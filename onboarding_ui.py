@@ -191,6 +191,176 @@ def _truthy(v: object) -> bool:
         return False
 
 
+def _handle_exit_param(
+    st_module: Any,
+    *,
+    logger: logging.Logger,
+    clear_active_slug,
+    clear_tab,
+) -> bool:
+    """Gestisce il parametro di query ?exit=1 (termina la sessione se attivo)."""
+    exit_flag = _truthy(getattr(st_module, "query_params", {}).get("exit"))
+    if not exit_flag:
+        return False
+
+    st_module.title("Sessione terminata")
+    st_module.info("Puoi chiudere questa scheda. Lo slug attivo e' stato azzerato.")
+    try:
+        clear_active_slug(persist=True, update_query=True)
+        clear_tab()
+    except Exception as exc:  # pragma: no cover - best effort logging
+        logger.warning("ui.slug.reset_failed", extra={"error": str(exc)})
+    st_module.stop()
+    return True
+
+
+def _run_preflight_flow(
+    st_module: Any,
+    *,
+    logger: logging.Logger,
+    get_skip_preflight,
+    set_skip_preflight,
+    apply_preflight_once,
+    run_preflight,
+    status_guard,
+) -> None:
+    """
+    Esegue (o salta) il preflight, gestendo session_state e rerun/stop.
+
+    Mantiene la stessa semantica del blocco precedente in main:
+    - se preflight_ok è già True → non fa nulla;
+    - se skip_preflight è attivo → setta preflight_ok=True e prosegue;
+    - altrimenti mostra la UI di controllo, blocca finché non si preme Prosegui
+      o in caso di errore chiama st.stop().
+    """
+    skip_preflight = get_skip_preflight()
+
+    if st_module.session_state.get("preflight_ok", False):
+        return
+
+    _load_dotenv_best_effort()
+
+    if skip_preflight:
+        st_module.session_state["preflight_ok"] = True
+        return
+
+    _render_preflight_header()
+    box = st_module.container()
+    with box:
+        with st_module.expander("Prerequisiti", expanded=True):
+            current_skip = skip_preflight
+            new_skip = st_module.checkbox(
+                "Salta il controllo",
+                value=current_skip,
+                help="Preferenza persistente (config/config.yaml -> ui.skip_preflight).",
+            )
+            if new_skip != current_skip:
+                try:
+                    set_skip_preflight(new_skip)
+                    st_module.toast("Preferenza aggiornata.")
+                except Exception as exc:  # pragma: no cover - UI feedback best effort
+                    st_module.warning(f"Impossibile salvare la preferenza: {exc}")
+
+            once_skip = st_module.checkbox(
+                "Salta il controllo solo per questa esecuzione",
+                value=False,
+                help="Bypassa il preflight in questa sessione senza modificare la preferenza persistente.",
+            )
+            if apply_preflight_once(once_skip, st_module.session_state, logger):
+                st_module.toast("Preflight saltato per questa run.")
+                st_module.rerun()
+
+            try:
+                with status_guard(
+                    "Controllo prerequisiti...",
+                    expanded=True,
+                    error_label="Errore nel preflight",
+                ) as s:
+                    results, port_busy = run_preflight()
+
+                    essential_checks = {"PyMuPDF", "ReportLab", "Google API Client"}
+                    essentials_ok = True
+
+                    for name, ok, hint in results:
+                        if name in {"OPENAI_API_KEY", "Docker"} and not ok:
+                            st_module.warning(f"[Opzionale] {name} - {hint}")
+                        elif ok:
+                            st_module.success(f"[OK] {name}")
+                        else:
+                            st_module.error(f"[KO] {name} - {hint}")
+
+                        if name in essential_checks:
+                            essentials_ok &= ok
+
+                    if port_busy:
+                        st_module.warning("Porta 4000 occupata: chiudi altre preview HonKit o imposta PORT in .env")
+
+                    if s is not None and hasattr(s, "update"):
+                        s.update(label="Controllo completato", state="complete")
+            except Exception as exc:
+                st_module.error(f"Errore nel preflight: {exc}")
+                st_module.session_state["preflight_ok"] = False
+                st_module.stop()
+
+            proceed = st_module.button("Prosegui", type="primary", disabled=not essentials_ok)
+            if proceed:
+                st_module.session_state["preflight_ok"] = True
+                st_module.rerun()
+            else:
+                st_module.stop()
+
+
+def build_navigation(
+    *,
+    st: Any,
+    logger: logging.Logger,
+    compute_gates,
+    visible_page_specs,
+    get_streamlit,
+    get_active_slug,
+    has_raw_pdfs,
+) -> None:
+    """Costruisce e avvia la navigazione Streamlit (st.navigation + st.Page)."""
+    try:
+        slug = get_active_slug()
+    except Exception:
+        slug = None
+
+    # Layout preservato anche se non usiamo direttamente le colonne.
+    st.columns([4, 1])
+
+    if slug:
+        try:
+            has_raw_pdfs(slug)
+        except Exception as exc:  # pragma: no cover - best effort logging
+            logger.warning(
+                "ui.workspace.raw_check_failed",
+                extra={"event": "ui.workspace.raw_check_failed", "slug": slug, "error": str(exc)},
+            )
+
+    _st = get_streamlit()
+    _pages_specs = visible_page_specs(compute_gates())
+    pages = {
+        group: [_st.Page(spec.path, title=spec.title, url_path=(spec.url_path or None)) for spec in specs]
+        for group, specs in _pages_specs.items()
+    }
+
+    try:
+        logger.info(
+            "ui.navigation.pages",
+            extra={
+                "pages": {
+                    group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()
+                }
+            },
+        )
+    except Exception:
+        pass
+
+    navigation = st.navigation(pages, position="top")
+    navigation.run()
+
+
 def main() -> None:
     global st
 
@@ -252,126 +422,36 @@ def main() -> None:
 
     _hydrate_query_defaults()
 
-    if _truthy(getattr(st, "query_params", {}).get("exit")):
-        st.title("Sessione terminata")
-        st.info("Puoi chiudere questa scheda. Lo slug attivo e' stato azzerato.")
-        try:
-            clear_active_slug(persist=True, update_query=True)
-            clear_tab()
-        except Exception as exc:
-            LOGGER.warning("ui.slug.reset_failed", extra={"error": str(exc)})
-        st.stop()
+    # Gestione del parametro di uscita (?exit=1)
+    if _handle_exit_param(
+        st,
+        logger=LOGGER,
+        clear_active_slug=clear_active_slug,
+        clear_tab=clear_tab,
+    ):
+        return
 
-    skip_preflight = get_skip_preflight()
-    if not st.session_state.get("preflight_ok", False):
-        _load_dotenv_best_effort()
-        if skip_preflight:
-            st.session_state["preflight_ok"] = True
-        else:
-            _render_preflight_header()
-            box = st.container()
-            with box:
-                with st.expander("Prerequisiti", expanded=True):
-                    current_skip = skip_preflight
-                    new_skip = st.checkbox(
-                        "Salta il controllo",
-                        value=current_skip,
-                        help="Preferenza persistente (config/config.yaml -> ui.skip_preflight).",
-                    )
-                    if new_skip != current_skip:
-                        try:
-                            set_skip_preflight(new_skip)
-                            st.toast("Preferenza aggiornata.")
-                        except Exception as exc:
-                            st.warning(f"Impossibile salvare la preferenza: {exc}")
+    # Flusso di preflight (può impostare preflight_ok e chiamare rerun/stop).
+    _run_preflight_flow(
+        st_module=st,
+        logger=LOGGER,
+        get_skip_preflight=get_skip_preflight,
+        set_skip_preflight=set_skip_preflight,
+        apply_preflight_once=apply_preflight_once,
+        run_preflight=run_preflight,
+        status_guard=status_guard,
+    )
 
-                    once_skip = st.checkbox(
-                        "Salta il controllo solo per questa esecuzione",
-                        value=False,
-                        help="Bypassa il preflight in questa sessione senza modificare la preferenza persistente.",
-                    )
-                    if apply_preflight_once(once_skip, st.session_state, LOGGER):
-                        st.toast("Preflight saltato per questa run.")
-                        st.rerun()
-
-                    try:
-                        with status_guard(
-                            "Controllo prerequisiti...",
-                            expanded=True,
-                            error_label="Errore nel preflight",
-                        ) as s:
-                            results, port_busy = run_preflight()
-
-                            essential_checks = {"PyMuPDF", "ReportLab", "Google API Client"}
-                            essentials_ok = True
-
-                            for name, ok, hint in results:
-                                if name in {"OPENAI_API_KEY", "Docker"} and not ok:
-                                    st.warning(f"[Opzionale] {name} - {hint}")
-                                elif ok:
-                                    st.success(f"[OK] {name}")
-                                else:
-                                    st.error(f"[KO] {name} - {hint}")
-
-                                if name in essential_checks:
-                                    essentials_ok &= ok
-
-                            if port_busy:
-                                st.warning("Porta 4000 occupata: chiudi altre preview HonKit o imposta PORT in .env")
-
-                            if s is not None and hasattr(s, "update"):
-                                s.update(label="Controllo completato", state="complete")
-                    except Exception as exc:
-                        st.error(f"Errore nel preflight: {exc}")
-                        st.session_state["preflight_ok"] = False
-                        st.stop()
-
-                    proceed = st.button("Prosegui", type="primary", disabled=not essentials_ok)
-                    if proceed:
-                        st.session_state["preflight_ok"] = True
-                        st.rerun()
-                    else:
-                        st.stop()
-    else:
-        skip_preflight = get_skip_preflight()
-
-    try:
-        slug = get_active_slug()
-    except Exception:
-        slug = None
-
-    st.columns([4, 1])  # layout preservato anche se non riassegniamo le colonne
-
-    if slug:
-        try:
-            has_raw_pdfs(slug)
-        except Exception as exc:
-            LOGGER.warning(
-                "ui.workspace.raw_check_failed",
-                extra={"event": "ui.workspace.raw_check_failed", "slug": slug, "error": str(exc)},
-            )
-
-    _st = _get_streamlit()
-    _pages_specs = visible_page_specs(compute_gates())
-    pages = {
-        group: [_st.Page(spec.path, title=spec.title, url_path=(spec.url_path or None)) for spec in specs]
-        for group, specs in _pages_specs.items()
-    }
-
-    try:
-        LOGGER.info(
-            "ui.navigation.pages",
-            extra={
-                "pages": {
-                    group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()
-                }
-            },
-        )
-    except Exception:
-        pass
-
-    navigation = st.navigation(pages, position="top")
-    navigation.run()
+    # Navigazione principale (st.navigation + st.Page)
+    build_navigation(
+        st=st,
+        logger=LOGGER,
+        compute_gates=compute_gates,
+        visible_page_specs=visible_page_specs,
+        get_streamlit=_get_streamlit,
+        get_active_slug=get_active_slug,
+        has_raw_pdfs=has_raw_pdfs,
+    )
 
 
 if __name__ == "__main__":

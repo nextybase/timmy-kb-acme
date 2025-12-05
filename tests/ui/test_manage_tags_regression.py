@@ -9,6 +9,7 @@ import pytest
 
 import ui.manage.tags as tags
 from pipeline.exceptions import ConfigError
+from storage.tags_store import ensure_schema_v2
 from ui.manage.tags import DEFAULT_TAGS_YAML
 
 
@@ -184,6 +185,8 @@ def test_enable_tags_stub_returns_false_when_state_update_fails(tmp_path: Path) 
     st_stub = _StreamlitStub()
     semantic_dir = tmp_path / "semantic"
     yaml_path = semantic_dir / "tags_reviewed.yaml"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    ensure_schema_v2(str(semantic_dir / "tags.db"))
 
     ok = tags.enable_tags_stub(
         "demo",
@@ -228,6 +231,7 @@ def test_enable_tags_service_returns_false_when_state_update_fails(
     monkeypatch.setattr("semantic.tags_io.write_tags_review_stub_from_csv", fake_write_stub)
     monkeypatch.setattr("semantic.api.export_tags_yaml_from_db", fake_export)
     monkeypatch.setattr("storage.tags_store.derive_db_path_from_yaml_path", lambda _path: str(db_path))
+    ensure_schema_v2(str(db_path))
 
     ok = tags.enable_tags_service(
         "demo",
