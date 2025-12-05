@@ -204,6 +204,8 @@ _DEFAULT_VISION_PDF = (
     b"trailer\n<< /Root 1 0 R >>\nstartxref\n9\n%%EOF\n"
 )
 
+_MINIMAL_RAW_PDF = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
+
 
 def _build_generic_vision_template_pdf() -> bytes:
     """
@@ -555,6 +557,33 @@ def _render_local_readme_bytes(title: str, descr: str, examples: list[str]) -> t
         lines = [f"README - {title}", "", "Ambito:", descr or "", "", "Esempi:"]
         lines.extend(f"- {ex}" for ex in (examples or []))
         return ("\n".join(lines)).encode("utf-8"), "text/plain"
+
+
+def _ensure_raw_pdfs(base_dir: Path, categories: Optional[dict[str, dict[str, Any]]] = None) -> None:
+    """
+    Deposita un PDF minimale in ogni sottocartella di raw/ (inclusa la root).
+
+    Serve per i test/gating che richiedono la presenza di almeno un PDF valido
+    anche in ambienti privi di reportlab.
+    """
+    raw_dir = base_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    candidate_dirs: set[Path] = {raw_dir}
+    for sub in raw_dir.iterdir():
+        if sub.is_dir():
+            candidate_dirs.add(sub)
+
+    catalogue = categories or {}
+    for key in catalogue.keys():
+        candidate_dirs.add(raw_dir / to_kebab(key))
+
+    for subdir in sorted(candidate_dirs):
+        subdir.mkdir(parents=True, exist_ok=True)
+        existing_pdf = next((p for p in subdir.iterdir() if p.suffix.lower() == ".pdf"), None)
+        if existing_pdf is None:
+            target = subdir / "sample.pdf"
+            _safe_write_bytes(target, _MINIMAL_RAW_PDF, atomic=True)
 
 
 def _ensure_local_readmes(base_dir: Path, categories: Optional[dict[str, dict[str, Any]]] = None) -> list[str]:
@@ -928,6 +957,8 @@ def build_payload(
 
     if not categories_for_readmes:
         categories_for_readmes = _load_mapping_categories(base_dir)
+
+    _ensure_raw_pdfs(base_dir, categories_for_readmes)
 
     local_readmes = _ensure_local_readmes(base_dir, categories_for_readmes)
 
