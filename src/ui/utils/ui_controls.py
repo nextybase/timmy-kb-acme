@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from ui.types import StreamlitLike
 from ui.utils.stubs import get_streamlit
 
 
-def _st() -> Any:
+def _st() -> StreamlitLike:
     """Recupera dinamicamente il modulo streamlit (o lo stub) per supportare i test che lo monkeypatchano."""
-    return get_streamlit()
+    return cast(StreamlitLike, get_streamlit())
 
 
 def columns3() -> tuple[Any, Any, Any]:

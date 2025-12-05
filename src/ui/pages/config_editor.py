@@ -15,10 +15,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Tuple
 
+from ui.types import StreamlitLike
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 
-st = get_streamlit()
+st: StreamlitLike = get_streamlit()
 
 from pipeline.config_utils import update_config_with_drive_ids
 from pipeline.exceptions import ConfigError
@@ -61,7 +62,7 @@ def _extract_sections(data: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, A
     return vision, retriever, ui
 
 
-def render_sidebar(slug: str, assistant_env: str, *, st_module: Any | None = None) -> None:
+def render_sidebar(slug: str, assistant_env: str, *, st_module: StreamlitLike | None = None) -> None:
     st_mod = st_module or get_streamlit()
     sidebar = getattr(st_mod, "sidebar", st_mod)
     sidebar.header("Workspace")
@@ -71,7 +72,7 @@ def render_sidebar(slug: str, assistant_env: str, *, st_module: Any | None = Non
 
 def render_body(
     *,
-    st_module: Any | None,
+    st_module: StreamlitLike | None,
     data: Dict[str, Any],
     vision_cfg: Dict[str, Any],
     retriever_cfg: Dict[str, Any],
@@ -236,7 +237,7 @@ def handle_actions(
 
 
 # ---------- helpers runtime / semantica ----------
-def _render_runtime_retriever(slug: str, *, st_module: Any | None = None) -> None:
+def _render_runtime_retriever(slug: str, *, st_module: StreamlitLike | None = None) -> None:
     st_mod = st_module or get_streamlit()
     st_mod.markdown("### Retriever (runtime)")
 
