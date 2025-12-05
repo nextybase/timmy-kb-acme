@@ -11,10 +11,10 @@ from __future__ import annotations
 from src.tools.gen_dummy_kb import *  # noqa: F401,F403
 
 
-def main() -> int:  # pragma: no cover - delega pura
+def main(argv: list[str] | None = None) -> int:  # pragma: no cover - delega pura
     from src.tools.gen_dummy_kb import main as _main
 
-    return _main()
+    return _main(argv)
 
 
 if __name__ == "__main__":  # pragma: no cover
