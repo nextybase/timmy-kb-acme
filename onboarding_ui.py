@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ui.types import StreamlitLike
+
 try:
     from dotenv import load_dotenv
 except Exception:  # pragma: no cover
@@ -77,7 +79,7 @@ def _lazy_bootstrap() -> logging.Logger:
     return get_structured_logger("ui.preflight")
 
 
-def _render_preflight_header(st_module: Any, logger: logging.Logger) -> None:
+def _render_preflight_header(st_module: StreamlitLike, logger: logging.Logger) -> None:
     """Logo + titolo centrati per il controllo di sistema (solo schermata preflight)."""
     from ui.utils.branding import get_main_logo_path
 
@@ -148,7 +150,7 @@ def _parse_version(raw: str) -> tuple[int, ...]:
     return tuple(parts)
 
 
-def _ensure_streamlit_api(st_module: Any) -> None:
+def _ensure_streamlit_api(st_module: StreamlitLike) -> None:
     if st_module is None:
         raise RuntimeError("Streamlit non inizializzato")
     version = getattr(st_module, "__version__", "0")
@@ -195,7 +197,7 @@ def _truthy(v: object) -> bool:
 
 
 def _handle_exit_param(
-    st_module: Any,
+    st_module: StreamlitLike,
     *,
     logger: logging.Logger,
     clear_active_slug,
@@ -218,7 +220,7 @@ def _handle_exit_param(
 
 
 def _run_preflight_flow(
-    st_module: Any,
+    st_module: StreamlitLike,
     *,
     logger: logging.Logger,
     get_skip_preflight,
@@ -315,7 +317,7 @@ def _run_preflight_flow(
 
 def build_navigation(
     *,
-    st: Any,
+    st: StreamlitLike,
     logger: logging.Logger,
     compute_gates,
     visible_page_specs,
@@ -368,7 +370,7 @@ def main() -> None:
     logger = _lazy_bootstrap()
 
     try:  # noqa: E402
-        import streamlit as st_module  # type: ignore
+        import streamlit as st  # type: ignore[import]
     except Exception as exc:  # pragma: no cover
         raise RuntimeError("Streamlit non disponibile: installa le dipendenze UI") from exc
 
@@ -394,7 +396,7 @@ def main() -> None:
         )
         raise RuntimeError("Router UI non disponibile: reinstalla Streamlit/UI") from exc
 
-    st_module.set_page_config(
+    st.set_page_config(
         page_title="Onboarding NeXT - Clienti",
         page_icon=str(get_favicon_path(REPO_ROOT)),
         layout="wide",
@@ -403,19 +405,19 @@ def main() -> None:
     inject_theme_css()
 
     try:
-        _ensure_streamlit_api(st_module)
+        _ensure_streamlit_api(st)
     except Exception as exc:
-        st_module.error(str(exc))
-        st_module.stop()
+        st.error(str(exc))
+        st.stop()
 
-    if not st_module.session_state.get("_startup_logged", False):
+    if not st.session_state.get("_startup_logged", False):
         port = os.getenv("PORT") or os.getenv("STREAMLIT_SERVER_PORT") or os.getenv("SERVER_PORT")
-        st_module.session_state["_startup_logged"] = True
+        st.session_state["_startup_logged"] = True
         logger.info(
             "ui.startup",
             extra={
                 "version": "v1.0-beta",
-                "streamlit_version": getattr(st_module, "__version__", "unknown"),
+                "streamlit_version": getattr(st, "__version__", "unknown"),
                 "port": port,
                 "mode": "streamlit",
             },
@@ -425,7 +427,7 @@ def main() -> None:
 
     # Gestione del parametro di uscita (?exit=1)
     if _handle_exit_param(
-        st_module,
+        st,
         logger=logger,
         clear_active_slug=clear_active_slug,
         clear_tab=clear_tab,
@@ -434,7 +436,7 @@ def main() -> None:
 
     # Flusso di preflight (può impostare preflight_ok e chiamare rerun/stop).
     _run_preflight_flow(
-        st_module=st_module,
+        st_module=st,
         logger=logger,
         get_skip_preflight=get_skip_preflight,
         set_skip_preflight=set_skip_preflight,
@@ -445,7 +447,7 @@ def main() -> None:
 
     # Navigazione principale (st.navigation + st.Page)
     build_navigation(
-        st=st_module,
+        st=st,
         logger=logger,
         compute_gates=compute_gates,
         visible_page_specs=visible_page_specs,

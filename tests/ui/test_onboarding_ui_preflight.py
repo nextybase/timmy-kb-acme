@@ -7,16 +7,16 @@ from contextlib import nullcontext
 import pytest
 
 import onboarding_ui
+from tests.ui.streamlit_like_adapter import StreamlitStubAdapter
 from tests.ui.streamlit_stub import StreamlitStub
 
 
-def _attach_title(stub: StreamlitStub) -> None:
-    stub.title = lambda msg: stub.info(msg)  # type: ignore[attr-defined]
+def _make_st() -> StreamlitStubAdapter:
+    return StreamlitStubAdapter(StreamlitStub())
 
 
 def test_handle_exit_param_falsy() -> None:
-    st = StreamlitStub()
-    _attach_title(st)
+    st = _make_st()
     calls = {"clear_active": 0, "clear_tab": 0}
 
     def _clear_active_slug(**_kwargs: object) -> None:
@@ -39,8 +39,7 @@ def test_handle_exit_param_falsy() -> None:
 
 
 def test_handle_exit_param_truthy_triggers_stop() -> None:
-    st = StreamlitStub()
-    _attach_title(st)
+    st = _make_st()
     st.query_params["exit"] = "1"
     calls = {"clear_active": 0, "clear_tab": 0}
 
@@ -63,7 +62,7 @@ def test_handle_exit_param_truthy_triggers_stop() -> None:
 
 
 def test_run_preflight_flow_skips_when_already_ok() -> None:
-    st = StreamlitStub()
+    st = _make_st()
     st.session_state["preflight_ok"] = True
     calls = {"run_preflight": 0}
     skip_preflight_state = {"value": False}
@@ -96,7 +95,7 @@ def test_run_preflight_flow_skips_when_already_ok() -> None:
 
 
 def test_run_preflight_flow_sets_flag_when_skipped_persistently() -> None:
-    st = StreamlitStub()
+    st = _make_st()
     calls = {"run_preflight": 0}
     skip_preflight_state = {"value": True}
 
