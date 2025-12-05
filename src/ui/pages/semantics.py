@@ -7,11 +7,12 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence, Tuple, cast
 
+from ui.types import StreamlitLike
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
 
-st = get_streamlit()
+st: StreamlitLike = get_streamlit()
 
 
 from pipeline.exceptions import ConfigError, ConversionError
@@ -200,17 +201,6 @@ def _go_preview() -> None:
         return
 
 
-# ---------------- UI ----------------
-
-slug = cast(str, render_chrome_then_require())
-
-try:
-    from streamlit.runtime.scriptrunner import get_script_run_ctx
-except Exception:
-    _HAS_STREAMLIT_CONTEXT = False
-else:
-    _HAS_STREAMLIT_CONTEXT = get_script_run_ctx() is not None
-
 _client_state: str | None = None
 _raw_ready: bool = False
 _book_ready: bool = False
@@ -249,42 +239,8 @@ def _raise_semantic_unavailable(slug: str | None, state: str, raw_ready: bool, r
     )
 
 
-if _HAS_STREAMLIT_CONTEXT:
-    try:
-        _client_state, _raw_ready, _ = _require_semantic_gating(slug)
-    except ConfigError as exc:
-        st.info(SEMANTIC_GATING_MESSAGE)
-        st.caption(str(exc))
-        try:
-            st.stop()
-        except Exception as stop_exc:  # pragma: no cover - Streamlit specific
-            raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from stop_exc
-
-    try:
-        _book_dir = get_paths(slug).get("book")
-        if _book_dir is not None:
-            _book_ready = is_book_ready(_book_dir)
-    except Exception as exc:  # pragma: no cover - best effort
-        try:
-            _GATING_LOG.warning(
-                "ui.semantics.book_readiness_check_failed",
-                extra={
-                    "slug": slug,
-                    "error": str(exc),
-                },
-            )
-        except Exception:
-            pass
-
-if _column_button(st, "Rileva PDF in raw", key="btn_rescan_raw", width="stretch"):
-    cache_key = (slug or "<none>").strip().lower()
-    _GATE_CACHE.pop(cache_key, None)
-    _reset_gating_cache(slug)
-    has_raw_pdfs(slug)
-    st.toast("Stato raw aggiornato.")
-
-
-def _handle_semantic_action(action: Callable[[str], None]) -> None:
+def _handle_semantic_action(action: Callable[[str], None], slug: str) -> None:
+    """Wrapper comune per gestire le eccezioni UI delle azioni semantiche."""
     try:
         action(slug)
     except (ConfigError, ConversionError) as exc:
@@ -293,22 +249,74 @@ def _handle_semantic_action(action: Callable[[str], None]) -> None:
         _display_user_error(exc)
 
 
-client_state_ok = _client_state in SEMANTIC_ENTRY_STATES
+def main() -> None:
+    """Entry point Streamlit per la pagina Semantica."""
 
-actions = {
-    "convert": lambda: _handle_semantic_action(_run_convert),
-    "enrich": lambda: _handle_semantic_action(_run_enrich),
-    "summary": lambda: _handle_semantic_action(_run_summary),
-    "preview": _go_preview,
-}
+    slug = cast(str, render_chrome_then_require())
 
-render_semantic_wizard(
-    slug=slug or "",
-    client_state_ok=client_state_ok,
-    book_ready=_book_ready,
-    actions=actions,
-)
+    try:  # pragma: no cover - dipende dall'ambiente Streamlit
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+    except Exception:  # pragma: no cover
+        has_ctx = False
+    else:  # pragma: no cover
+        has_ctx = get_script_run_ctx() is not None
 
-progress_msg = _PROGRESS.get((_client_state or "").strip().lower())
-if progress_msg:
-    st.caption(progress_msg)
+    global _client_state, _raw_ready, _book_ready, _book_dir
+
+    if has_ctx:
+        try:
+            _client_state, _raw_ready, _ = _require_semantic_gating(slug)
+        except ConfigError as exc:
+            st.info(SEMANTIC_GATING_MESSAGE)
+            st.caption(str(exc))
+            try:
+                st.stop()
+            except Exception as stop_exc:  # pragma: no cover - Streamlit specific
+                raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from stop_exc
+
+        try:
+            _book_dir = get_paths(slug).get("book")
+            if _book_dir is not None:
+                _book_ready = is_book_ready(_book_dir)
+        except Exception as exc:  # pragma: no cover - best effort
+            try:
+                _GATING_LOG.warning(
+                    "ui.semantics.book_readiness_check_failed",
+                    extra={
+                        "slug": slug,
+                        "error": str(exc),
+                    },
+                )
+            except Exception:
+                pass
+
+    if _column_button(st, "Rileva PDF in raw", key="btn_rescan_raw", width="stretch"):
+        cache_key = (slug or "<none>").strip().lower()
+        _GATE_CACHE.pop(cache_key, None)
+        _reset_gating_cache(slug)
+        has_raw_pdfs(slug)
+        st.toast("Stato raw aggiornato.")
+
+    client_state_ok = _client_state in SEMANTIC_ENTRY_STATES
+
+    actions = {
+        "convert": lambda: _handle_semantic_action(_run_convert, slug),
+        "enrich": lambda: _handle_semantic_action(_run_enrich, slug),
+        "summary": lambda: _handle_semantic_action(_run_summary, slug),
+        "preview": _go_preview,
+    }
+
+    render_semantic_wizard(
+        slug=slug or "",
+        client_state_ok=client_state_ok,
+        book_ready=_book_ready,
+        actions=actions,
+    )
+
+    progress_msg = _PROGRESS.get((_client_state or "").strip().lower())
+    if progress_msg:
+        st.caption(progress_msg)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
