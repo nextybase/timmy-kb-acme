@@ -418,6 +418,7 @@ Quando abiliti lo stub ricorda di puntare `CLIENTS_DB_PATH` e altre risorse pers
 
 I test girano con uno **stub** di Streamlit (assenza del runtime reale). Per evitare rotture:
 
+- Tipizza sempre `st` come `StreamlitLike` (`from ui.types import StreamlitLike`); negli unit test usa `StreamlitStubAdapter(StreamlitStub())` da `tests/ui/streamlit_like_adapter.py` per rispettare il contratto.
 - Avvolgi le chiamate facoltative con `getattr(st, "api", None)` e verifica che siano **callable**.
 - Fallback per layout:
 - Se devi azzerare lo stato condiviso tra test, chiama `ui.utils.stubs.reset_streamlit_stub()` nelle fixture (`autouse=True` consigliato).
@@ -445,6 +446,7 @@ else:
 ```
 
 - Evita pattern che forzano `with col:` sugli stub: alcuni colonnati mock non implementano il context manager.
+- Per le pagine piu recenti (Onboarding, Semantica, Admin) l'UI è incapsulata in `main()` e gli import non generano side-effect; mantieni questo pattern per i nuovi moduli.
 
 ---
 
