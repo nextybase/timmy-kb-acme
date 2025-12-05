@@ -85,6 +85,7 @@ __all__ = [
     "enrich_frontmatter",
     "write_summary_and_readme",
     "run_semantic_pipeline",
+    "run_semantic_pipeline_for_slug",
     "build_tags_csv",
     "build_markdown_book",
     "index_markdown_to_db",
@@ -436,6 +437,44 @@ def run_semantic_pipeline(
         vocab_fn=None,
         enrich_fn=None,
         summary_fn=None,
+    )
+
+
+def run_semantic_pipeline_for_slug(
+    slug: str,
+    *,
+    context_factory: Callable[[str], "ClientContextType"],
+    logger: logging.Logger | None = None,
+    gating: Callable[[str], tuple[str, bool, Path | None]] | None = None,
+    stage_wrapper: StageWrapper | None = None,
+) -> BuildWorkflowResult:
+    """
+    Esegue la pipeline semantica standard per uno slug.
+
+    - Facoltativamente applica un gating headless (es. `_require_semantic_gating`).
+    - Costruisce il contesto cliente tramite `context_factory(slug)`.
+    - Delega a `run_semantic_pipeline(context, logger, slug=slug, stage_wrapper=...)`.
+
+    Questa funzione è pensata per CLI, job batch e automazioni, non per la UI:
+    la UI può continuare a usare i runner `_run_convert/_run_enrich/_run_summary`
+    in `ui.pages.semantics` per avere messaggi e feedback Streamlit.
+    """
+
+    safe_slug = slug.strip()
+    if not safe_slug:
+        raise ConfigError("Slug vuoto non valido per la pipeline semantica.", slug=slug)
+
+    if gating is not None:
+        gating(safe_slug)
+
+    ctx = context_factory(safe_slug)
+    eff_logger = logger or get_structured_logger("semantic.pipeline", context={"slug": safe_slug})
+
+    return run_semantic_pipeline(
+        ctx,
+        eff_logger,
+        slug=safe_slug,
+        stage_wrapper=stage_wrapper,
     )
 
 
