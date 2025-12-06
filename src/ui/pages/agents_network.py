@@ -233,11 +233,18 @@ def _regenerate_agents_matrix() -> None:
 
     try:
         gen_agents_matrix.main(check=False)
+
+        # Invalida la cache del reader Markdown per riflettere subito i cambiamenti
+        try:
+            _read_markdown.clear()
+        except Exception:
+            LOGGER.warning("ui.agents_network.cache_clear_failed")
+
+        st.success("Matrice AGENTS rigenerata. " "Ricorda di committare anche docs/AGENTS_INDEX.md.")
         LOGGER.info(
             "ui.agents_network.matrix_regenerated",
             extra={"rel_path": "docs/AGENTS_INDEX.md"},
         )
-        st.success("Matrice AGENTS rigenerata in docs/AGENTS_INDEX.md.")
     except SystemExit as exc:
         LOGGER.warning(
             "ui.agents_network.matrix_regen_failed",
@@ -487,8 +494,9 @@ render_chrome_then_require(allow_without_slug=True)
 st.subheader("Rete degli AGENT & integrazione Codex")
 st.caption(
     "Vista amministrativa della rete degli agent e dei documenti che governano "
-    "l’integrazione di Codex. Prima fase: navigazione e consultazione; "
-    "le funzioni di editing arriveranno in step successivi."
+    "l'integrazione di Codex. Questa pagina consente sia la navigazione sia "
+    "l'editing sezionale degli AGENTS; funzionalità di editing avanzato "
+    "arriveranno in step successivi."
 )
 
 # Layout a due colonne: sinistra (albero AGENTS), destra (documenti Codex)
