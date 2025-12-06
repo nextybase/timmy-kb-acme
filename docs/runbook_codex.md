@@ -6,6 +6,68 @@
 - **Scope:** operazioni locali, UI/CLI, integrazioni OpenAI/Drive/GitHub, sicurezza I/O e path-safety, qualita', rollback e risoluzione problemi.
 - **Rimandi canonici:** [Developer Guide](developer_guide.md), [Coding Rules](coding_rule.md), [Architecture Overview](architecture.md), [AGENTS Index](AGENTS_INDEX.md), [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md), [User Guide](user_guide.md).
 
+## Mappa visuale del sistema Codex (Repo-aware, v2)
+
+Di seguito una rappresentazione ASCII del flusso completo che governa l’esecuzione
+di Codex nel repository, integrando policy (AGENTS_INDEX), regole locali (AGENTS),
+prompt operativi (PROMPTS.md), runbook e workflow tecnici.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    CODICE DI GOVERNO DEL REPO                │
+└──────────────────────────────────────────────────────────────┘
+
+                 ┌───────────────────────────────┐
+                 │    docs/AGENTS_INDEX.md       │
+                 └───────────────┬───────────────┘
+                                 │
+                                 ▼
+                     ┌─────────────────────┐
+                     │ AGENTS.md (area)    │
+                     └───────────┬─────────┘
+                                 │
+                                 ▼
+               ┌─────────────────────────────────┐
+               │ ~/.codex/AGENTS.md (preferenze) │
+               └─────────────────┬───────────────┘
+                                 │
+                                 ▼
+          ┌───────────────────────────────────────────────┐
+          │ .codex/PROMPTS.md = API operativa Codex       │
+          │ - Task di avvio                               │
+          │ - Onboarding Task Codex                       │
+          │ - micro-PR + QA + safety                      │
+          └──────────────────────────┬────────────────────┘
+                                     │
+                                     ▼
+                      ┌─────────────────────────┐
+                      │ docs/runbook_codex.md   │
+                      └─────────────┬───────────┘
+                                    │
+                                    ▼
+                         ┌──────────────────────┐
+                         │ .codex/WORKFLOWS.md │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                 ┌────────────────────────────────────────┐
+                 │ Azione Codex (refactor / feature / UI) │
+                 │ - collector + orchestratore            │
+                 │ - path-safety                          │
+                 │ - log strutturati                      │
+                 └────────────────────────────────────────┘
+                                    │
+                                    ▼
+               ┌────────────────────────────────────┐
+               │ micro-PR idempotente + QA locale   │
+               └────────────────────┬───────────────┘
+                                    │
+                                    ▼
+                   ┌────────────────────────────────┐
+                   │ Aggiornamento Matrice AGENTS   │
+                   └────────────────────────────────┘
+```
+
 > **Nota:** questo runbook si integra con il documento
 > **[`docs/codex_integrazione.md`](codex_integrazione.md)**
 > che definisce il *Workflow Codex + Repo-Aware (v2)*, l’uso dei tre SSoT (AGENTS_INDEX, AGENTS di area, `~/.codex/AGENTS.md`),
