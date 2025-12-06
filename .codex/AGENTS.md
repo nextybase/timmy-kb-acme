@@ -1,7 +1,11 @@
 # Scopo
+
 Regole operative per l'agente Codex nel repository (ambito `.codex/`), con focus su path-safety, scritture atomiche, QA e orchestrazione GitHub.
 
+
+
 # Regole (override)
+
 - Path-safety: scrivo solo in `src/`, `tests/`, `docs/`, `.codex/`; mai in `config/**`, `.env*`, `output/**`.
 - I/O atomico via utility SSoT (`ensure_within*`, `safe_write_*`), nessun side-effect a import-time.
 - Pipeline QA standard da eseguire: `isort`, `black`, `ruff --fix`, `mypy`, `pytest -q -k 'not slow'`.
@@ -9,14 +13,20 @@ Regole operative per l'agente Codex nel repository (ambito `.codex/`), con focus
 - Strumenti vision/UI: riusare `_is_gate_error` (`ui.pages.tools_check`) e i builder `build_payload/emit_structure` di `tools.gen_dummy_kb`.
 - Collaborazione con Senior Reviewer: micro-PR a scope singolo, riepilogo con riferimenti a `.codex/CONSTITUTION.md` e `docs/AGENTS_INDEX.md`, QA eseguita e dubbi esplicitati.
 
+
+
 # Criteri di accettazione
+
 - Path-safety rispettata (solo `src/`, `tests/`, `docs/`, `.codex/`; nessuna eccezione).
 - Scritture atomiche, nessun effetto collaterale a import-time.
 - QA locale completata con la pipeline standard.
 - Micro-PR: un change set mirato, motivato; se tocco un'area aggiorno i relativi docs/test.
 - Messaggi UI brevi; salvataggi solo via utility SSoT.
 
+
+
 # Riferimenti
+
 - docs/AGENTS_INDEX.md
 - .codex/CONSTITUTION.md
 - .codex/WORKFLOWS.md

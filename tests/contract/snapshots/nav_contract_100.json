@@ -30,6 +30,11 @@
         "path": "src/ui/pages/guida_dev.py",
         "title": "Guida Dev",
         "url_path": "guida-dev"
+      },
+      {
+        "path": "src/ui/pages/agents_network.py",
+        "title": "Rete degli AGENT",
+        "url_path": "agents_network"
       }
     ],
     "Onboarding": [

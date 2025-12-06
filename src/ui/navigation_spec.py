@@ -17,6 +17,7 @@ class PagePaths:
     CONFIGURAZIONE = "src/ui/pages/configurazione.py"
     GUIDA = "src/ui/pages/guida_ui.py"
     GUIDA_DEV = "src/ui/pages/guida_dev.py"
+    AGENTS_NETWORK = "src/ui/pages/agents_network.py"
 
     ADMIN = "src/ui/pages/admin.py"
     TUNING = "src/ui/pages/tools_check.py"
@@ -67,6 +68,7 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
             NavPage(PagePaths.SECRETS, "Secrets Healthcheck", "secrets"),
             NavPage(PagePaths.LOGS_PANEL, "Log dashboard", None),
             NavPage(PagePaths.GUIDA_DEV, "Guida Dev", "guida-dev"),
+            NavPage(PagePaths.AGENTS_NETWORK, "Rete degli AGENT", "agents_network"),
         ),
     ),
 )
