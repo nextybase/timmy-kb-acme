@@ -5,10 +5,10 @@
 - Obiettivo: trasformare PDF in **KB Markdown AIready** con frontmatter coerente, README/SUMMARY e **preview HonKit (Docker)**; infine **push**.
 
 ### Integrazione Codex (Repo-aware, v2)
-- Tutti i workflow UI/CLI devono essere avviati tramite il modello **Codex repo-aware**, seguendo quanto definito in `docs/codex_integrazione.md`.
+- Tutti i workflow UI/CLI possono essere eseguiti anche tramite l'agente **Codex repo-aware**, seguendo quanto definito in `docs/codex_integrazione.md` e nel `docs/runbook_codex.md`.
 - Prima di ogni esecuzione assistita da Codex vengono caricati obbligatoriamente i tre SSoT: `docs/AGENTS_INDEX.md`, l'`AGENTS.md` dell'area interessata e `~/.codex/AGENTS.md`.
-- L'entrypoint operativo raccomandato è **Onboarding Task Codex** (vedi `.codex/PROMPTS.md`), che garantisce piano preliminare, micro-PR idempotenti, QA esplicita e aggiornamento della matrice AGENTS.
-- I workflow descritti in questo file sono pertanto eseguibili anche via agente, mantenendo: path-safety, scritture atomiche, logging strutturato e assenza di side-effects a import-time.
+- L'entrypoint operativo raccomandato e' **Onboarding Task Codex** (vedi `.codex/PROMPTS.md`), che garantisce piano preliminare, micro-PR idempotenti, QA esplicita e aggiornamento della matrice AGENTS.
+- I workflow descritti in questo file devono quindi mantenere: path-safety, scritture atomiche, logging strutturato e assenza di side-effects a import-time, anche quando eseguiti via agente.
 
 ## Flusso end-to-end
 1) **pre_onboarding**  crea sandbox locale (`output/timmy-kb-<slug>/...`), risolve YAML struttura, opzionale **provisioning Drive** + upload `config.yaml`.
@@ -29,8 +29,14 @@ Preview Docker: start/stop con nome container sicuro e validazione porta.
 ### Invarianti
 - **Idempotenza** (rilanci sicuri), **path-safety** (tutte le write passano da util dedicate),
 - **Logging con redazione** dove richiesto; **portabilita** Win/Linux.
-- **Pattern Collector + Orchestratore (UI Refactor v2):** le funzioni che aggregano check, validazioni o fasi ripetitive devono essere strutturate in collector composabili, mentre l'orchestratore principale mantiene ordine, output invariati e semantica originale (vedi refactor preflight).
-- **Coerenza con Codex PROMPTS:** quando un workflow viene attivato da Codex, l'agente deve applicare i prompt di `.codex/PROMPTS.md` (dipendenze, path-safety, QA, update doc), mantenendo l'intero flusso nel perimetro definito da AGENTS_INDEX.
+- **Pattern Collector + Orchestratore (UI Refactor v2):**
+  le funzioni che aggregano check, validazioni o fasi ripetitive devono essere
+  strutturate in collector composabili, mentre l'orchestratore principale
+  mantiene ordine, output invariati e semantica originale (vedi refactor preflight).
+- **Coerenza con Codex PROMPTS:**
+  quando un workflow viene attivato da Codex, l'agente deve applicare i prompt di
+  `.codex/PROMPTS.md` (dipendenze, path-safety, QA, aggiornamento doc/matrice),
+  mantenendo l'intero flusso nel perimetro definito da `docs/AGENTS_INDEX.md`.
 
 ## API Semantiche Additive (v1)
 

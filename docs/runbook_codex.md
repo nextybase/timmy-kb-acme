@@ -42,13 +42,13 @@ Riferimenti: [README](../README.md), [Developer Guide -> Dipendenze & QA](develo
 
 ### Integrazione con `.codex/PROMPTS.md` (obbligatoria)
 - I prompt in `.codex/PROMPTS.md` costituiscono la **API operativa** ufficiale per l’agente Codex.
-- Prima di ogni task, Codex esegue il blocco “Task di avvio” indicato in `.codex/PROMPTS.md` (lettura `docs/AGENTS_INDEX.md`, `AGENTS.md` dell’area, `~/.codex/AGENTS.md`, runbook stesso).
-- Il prompt **Onboarding Task Codex** è l’entrypoint vincolante per:
-  - definire il piano di lavoro,
-  - garantire micro-PR non-breaking,
-  - applicare la checklist QA (path-safety, write atomiche, logging strutturato),
-  - aggiornare documentazione e matrice AGENTS se toccate.
-- Questo garantisce coerenza esatta con quanto definito in `.codex/PROMPTS.md`, che governa tutti i flussi di sviluppo assistito.
+- Prima di ogni task agent-based, Codex esegue il blocco “Task di avvio” definito in `.codex/PROMPTS.md`: lettura di `docs/AGENTS_INDEX.md`, dell’`AGENTS.md` dell’area, di `.codex/AGENTS.md` e di questo stesso runbook.
+- Il prompt **Onboarding Task Codex** è l’entrypoint vincolante per i task di sviluppo/refactor:
+  - definisce il piano di lavoro prima delle modifiche,
+  - impone micro-PR non-breaking,
+  - applica la checklist QA (path-safety, scritture atomiche, logging strutturato),
+  - richiede l’aggiornamento della documentazione e della matrice AGENTS quando toccate.
+- In questo modo tutti i flussi descritti nel runbook restano allineati alle regole operative codificate in `.codex/PROMPTS.md`.
 
 ---
 
