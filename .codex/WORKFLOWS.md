@@ -4,9 +4,15 @@
 - Doppio approccio: **orchestratori CLI** o **UI Streamlit** (`onboarding_ui.py`).
 - Obiettivo: trasformare PDF in **KB Markdown AIready** con frontmatter coerente, README/SUMMARY e **preview HonKit (Docker)**; infine **push**.
 
+### Integrazione Codex (Repo-aware, v2)
+- Tutti i workflow UI/CLI devono essere avviati tramite il modello **Codex repo-aware**, seguendo quanto definito in `docs/codex_integrazione.md`.
+- Prima di ogni esecuzione assistita da Codex vengono caricati obbligatoriamente i tre SSoT: `docs/AGENTS_INDEX.md`, l'`AGENTS.md` dell'area interessata e `~/.codex/AGENTS.md`.
+- L'entrypoint operativo raccomandato è **Onboarding Task Codex** (vedi `.codex/PROMPTS.md`), che garantisce piano preliminare, micro-PR idempotenti, QA esplicita e aggiornamento della matrice AGENTS.
+- I workflow descritti in questo file sono pertanto eseguibili anche via agente, mantenendo: path-safety, scritture atomiche, logging strutturato e assenza di side-effects a import-time.
+
 ## Flusso end-to-end
 1) **pre_onboarding**  crea sandbox locale (`output/timmy-kb-<slug>/...`), risolve YAML struttura, opzionale **provisioning Drive** + upload `config.yaml`.
-2) **tag_onboarding**  genera `semantic/tags_raw.csv` (euristiche filename/path) + checkpoint HiTL  `tags_reviewed.yaml` (stub revisione).
+    2) **tag_onboarding**  genera `semantic/tags_raw.csv` (euristiche filename/path) + checkpoint HiTL  `tags_reviewed.yaml` (stub revisione).
 3) **Tag KG Builder** (`kg_build.py` / UI "Knowledge Graph dei tag")  legge `semantic/tags_raw.json`, invoca lassistant OpenAI `build_tag_kg`, salva `semantic/kg.tags.json` + `semantic/kg.tags.md` e mantiene la vista human-first per revisioni (occhio ai namespace).
 4) **semantic_onboarding** (UI via `semantic.api` / CLI)  **PDFMarkdown** in `book/`, arricchimento frontmatter usando **vocabolario canonico su SQLite (`tags.db`)**, rigenera il frontmatter, costruisce `README/SUMMARY` e prepara la preview Docker.
 4) **onboarding_full**  preflight (solo `.md` in `book/`)  **push GitHub**.
@@ -23,10 +29,12 @@ Preview Docker: start/stop con nome container sicuro e validazione porta.
 ### Invarianti
 - **Idempotenza** (rilanci sicuri), **path-safety** (tutte le write passano da util dedicate),
 - **Logging con redazione** dove richiesto; **portabilita** Win/Linux.
+- **Pattern Collector + Orchestratore (UI Refactor v2):** le funzioni che aggregano check, validazioni o fasi ripetitive devono essere strutturate in collector composabili, mentre l'orchestratore principale mantiene ordine, output invariati e semantica originale (vedi refactor preflight).
+- **Coerenza con Codex PROMPTS:** quando un workflow viene attivato da Codex, l'agente deve applicare i prompt di `.codex/PROMPTS.md` (dipendenze, path-safety, QA, update doc), mantenendo l'intero flusso nel perimetro definito da AGENTS_INDEX.
 
 ## API Semantiche Additive (v1)
 
-Queste funzioni estendono la pipeline semantica senza cambiare i flussi UI/CLI. Sono idempotenti, offline e rispettano la path-safety (SSoT) con scritture atomiche.
+Queste funzioni estendono la pipeline semantica senza cambiare i flussi UI/CLI. Sono idempotenti, offline, rispettano la path-safety (SSoT) con scritture atomiche e possono essere invocate anche dall'agente Codex in modalita' workflow, nel rispetto dei criteri Micro-PR e delle regole di QA definite in `.codex/PROMPTS.md`.
 
 - build_mapping_from_vision(context, logger, slug) -> Path:
   genera `config/semantic_mapping.yaml` a partire da `config/vision_statement.yaml`.

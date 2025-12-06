@@ -20,13 +20,31 @@ Nota OS: su Windows l'esperienza migliore e tramite WSL; l'estensione e pienamen
 ## Approccio pratico all'uso di Codex (day-by-day)
 
 **1) Modalita giusta per il task**  Usa *Agent* per refactor/manutenzione locale; *Chat* per brainstorming; *Full Access* solo per migrazioni massicce e su branch dedicati.
-**2) Regole dove servono**  Codex legge gli `AGENTS.md` del repo e il tuo `~/.codex/AGENTS.md`: i primi governano il progetto, il secondo preferenze personali. L**indice** (`docs/AGENTS_INDEX.md`) resta la SSoT.
-**3) Prompt minimi ma vincolanti**  Chiedi micro-PR idempotenti, diff esplicito e chiusura con `make qa-safe` (o equivalente).
-**4) Coerenza automatica**  Se tocchi un `AGENTS.md`, rigenera la Matrice dell'indice con `pre-commit run agents-matrix-check --all-files`. La CI (`job build` in `.github/workflows/ci.yaml`) riesegue `python tools/gen_agents_matrix.py --check` e fallisce se la matrice non e aggiornata.
+**2) Regole dove servono**  Framework AGENTS normalizzato: ogni file segue il template Scopo/Regole/Accettazione/Riferimenti; indice SSoT in `docs/AGENTS_INDEX.md` (ora con colonna "Task tipici dell'agente").
+**3) Prompt minimi ma vincolanti**  Usa l'API mentale in `.codex/PROMPTS.md` (es. "Onboarding Task Codex") per entrypoint e richieste ripetibili; micro-PR idempotenti con diff esplicito e QA mirata.
+**4) Coerenza automatica**  Se tocchi un `AGENTS.md`, rigenera la Matrice con `pre-commit run agents-matrix-check --all-files`; la CI ripete `python tools/gen_agents_matrix.py --check`.
 **5) Sicurezza & qualita**  Path-safety/I-O atomico, niente side-effects a import-time; linting/typing e test deterministici **senza rete**.
-**6) Performance**  Cache RAW PDF auto-invalidata da `safe_write_*` (config in `pipeline.raw_cache` di `config/config.yaml`); per lNLP usa `--nlp-workers/--nlp-batch-size` e (se serve debug) `--nlp-no-parallel`.
+**6) Performance**  Cache RAW PDF auto-invalidata da `safe_write_*` (config in `pipeline.raw_cache` di `config/config.yaml`); per NLP usa `--nlp-workers/--nlp-batch-size` e (se serve debug) `--nlp-no-parallel`.
 
 Obiettivo: accelerare il lavoro senza sorprese. L'agente propone, tu approvi: HiTL come regola, *repo-aware* come prassi.
+
+## Workflow Codex + Repo-Aware (v2)
+- Lettura obbligatoria dei tre SSoT prima di ogni task: `docs/AGENTS_INDEX.md`, l'`AGENTS.md` dell'area e `~/.codex/AGENTS.md`.
+- Entrypoint standard: prompt "Onboarding Task Codex" da `.codex/PROMPTS.md` (piano prima delle modifiche, micro-PR idempotenti, checklist QA).
+- Collaborazione tripartita: Sviluppatore ↔ Codex ↔ Senior Reviewer; riepilogo e QA esplicita prima della review esterna.
+- Principio micro-PR: patch piccole, atomiche, rilanciabili; se tocchi X aggiorna docs/test correlati.
+- Pipeline QA standard: ruff, black, typecheck, pytest mirati (o target repo `qa-safe`) con esito riportato nel messaggio finale.
+- Questo workflow e il percorso **predefinito** consigliato per qualsiasi attivita di sviluppo o refactor nel repo.
+
+### Integrazione con `.codex/PROMPTS.md` (obbligatoria)
+- I prompt in `.codex/PROMPTS.md` costituiscono la **API operativa** ufficiale per l’agente Codex.
+- Prima di ogni task, Codex esegue il blocco “Task di avvio” indicato in PROMPTS.md (lettura AGENTS_INDEX, AGENTS area, `.codex/AGENTS.md`, runbook stesso).
+- Il prompt **Onboarding Task Codex** è l’entrypoint vincolante per:
+  - definire il piano di lavoro,
+  - garantire micro-PR non-breaking,
+  - applicare la checklist QA (path-safety, write atomiche, logging strutturato),
+  - aggiornare documentazione e matrice AGENTS se toccate.
+- Questo garantisce coerenza esatta con quanto definito in `.codex/PROMPTS.md`, che governa tutti i flussi di sviluppo assistito.
 
 ## Flusso Codex + Senior Reviewer
 - Quando il task richiede review esterne (nuove feature, refactor sensibili, integrazioni Drive/Vision), Codex opera nel modello tripartito: sviluppatore umano (Franco/team), agente Codex e Senior Reviewer esterno.
@@ -110,7 +128,13 @@ Usa MCP per agganciare strumenti sicuri (es. solo filesystem del workspace). Per
 - Scenario Agent (consigliato): esegue comandi locali, propone patch, rispetta l'indice `docs/AGENTS_INDEX.md` e gli `AGENTS.md` locali, chiude il loop con test/lint.
 - Scenario Agent (Full Access): usarlo solo per task espliciti ad alto sforzo (migrazioni massicce, rigenerazioni documentazione), su branch dedicati.
 
+## Pattern architetturali consigliati
+- Collector + Orchestratore nei moduli UI: separa raccolta check (collector) e coordinamento (orchestratore), mantenendo ordine e output invariati (es. preflight UI).
+- Refactor non-breaking: logica invariata, leggibilita aumentata, nessun cambio di firma o side-effect a import-time.
+- Logging strutturato minimale, coerente con `docs/logging_events.md`: eventi sintetici, `extra` senza PII/segreti, solo per start/fail/complete.
+
 Esempi di prompt efficaci
+- "Applica Onboarding Task Codex su `src/ui/preflight.py`: identifica check e orchestrazione, proponi micro-refactor non-breaking (collector + orchestratore) e log strutturato minimale."
 - "Allinea docs/ alle coding rules e ai termini glossario; applica correzioni cSpell e aggiorna frontmatter. Chiudi con make docs e allega diff."
 - "Nel servizio semantic.api, usa DB come SSoT per i tag. Scrivi migrazione e test."
 - "Rivedi onboarding_ui.py: spiega flusso, dipendenze e orchestratori chiamati; proponi 3 microPR idempotenti con stima impatto."
@@ -144,3 +168,4 @@ Nota: i target "safe" degradano in assenza degli strumenti (skip espliciti); gli
 - Codex CLI open-source (configurazione `~/.codex`, MCP, AGENTS.md, sandbox e approvals).
 - MCP con Agents SDK di OpenAI (attacco server, filtraggio tool).
 - Che cos'e AGENTS.md (formato e priorita "file piu vicino").
+- [Runbook Codex](runbook_codex.md) - flussi operativi dettagliati per l'uso di Codex come agente.

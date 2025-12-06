@@ -6,6 +6,12 @@
 - **Scope:** operazioni locali, UI/CLI, integrazioni OpenAI/Drive/GitHub, sicurezza I/O e path-safety, qualita', rollback e risoluzione problemi.
 - **Rimandi canonici:** [Developer Guide](developer_guide.md), [Coding Rules](coding_rule.md), [Architecture Overview](architecture.md), [AGENTS Index](AGENTS_INDEX.md), [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md), [User Guide](user_guide.md).
 
+> **Nota:** questo runbook si integra con il documento
+> **[`docs/codex_integrazione.md`](codex_integrazione.md)**
+> che definisce il *Workflow Codex + Repo-Aware (v2)*, l’uso dei tre SSoT (AGENTS_INDEX, AGENTS di area, `~/.codex/AGENTS.md`),
+> e l’entrypoint operativo *Onboarding Task Codex*.
+> Il runbook resta la guida pratica per l’esecuzione dei flussi, mentre `codex_integrazione.md` definisce il modello mentale e metodologico.
+
 ---
 
 ## 1) Prerequisiti & setup rapido
@@ -26,6 +32,23 @@ make qa-safe
 pytest -q
 ```
 Riferimenti: [README](../README.md), [Developer Guide -> Dipendenze & QA](developer_guide.md).
+
+### Workflow Codex (operativo) – Allineamento rapido
+- Prima di eseguire attività di sviluppo/refactor, l’agente Codex deve caricare i tre SSoT:
+  `docs/AGENTS_INDEX.md` + `AGENTS.md` dell’area + `~/.codex/AGENTS.md`.
+- L’entrypoint suggerito è **Onboarding Task Codex** definito in `.codex/PROMPTS.md`.
+- Ogni intervento deve produrre una *micro-PR* idempotente, con QA documentata nel messaggio finale.
+- I flussi e le azioni Codex devono essere coerenti con le policy del runbook e la Matrice AGENTS.
+
+### Integrazione con `.codex/PROMPTS.md` (obbligatoria)
+- I prompt in `.codex/PROMPTS.md` costituiscono la **API operativa** ufficiale per l’agente Codex.
+- Prima di ogni task, Codex esegue il blocco “Task di avvio” indicato in `.codex/PROMPTS.md` (lettura `docs/AGENTS_INDEX.md`, `AGENTS.md` dell’area, `~/.codex/AGENTS.md`, runbook stesso).
+- Il prompt **Onboarding Task Codex** è l’entrypoint vincolante per:
+  - definire il piano di lavoro,
+  - garantire micro-PR non-breaking,
+  - applicare la checklist QA (path-safety, write atomiche, logging strutturato),
+  - aggiornare documentazione e matrice AGENTS se toccate.
+- Questo garantisce coerenza esatta con quanto definito in `.codex/PROMPTS.md`, che governa tutti i flussi di sviluppo assistito.
 
 ---
 
@@ -158,6 +181,15 @@ Riferimenti: [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [User Guide](user_guide
 
 > Lo scenario **Agent** e' predefinito; **Full Access** e' eccezione con branch dedicati. Chat "solo testo" e' possibile ma **non** effettua write/push.
 
+### 5.0 Principi operativi comuni (v2)
+- Lo scenario **Agent** è predefinito; usa path-safety, scritture atomiche e aggiornamento docs/test.
+- Tutte le attività devono rispettare:
+  - workflow Codex v2 (`codex_integrazione.md`)
+  - perimetro AGENTS (AGENTS_INDEX + AGENTS locali)
+  - micro-PR + QA esplicita.
+- I prompt Codex vanno selezionati da `.codex/PROMPTS.md`; l’entrypoint raccomandato è **Onboarding Task Codex**.
+- Il modello a tre attori (Sviluppatore ↔ Codex ↔ Senior Reviewer) guida la collaborazione per i task sensibili.
+
 ### 5.1 Scenario *Chat*
 - Solo reasoning/risposte; nessun I/O. Utile per grooming, draft e check veloci.
 
@@ -239,6 +271,16 @@ Riferimenti: [.codex/AGENTS](../.codex/AGENTS.md).
 - La CI (`job build` in `.github/workflows/ci.yaml`) esegue `python tools/gen_agents_matrix.py --check` e fallisce se la matrice non e' aggiornata.
 
 Riferimenti: [AGENTS Index](AGENTS_INDEX.md), [docs/AGENTS.md](AGENTS.md), [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/semantic/AGENTS.md](../src/semantic/AGENTS.md), [src/pipeline/AGENTS.md](../src/pipeline/AGENTS.md), [tests/AGENTS.md](../tests/AGENTS.md), [.codex/AGENTS.md](../.codex/AGENTS.md).
+
+---
+
+### Pattern operativi aggiuntivi (UI/Refactor)
+- Nei moduli UI (es. preflight), adottare il pattern **Collector + Orchestratore**
+  per separare raccolta check e coordinamento, mantenendo ordine e output invariati.
+- I refactor devono essere **non-breaking**, mantenere firma e semantica dei messaggi,
+  ed evitare side-effect a import-time.
+- Il logging deve restare minimale e strutturato: eventi sintetici (`run_start`, `check_failed`, `run_complete`)
+  senza includere dati sensibili (PII/segreti).
 
 ---
 
