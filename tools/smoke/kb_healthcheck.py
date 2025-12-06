@@ -75,6 +75,7 @@ class HealthcheckError(RuntimeError):
         self.payload = payload
         self.code = code
 
+
 def _print_err(payload: Dict[str, Any], code: int) -> None:
     """Stampa JSON su stderr e termina con codice specifico."""
     print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
@@ -436,9 +437,7 @@ def main() -> None:
     _require_env()
     _ensure_kb_enabled_or_fail()
 
-    parser = argparse.ArgumentParser(
-        description="Healthcheck E2E Vision (usa Vision reale + tracing Assistente)"
-    )
+    parser = argparse.ArgumentParser(description="Healthcheck E2E Vision (usa Vision reale + tracing Assistente)")
     parser.add_argument("--slug", default="dummy", help="Slug cliente (default: dummy)")
     parser.add_argument("--force", action="store_true", help="Forza rigenerazione Vision")
     parser.add_argument(

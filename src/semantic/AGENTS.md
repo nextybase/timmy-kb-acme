@@ -1,16 +1,15 @@
-# AGENT  Semantica (enrichment/frontmatter)
-> Nota: policy comuni in `docs/AGENTS_INDEX.md`; questo file contiene solo override specifici.
+# Scopo
+Regole per i flussi semantici (enrichment/frontmatter) mantenendo SSoT e idempotenza.
 
-## Obiettivi
-- Arricchimento frontmatter coerente e ripetibile (idempotente) sui Markdown in `book/`.
-- Uso esclusivo della **facade `semantic.api`** per le API pubbliche.
+# Regole (override)
+- Uso della facade pubblica `semantic.api`; niente import/invocazioni di funzioni `_private`.
+- SSoT tag runtime: `semantic/tags.db`; `tags_reviewed.yaml` solo per authoring/migrazione.
+- README/SUMMARY tramite utility repo con fallback idempotenti (nessuna sovrascrittura distruttiva).
+- Nessun side-effect a import-time; funzioni pure dove possibile.
 
-## Regole
-- **SSoT tag runtime: SQLite (`semantic/tags.db`)**; YAML `tags_reviewed.yaml` e solo authoring/migrazione.
-- Non importare o invocare funzioni `_private`; mantenere compatibilita della facade.
-- README/SUMMARY: usa util repo; se assenti, fallback **idempotenti** (niente sovrascritture distruttive).
-- Nessun sideeffect in import-time; funzioni pure dove possibile.
-
-## Accettazione
+# Criteri di accettazione
 - Enrichment non duplica tag, rispetta sinonimi/alias e non altera contenuti non frontmatter.
-- In assenza di `tags.db`: proporre rigenerazione/migrazione, non forzare fallback silenziosi.
+- Se `tags.db` manca, proporre rigenerazione/migrazione invece di fallback silenziosi.
+
+# Riferimenti
+- docs/AGENTS_INDEX.md

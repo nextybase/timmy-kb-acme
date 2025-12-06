@@ -1,13 +1,13 @@
-# AGENT  Test
-> Nota: policy comuni in `docs/AGENTS_INDEX.md`; questo file contiene solo override specifici.
+# Scopo
+Gestione test con piramide unit -> middle/contract -> smoke E2E su dataset dummy.
 
-## Strategia
-- Piramide: unit  middle/contract  smoke E2E (dummy).
-- Genera dataset dummy con tool dedicato (no dati reali).
+# Regole (override)
+- Dataset dummy generati con tool dedicati (mai dati reali).
+- Nessuna dipendenza di rete: Drive/Git vanno mockati o bypassati.
+- Contract test sui guard di `book/` (solo `.md`, ignorare `.md.fp`).
 
-## Regole
-- Niente dipendenze di rete (Drive/Git mockati o bypass).
-- Contract test su guard di `book/` (solo `.md`, `.md.fp` ignorati).
+# Criteri di accettazione
+- Build/test verdi in locale; smoke E2E su slug dummy riproducibile.
 
-## Accettazione
-- Build verde locale; smoke E2E su dummy slug riproducibile.
+# Riferimenti
+- docs/AGENTS_INDEX.md

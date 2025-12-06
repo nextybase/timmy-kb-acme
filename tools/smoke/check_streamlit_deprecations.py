@@ -8,7 +8,6 @@ import subprocess
 import sys
 from typing import List, Optional, Tuple
 
-
 CommandResult = Tuple[str, str]
 
 

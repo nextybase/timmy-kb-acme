@@ -154,8 +154,10 @@ def _ensure_streamlit_api(st_module: StreamlitLike) -> None:
     if st_module is None:
         raise RuntimeError("Streamlit non inizializzato")
     version = getattr(st_module, "__version__", "0")
-    if _parse_version(version) < _MIN_STREAMLIT_VERSION or not hasattr(st_module, "Page") or not hasattr(
-        st_module, "navigation"
+    if (
+        _parse_version(version) < _MIN_STREAMLIT_VERSION
+        or not hasattr(st_module, "Page")
+        or not hasattr(st_module, "navigation")
     ):
         raise RuntimeError(
             "Streamlit 1.50.0 o superiore richiesto per l'interfaccia Beta 0. "
@@ -169,6 +171,7 @@ def _hydrate_query_defaults() -> None:
         from ui.utils.route_state import get_slug_from_qp as _get_slug
         from ui.utils.route_state import get_tab as _get_tab
     except Exception:
+
         def _noop_tab(*_args: object, **_kwargs: object) -> None:
             return None
 
@@ -354,9 +357,7 @@ def build_navigation(
         logger.info(
             "ui.navigation.pages",
             extra={
-                "pages": {
-                    group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()
-                }
+                "pages": {group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()}
             },
         )
     except Exception:

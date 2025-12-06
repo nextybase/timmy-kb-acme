@@ -102,9 +102,7 @@ def check_router() -> list[str]:
     # Passa se trovi almeno uno fra st.Page e st.navigation nel codice UI.
     hits = sum(grep_count(SRC, p) for p in REQUIRED_ROUTER_ANY)
     if hits == 0:
-        return [
-            "Router APIs non rilevate (st.Page/st.navigation). Migrare al router nativo Streamlit (>=1.50)."
-        ]
+        return ["Router APIs non rilevate (st.Page/st.navigation). Migrare al router nativo Streamlit (>=1.50)."]
     return []
 
 
@@ -139,9 +137,7 @@ def check_logger_prefix() -> list[str]:
             name = m.group(2) or ""
             if not name.startswith("ui."):
                 line_no = text.count("\n", 0, m.start()) + 1
-                warnings.append(
-                    f"{file_path}:{line_no}: logger senza prefisso 'ui.' -> getLogger('{name}')"
-                )
+                warnings.append(f"{file_path}:{line_no}: logger senza prefisso 'ui.' -> getLogger('{name}')")
     return warnings
 
 

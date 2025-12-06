@@ -6,7 +6,7 @@ import json
 import os
 import socket
 from pathlib import Path
-from typing import List, Tuple
+from typing import Iterable, List, Tuple
 
 try:
     from dotenv import load_dotenv
@@ -25,19 +25,25 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 CheckItem = Tuple[str, bool, str]
 LOGGER = get_structured_logger("ui.preflight")
+DEPENDENCY_CHECKS = [
+    ("PyMuPDF", "fitz", "pip install pymupdf"),
+    ("ReportLab", "reportlab", "pip install reportlab"),
+    ("Google API Client", "googleapiclient.discovery", "pip install google-api-python-client"),
+]
 
 
 def _maybe_load_dotenv() -> None:
     """Carica .env solo quando serve (no side-effects a import-time)."""
+    loaders = []
     if load_dotenv:
+        loaders.append(lambda: load_dotenv(override=False))
+    loaders.append(ensure_dotenv_loaded)
+
+    for fn in loaders:
         try:
-            load_dotenv(override=False)
+            fn()
         except Exception:
             pass
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        pass
 
 
 def _is_importable(mod: str) -> bool:
@@ -102,6 +108,14 @@ def _port_in_use(port: int) -> bool:
         return sock.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _run_optional_import_checks(defs: Iterable[tuple[str, str, str]]) -> list[CheckItem]:
+    """Costruisce i check di import opzionali con hint di installazione."""
+    checks: list[CheckItem] = []
+    for name, module, hint in defs:
+        checks.append((name, _is_importable(module), hint))
+    return checks
+
+
 def _has_openai_key() -> bool:
     if get_env_var("OPENAI_API_KEY", default=None):
         return True
@@ -114,61 +128,102 @@ def _has_openai_key() -> bool:
 
 
 def _vision_schema_ok() -> tuple[bool, str]:
+    def _resolve_schema_path(repo_root: Path) -> Path:
+        return ensure_within_and_resolve(repo_root, repo_root / "schemas" / "VisionOutput.schema.json")
+
+    def _load_schema_text(repo_root: Path, schema_path: Path) -> tuple[bool, str]:
+        if not schema_path.exists():
+            return False, f"schema mancante: {schema_path}"
+        schema_text = read_text_safe(repo_root, schema_path, encoding="utf-8")
+        return True, schema_text
+
+    def _parse_schema(schema_text: str) -> tuple[bool, dict | str]:
+        try:
+            return True, json.loads(schema_text)
+        except json.JSONDecodeError as exc:
+            return False, f"schema JSON invalido: {exc}"
+
+    def _compare_required(schema: dict) -> tuple[bool, str]:
+        props = set(schema.get("properties", {}).keys())
+        required = set(schema.get("required", []))
+        missing = props - required
+        extra = required - props
+        if missing or extra:
+            parts = []
+            if missing:
+                parts.append(f"mancano in required: {', '.join(sorted(missing))}")
+            if extra:
+                parts.append(f"required contiene chiavi assenti: {', '.join(sorted(extra))}")
+            return False, "; ".join(parts)
+        return True, "Vision schema allineato"
+
     if os.getenv("TIMMY_VISION_SKIP_SCHEMA_CHECK", "0").lower() in {"1", "true", "yes", "on"}:
         return True, "Vision schema check bypassed (TIMMY_VISION_SKIP_SCHEMA_CHECK)"
     repo_root = Path(__file__).resolve().parents[2]
-    schema_path = ensure_within_and_resolve(repo_root, repo_root / "schemas" / "VisionOutput.schema.json")
-    if not schema_path.exists():
-        return False, f"schema mancante: {schema_path}"
-    try:
-        schema_text = read_text_safe(repo_root, schema_path, encoding="utf-8")
-        schema = json.loads(schema_text)
-    except json.JSONDecodeError as exc:
-        return False, f"schema JSON invalido: {exc}"
-    props = set(schema.get("properties", {}).keys())
-    required = set(schema.get("required", []))
-    missing = props - required
-    extra = required - props
-    if missing or extra:
-        parts = []
-        if missing:
-            parts.append(f"mancano in required: {', '.join(sorted(missing))}")
-        if extra:
-            parts.append(f"required contiene chiavi assenti: {', '.join(sorted(extra))}")
-        detail = "; ".join(parts)
-        return False, detail
-    return True, "Vision schema allineato"
+    schema_path = _resolve_schema_path(repo_root)
+
+    ok, payload = _load_schema_text(repo_root, schema_path)
+    if not ok:
+        return False, str(payload)
+
+    parsed_ok, parsed = _parse_schema(payload)
+    if not parsed_ok:
+        return False, str(parsed)
+
+    return _compare_required(parsed)
 
 
-def run_preflight() -> tuple[List[CheckItem], bool]:
-    _maybe_load_dotenv()
-    results: List[CheckItem] = []
-
+def _collect_schema_checks() -> list[CheckItem]:
     schema_ok, schema_msg = _vision_schema_ok()
-    results.append(("Vision schema", schema_ok, schema_msg))
+    return [("Vision schema", schema_ok, schema_msg)]
 
+
+def _collect_docker_and_pipeline_checks() -> tuple[list[CheckItem], bool]:
     docker_ok, hint = _docker_ok()
-    results.append(("Docker", docker_ok, hint or "OK"))
-
-    # Allineamento UI/pipeline: evita mismatch tra repo clonato e installazione pip.
     pipe_ok, pipe_hint = _pipeline_origin_ok()
-    results.append(("Pipeline install", pipe_ok, pipe_hint))
+    return [
+        ("Docker", docker_ok, hint or "OK"),
+        ("Pipeline install", pipe_ok, pipe_hint),
+    ], docker_ok
 
-    results.append(("PyMuPDF", _is_importable("fitz"), "pip install pymupdf"))
-    results.append(("ReportLab", _is_importable("reportlab"), "pip install reportlab"))
-    results.append(
-        (
-            "Google API Client",
-            _is_importable("googleapiclient.discovery"),
-            "pip install google-api-python-client",
-        )
-    )
-    results.append(("OPENAI_API_KEY", _has_openai_key(), "Imposta .env o st.secrets e riavvia"))
 
+def _collect_dependency_checks() -> list[CheckItem]:
+    return _run_optional_import_checks(DEPENDENCY_CHECKS)
+
+
+def _collect_env_checks() -> list[CheckItem]:
+    return [("OPENAI_API_KEY", _has_openai_key(), "Imposta .env o st.secrets e riavvia")]
+
+
+def _collect_port_check(docker_ok: bool) -> bool:
     port_val = get_env_var("PORT", default="4000")
     try:
         port_num = int(port_val or "4000")
     except Exception:
         port_num = 4000
-    port_busy = _port_in_use(port_num) if docker_ok else False
+    return _port_in_use(port_num) if docker_ok else False
+
+
+def run_preflight() -> tuple[List[CheckItem], bool]:
+    """Esegue i check di preflight (import-safe, dipendenze, schema, porte)."""
+    LOGGER.info("ui.preflight.run_start")
+    _maybe_load_dotenv()
+    results: List[CheckItem] = []
+
+    results.extend(_collect_schema_checks())
+
+    docker_and_pipe_checks, docker_ok = _collect_docker_and_pipeline_checks()
+    results.extend(docker_and_pipe_checks)
+
+    results.extend(_collect_dependency_checks())
+    results.extend(_collect_env_checks())
+
+    port_busy = _collect_port_check(docker_ok)
+    for name, ok, hint in results:
+        if not ok:
+            LOGGER.warning("ui.preflight.check_failed", extra={"check": name, "hint": hint})
+    LOGGER.info(
+        "ui.preflight.run_complete",
+        extra={"checks": len(results), "port_busy": port_busy},
+    )
     return results, port_busy

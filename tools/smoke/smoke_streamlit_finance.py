@@ -43,25 +43,23 @@ def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
 
 def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
     """
-    Tab Finanza (CSV â†’ finance.db), estratta da onboarding_ui.py.
+    Tab Finanza (CSV ???????T finance.db), estratta da onboarding_ui.py.
 
     Dipendenze runtime:
       - finance.api.import_csv
       - finance.api.summarize_metrics
-      - (opzionale) semantic.api.get_paths  â† usata solo come fallback
+      - (opzionale) semantic.api.get_paths  ?????¶? usata solo come fallback
     """
     # Import lazy (evita side-effects a import-time del modulo)
     from finance.api import import_csv as fin_import_csv
     from finance.api import summarize_metrics as fin_summarize
 
-    st.subheader("Finanza (CSV â†’ finance.db)")
+    st.subheader("Finanza (CSV ???????T finance.db)")
     st.caption("Ingestione opzionale di metriche numeriche in un DB SQLite separato (`semantic/finance.db`).")
 
     colA, colB = st.columns([1, 1], gap="large")
 
-    # â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
     # Colonna A: uploader + import
-    # â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
     with colA:
         # Base dir coerente con ClientContext (override inclusi)
         base_dir: Path = _resolve_base_dir(slug, log)
@@ -110,22 +108,15 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
             except Exception as e:  # pragma: no cover - mostrato in UI
                 st.exception(e)
 
-    # â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
     # Colonna B: riepilogo metriche
-    # â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
     with colB:
         try:
             base_dir = _resolve_base_dir(slug, log)
             summary: List[tuple[str, int]] = fin_summarize(base_dir)
             if summary:
-                st.caption("Metriche presenti:")
-                st.table(
-                    {
-                        "metric": [m for m, _ in summary],
-                        "osservazioni": [n for _, n in summary],
-                    }
-                )
+                st.write("Metriche disponibili:")
+                st.table({"metric": [m for m, _ in summary], "rows": [r for _, r in summary]})
             else:
-                st.info("Nessuna metrica importata al momento.")
+                st.info("Nessuna metrica importata in finance.db")
         except Exception as e:  # pragma: no cover - mostrato in UI
             st.exception(e)

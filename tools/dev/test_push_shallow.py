@@ -28,8 +28,8 @@ def main() -> int:
     # Ensure src/ is importable
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
     # Stub PyGithub to avoid external dependency in this integration
-    import types
     import sys as _sys
+    import types
 
     github_mod = types.ModuleType("github")
 

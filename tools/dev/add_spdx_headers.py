@@ -30,9 +30,7 @@ DEFAULT_EXCLUDE_DIRS = {
 }
 
 
-def discover_python_files(
-    roots: Iterable[Path], exclude_dirs: set[str]
-) -> list[Path]:
+def discover_python_files(roots: Iterable[Path], exclude_dirs: set[str]) -> list[Path]:
     found: list[Path] = []
     for root in roots:
         if not root.exists():
@@ -71,9 +69,7 @@ def ensure_trailing_nl(b: bytes) -> bytes:
     return b if b.endswith(b"\n") else b + b"\n"
 
 
-def process_file(
-    path: Path, license_id: str, dry_run: bool = False
-) -> tuple[bool, str]:
+def process_file(path: Path, license_id: str, dry_run: bool = False) -> tuple[bool, str]:
     try:
         with open(path, "rb") as fh:
             content = fh.read()
@@ -94,9 +90,7 @@ def process_file(
     if insert_at > 0 and not lines[insert_at - 1].endswith(b"\n"):
         lines[insert_at - 1] = ensure_trailing_nl(lines[insert_at - 1])
 
-    new_content = b"".join(
-        lines[:insert_at] + [spdx_line] + lines[insert_at:]
-    )
+    new_content = b"".join(lines[:insert_at] + [spdx_line] + lines[insert_at:])
     if dry_run:
         return True, f"DRY-RUN would add SPDX to: {path}"
     try:
@@ -108,10 +102,7 @@ def process_file(
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
-        description=(
-            "Insert SPDX headers into Python files that are missing them "
-            "(safe & idempotent)."
-        )
+        description=("Insert SPDX headers into Python files that are missing them " "(safe & idempotent).")
     )
     parser.add_argument(
         "--license-id",
@@ -153,10 +144,7 @@ def main(argv: list[str]) -> int:
         else:
             skipped += 1
 
-    print(
-        f"\nSummary: changed={changed}, skipped={skipped}, "
-        f"errors={errors}, scanned={len(to_scan)}"
-    )
+    print(f"\nSummary: changed={changed}, skipped={skipped}, " f"errors={errors}, scanned={len(to_scan)}")
     return 1 if errors else 0
 
 

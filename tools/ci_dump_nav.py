@@ -20,10 +20,8 @@ _bootstrap_paths()
 
 import logging
 
-from ui.gating import GateState, compute_gates, visible_page_specs  # noqa: E402
-
-
 import pipeline.env_utils as _env_utils  # noqa: E402
+from ui.gating import GateState, compute_gates, visible_page_specs  # noqa: E402
 
 _logger = logging.getLogger("pipeline.env_utils.ci_dump")
 _logger.addHandler(logging.NullHandler())

@@ -1,10 +1,17 @@
-# Istruzioni di progetto (indice)
-> Nota: per le policy comuni degli agent consulta `docs/AGENTS_INDEX.md`. Questo file contiene indicazioni generali di progetto.
+# Scopo
+Indice radice che rimanda alle policy comuni e ai documenti operativi `.codex/` prima di qualsiasi intervento.
 
-Consulta e segui i documenti in **.codex/**:
-- Prima di qualsiasi intervento, apri e rileggi `docs/runbook_codex.md`.
-- `.codex/CONSTITUTION.md`  principi NeXT e Probabilismo.
-- `.codex/WORKFLOWS.md`  pipeline UI/CLI.
-- `.codex/CODING_STANDARDS.md`  regole tecniche.
-- `.codex/CHECKLISTS.md`  checklist pronte all'uso.
-- `.codex/PROMPTS.md`  prompt operativi riusabili.
+# Regole (override)
+- Prima di lavorare rileggi `docs/runbook_codex.md` e i documenti `.codex/` per allineare workflow e standard.
+
+# Criteri di accettazione
+- Le attività partono solo dopo avere consultato `docs/runbook_codex.md` e le guide `.codex/`.
+
+# Riferimenti
+- docs/AGENTS_INDEX.md
+- docs/runbook_codex.md
+- .codex/CONSTITUTION.md
+- .codex/WORKFLOWS.md
+- .codex/CODING_STANDARDS.md
+- .codex/CHECKLISTS.md
+- .codex/PROMPTS.md

@@ -24,7 +24,6 @@ from pipeline.gitbook_publish import publish_book_to_gitbook
 from pipeline.layout_summary import read_layout_summary_entries
 from pipeline.logging_utils import get_structured_logger
 
-
 LOGGER = get_structured_logger("tools.gitbook_publish_smoke")
 
 

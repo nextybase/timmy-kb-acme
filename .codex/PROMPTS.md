@@ -1,68 +1,90 @@
-# Prompt riusabili (per Agent/Chat IDE)
+# Pipeline & I/O
 
-## Doc-sync (API o flow cambiati)
-Sistema la documentazione in modo idempotente:
-- Leggi `docs/architecture.md`, `docs/developer_guide.md`, `docs/guida_ui.md`.
-- Confronta con il codice attuale.
-- Applica patch minime e precise (no riscritture ampie).
-- Aggiorna anche `.codex/WORKFLOWS.md` se serve.
-- Verifica cSpell e link interni.
+## Task di avvio
+- Leggi `docs/AGENTS_INDEX.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, `docs/runbook_codex.md`.
+- Usa solo utility SSoT (`ensure_within*`, `safe_write_*`), scope write: `src/`, `tests/`, `docs/`, `.codex/`.
 
-## Hardening I/O
-Controlla path-safety e scritture atomiche:
-- Sostituisci join manuali con util SSoT.
-- Inserisci guard su directory target e slug.
-- Aggiungi test unit per i casi limite.
+## Hardening path-safety e scritture atomiche
+- Rimpiazza join manuali con `ensure_within_and_resolve`.
+- Applica `safe_write_text/bytes` atomici e guard su slug/perimetro.
+- Aggiungi test unit per traversal/symlink e path fuori perimetro.
 
-## Enrichment frontmatter
-Verifica arricchimento usando **SQLite** (`semantic/tags.db`); YAML e solo authoring/migrazione.
-Se `tags.db` assente: proponi migrazione o rigenerazione safe.
+## Orchestrazione GitHub (helper obbligatori)
+- Usa `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`.
+- Nei test stubba `_prepare_repo`/`_stage_changes` come in `tests/pipeline/test_github_push.py`.
+- Log strutturato del flusso (`prepare_repo`, `stage_changes`, `push`).
 
-## cSpell cleanup su docs/
-- Raccogli parole ignote; aggiorna `cspell.json` e `.vscode/settings.json`.
-- Evita ignore perfile se non necessario.
-
-### Micro-PR Commit Template
+## Template micro-PR
 Titolo: <breve, imperativo>
 Motivazione: <bugfix/security/robustezza; impatto>
 Scope: <file toccati e perche; 1 change set>
-Regole rispettate: path-safety  / atomiche  / no side-effects a import-time
-Test: <nuovi/aggiornati; come riprodurre  es. pytest -k ...>
+Regole rispettate: path-safety / atomiche / no side-effects a import-time
+Test: <nuovi/aggiornati; es. pytest -k ...>
 QA: isort  black  ruff --fix  mypy  pytest
 Note docs: <se tocchi X, aggiorna Y/Z>
 
-## Prompts per collaborazione con Senior Reviewer
+## Onboarding Task Codex
+- Leggi obbligatoriamente i 3 SSoT prima di ogni intervento: `docs/AGENTS_INDEX.md`, `AGENTS.md` locale, `.codex/AGENTS.md`.
+- Prima di modificare file, proponi un piano d'azione sintetico (passi e ordine).
+- Applica modello Micro-PR: scope singolo, diff minimo, idempotente, motivazione chiara.
+- Checklist QA da confermare: path-safety (utility SSoT, scope `src/` `tests/` `docs/` `.codex/`), write-atomicity, logging strutturato, aggiornare la matrice AGENTS se toccati gli `AGENTS.md`, aggiornare documentazione se necessario, rispetto degli override specifici dell'area.
 
-### 1. Dev task con review del Senior
-- Scopo: prompt da usare quando lo sviluppatore richiede una modifica sapendo che il lavoro ricevera review dal Senior Reviewer esterno.
-> Repo `nextybase/timmy-kb-acme`
-> Obiettivi:
-> - implementare la modifica richiesta con approccio minimo ma completo;
-> - rispettare rigorosamente `.codex/CONSTITUTION.md`, `.codex/AGENTS.md` e `docs/AGENTS_INDEX.md`;
-> - predisporre il lavoro per facilitare la revisione del Senior Reviewer.
-> Regole operative:
-> - modificare solo le path consentite dal contratto degli agent;
-> - usare sempre le utility di I/O sicure (safe write, `ensure_within*`, ecc.);
-> - mantenere i cambi idempotenti, locali, da micro-PR;
-> - eseguire la pipeline QA definita nel progetto (formatter, linter, type-checker, test).
-> Output richiesto:
-> 1. Sintesi del task (13 frasi).
-> 2. Elenco file toccati con spiegazione per ciascuno.
-> 3. Diff logico principale (non il diff completo).
-> 4. Esito QA: comandi usati + risultato.
-> 5. Rischi/dubbi da condividere col Senior.
+# Semantica & tags.db
 
-### 2. Preparare la richiesta di review per il Senior
-- Scopo: prompt da usare per chiedere a Codex di produrre il messaggio destinato al Senior Reviewer esterno con il riepilogo del lavoro.
-> Contesto:
-> - repo `nextybase/timmy-kb-acme`;
-> - esiste gia una branch di lavoro con i cambi.
-> Obiettivo:
-> - generare un messaggio chiaro e completo da inviare al Senior Reviewer esterno.
-> Il messaggio deve includere:
-> - titolo sintetico del cambiamento;
-> - contesto (perche e stato fatto);
-> - elenco file toccati + principali modifiche per ciascun file;
-> - esito QA (formatter, linter, type-checker, test eseguiti e risultato);
-> - eventuali test mancanti o known issues;
-> - 23 domande precise per il Senior (es. dubbi architetturali, rischi o alternative scartate).
+## Task di avvio
+- Leggi `docs/AGENTS_INDEX.md` e `src/semantic/AGENTS.md`.
+- Verifica presenza `semantic/tags.db`; `tags_reviewed.yaml` solo per authoring/migrazione.
+
+## Enrichment frontmatter
+- Usa `semantic.api` (niente `_private`); SSoT tag in `tags.db`.
+- Se `tags.db` manca: proponi migrazione/rigenerazione safe (no fallback silenzioso).
+- README/SUMMARY via utility repo con fallback idempotenti.
+
+## Allineamento facade vs servizi
+- Controlla parita di firma tra `semantic.api` e servizi (`convert/frontmatter/embedding`).
+- Aggiungi test di compatibilita e alias/sinonimi per tag.
+
+# UI Streamlit
+
+## Task di avvio
+- Leggi `docs/streamlit_ui.md`, `src/ui/AGENTS.md`, `src/ui/pages/AGENTS.md`.
+- Verifica gating RAW/slug, router `st.Page` + `st.navigation`, import-safe (no I/O a import).
+
+## Router e gating onboarding
+- Forza routing nativo (`st.navigation(pages).run()`), link interni con `st.page_link`.
+- Gating: tab Semantica attiva solo se `raw/` presente; messaggi utente brevi, log dettagliati.
+- Stato/slug tramite `ui.utils.route_state` e `ui.utils.slug`; niente query hacks.
+
+## Sweep deprecazioni e layout
+- Rimuovi `st.cache`, `st.experimental_*`, `unsafe_allow_html`, `use_container_width`.
+- Layout compat con stub (evita `with col` non supportati); preferisci `st.dialog` con fallback.
+- Logging `get_structured_logger("ui.<pagina>")`, senza `print()`/PII.
+
+# Test & QA
+
+## Task di avvio
+- Leggi `docs/AGENTS_INDEX.md`, `tests/AGENTS.md`.
+- Setup dataset dummy; nessuna dipendenza di rete (mock Drive/Git).
+
+## QA pipeline
+- Esegui: `isort`, `black`, `ruff --fix`, `mypy`, `pytest -q -k 'not slow'`.
+- Contract test su guard `book/` (solo `.md`, ignora `.md.fp`), smoke E2E su slug dummy.
+
+# Docs & Runbook
+
+## Task di avvio
+- Leggi `docs/runbook_codex.md`, `docs/AGENTS_INDEX.md`, `docs/AGENTS.md`.
+- Mantieni frontmatter/titoli coerenti (`v1.0 Beta`), cSpell su `docs/` e `README.md`.
+
+## Doc-sync (API o flow cambiati)
+- Confronta codice vs `docs/architecture.md`, `docs/developer_guide.md`, `docs/guida_ui.md`.
+- Applica patch minime; aggiorna `.codex/WORKFLOWS.md` se il flow cambia.
+- Verifica cSpell e link relativi.
+
+## cSpell cleanup su docs/
+- Raccogli parole ignote; aggiorna `cspell.json` / `.vscode/settings.json` solo per termini di dominio.
+- Evita ignore per file interi.
+
+## Richiesta review al Senior Reviewer
+- Output: titolo sintetico, contesto, file toccati + modifiche, esito QA (formatter/linter/type/test), test mancanti/known issues, 2-3 domande al Senior.
+- Rispetta `.codex/CONSTITUTION.md`, `.codex/AGENTS.md`, `docs/AGENTS_INDEX.md`; scope micro-PR.

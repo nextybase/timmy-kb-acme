@@ -1,18 +1,17 @@
-# AGENT - Onboarding UI (Streamlit)
-> Nota: policy comuni in `docs/AGENTS_INDEX.md`; questo file contiene solo override specifici.
+# Scopo
+Regole per l'onboarding UI Streamlit, orientate a gating corretto e I/O sicuro.
 
-## Flusso vincolante
-1) Configurazione (mapping) -> 2) Drive (provisioning + README + **download RAW**) -> 3) Semantica (convert/enrich -> README/SUMMARY -> Preview).
+# Regole (override)
+- Seguire `docs/streamlit_ui.md` per router, stato, I/O e logging; flusso: configurazione -> Drive (provisioning + README + download RAW) -> Semantica (convert/enrich -> README/SUMMARY -> Preview).
+- Gating: la tab **Semantica** e attiva solo se `raw/` locale esiste.
+- Router obbligatorio con `st.Page` + `st.navigation` e helper `ui.utils.route_state`/`ui.utils.slug`; evitare side-effect non idempotenti.
+- I/O path-safe con `ensure_within_and_resolve`, `safe_write_text/bytes`, `iter_safe_pdfs` (nessun `os.walk` non previsto).
+- Messaggi utente brevi, dettagli nei log; logging strutturato `ui.<pagina>` con contesto minimo (slug, path relativo, esito).
 
-## Regole
-- Riferimento operativo: segui le linee guida di `docs/streamlit_ui.md` (router, stato, I/O, logging).
-- Gating: la tab **Semantica** si abilita **solo** quando `raw/` locale e presente.
-- Evita side-effects non idempotenti; persistenza solo via util SSoT (no write manuali).
-- Messaggi d'errore brevi per l'utente, dettagli nei log.
-- Router obbligatorio: usa `st.Page` + `st.navigation` e gli helper `ui.utils.route_state`/`ui.utils.slug` per deep-link coerenti.
-- I/O path-safe: `ensure_within_and_resolve`, `safe_write_text/bytes`, `iter_safe_pdfs` (deroghe documentate), nessun `os.walk` fuori dai casi codificati.
-- Logging strutturato: namespace `ui.<pagina>` con payload minimo (slug, path relativo, esito).
+# Criteri di accettazione
+- Nessuna azione "Semantica" se `raw/` e vuoto o mancante.
+- Progress/feedback utente chiaro su Drive e conversione.
 
-## Accettazione
-- Nessuna azione "Semantica" se RAW vuoto.
-- Progress/feedback utente chiaro su Drive e Conversione.
+# Riferimenti
+- docs/AGENTS_INDEX.md
+- docs/streamlit_ui.md

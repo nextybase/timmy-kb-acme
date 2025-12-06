@@ -1,11 +1,14 @@
-# AGENT  Pipeline Core (I/O & Safety)
-> Nota: policy comuni in `docs/AGENTS_INDEX.md`; questo file contiene solo override specifici.
+# Scopo
+Area pipeline core con focus su I/O sicuro e idempotente.
 
-## Regole
-- **path-safety**: tutte le write/copy/rm passano da `ensure_within*` (no join manuali).
-- **Scritture atomiche**: `safe_write_text/bytes` obbligatorie.
-- Logger strutturato se disponibile; redazione attiva in prod/LOG_REDACTION.
+# Regole (override)
+- Path-safety obbligatoria: tutte le write/copy/rm passano da `ensure_within*` (no join manuali).
+- Scritture atomiche tramite `safe_write_text/bytes`.
+- Logging strutturato con redazione attiva (`LOG_REDACTION`) quando disponibile.
 
-## Accettazione
-- Nessuna write fuori dal workspace cliente.
-- Operazioni ripetibili senza corrompere stato (idempotenza).
+# Criteri di accettazione
+- Nessuna scrittura fuori dal workspace cliente.
+- Operazioni ripetibili senza corrompere stato.
+
+# Riferimenti
+- docs/AGENTS_INDEX.md

@@ -81,9 +81,7 @@ def cmd_review(args: argparse.Namespace) -> None:
         while True:
             print(f"\nTag per doc_uid='{args.doc_uid}':\n")
             _print_tag_table(items)
-            choice = input(
-                "\nSeleziona indice da modificare (q=esci, a=approva tutti i suggested): "
-            ).strip()
+            choice = input("\nSeleziona indice da modificare (q=esci, a=approva tutti i suggested): ").strip()
             if choice.lower() == "q":
                 break
             if choice.lower() == "a":

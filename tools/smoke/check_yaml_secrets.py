@@ -72,8 +72,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if violations:
         sys.stderr.write(
-            "Detected potential secrets in config YAMLs. "
-            "Move secrets to .env and reference them via *_env keys.\n"
+            "Detected potential secrets in config YAMLs. " "Move secrets to .env and reference them via *_env keys.\n"
         )
         for msg in violations:
             sys.stderr.write(f"  - {msg}\n")

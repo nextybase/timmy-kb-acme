@@ -4,9 +4,9 @@ from __future__ import annotations
 import argparse
 import sys
 import unicodedata
+from importlib import import_module
 from pathlib import Path
 from typing import List, Sequence
-from importlib import import_module
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT / "src") not in sys.path:

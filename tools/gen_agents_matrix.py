@@ -17,6 +17,7 @@ CANDIDATES = [
     ("Semantica", REPO / "src" / "semantic" / "AGENTS.md"),
     ("UI (Streamlit)", REPO / "src" / "ui" / "AGENTS.md"),
     ("UI (Streamlit)", REPO / "src" / "ui" / "pages" / "AGENTS.md"),
+    ("UI Fine Tuning", REPO / "src" / "ui" / "fine_tuning" / "AGENTS.md"),
     ("Test", REPO / "tests" / "AGENTS.md"),
     ("Documentazione", REPO / "docs" / "AGENTS.md"),
     ("Codex (repo)", REPO / ".codex" / "AGENTS.md"),
@@ -28,7 +29,52 @@ HEADERS = [
     "Override chiave (sintesi)",
     "Criteri di accettazione (key)",
     "Note",
+    "Task tipici dell'agente",
 ]
+
+TASKS = {
+    "Root": "Allineamento runbook `.codex/`<br>Verifica documenti obbligatori",
+    "Pipeline Core": (
+        "Hardening path-safety pipeline<br>"
+        "Refactor I/O su utility SSoT<br>"
+        "Log strutturato pipeline/run"
+    ),
+    "Semantica": (
+        "Allineamento `semantic.api` vs service<br>"
+        "Rigenerazione/migrazione `tags.db`<br>"
+        "Fallback README/SUMMARY idempotenti"
+    ),
+    "UI (Streamlit)": (
+        "Refactor orchestratori UI onboarding<br>"
+        "Audit gating RAW/slug e router `st.navigation`<br>"
+        "Messaggistica/log `ui.<pagina>` coerente"
+    ),
+    "UI (Streamlit) pages": (
+        "Sweep deprecazioni Streamlit 1.50<br>"
+        "Router nativo `st.Page`/`st.navigation` compliance<br>"
+        "Path-safety e logging per pagine"
+    ),
+    "UI Fine Tuning": (
+        "Modal Assistant read-only + export<br>"
+        "Dry-run con output grezzo<br>"
+        "Proposte micro-PR per config Assistant"
+    ),
+    "Test": (
+        "Mock Drive/Git e fixture dummy<br>"
+        "Contract test su guard `book/`<br>"
+        "Smoke E2E slug di esempio"
+    ),
+    "Documentazione": (
+        "Sweep cSpell e frontmatter versione<br>"
+        "Allineamento README/docs su nuove feature<br>"
+        "Aggiornare guide con orchestratori correnti"
+    ),
+    "Codex (repo)": (
+        "Esecuzione pipeline QA standard<br>"
+        "Allineamento uso helper GitHub<br>"
+        "Riuso tool vision/UI condivisi"
+    ),
+}
 
 
 def extract_summary(md: str) -> Tuple[str, str]:
@@ -36,7 +82,7 @@ def extract_summary(md: str) -> Tuple[str, str]:
     Estrae due righe sintetiche:
     - Override: cerca sezioni 'Override'/'Regole' e prende 1-2 bullet.
     - Accettazione: cerca 'Accettazione'/'Acceptance' e prende 1 bullet.
-    Fallback: 'â€”'
+    Fallback: '???'????'
     """
 
     def bullets_after(heading_regex: str, take: int = 2) -> List[str]:
@@ -55,18 +101,30 @@ def extract_summary(md: str) -> Tuple[str, str]:
                 break
         return out
 
-    override = bullets_after(r"^\s*##\s*(Override|Regole)\b", take=2)
-    accept = bullets_after(r"^\s*##\s*(Accettazione|Acceptance)\b", take=1)
+        return out
 
-    override_txt = "; ".join(override) if override else "â€”"
-    accept_txt = "; ".join(accept) if accept else "â€”"
+    override = bullets_after(r"^\s*#+\s*(Override|Regole)\b", take=2)
+    accept = bullets_after(r"^\s*#+\s*(Accettazione|Acceptance|Criteri)\b", take=1)
+
+    override_txt = "; ".join(override) if override else "???'????"
+    accept_txt = "; ".join(accept) if accept else "???'????"
     return override_txt, accept_txt
 
 
 def make_row(area: str, path: Path) -> List[str]:
+    area_key = area
     note = ""
+    if "ui/pages" in path.as_posix():
+        area_key = "UI (Streamlit) pages"
     if not path.exists():
-        return [area, f"`{path.relative_to(REPO)}`", "â€”", "â€”", "**MANCANTE**"]
+        return [
+            area,
+            f"`{path.relative_to(REPO)}`",
+            "???'????",
+            "???'????",
+            "**MANCANTE**",
+            TASKS.get(area_key, ""),
+        ]
 
     md = path.read_text(encoding="utf-8", errors="ignore")
     override, accept = extract_summary(md)
@@ -74,7 +132,7 @@ def make_row(area: str, path: Path) -> List[str]:
     rel = f"`{rel_path}`"
     if "streamlit" in area.lower():
         note = "UX guidata da stato"
-    return [area, rel, override, accept, note or ""]
+    return [area, rel, override, accept, note or "", TASKS.get(area_key, "")]
 
 
 def render_table(rows: List[List[str]]) -> str:

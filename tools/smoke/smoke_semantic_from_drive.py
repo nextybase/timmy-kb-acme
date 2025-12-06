@@ -32,11 +32,9 @@ from pipeline.context import ClientContext  # type: ignore[import]
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for  # type: ignore[import]
 from pipeline.logging_utils import get_structured_logger, phase_scope  # type: ignore[import]
 from pipeline.observability_config import get_observability_settings  # type: ignore[import]
-
 from semantic.api import run_semantic_pipeline  # type: ignore[import]
-
-from ui.utils import workspace as ws  # type: ignore[import]
 from ui.services import drive_runner  # type: ignore[import]
+from ui.utils import workspace as ws  # type: ignore[import]
 
 
 def _parse_args() -> argparse.Namespace:
@@ -66,7 +64,6 @@ def _parse_args() -> argparse.Namespace:
     )
     p.set_defaults(skip_drive=True, non_interactive=True)
     return p.parse_args()
-
 
 
 def _print_progress(msg: str, **extra: Any) -> None:
@@ -178,9 +175,7 @@ def main() -> int:
                 result = fn()
                 try:
                     # Allineiamo le metriche base con semantic_onboarding
-                    if stage_name in {"convert_markdown", "enrich_frontmatter"} and hasattr(
-                        result, "__len__"
-                    ):
+                    if stage_name in {"convert_markdown", "enrich_frontmatter"} and hasattr(result, "__len__"):
                         m.set_artifacts(len(result))  # type: ignore[arg-type]
                 except Exception:
                     m.set_artifacts(None)

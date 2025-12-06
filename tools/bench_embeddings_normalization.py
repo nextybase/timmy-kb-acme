@@ -29,11 +29,7 @@ import numpy as np
 
 import retriever as retr
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import (
-    clear_iter_safe_pdfs_cache,
-    ensure_within_and_resolve,
-    iter_safe_pdfs,
-)
+from pipeline.path_utils import clear_iter_safe_pdfs_cache, ensure_within_and_resolve, iter_safe_pdfs
 
 
 def _timeit(fn: Callable[[], object], rounds: int = 5) -> float:

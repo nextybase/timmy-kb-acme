@@ -9,7 +9,7 @@ consentire import e invocazioni da CLI come `python tools/gen_vision_yaml.py`.
 from __future__ import annotations
 
 import src.tools.gen_vision_yaml as _impl
-from src.tools.gen_vision_yaml import *  # noqa: F401,F403
+from src.tools.gen_vision_yaml import provision_from_vision  # noqa: F401,F403
 
 
 def main(argv: list[str] | None = None) -> int:  # pragma: no cover - delega pura

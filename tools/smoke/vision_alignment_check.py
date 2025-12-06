@@ -15,7 +15,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from dotenv import load_dotenv, find_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 
 # -------------------------------------------------
@@ -48,6 +48,7 @@ if str(SRC) not in sys.path:
 from pipeline.env_utils import get_env_var  # noqa: E402
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
 from pipeline.settings import Settings as PipelineSettings
+
 LOGGER = get_structured_logger("vision.alignment_check")
 
 

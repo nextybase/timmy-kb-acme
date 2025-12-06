@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 SRC_ROOT = (Path(__file__).resolve().parents[2] / "src").resolve()
 if str(SRC_ROOT) not in sys.path:  # pragma: no cover - path setup

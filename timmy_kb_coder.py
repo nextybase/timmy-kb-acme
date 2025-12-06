@@ -29,19 +29,18 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
+import pipeline.path_utils as ppath
+from ingest import OpenAIEmbeddings
+from kb_db import init_db
 from pipeline.config_utils import get_client_config
 from pipeline.context import ClientContext
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.logging_utils import get_structured_logger
-import pipeline.path_utils as ppath
-
-from semantic.types import EmbeddingsClient
-from ingest import OpenAIEmbeddings
-from kb_db import get_db_path, init_db
 from prompt_builder import build_prompt
 from retriever import QueryParams, search_with_config  # <-- usa la facade
 from security.authorization import authorizer_session
 from security.throttle import throttle_token_bucket
+from semantic.types import EmbeddingsClient
 from storage.kb_store import KbStore
 from vscode_bridge import read_response, write_request
 
@@ -69,6 +68,7 @@ def _configure_logging() -> None:
     for handler in logger.handlers:
         if getattr(handler, "_logging_utils_key", "").startswith("timmy_kb.ui::"):
             handler._kb_handler = True
+
 
 def _ensure_startup() -> None:
     """Bootstrap legacy globale: crea data/.timmykb e inizializza il DB globale."""
