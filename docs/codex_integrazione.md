@@ -52,6 +52,7 @@ Obiettivo: accelerare il lavoro senza sorprese. L'agente propone, tu approvi: Hi
 - **OrchestratoreChainPrompt (OCP)**: strato di orchestrazione sopra Codex; non modifica il repository, genera e inoltra i prompt della chain verso Codex. Ogni prompt viene eseguito singolarmente, senza batch.
 - **Timmy/ProtoTimmy**: planner/logico che definisce gli obiettivi e passa sempre attraverso l'OCP per produrre prompt formali destinati a Codex.
 - **Avvio**: la Prompt Chain parte solo su richiesta esplicita dell'utente; Codex non avvia catene autonomamente. L'entrypoint operativo resta "Onboarding Task Codex".
+- **SSoT**: la definizione completa del modello Prompt Chain (governance + contratto operativo) e in `docs/PromptChain_spec.md`; qui restano solo i riferimenti sintetici per l'operativita.
 
 ## Flusso Codex + Senior Reviewer
 - Quando il task richiede review esterne (nuove feature, refactor sensibili, integrazioni Drive/Vision), Codex opera nel modello tripartito: sviluppatore umano (Franco/team), agente Codex e Senior Reviewer esterno.

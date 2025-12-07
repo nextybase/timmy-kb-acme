@@ -24,6 +24,7 @@ QA: isort  black  ruff --fix  mypy  pytest
 Note docs: <se tocchi X, aggiorna Y/Z>
 
 ## Prompt Chain (OCP → Codex) — modalita operativa
+- **SSoT**: per governance e contratto operativo della Prompt Chain vedi `docs/PromptChain_spec.md`.
 - Sequenza numerata di prompt (Prompt 0, 1, 2, ...) generati dall'OrchestratoreChainPrompt (OCP) su richiesta utente; ogni prompt ha scope limitato e corrisponde a un micro-PR con le stesse regole Codex (HiTL, AGENT-first, QA, path-safety, I/O atomico).
 - OCP non modifica il repo, traduce gli obiettivi di Timmy/ProtoTimmy in prompt formali e chiama Codex un passo alla volta. Codex esegue senza anticipare passi successivi, senza generare prompt autonomi e senza uscire dallo scope.
 - Onboarding Task Codex resta l'entrypoint obbligatorio prima della chain; applica le regole standard: non estendere lo scope, non toccare file non richiesti, produrre output idempotente e tracciabile per ogni prompt.

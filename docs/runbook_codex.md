@@ -277,6 +277,7 @@ Riferimenti: [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [User Guide](user_guide
 - Entrypoint: resta obbligatorio l'Onboarding Task Codex da `.codex/PROMPTS.md` prima di avviare la sequenza. Ogni prompt mantiene scope limitato e non puo estendersi oltre quanto richiesto.
 - Regole: ogni step segue le stesse policy (AGENT-first, HiTL, path-safety, QA, scritture atomiche). L'OCP non modifica il repository; Codex e l'esecutore repo-aware.
 - Output: la chain deve essere tracciata nei riepiloghi/log; ciascun passo resta rilanciabile e idempotente.
+- SSoT: per la definizione completa del modello Prompt Chain (governance + contratto operativo), fare riferimento a `docs/PromptChain_spec.md`. In questo runbook restano solo riferimenti sintetici e flusso operativo (prompt operativo → patch limitata → QA → decisione del Planner).
 
 Riferimenti: [AGENTS Index](AGENTS_INDEX.md), [.codex/AGENTS](../.codex/AGENTS.md).
 

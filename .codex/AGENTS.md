@@ -12,7 +12,7 @@ Regole operative per l'agente Codex nel repository (ambito `.codex/`), con focus
 - Per i push usare solo gli helper `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease` (stub nei test come in `tests/pipeline/test_github_push.py`).
 - Strumenti vision/UI: riusare `_is_gate_error` (`ui.pages.tools_check`) e i builder `build_payload/emit_structure` di `tools.gen_dummy_kb`.
 - Collaborazione con Senior Reviewer: micro-PR a scope singolo, riepilogo con riferimenti a `.codex/CONSTITUTION.md` e `docs/AGENTS_INDEX.md`, QA eseguita e dubbi esplicitati.
-- Codex puo essere guidato da una Prompt Chain definita dall'OCP: ogni prompt è un micro-PR che rispetta AGENT-first/HiTL, path-safety, QA e SSoT `docs/AGENTS_INDEX.md`; l'OCP orchestra ma non modifica il repository.
+- Codex puo essere guidato da una Prompt Chain definita dall'OCP: ogni prompt è un micro-PR che rispetta AGENT-first/HiTL, path-safety, QA e SSoT `docs/AGENTS_INDEX.md`; l'OCP orchestra ma non modifica il repository. Per la definizione completa della chain fare riferimento a `docs/PromptChain_spec.md`.
 
 
 
