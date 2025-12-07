@@ -15,6 +15,7 @@ all’Assistant preconfigurato. Non esistono più modalità vector/attachments/f
 
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 from functools import lru_cache
@@ -100,6 +101,30 @@ def _resolve_workspace_base(slug: str) -> Optional[Path]:
         return None
 
     return None
+
+
+def _build_lineage(
+    *,
+    slug: str,
+    scope: str,
+    version: str,
+    base_dir: Path,
+    safe_path: Path,
+    chunks: Sequence[str],
+) -> dict[str, Any]:
+    relative_path = _relative_to(base_dir, safe_path)
+    source_id = f"{slug}:{scope}:{version}:{relative_path}"
+    lineage_chunks = []
+    for idx, _chunk in enumerate(chunks):
+        chunk_hash = hashlib.sha256(f"{source_id}:{idx}".encode("utf-8")).hexdigest()
+        lineage_chunks.append(
+            {
+                "chunk_index": idx,
+                "chunk_id": chunk_hash,
+                "embedding_id": chunk_hash,
+            }
+        )
+    return {"source_id": source_id, "chunks": lineage_chunks}
 
 
 def discover_files(
@@ -291,12 +316,48 @@ def embed_and_persist(
     safe_path: Path,
     chunks: list[str],
     meta: dict[str, Any],
+    base_dir: Path,
     embeddings_client: EmbeddingsClient | None,
     db_path: Path,
     customer: str | None,
 ) -> int:
     """Calcola le embedding e persiste i chunk nel DB, restituendo il totale inserito."""
     client: EmbeddingsClient = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
+    safe_rel_path = _relative_to(base_dir, safe_path)
+    meta_dict = dict(meta or {})
+    lineage_meta = meta_dict.get("lineage")
+    if not isinstance(lineage_meta, dict):
+        lineage_meta = _build_lineage(
+            slug=slug,
+            scope=scope,
+            version=version,
+            base_dir=base_dir,
+            safe_path=safe_path,
+            chunks=chunks,
+        )
+        meta_dict.setdefault("lineage", lineage_meta)
+    LOGGER.info(
+        "semantic.input.received",
+        extra={
+            "slug": slug,
+            "scope": scope,
+            "source_id": lineage_meta.get("source_id"),
+            "source_path": safe_rel_path,
+            "ingestion_run_id": meta_dict.get("run_id"),
+        },
+    )
+    for chunk in lineage_meta.get("chunks", []):
+        LOGGER.info(
+            "semantic.lineage.chunk_created",
+            extra={
+                "slug": slug,
+                "scope": scope,
+                "path": safe_rel_path,
+                "source_id": lineage_meta.get("source_id"),
+                "chunk_id": chunk.get("chunk_id"),
+                "chunk_index": chunk.get("chunk_index"),
+            },
+        )
     with phase_scope(LOGGER, stage="ingest.embed", customer=customer or slug) as phase_embed:
         vectors_seq = client.embed_texts(chunks)
         vectors: list[list[float]] = [list(map(float, v)) for v in vectors_seq]
@@ -309,7 +370,7 @@ def embed_and_persist(
                 scope=scope,
                 path=str(safe_path),
                 version=version,
-                meta_dict=meta,
+                meta_dict=meta_dict,
                 chunks=chunks,
                 embeddings=vectors,
                 db_path=db_path,
@@ -324,6 +385,18 @@ def embed_and_persist(
             "scope": scope,
             "file": str(safe_path),
             "chunks": inserted,
+            "source_id": lineage_meta.get("source_id"),
+        },
+    )
+    LOGGER.info(
+        "semantic.lineage.embedding_registered",
+        extra={
+            "slug": slug,
+            "scope": scope,
+            "path": safe_rel_path,
+            "source_id": lineage_meta.get("source_id"),
+            "version": version,
+            "embedding_count": len(chunks),
         },
     )
     if inserted > 0:
@@ -445,6 +518,7 @@ def ingest_path(
         safe_path=safe_path,
         chunks=chunks,
         meta=meta,
+        base_dir=base,
         embeddings_client=embeddings_client,
         db_path=effective_db_path,
         customer=customer,

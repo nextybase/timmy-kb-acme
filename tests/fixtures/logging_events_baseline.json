@@ -2,5 +2,11 @@
   "freeform": [],
   "missing_extra": [],
   "event_mismatch": [],
-  "invalid_event": []
+  "invalid_event": [],
+  "allowlist": [
+    "semantic.input.received",
+    "semantic.lineage.chunk_created",
+    "semantic.lineage.embedding_registered",
+    "semantic.lineage.hilt_override"
+  ]
 }

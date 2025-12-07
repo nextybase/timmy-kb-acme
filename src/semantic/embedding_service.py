@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from dataclasses import dataclass
@@ -240,6 +241,21 @@ def _log_index_skips(
     )
 
 
+def _build_lineage_for_markdown(*, slug: str, scope: str, version: str, rel_name: str) -> Dict[str, object]:
+    source_id = f"{slug}:{scope}:{version}:{rel_name}"
+    chunk_hash = hashlib.sha256(f"{source_id}:0".encode("utf-8")).hexdigest()
+    return {
+        "source_id": source_id,
+        "chunks": [
+            {
+                "chunk_index": 0,
+                "chunk_id": chunk_hash,
+                "embedding_id": chunk_hash,
+            }
+        ],
+    }
+
+
 def _persist_markdown_embeddings(
     embeddings_result: _EmbeddingResult,
     *,
@@ -264,6 +280,13 @@ def _persist_markdown_embeddings(
         if isinstance(meta, dict):
             filtered = {k: v for k, v in meta.items() if v not in (None, "", [], {})}
             payload_meta.update(filtered)
+        if not isinstance(payload_meta.get("lineage"), dict):
+            payload_meta["lineage"] = _build_lineage_for_markdown(
+                slug=slug,
+                scope=scope,
+                version=version,
+                rel_name=rel_name,
+            )
         batch_chunks.append(
             (
                 rel_name,
@@ -285,6 +308,33 @@ def _persist_markdown_embeddings(
                 payload_meta["area"] = area
             if relation_hints:
                 payload_meta["relation_hints"] = relation_hints
+            lineage = payload_meta.get("lineage")
+        else:
+            lineage = None
+        if isinstance(lineage, dict):
+            source_id = lineage.get("source_id")
+            chunk = (lineage.get("chunks") or [{}])[0]
+            logger.info(
+                "semantic.input.received",
+                extra={
+                    "slug": slug,
+                    "scope": scope,
+                    "source_id": source_id,
+                    "source_path": rel_name,
+                    "content_type": "markdown",
+                },
+            )
+            logger.info(
+                "semantic.lineage.chunk_created",
+                extra={
+                    "slug": slug,
+                    "scope": scope,
+                    "path": rel_name,
+                    "source_id": source_id,
+                    "chunk_id": chunk.get("chunk_id"),
+                    "chunk_index": chunk.get("chunk_index"),
+                },
+            )
         inserted_total += _insert_chunks(
             slug=slug,
             scope=scope,
@@ -296,6 +346,18 @@ def _persist_markdown_embeddings(
             db_path=db_path,
             ensure_schema=False,
         )
+        if isinstance(lineage, dict):
+            logger.info(
+                "semantic.lineage.embedding_registered",
+                extra={
+                    "slug": slug,
+                    "scope": scope,
+                    "path": rel_name,
+                    "source_id": lineage.get("source_id"),
+                    "version": version,
+                    "embedding_count": 1,
+                },
+            )
 
     logger.info(
         "semantic.index.inserted",

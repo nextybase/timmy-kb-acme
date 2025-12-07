@@ -41,6 +41,17 @@ Questi eventi sono emessi con `logger.info/warning` e includono campi `extra` st
 - Eventi CLI `cli.pre_onboarding.*`, `cli.tag_onboarding.*`, `cli.semantic_onboarding.*`
   - Gli orchestratori applicano automaticamente le preferenze di `observability.yaml` (livello/log redaction/tracing OTEL) come default nei logger; override ancora possibile via parametri espliciti.
 
+## Explainability & lineage
+
+- `semantic.input.received` extra: `slug`, `scope`, `source_id`, `source_path`, `content_type`, `ingestion_run_id`
+  - Evento di ingresso di un documento/Markdown prima del chunking o indicizzazione; registra SSoT di provenienza.
+- `semantic.lineage.chunk_created` extra: `slug`, `scope`, `path`, `source_id`, `chunk_id`, `chunk_index`
+  - Chunk derivato da una sorgente tracciata; associa il chunk all'identificativo di origine.
+- `semantic.lineage.embedding_registered` extra: `slug`, `scope`, `path`, `source_id`, `chunk_id`, `embedding_id`, `version`
+  - Embedding calcolata e persistita per un chunk con lineage noto (versione tipicamente `YYYYMMDD`).
+- `semantic.lineage.hilt_override` extra: `slug`, `source_id`, `chunk_id`, `operator_id`, `reason`
+  - Override manuale HiTL su un elemento di lineage; l'operator_id va mascherato/anonimizzato.
+
 Note:
 - Gli orchestratori e le API usano `phase_scope(logger, stage=..., customer=...)` per tracciare `phase_started/phase_completed/phase_failed` con `artifacts` numerici.
 - Evitare string-log non strutturati per eventi di pipeline/CLI: il messaggio (`msg`) deve essere il codice evento. Usa `extra` per contesto/descrizione se serve.

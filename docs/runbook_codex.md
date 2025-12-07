@@ -303,6 +303,14 @@ Riferimenti: [README -> Telemetria & sicurezza](../README.md), [User Guide -> Co
 
 ---
 
+## Debug explainability (lineage)
+
+- Se un embedding/chunk risulta sospetto, individua `slug/scope/path` e usa i log `semantic.input.received`, `semantic.lineage.chunk_created`, `semantic.lineage.embedding_registered` per ricostruire origine (`source_id`) e `chunk_id/embedding_id`.
+- In modalita Codex (Chat/Agent) puoi interrogare il DB o i log strutturati per verificare `meta["lineage"]` senza cambiare schema; proporre fix solo se idempotenti e preservando il passaporto esistente.
+- Per modifiche ai flussi ingest/semantic mantieni gli eventi di explainability coerenti con `docs/logging_events.md` e aggiorna `meta["lineage"]` se cambia il modo di creare chunk/embedding.
+
+---
+
 ## 8) Procedure GitHub (push/publish) & rollback
 
 **Publish (CLI)**

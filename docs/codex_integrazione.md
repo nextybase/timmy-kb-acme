@@ -25,6 +25,7 @@ Nota OS: su Windows l'esperienza migliore e tramite WSL; l'estensione e pienamen
 **4) Coerenza automatica**  Se tocchi un `AGENTS.md`, rigenera la Matrice con `pre-commit run agents-matrix-check --all-files`; la CI ripete `python tools/gen_agents_matrix.py --check`.
 **5) Sicurezza & qualita**  Path-safety/I-O atomico, niente side-effects a import-time; linting/typing e test deterministici **senza rete**.
 **6) Performance**  Cache RAW PDF auto-invalidata da `safe_write_*` (config in `pipeline.raw_cache` di `config/config.yaml`); per NLP usa `--nlp-workers/--nlp-batch-size` e (se serve debug) `--nlp-no-parallel`.
+**7) Explainability & lineage**  Ogni embedding porta un passaporto semantico in `meta["lineage"]` (source_id + chunk_id/embedding_id). Quando Codex tocca ingest o servizi semantic deve preservare/aggiornare il lineage e mantenere i log `semantic.input.received` / `semantic.lineage.chunk_created` / `semantic.lineage.embedding_registered` allineati a `docs/logging_events.md`.
 
 Obiettivo: accelerare il lavoro senza sorprese. L'agente propone, tu approvi: HiTL come regola, *repo-aware* come prassi.
 
