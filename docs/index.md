@@ -40,6 +40,7 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
   - [Runbook Codex](runbook_codex.md) - flussi operativi per l'uso di Codex.
   - [AGENTS (Repo)](AGENTS.md) - regole locali per gli agent.
   - [AGENTS Index](AGENTS_INDEX.md) - indice delle policy per agent e preferenze.
+  - Prompt Chain Spec: [PromptChain_spec](PromptChain_spec.md) - modello SSoT per orchestrazione Planner/OCP/Codex e chiusura QA.
 - **Changelog**
   - [CHANGELOG](../CHANGELOG.md) - novita' e fix per ogni release.
 - **Milestones**

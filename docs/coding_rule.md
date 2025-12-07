@@ -133,6 +133,14 @@ make qa-safe
 make ci-safe
 ```
 
+### Prompt Chain e QA
+Se la modifica deriva da una Prompt Chain Codex, la chiusura richiede:
+
+- successo di `pre-commit run --all-files` e `pytest -q`;
+- proposta del commit one-line finale da parte di Codex, come descritto in `docs/PromptChain_spec.md`.
+
+Solo dopo questa fase la modifica e pronta per PR.
+
 ---
 
 ## 9) Sicurezza & Segreti
@@ -147,6 +155,7 @@ make ci-safe
 - PR piccole con descrizione dello scope e checklist QA.
 - Ogni modifica di comportamento va coperta da test; documentazione aggiornata **nello stesso PR**.
 - Branch di lavoro: `feat/*`, `fix/*`, `chore/*`, `docs/*`.
+- Se la PR nasce da una Prompt Chain Codex, nel corpo PR includi il riferimento alla chain e la conferma che il Prompt finale di QA e stato eseguito con successo secondo `docs/PromptChain_spec.md`.
 
 ---
 

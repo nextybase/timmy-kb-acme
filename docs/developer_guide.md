@@ -183,6 +183,18 @@ make qa-safe     # isort/black/ruff/mypy (se presenti)
 make ci-safe     # qa-safe + pytest
 ```
 
+### Prompt Chain & agenti (vista sviluppatore)
+- Per modifiche non banali usa il modello Prompt Chain definito nello SSoT `docs/PromptChain_spec.md`.
+- **Ruoli**: Planner definisce obiettivi/vincoli; OCP (OrchestratoreChainPrompt) genera i prompt numerati; Codex esegue ogni prompt come micro-PR con QA locale e rispetto delle policy AGENT.
+- **Quando usarla**: cambi articolati in piu step o quando serve garanzia di chiusura QA completa.
+- **Regole operative minime**: un prompt alla volta, scope limitato, diff + report in uscita; il Planner decide se proseguire o chiudere.
+- **Chiusura obbligatoria**: il Prompt finale di QA deve portare a verde
+  ```bash
+  pre-commit run --all-files
+  pytest -q
+  ```
+  e Codex risponde con un commit one-line di sintesi del lavoro svolto. Per dettagli completi vedi `docs/PromptChain_spec.md`.
+
 ---
 
 ## Test: piramide e casi minimi

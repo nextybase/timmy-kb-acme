@@ -65,6 +65,18 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 
 ---
 
+### Prompt Chain (refactor sicuri)
+Le modifiche significative, i refactor complessi o gli interventi multi-step effettuati tramite l'agente Codex seguono il modello **Prompt Chain**, descritto nello SSoT [`docs/PromptChain_spec.md`](docs/PromptChain_spec.md).
+
+Una Prompt Chain garantisce che ogni step sia un micro-PR con QA, supervisionato dal Planner, e che la chiusura avvenga solo dopo aver portato a verde:
+```
+pre-commit run --all-files
+pytest -q
+```
+Questo modello consente interventi profondi mantenendo massima sicurezza, coerenza e tracciabilita'.
+
+---
+
 ## Telemetria & sicurezza
 - Logging strutturato centralizzato sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti (token/password/key/service_account). L'entrypoint UI crea l'handler condiviso `.timmykb/logs/ui.log` e propaga agli altri logger `ui.*`.
 - I log globali della UI (Streamlit) sono salvati in `.timmykb/logs/` e visibili dalla pagina Log dashboard; Promtail estrae `slug/run_id/event` (e, se OTEL attivo, `trace_id/span_id` nei campi log) per la correlazione Grafana/Tempo.
