@@ -130,7 +130,6 @@ def _make_settings(use_kb: bool) -> Settings:
             "openai": {},
             "vision": {
                 "model": "gpt-4o-mini",
-                "engine": "assistants",
                 "assistant_id_env": "OBNEXT_ASSISTANT_ID",
                 "snapshot_retention_days": 30,
                 "strict_output": True,
@@ -205,7 +204,7 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert len(gov["examples"]) >= 1
 
 
-def test_provision_uses_engine_from_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_provision_ignores_engine_in_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "dummy-engine"
     ctx = _Ctx(tmp_path)
     ctx.settings["vision"]["engine"] = "responses"
@@ -219,14 +218,14 @@ def test_provision_uses_engine_from_settings(tmp_path: Path, monkeypatch: pytest
     captured: Dict[str, Any] = {}
 
     def _fake_call(**kwargs: Any) -> Dict[str, Any]:
-        captured["engine"] = kwargs.get("engine")
+        captured.update(kwargs)
         return _ok_payload(slug)
 
     monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
 
     provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
 
-    assert captured.get("engine") == "responses"
+    assert "engine" not in captured
 
 
 def test_provision_retention_fallback_on_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -243,9 +242,7 @@ def test_provision_retention_fallback_on_zero(tmp_path: Path, monkeypatch: pytes
 
     captured: Dict[str, Any] = {}
 
-    def _fake_persist(
-        prepared: Any, payload: Dict[str, Any], logger: Any, *, retention_days: int, engine: str
-    ) -> Dict[str, Any]:
+    def _fake_persist(prepared: Any, payload: Dict[str, Any], logger: Any, *, retention_days: int) -> Dict[str, Any]:
         captured["retention_days"] = retention_days
         return {
             "mapping": str(prepared.paths.mapping_yaml),
@@ -458,7 +455,6 @@ def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_pat
         strict_output=True,
         client=object(),
         paths=paths,
-        engine="assistants",
     )
 
     vp._invoke_assistant(prepared)
@@ -479,11 +475,11 @@ def test_call_assistant_json_skips_response_format_when_not_structured(monkeypat
         lambda client, assistant_id, strict_output: False,
     )
 
-    def _fake_assistants_api(**kwargs: Any) -> Dict[str, Any]:
+    def _fake_responses_api(**kwargs: Any) -> Dict[str, Any]:
         captured.update(kwargs)
         return {}
 
-    monkeypatch.setattr(vp, "_call_assistants_api", _fake_assistants_api)
+    monkeypatch.setattr(vp, "_call_responses_json", _fake_responses_api)
 
     vp._call_assistant_json(
         client=_DummyClient(),
@@ -492,11 +488,59 @@ def test_call_assistant_json_skips_response_format_when_not_structured(monkeypat
         strict_output=False,
         run_instructions=None,
         use_kb=False,
-        engine="assistants",
     )
 
     assert captured.get("use_structured") is False
     assert captured.get("response_format") == {"type": "json_object"}
+
+
+def test_call_assistant_json_uses_schema_when_strict(monkeypatch: pytest.MonkeyPatch):
+    captured: Dict[str, Any] = {}
+
+    class _DummyClient:
+        pass
+
+    # Usa la logica reale: strict_output True forza schema
+    monkeypatch.setattr(
+        vp,
+        "_call_responses_json",
+        lambda **kwargs: captured.update(kwargs) or {},
+    )
+
+    vp._call_assistant_json(
+        client=_DummyClient(),
+        assistant_id="asst",
+        user_messages=[{"role": "user", "content": "hi"}],
+        strict_output=True,
+        run_instructions=None,
+        use_kb=True,
+    )
+
+    rf = captured.get("response_format")
+    assert isinstance(rf, dict)
+    assert rf.get("type") == "json_schema"
+
+
+def test_call_responses_json_errors_on_exception(monkeypatch: pytest.MonkeyPatch):
+    class _DummyClient:
+        def responses(self) -> None:  # pragma: no cover - prevent attr access confusion
+            return None
+
+    def _raise(*_: object, **__: object) -> None:
+        raise RuntimeError("boom")
+
+    client = type("C", (), {"responses": type("R", (), {"create": staticmethod(_raise)})})()
+
+    with pytest.raises(ConfigError):
+        vp._call_responses_json(
+            client=client,
+            assistant_id="asst",
+            user_messages=[{"role": "user", "content": "hi"}],
+            run_instructions=None,
+            use_kb=False,
+            use_structured=True,
+            response_format={"type": "json_object"},
+        )
 
 
 def test_load_vision_schema_fills_required_when_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -171,22 +171,6 @@ def _extract_context_settings(ctx: Any) -> tuple[Optional[Settings], Dict[str, A
     return None, {}
 
 
-def _resolve_vision_engine(ctx: Any) -> str:
-    settings_obj, settings_payload = _extract_context_settings(ctx)
-    if isinstance(settings_obj, Settings):
-        try:
-            value = settings_obj.vision_engine or "assistants"
-        except Exception:
-            value = "assistants"
-        return str(value)
-    vision_cfg = settings_payload.get("vision")
-    if isinstance(vision_cfg, Mapping):
-        raw = vision_cfg.get("engine")
-        if isinstance(raw, str) and raw.strip():
-            return raw.strip()
-    return "assistants"
-
-
 def _resolve_assistant_env(ctx: Any) -> str:
     settings_obj, settings_payload = _extract_context_settings(ctx)
     default_env = "OBNEXT_ASSISTANT_ID"
@@ -213,7 +197,7 @@ def _resolve_model_from_settings(ctx: Any) -> str:
     candidate = settings_payload.get("vision_model")
     if isinstance(candidate, str) and candidate.strip():
         return candidate.strip()
-    return "assistants"
+    return ""
 
 
 def _resolve_snapshot_retention_days(ctx: Any) -> int:
@@ -441,7 +425,6 @@ class _VisionPrepared:
     strict_output: bool
     client: Any
     paths: _Paths
-    engine: str
 
 
 def _resolve_paths(ctx_base_dir: str) -> _Paths:
@@ -497,12 +480,10 @@ def _call_assistant_json(
     strict_output: bool = True,
     run_instructions: Optional[str] = None,
     use_kb: bool = True,
-    engine: str = "assistants",
 ) -> Dict[str, Any]:
-    """Instrada l'esecuzione Vision verso l'engine richiesto (assistants o responses)."""
+    """Instrada l'esecuzione Vision verso Responses."""
     use_structured = _determine_structured_output(client, assistant_id, strict_output)
     response_format = _build_response_format(use_structured)
-    normalized_engine = (engine or "assistants").strip().lower()
 
     if response_format:
         schema_dict = response_format.get("json_schema", {}).get("schema", {})
@@ -511,24 +492,12 @@ def _call_assistant_json(
         LOGGER.debug(
             _evt("response_format.keys"),
             extra={
-                "engine": normalized_engine,
                 "properties": sorted(props.keys()) if isinstance(props, dict) else [],
                 "required": sorted(reqs) if isinstance(reqs, list) else [],
             },
         )
 
-    if normalized_engine.startswith("responses"):
-        return _call_responses_json(
-            client=client,
-            assistant_id=assistant_id,
-            user_messages=user_messages,
-            run_instructions=run_instructions,
-            use_kb=use_kb,
-            use_structured=use_structured,
-            response_format=response_format,
-        )
-
-    return _call_assistants_api(
+    return _call_responses_json(
         client=client,
         assistant_id=assistant_id,
         user_messages=user_messages,
@@ -667,7 +636,6 @@ def _prepare_payload(
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
     client = make_openai_client()
-    engine = _resolve_vision_engine(ctx)
 
     env_name = _resolve_assistant_env(ctx)
     assistant_id = _optional_env(env_name) or _optional_env("ASSISTANT_ID")
@@ -704,7 +672,6 @@ def _prepare_payload(
         strict_output=strict_output,
         client=client,
         paths=paths,
-        engine=engine,
     )
 
 
@@ -716,7 +683,6 @@ def _invoke_assistant(prepared: _VisionPrepared) -> Dict[str, Any]:
         strict_output=prepared.strict_output,
         run_instructions=prepared.run_instructions,
         use_kb=prepared.use_kb,
-        engine=prepared.engine,
     )
 
 
@@ -726,7 +692,6 @@ def _persist_outputs(
     logger: "logging.Logger",
     *,
     retention_days: int,
-    engine: str,
 ) -> Dict[str, Any]:
     slug = prepared.slug
     _validate_json_payload(payload, expected_slug=slug)
@@ -767,7 +732,7 @@ def _persist_outputs(
         "slug": slug,
         "client_hash": hash_identifier(prepared.display_name),
         "pdf_hash": sha256_path(prepared.safe_pdf),
-        "vision_engine": engine or "assistants",
+        "vision_engine": "responses",
         "input_mode": "inline-only",
         "strict_output": True,
         "yaml_paths": mask_paths(prepared.paths.mapping_yaml, prepared.paths.cartelle_yaml),
@@ -831,24 +796,13 @@ def provision_from_vision(
         response,
         logger,
         retention_days=retention_days,
-        engine=prepared.engine,
     )
 
 
 def _determine_structured_output(client: Any, assistant_id: str, strict_output: bool) -> bool:
-    """Stabilisce se usare JSON Schema in base al modello dell'assistente."""
-    if not strict_output:
-        return False
-    try:
-        asst = client.beta.assistants.retrieve(assistant_id)
-        asst_model = getattr(asst, "model", "") or ""
-    except Exception as exc:  # pragma: no cover - diagnostico best effort
-        LOGGER.warning(
-            _evt("assistant_retrieve_failed"),
-            extra={"assistant_id": assistant_id, "error": str(exc)},
-        )
-        return False
-    return "gpt-4o-2024-08-06" in asst_model or "gpt-4o-mini" in asst_model
+    """Decide se usare JSON Schema: strict_output True forza schema, altrimenti fallback json_object."""
+    _ = (client, assistant_id)  # mantenimento firma, no calls Assistants
+    return bool(strict_output)
 
 
 def _build_response_format(use_structured: bool) -> Optional[Dict[str, Any]]:
@@ -876,85 +830,6 @@ def _build_response_format(use_structured: bool) -> Optional[Dict[str, Any]]:
     return schema_payload
 
 
-def _call_assistants_api(
-    *,
-    client: Any,
-    assistant_id: str,
-    user_messages: List[Dict[str, str]],
-    run_instructions: Optional[str],
-    use_kb: bool,
-    use_structured: bool,
-    response_format: Optional[Dict[str, Any]],
-) -> Dict[str, Any]:
-    LOGGER.debug(_evt("create_thread"), extra={"assistant_id": assistant_id})
-    thread = client.beta.threads.create()
-
-    LOGGER.debug(
-        _evt("response_format_payload"),
-        extra={
-            "assistant_id": assistant_id,
-            "response_format": response_format,
-            "use_kb": use_kb,
-        },
-    )
-
-    for msg in user_messages:
-        role = (msg.get("role") or "user").strip() or "user"
-        content = str(msg.get("content") or "")
-        client.beta.threads.messages.create(thread_id=thread.id, role=role, content=content)
-
-    tool_choice = {"type": "file_search"} if use_kb else "auto"
-
-    run_kwargs: Dict[str, Any] = {
-        "thread_id": thread.id,
-        "assistant_id": assistant_id,
-        "instructions": run_instructions or None,
-        "tool_choice": tool_choice,
-    }
-    if response_format is not None:
-        run_kwargs["response_format"] = response_format
-
-    run = client.beta.threads.runs.create_and_poll(**run_kwargs)
-
-    status = getattr(run, "status", None)
-    if status != "completed":
-        extra = {
-            "assistant_id": assistant_id,
-            "run_id": getattr(run, "id", None),
-            "status": status,
-            "last_error": getattr(run, "last_error", None),
-            "incomplete_details": getattr(run, "incomplete_details", None),
-        }
-        LOGGER.error(_evt("run_failed"), extra=extra)
-        last_error = extra["last_error"] or {}
-        reason = (
-            getattr(last_error, "message", None)
-            or getattr(last_error, "code", None)
-            or str(last_error)
-            or "sconosciuto"
-        )
-        raise ConfigError(f"Assistant run non completato (status={status or 'n/d'}; reason={reason}).")
-
-    msgs = client.beta.threads.messages.list(thread_id=thread.id, order="desc", limit=10)
-
-    text = None
-    for msg in getattr(msgs, "data", []) or []:
-        if getattr(msg, "role", "") != "assistant":
-            continue
-        for part in getattr(msg, "content", None) or []:
-            t = getattr(part, "type", None)
-            if t == "output_text":
-                text = getattr(getattr(part, "text", None), "value", None)
-            elif t == "text":
-                text = getattr(getattr(part, "text", None), "value", None)
-            if text:
-                break
-        if text:
-            break
-
-    return _parse_json_output(text, assistant_id, source="assistants")
-
-
 def _call_responses_json(
     *,
     client: Any,
@@ -971,6 +846,7 @@ def _call_responses_json(
             "assistant_id": assistant_id,
             "response_format": response_format,
             "use_kb": use_kb,
+            "use_structured": use_structured,
         },
     )
 
@@ -998,8 +874,13 @@ def _call_responses_json(
     try:
         resp = client.responses.create(**request_kwargs)
     except AttributeError as exc:  # pragma: no cover - adapter mancante
+        LOGGER.error(_evt("responses.unsupported"), extra={"assistant_id": assistant_id, "error": str(exc)})
         raise ConfigError("Client OpenAI non supporta l'API Responses.") from exc
     except Exception as exc:
+        LOGGER.error(
+            _evt("responses.exception"),
+            extra={"assistant_id": assistant_id, "error": str(exc)},
+        )
         raise ConfigError(f"Responses API fallita: {exc}") from exc
 
     status = getattr(resp, "status", None)

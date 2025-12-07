@@ -23,6 +23,17 @@ ai:
     use_kb: false
     snapshot_retention_days: 30
     strict_output: false
+  prototimmy:
+    engine: assistants
+    model: gpt-4.1
+    assistant_id_env: PROTOTIMMY_ID
+    use_kb: true
+  kgbuilder:
+    engine: assistants
+    model: gpt-4.1
+    assistant_id_env: KGRAPH_ASSISTANT_ID
+    use_kb: true
+
 
 pipeline:
   retriever:
