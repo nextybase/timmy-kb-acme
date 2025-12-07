@@ -338,3 +338,37 @@ Contenuto principale del capitolo.
     assert candidate["meta"]["source_category"] == "guida"
     assert candidate["meta"]["created_at"] == "2025-01-01T00:00:00"
     assert candidate["meta"]["tags"] == ["Alpha", "Beta"]
+
+
+def test_lineage_persisted_in_markdown_index(tmp_path):
+    base = tmp_path / "output" / "timmy-kb-dummy"
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    (book / "Lineage.md").write_text("# Lineage\nContenuto lineage", encoding="utf-8")
+
+    class Emb:
+        def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
+            return [[0.1, 0.2, 0.3] for _ in texts]
+
+    dbp = tmp_path / "db_lineage.sqlite"
+    inserted = index_markdown_to_db(
+        cast(Any, _ctx(base)),
+        logging.getLogger("test"),
+        slug="dummy",
+        scope="book",
+        embeddings_client=Emb(),
+        db_path=dbp,
+    )
+    assert inserted == 1
+
+    candidates = list(fetch_candidates("dummy", "book", limit=5, db_path=dbp))
+    assert candidates, "nessun candidato restituito dal DB"
+    meta = candidates[0]["meta"]
+    assert "lineage" in meta
+    lineage = meta["lineage"]
+    assert lineage["source_id"]
+    assert len(lineage["chunks"]) == 1
+    chunk_info = lineage["chunks"][0]
+    assert set(chunk_info.keys()) == {"chunk_index", "chunk_id", "embedding_id"}
+    assert chunk_info["chunk_id"]
+    assert chunk_info["embedding_id"]

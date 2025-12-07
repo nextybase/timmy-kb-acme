@@ -8,7 +8,7 @@ import pytest
 
 import ingest as ingest_mod
 from ingest import ingest_path
-from kb_db import DEFAULT_DB_PATH
+from kb_db import DEFAULT_DB_PATH, fetch_candidates
 from retriever import MIN_CANDIDATE_LIMIT, QueryParams, search
 from storage.kb_store import KbStore
 
@@ -68,3 +68,44 @@ def test_ingest_and_search_use_workspace_db(dummy_workspace: dict[str, Path], mo
     assert results
     assert "Timmy KB" in (results[0].get("content") or "")
     assert results[0].get("meta", {}).get("slug") == slug
+
+
+def test_lineage_persisted_in_ingest_path(dummy_workspace: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+    base: Path = dummy_workspace["base"]
+    slug: str = dummy_workspace["slug"]
+
+    store = KbStore.for_slug(slug=slug, base_dir=base)
+    db_path = store.effective_db_path()
+
+    content_path = base / "raw" / "lineage_ingest.md"
+    content_path.write_text("# Title\ncontenuto lineage", encoding="utf-8")
+
+    def _single_chunk(text: str, *, target_tokens: int = 400, overlap_tokens: int = 40) -> list[str]:
+        return [text]
+
+    monkeypatch.setattr(ingest_mod, "_chunk_text", _single_chunk, raising=True)
+
+    dummy_embeddings = DummyEmbeddingsClient()
+    inserted = ingest_path(
+        slug=slug,
+        scope="kb",
+        path=str(content_path),
+        version="v1",
+        meta={"slug": slug},
+        embeddings_client=dummy_embeddings,
+        base_dir=base,
+        db_path=db_path,
+    )
+    assert inserted > 0
+
+    candidates = list(fetch_candidates(slug, "kb", limit=5, db_path=db_path))
+    assert candidates, "nessun candidato restituito dal DB"
+    lineage = candidates[0]["meta"].get("lineage")
+    assert isinstance(lineage, dict), "meta.lineage mancante"
+    assert lineage.get("source_id")
+    assert lineage.get("chunks")
+    for chunk_info in lineage["chunks"]:
+        expected_keys = {"chunk_index", "chunk_id", "embedding_id"}
+        assert expected_keys.issubset(chunk_info.keys())
+        assert chunk_info["chunk_id"]
+        assert chunk_info["embedding_id"]
