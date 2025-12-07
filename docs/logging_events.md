@@ -40,6 +40,16 @@ Questi eventi sono emessi con `logger.info/warning` e includono campi `extra` st
   - Preferenze globali di osservabilita' aggiornate dal pannello Log/Osservabilita' (persistite in `observability.yaml`).
 - Eventi CLI `cli.pre_onboarding.*`, `cli.tag_onboarding.*`, `cli.semantic_onboarding.*`
   - Gli orchestratori applicano automaticamente le preferenze di `observability.yaml` (livello/log redaction/tracing OTEL) come default nei logger; override ancora possibile via parametri espliciti.
+- `retriever.query.started` extra: `slug`, `scope`, `response_id`, `k`, `candidate_limit`, `latency_budget_ms`, `throttle_key`, `query_len`
+  - Punto di ingresso della query vettoriale; non logga il testo della query.
+- `retriever.query.embedded` extra: `slug`, `scope`, `response_id`, `ms`, `embedding_dims`, `embedding_model`
+  - Embedding della query completata; include dimensione embedding e modello se noto.
+- `retriever.candidates.fetched` extra: `slug`, `scope`, `response_id`, `candidates_loaded`, `candidate_limit`, `ms`, `budget_hit`
+  - Caricamento candidati dal DB completato; `budget_hit` segnala se il deadline era gia' esaurito.
+- `retriever.evidence.selected` extra: `slug`, `scope`, `response_id`, `k`, `selected_count`, `budget_hit`, `evidence_ids`
+  - Scelta finale dei top-k; `evidence_ids` contiene [{rank, score, source_id?, chunk_id?}] senza snippet/testo.
+- `retriever.response.manifest` extra: `slug`, `scope`, `response_id`, `manifest_path`, `evidence_ids`, `k`, `selected_count`
+  - Manifest per-risposta salvato su disco (path locale); i log non includono snippet o contenuti sensibili, solo ID/sintesi delle evidenze.
 
 ## Explainability & lineage
 

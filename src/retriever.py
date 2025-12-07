@@ -31,6 +31,7 @@ from itertools import tee
 from pathlib import Path
 from typing import Any, Callable, Generator, Iterable, Mapping, Optional, Sequence, TypedDict
 
+from explainability.serialization import safe_write_manifest
 from kb_db import fetch_candidates
 from pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
 from pipeline.exceptions import RetrieverError  # modulo comune degli errori
@@ -651,6 +652,24 @@ def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
     return candidates
 
 
+def _extract_lineage_for_logs(meta: Mapping[str, Any] | None) -> tuple[str | None, str | None]:
+    if not isinstance(meta, Mapping):
+        return None, None
+    lineage = meta.get("lineage")
+    if not isinstance(lineage, Mapping):
+        return None, None
+    source_id = lineage.get("source_id") if isinstance(lineage.get("source_id"), str) else None
+    chunk_id = None
+    chunks = lineage.get("chunks")
+    if isinstance(chunks, Sequence) and chunks:
+        first = chunks[0]
+        if isinstance(first, Mapping):
+            cid = first.get("chunk_id")
+            if isinstance(cid, str):
+                chunk_id = cid
+    return source_id, chunk_id
+
+
 def search(
     params: QueryParams,
     embeddings_client: EmbeddingsClient,
@@ -659,6 +678,9 @@ def search(
     throttle_check: Callable[[QueryParams], None] | None = None,
     throttle: Optional[ThrottleSettings] = None,
     throttle_key: Optional[str] = None,
+    response_id: str | None = None,
+    embedding_model: str | None = None,
+    explain_base_dir: Path | None = None,
 ) -> list[SearchResult]:
     """Esegue una ricerca vettoriale sui chunk del workspace indicato.
 
@@ -693,6 +715,23 @@ def search(
         if throttle_cfg
         else nullcontext()
     )
+
+    try:
+        LOGGER.info(
+            "retriever.query.started",
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "response_id": response_id,
+                "k": int(params.k),
+                "candidate_limit": int(params.candidate_limit),
+                "latency_budget_ms": int(throttle_cfg.latency_budget_ms) if throttle_cfg else None,
+                "throttle_key": throttle_key or params.slug or "retriever",
+                "query_len": len(params.query or ""),
+            },
+        )
+    except Exception:
+        pass
 
     with throttle_ctx:
         if authorizer is not None:
@@ -734,6 +773,22 @@ def search(
             return []
         if query_vector is None:
             return []
+        try:
+            LOGGER.info(
+                "retriever.query.embedded",
+                extra={
+                    "slug": params.slug,
+                    "scope": params.scope,
+                    "response_id": response_id,
+                    "ms": float(t_emb_ms),
+                    "embedding_dims": len(query_vector),
+                    "embedding_model": embedding_model
+                    or getattr(embeddings_client, "model", None)
+                    or getattr(embeddings_client, "embedding_model", None),
+                },
+            )
+        except Exception:
+            pass
         if _deadline_exceeded(deadline):
             LOGGER.warning(
                 "retriever.latency_budget.hit",
@@ -757,6 +812,22 @@ def search(
             )
             return []
         candidates, t_fetch_ms = _load_candidates(params)
+        fetch_budget_hit = _deadline_exceeded(deadline)
+        try:
+            LOGGER.info(
+                "retriever.candidates.fetched",
+                extra={
+                    "slug": params.slug,
+                    "scope": params.scope,
+                    "response_id": response_id,
+                    "candidates_loaded": int(len(candidates)),
+                    "candidate_limit": int(params.candidate_limit),
+                    "ms": float(t_fetch_ms),
+                    "budget_hit": bool(fetch_budget_hit),
+                },
+            )
+        except Exception:
+            pass
         if _deadline_exceeded(deadline):
             LOGGER.warning(
                 "retriever.latency_budget.hit",
@@ -795,6 +866,99 @@ def search(
             evaluated_count=evaluated_count,
             coerce_stats=coerce_stats,
         )
+
+        evidence_ids: list[dict[str, Any]] = []
+        for idx, item in enumerate(scored_items):
+            meta = item.get("meta", {}) if isinstance(item, Mapping) else {}
+            source_id, chunk_id = _extract_lineage_for_logs(meta)
+            evidence_ids.append(
+                {
+                    "rank": idx + 1,
+                    "score": float(item.get("score", 0.0)) if isinstance(item, Mapping) else 0.0,
+                    "source_id": source_id,
+                    "chunk_id": chunk_id,
+                }
+            )
+        try:
+            LOGGER.info(
+                "retriever.evidence.selected",
+                extra={
+                    "slug": params.slug,
+                    "scope": params.scope,
+                    "response_id": response_id,
+                    "k": int(params.k),
+                    "selected_count": len(scored_items),
+                    "budget_hit": bool(budget_hit),
+                    "evidence_ids": evidence_ids,
+                },
+            )
+        except Exception:
+            pass
+
+        # Serializza manifest (se configurato) e logga retriever.response.manifest
+        if explain_base_dir and response_id:
+            try:
+                manifest: dict[str, Any] = {
+                    "response_id": response_id,
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "slug": params.slug,
+                    "scope": params.scope,
+                    "query": params.query,
+                    "retriever_params": {
+                        "k": int(params.k),
+                        "candidate_limit": int(params.candidate_limit),
+                        "latency_budget_ms": int(throttle_cfg.latency_budget_ms) if throttle_cfg else None,
+                    },
+                    "model": {
+                        "embedding_model": embedding_model
+                        or getattr(embeddings_client, "model", None)
+                        or getattr(embeddings_client, "embedding_model", None)
+                    },
+                    "evidence": [
+                        {
+                            "rank": idx + 1,
+                            "score": float(item.get("score", 0.0)) if isinstance(item, Mapping) else 0.0,
+                            "source_id": evidence_ids[idx].get("source_id"),
+                            "chunk_id": evidence_ids[idx].get("chunk_id"),
+                            "path": (item.get("meta", {}) or {}).get("path") if isinstance(item, Mapping) else None,
+                            "snippet": None,
+                        }
+                        for idx, item in enumerate(scored_items)
+                    ],
+                    "metrics": {
+                        "candidates_loaded": int(candidates_count),
+                        "evaluated": int(evaluated_count),
+                        "timings_ms": {
+                            "total": float(total_ms),
+                            "embed": float(t_emb_ms),
+                            "fetch": float(t_fetch_ms),
+                            "score_sort": float(t_score_sort_ms),
+                        },
+                    },
+                    "lineage_refs": [
+                        {"source_id": e.get("source_id"), "chunk_id": e.get("chunk_id")} for e in evidence_ids
+                    ],
+                    "flags": {"budget_hit": bool(budget_hit)},
+                }
+                manifest_path = safe_write_manifest(manifest, base_dir=explain_base_dir, response_id=response_id)
+                try:
+                    LOGGER.info(
+                        "retriever.response.manifest",
+                        extra={
+                            "slug": params.slug,
+                            "scope": params.scope,
+                            "response_id": response_id,
+                            "manifest_path": str(manifest_path),
+                            "evidence_ids": evidence_ids,
+                            "k": int(params.k),
+                            "selected_count": len(scored_items),
+                        },
+                    )
+                except Exception:
+                    pass
+            except Exception:
+                # Manifest saving failures non-bloccanti
+                pass
 
         if throttle_cfg:
             try:
@@ -1043,6 +1207,8 @@ def search_with_config(
     *,
     authorizer: Callable[[QueryParams], None] | None = None,
     throttle_check: Callable[[QueryParams], None] | None = None,
+    response_id: str | None = None,
+    embedding_model: str | None = None,
 ) -> list[SearchResult]:
     """Esegue `with_config_or_budget(...)` e poi `search(...)`.
 
@@ -1063,6 +1229,8 @@ def search_with_config(
         throttle_check=throttle_check,
         throttle=throttle_cfg,
         throttle_key=throttle_key,
+        response_id=response_id,
+        embedding_model=embedding_model,
     )
 
 

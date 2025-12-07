@@ -309,6 +309,11 @@ Riferimenti: [README -> Telemetria & sicurezza](../README.md), [User Guide -> Co
 - In modalita Codex (Chat/Agent) puoi interrogare il DB o i log strutturati per verificare `meta["lineage"]` senza cambiare schema; proporre fix solo se idempotenti e preservando il passaporto esistente.
 - Per modifiche ai flussi ingest/semantic mantieni gli eventi di explainability coerenti con `docs/logging_events.md` e aggiorna `meta["lineage"]` se cambia il modo di creare chunk/embedding.
 
+### Audit risposte (Explainability)
+- Ogni ricerca/reply puo' salvare un manifest per-risposta (`response_id.json`) in una cartella dedicata, con scrittura atomica path-safe.
+- Il retriever emette `retriever.response.manifest` con path locale ed evidenze sintetiche (source_id/chunk_id/k/selected_count); i log non includono snippet o testo.
+- Usa `ExplainabilityService` per arricchire lineage/log a partire dal manifest e generare l'Explainability Packet per audit/debug locale.
+
 ---
 
 ## 8) Procedure GitHub (push/publish) & rollback
