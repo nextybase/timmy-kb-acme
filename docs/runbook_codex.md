@@ -272,6 +272,12 @@ Riferimenti: [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [User Guide](user_guide
 - Monitora la telemetria `phase_scope`: tutte le pipeline devono emettere `prepare_repo`, `stage_changes`, `push_with_retry`/`force_push` per semplificare il triage cross-team.
 - Sincronizza le cache condivise (`clients_store`, `safe_pdf_cache`) invalidandole dopo le write atomiche e tracciando nei log `reset_gating_cache`.
 
+### 5.5 Scenario: Esecuzione Prompt Chain Timmy/ProtoTimmy → OCP → Codex
+- Flusso: 1) Utente ↔ Timmy/ProtoTimmy (planner/logico) definisce obiettivi; 2) Timmy/ProtoTimmy → OrchestratoreChainPrompt (OCP) genera prompt numerati (0..N) uno per volta; 3) OCP → Codex che esegue ogni passo come micro-PR.
+- Entrypoint: resta obbligatorio l'Onboarding Task Codex da `.codex/PROMPTS.md` prima di avviare la sequenza. Ogni prompt mantiene scope limitato e non puo estendersi oltre quanto richiesto.
+- Regole: ogni step segue le stesse policy (AGENT-first, HiTL, path-safety, QA, scritture atomiche). L'OCP non modifica il repository; Codex e l'esecutore repo-aware.
+- Output: la chain deve essere tracciata nei riepiloghi/log; ciascun passo resta rilanciabile e idempotente.
+
 Riferimenti: [AGENTS Index](AGENTS_INDEX.md), [.codex/AGENTS](../.codex/AGENTS.md).
 
 ---

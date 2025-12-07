@@ -47,6 +47,12 @@ Obiettivo: accelerare il lavoro senza sorprese. L'agente propone, tu approvi: Hi
   - aggiornare documentazione e matrice AGENTS se toccate.
 - Questo garantisce coerenza esatta con quanto definito in `.codex/PROMPTS.md`, che governa tutti i flussi di sviluppo assistito.
 
+## Prompt Chain e OrchestratoreChainPrompt (OCP)
+- **Prompt Chain**: sequenza numerata di prompt (Prompt 0, 1, 2, ...) eseguiti uno per volta, ciascuno con scope limitato e trattato come micro-PR secondo le regole Codex (HiTL, AGENT-first, QA, path-safety).
+- **OrchestratoreChainPrompt (OCP)**: strato di orchestrazione sopra Codex; non modifica il repository, genera e inoltra i prompt della chain verso Codex. Ogni prompt viene eseguito singolarmente, senza batch.
+- **Timmy/ProtoTimmy**: planner/logico che definisce gli obiettivi e passa sempre attraverso l'OCP per produrre prompt formali destinati a Codex.
+- **Avvio**: la Prompt Chain parte solo su richiesta esplicita dell'utente; Codex non avvia catene autonomamente. L'entrypoint operativo resta "Onboarding Task Codex".
+
 ## Flusso Codex + Senior Reviewer
 - Quando il task richiede review esterne (nuove feature, refactor sensibili, integrazioni Drive/Vision), Codex opera nel modello tripartito: sviluppatore umano (Franco/team), agente Codex e Senior Reviewer esterno.
 - Prima di coinvolgere il Senior Codex prepara un riepilogo sintetico (contesto, file interessati, motivi di coerenza con `.codex/CONSTITUTION.md` e `docs/AGENTS_INDEX.md`) e usa i prompt dedicati in `.codex/PROMPTS.md` per la fase di coding e per il messaggio di review.

@@ -9,6 +9,7 @@
 - Prima di ogni esecuzione assistita da Codex vengono caricati obbligatoriamente i tre SSoT: `docs/AGENTS_INDEX.md`, l'`AGENTS.md` dell'area interessata e `~/.codex/AGENTS.md`.
 - L'entrypoint operativo raccomandato e' **Onboarding Task Codex** (vedi `.codex/PROMPTS.md`), che garantisce piano preliminare, micro-PR idempotenti, QA esplicita e aggiornamento della matrice AGENTS.
 - I workflow descritti in questo file devono quindi mantenere: path-safety, scritture atomiche, logging strutturato e assenza di side-effects a import-time, anche quando eseguiti via agente.
+- Alcuni workflow possono essere eseguiti dentro una Prompt Chain orchestrata da OCP: l'entrypoint resta Onboarding Task Codex, poi la sequenza di prompt viene guidata dall'OCP (un prompt alla volta) senza cambiare il flusso base micro-PR + QA.
 
 ## Flusso end-to-end
 1) **pre_onboarding**  crea sandbox locale (`output/timmy-kb-<slug>/...`), risolve YAML struttura, opzionale **provisioning Drive** + upload `config.yaml`.
