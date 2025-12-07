@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any, Optional
 
 from pipeline.exceptions import ConfigError
 
@@ -23,6 +24,50 @@ def _get_settings() -> Settings:
     Carica le Settings globali del repo, usando config/config.yaml come SSoT.
     """
     return Settings.load(REPO_ROOT)
+
+
+def _retrieve_assistant(client: Any, assistant_id: str) -> Any:
+    """
+    Recupera i metadati dell'assistant usando la surface più moderna disponibile.
+
+    - Preferisce client.assistants.retrieve(...)
+    - Fallback su client.beta.assistants.retrieve(...) se necessario
+    """
+    # Preferisci surface stabile, se presente
+    if hasattr(client, "assistants"):
+        assistants = getattr(client, "assistants")
+        if hasattr(assistants, "retrieve"):
+            return assistants.retrieve(assistant_id)
+
+    # Fallback incapsulato su beta.assistants
+    beta = getattr(client, "beta", None)
+    if beta is None or not hasattr(beta, "assistants"):
+        raise ConfigError("Client OpenAI non espone l'API assistants (né stabile né beta).")
+
+    return beta.assistants.retrieve(assistant_id)
+
+
+def _extract_text_from_response(resp: Any) -> str:
+    """
+    Estrae il testo dalla Responses API con la stessa logica usata altrove:
+    - prima cerca in resp.output[*].text.value con type == "output_text"
+    - fallback su resp.output_text (se presente)
+    """
+    text: Optional[str] = None
+
+    for item in getattr(resp, "output", []) or []:
+        if getattr(item, "type", "") == "output_text":
+            txt = getattr(getattr(item, "text", None), "value", None)
+            if isinstance(txt, str) and txt.strip():
+                text = txt.strip()
+                break
+
+    if not text:
+        fallback = getattr(resp, "output_text", None)
+        if isinstance(fallback, str) and fallback.strip():
+            text = fallback.strip()
+
+    return text or ""
 
 
 def main() -> None:
@@ -61,9 +106,9 @@ def main() -> None:
         print(f"[ERRORE OPENAI] Impossibile inizializzare il client OpenAI: {exc}")
         raise SystemExit(1)
 
-    # 4) Recupero i metadati dell'assistant
+    # 4) Recupero i metadati dell'assistant (senza usare threads legacy)
     try:
-        assistant = client.beta.assistants.retrieve(prototimmy_id)
+        assistant = _retrieve_assistant(client, prototimmy_id)
     except Exception as exc:
         print(
             f"[ERRORE API] Impossibile recuperare l'assistant {prototimmy_id}: {exc}"
@@ -75,45 +120,45 @@ def main() -> None:
     print(f"   nome:  {getattr(assistant, 'name', '')}")
     print(f"   model: {getattr(assistant, 'model', '')}")
 
-    # 5) Ping minimale: creiamo un thread e chiediamo “pong”
-    thread = client.beta.threads.create()
-    client.beta.threads.messages.create(
-        thread_id=thread.id,
-        role="user",
-        content="Ping di test da timmy-kb-acme (protoTimmy). "
-        "Rispondi solo con la parola 'pong'.",
-    )
+    # 5) Ping minimale via Responses API (nessun uso di beta.threads.*)
+    model_for_ping = getattr(assistant, "model", None) or "gpt-4.1"
 
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id,
-        assistant_id=assistant.id,
-    )
-
-    if run.status != "completed":
-        print(f"[WARN] Run non completata, stato={run.status}")
+    try:
+        resp = client.responses.create(
+            model=model_for_ping,
+            input=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Ping di test da timmy-kb-acme (protoTimmy). "
+                        "Rispondi solo con la parola 'pong'."
+                    ),
+                }
+            ],
+            temperature=0,
+        )
+    except AttributeError as exc:
+        print(
+            "[ERRORE API] Client OpenAI non supporta l'API Responses "
+            f"(AttributeError: {exc})"
+        )
+        raise SystemExit(1)
+    except Exception as exc:
+        print(f"[ERRORE API] Chiamata Responses fallita: {exc}")
         raise SystemExit(1)
 
-    msgs = client.beta.threads.messages.list(
-        thread_id=thread.id,
-        order="desc",
-        limit=5,
-    )
+    text = _extract_text_from_response(resp)
 
-    text = ""
-    for msg in getattr(msgs, "data", []) or []:
-        if getattr(msg, "role", "") != "assistant":
-            continue
-        for part in getattr(msg, "content", None) or []:
-            t = getattr(part, "type", None)
-            if t in ("text", "output_text"):
-                txt = getattr(getattr(part, "text", None), "value", None)
-                if isinstance(txt, str) and txt.strip():
-                    text = txt.strip()
-                    break
-        if text:
-            break
+    if not text:
+        print("[WARN] Nessun testo restituito dalla Responses API.")
+        raise SystemExit(1)
 
     print(f"   risposta assistant: {text!r}")
+
+    # opzionale: se vuoi proprio essere pignolo sulla risposta
+    if text.strip().lower() != "pong":
+        print("[WARN] La risposta non è 'pong' come richiesto.")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import pytest
 
 import kg_builder
 from kg_builder import RawTag, TagKgInput, _load_raw_tags, call_openai_tag_kg_assistant
+from pipeline.exceptions import ConfigError
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
@@ -91,55 +92,22 @@ def test_call_openai_tag_kg_assistant_parses_tool_call(monkeypatch: pytest.Monke
         "relations": [],
     }
 
-    tool_function = SimpleNamespace(name="build_tag_kg", arguments=json.dumps(tool_output, ensure_ascii=False))
-    tool_call = SimpleNamespace(function=tool_function)
-    step_details = SimpleNamespace(type="tool_calls", tool_calls=[tool_call])
-    step = SimpleNamespace(step_details=step_details)
-
-    class DummyMessages:
-        def create(self, **kwargs: object) -> None:
-            self.last = kwargs
-
-    class DummySteps:
-        def list(self, *args: object, **kwargs: object) -> list[SimpleNamespace]:
-            return [step]
-
-    class DummyRuns:
-        def __init__(self) -> None:
-            self.steps = DummySteps()
-
-        def create_and_poll(self, *args: object, **kwargs: object) -> SimpleNamespace:
-            return SimpleNamespace(status="completed", id="run", thread_id="thread")
-
-    class DummyThreads:
-        def __init__(self) -> None:
-            self.messages = DummyMessages()
-            self.runs = DummyRuns()
-
-        def create(self) -> SimpleNamespace:
-            return SimpleNamespace(id="thread")
-
-    class DummyBeta:
-        def __init__(self) -> None:
-            self.threads = DummyThreads()
-
-    class DummyCompletions:
-        def create(self, **kwargs: object) -> SimpleNamespace:
-            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(tool_output)))])
-
-    class DummyChat:
-        def __init__(self) -> None:
-            self.completions = DummyCompletions()
+    class DummyOutputItem:
+        def __init__(self, text: str) -> None:
+            self.type = "output_text"
+            self.text = SimpleNamespace(value=text)
 
     class DummyClient:
         def __init__(self) -> None:
-            self.beta = DummyBeta()
-            self.chat = DummyChat()
+            self.responses = self
+
+        def create(self, **kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(output=[DummyOutputItem(json.dumps(tool_output, ensure_ascii=False))])
 
     monkeypatch.setattr(kg_builder, "make_openai_client", lambda: DummyClient())
 
     def _fake_get_env_var(name, default=None, **kwargs):
-        return "tag-kg" if name == "TAG_KG_BUILDER_ASSISTANT_ID" else default
+        return "tag-kg" if name == "KGRAPH_ASSISTANT_ID" else default
 
     monkeypatch.setattr(kg_builder, "get_env_var", _fake_get_env_var)
 
@@ -148,3 +116,38 @@ def test_call_openai_tag_kg_assistant_parses_tool_call(monkeypatch: pytest.Monke
     assert kg.namespace == "demo"
     assert len(kg.tags) == 1
     assert kg.tags[0].id == "tag:alpha"
+
+
+def test_invoke_assistant_raises_on_responses_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyClient:
+        def __init__(self) -> None:
+            self.responses = self
+
+        def create(self, **kwargs: object) -> None:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(kg_builder, "make_openai_client", lambda: DummyClient())
+    monkeypatch.setattr(kg_builder, "get_env_var", lambda *_a, **_k: "tag-kg")
+
+    with pytest.raises(ConfigError):
+        kg_builder._invoke_assistant([{"role": "user", "content": "hi"}], redact_logs=False)
+
+
+def test_invoke_assistant_raises_on_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyOutputItem:
+        def __init__(self, text: str) -> None:
+            self.type = "output_text"
+            self.text = SimpleNamespace(value=text)
+
+    class DummyClient:
+        def __init__(self) -> None:
+            self.responses = self
+
+        def create(self, **kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(output=[DummyOutputItem("not-json")])
+
+    monkeypatch.setattr(kg_builder, "make_openai_client", lambda: DummyClient())
+    monkeypatch.setattr(kg_builder, "get_env_var", lambda *_a, **_k: "tag-kg")
+
+    with pytest.raises(ConfigError):
+        kg_builder._invoke_assistant([{"role": "user", "content": "hi"}], redact_logs=False)

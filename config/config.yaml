@@ -28,11 +28,9 @@ ai:
     model: gpt-4.1
     assistant_id_env: PROTOTIMMY_ID
     use_kb: true
-  kgbuilder:
-    engine: assistants
+  kgraph:
     model: gpt-4.1
     assistant_id_env: KGRAPH_ASSISTANT_ID
-    use_kb: true
 
 
 pipeline:
