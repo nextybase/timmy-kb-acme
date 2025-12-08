@@ -183,6 +183,87 @@ make qa-safe     # isort/black/ruff/mypy (se presenti)
 make ci-safe     # qa-safe + pytest
 ```
 
+## Interfacciarsi correttamente agli Assistant OpenAI con l'SDK interno
+
+Questa sezione descrive il modo corretto per collegare gli script del framework NeXT agli assistant OpenAI usando lo SDK interno (`ai.client_factory`, `client.responses.create`, modello-only).
+
+### 7.1 Architettura di riferimento
+- Recupero delle impostazioni dal `config.yaml` tramite `Settings()`.
+- Risoluzione dell'`assistant_id` se richiesto (assistant_env -> variabile ambiente).
+- Risoluzione del modello da config, con fallback al modello dell'assistant quando previsto.
+- Uso dell'SDK OpenAI centralizzato:
+  ```python
+  from ai.client_factory import make_openai_client
+  client = make_openai_client()
+  ```
+- Chiamata tramite Responses API se serve output strutturato JSON.
+- Validazione dell'output: mai fidarsi ciecamente del modello.
+
+### 7.2 Best practice per i messaggi (Responses API)
+Formato compatibile:
+```python
+messages = [
+    {
+        "role": "user",
+        "content": [
+            {"type": "input_text", "text": "contenuto..."}
+        ],
+    }
+]
+```
+⚠️ Non usare `type: text` (gli assistant lo ignorano o generano errori).
+
+### 7.3 Chiamata standard a `client.responses.create()`
+```python
+response = client.responses.create(
+    model=model_name,
+    input=messages,
+    response_format={"type": "json_object"},
+    temperature=0,
+)
+```
+Note:
+- `response_format` deve essere esattamente `{"type": "json_object"}` se ci aspettiamo JSON.
+- L'output va letto da `response.output` o `response.output_text`.
+```python
+text = None
+for item in response.output:
+    if item.type == "output_text":
+        text = item.text.value
+        break
+```
+
+### 7.4 Regole per gli assistant
+- L'assistant e solo contenitore di configurazione: niente thread, run, file upload.
+- L'inferenza usa sempre Responses API (o completions modello-only).
+- Dalle settings si leggono: `assistant_id_env` e `model` se configurato.
+- Logica NeXT: assistant = definizione; Responses = inferenza.
+
+### 7.5 Risoluzione del modello (`_resolve_kgraph_model` pattern)
+- Se nel `config.yaml` esiste un modello esplicito -> usare quello.
+- Se manca -> recuperare il modello dell'assistant (se presente).
+- Se manca anche quello -> lanciare `ConfigError`.
+
+### 7.6 Errori tipici e fix
+Errore | Significato | Fix
+--- | --- | ---
+`Responses.create() got an unexpected keyword argument 'response_format'` | SDK troppo vecchio | Aggiornare `openai>=1.50`
+`Invalid value: 'text'. Supported values are ...` | `type` errato nei messaggi | Usare `input_text`
+JSON non valido | Il modello ha risposto in linguaggio naturale | Rafforzare prompt + validazione
+
+### 7.7 Modello-only: quando usarlo
+- Tutti gli script che non richiedono un assistant dedicato devono usare i modelli direttamente:
+  ```python
+  client.responses.create(model="gpt-4.1", input=messages)
+  ```
+- Esempi: Vision, ping ProtoTimmy, test diagnostici.
+
+### 7.8 Logging e debug raccomandati
+- Loggare sempre: modello usato, path input, `assistant_id` se usato, sample dell'output grezzo (non sensibile).
+```python
+logger.info("debug.raw_output", extra={"sample": text[:500]})
+```
+
 ### Prompt Chain & agenti (vista sviluppatore)
 - Per modifiche non banali usa il modello Prompt Chain definito nello SSoT `docs/PromptChain_spec.md`.
 - **Ruoli**: Planner definisce obiettivi/vincoli; OCP (OrchestratoreChainPrompt) genera i prompt numerati; Codex esegue ogni prompt come micro-PR con QA locale e rispetto delle policy AGENT.

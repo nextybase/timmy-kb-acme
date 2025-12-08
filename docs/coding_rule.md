@@ -157,6 +157,12 @@ Solo dopo questa fase la modifica e pronta per PR.
 - Branch di lavoro: `feat/*`, `fix/*`, `chore/*`, `docs/*`.
 - Se la PR nasce da una Prompt Chain Codex, nel corpo PR includi il riferimento alla chain e la conferma che il Prompt finale di QA e stato eseguito con successo secondo `docs/PromptChain_spec.md`.
 
+### Uso degli Assistant OpenAI nei componenti NeXT
+- Usa sempre lo SDK interno (`make_openai_client`) e la Responses API; vietato usare thread/run degli assistant.
+- Messaggi solo con `input_text`/`output_text`; niente `type: text`.
+- Ogni funzione deve risolvere il modello da config, gestire errori espliciti e validare l'output JSON.
+- Preferisci modello-only quando non serve un assistant dedicato; l'assistant e solo spazio di configurazione, non contesto di inferenza.
+
 ---
 
 ## 11) Pattern da evitare

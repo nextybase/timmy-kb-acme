@@ -157,12 +157,5 @@ def test_invoke_assistant_raises_on_invalid_json(monkeypatch: pytest.MonkeyPatch
 
 
 def test_resolve_kgraph_model_from_settings_object() -> None:
-    class DummySettings:
-        def __init__(self) -> None:
-            self._data = {"ai": {"kgraph": {"model": "gpt-4.1"}}}
-
-        def get(self, key: str, default=None):
-            return self._data.get(key, default)
-
-    model = kg_builder._resolve_kgraph_model(settings=DummySettings())
+    model = kg_builder._resolve_kgraph_model(settings={"ai": {"kgraph": {"model": "gpt-4.1"}}})
     assert model == "gpt-4.1"

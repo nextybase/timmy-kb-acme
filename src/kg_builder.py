@@ -19,6 +19,81 @@ from pipeline.settings import Settings
 logger = get_structured_logger("kg_builder")
 
 
+# Prompt interno per il modello KGraph (Responses model-only).
+# NOTA: questo è il prompt effettivamente usato in runtime, indipendentemente
+# dalla configurazione dell'assistant su dashboard.
+_KGRAPH_SYSTEM_PROMPT = """
+Sei il componente "Tag KG Builder" del framework NeXT.
+
+RICEVI:
+- un singolo messaggio utente con un oggetto JSON che contiene:
+  {
+    "namespace": "string",
+    "tags_file": "string",
+    "contexts_file": "string o null",
+    "tags": [
+      { "raw_label": "string", "contexts": ["string", "..."] },
+      ...
+    ]
+  }
+
+DEVI:
+- Restituire SOLO un oggetto JSON valido (niente testo fuori dal JSON, niente markdown).
+- Il JSON deve rappresentare un TagKnowledgeGraph con questa struttura di alto livello:
+
+{
+  "schema_version": "kg-tags-0.1",
+  "namespace": "<dall'input.namespace>",
+  "generated_by": "assistant-openai",
+  "generated_at": "YYYY-MM-DDTHH:MM:SSZ",
+  "source": {
+    "tags_file": "string",
+    "contexts_file": "string o null"
+  },
+  "tags": [ ... ],
+  "relations": [ ... ]
+}
+
+CAMPO tags (obbligatorio, può essere anche lista vuota):
+Ogni elemento ha la forma:
+
+{
+  "id": "string (es. 'tag:ai.llm')",
+  "label": "string",
+  "description": "string",
+  "category": "tecnologia | processo | prodotto | ruolo | organizzazione | rischio | dato | cliente | servizio",
+  "status": "active | draft | deprecated",
+  "language": "string (es. 'it')",
+  "aliases": ["string", "..."],
+  "examples": ["string", "..."],
+  "extra": {}
+}
+
+- Usa l'italiano per description, examples, notes, salvo termini tecnici (es. LLM).
+- Puoi fondere raw_label simili in un solo tag (usando aliases).
+
+CAMPO relations (facoltativo, può essere lista vuota):
+Ogni relazione ha la forma:
+
+{
+  "id": "rel:<source-id>-><target-id>#<type>",
+  "source": "<id di un tag>",
+  "target": "<id di un tag>",
+  "type": "BROADER_THAN | NARROWER_THAN | RELATED_TO | ALIAS_OF",
+  "confidence": numero tra 0.0 e 1.0,
+  "review_status": "pending",
+  "provenance": "assistant_v1",
+  "notes": "string"
+}
+
+VINCOLI:
+- Non scrivere MAI testo fuori dall'oggetto JSON.
+- Non usare blocchi ```json o markdown.
+- Se hai poche informazioni, puoi restituire:
+  - "tags": [] e/o "relations": [], ma il JSON deve restare ben formato.
+""".strip()
+
+
 @dataclass
 class RawTag:
     raw_label: str
@@ -33,27 +108,57 @@ class TagKgInput:
     tags: List[RawTag]
 
     def to_messages(self) -> list[dict[str, Any]]:
-        content = [
-            {
-                "type": "text",
-                "text": json.dumps(
-                    {
-                        "namespace": self.namespace,
-                        "tags_file": self.tags_file,
-                        "contexts_file": self.contexts_file,
-                        "tags": [
-                            {
-                                "raw_label": t.raw_label,
-                                "contexts": t.contexts,
-                            }
-                            for t in self.tags
-                        ],
-                    },
-                    ensure_ascii=False,
-                ),
-            }
+        """
+        Prepara i messaggi per la Responses API in formato model-only:
+
+        input = [
+          {
+            "role": "system",
+            "content": [
+              {"type": "input_text", "text": <istruzioni per JSON-only> }
+            ]
+          },
+          {
+            "role": "user",
+            "content": [
+              {"type": "input_text", "text": "<json con namespace/tags/...>"}
+            ]
+          }
         ]
-        return [{"role": "user", "content": content}]
+        """
+        payload = {
+            "namespace": self.namespace,
+            "tags_file": self.tags_file,
+            "contexts_file": self.contexts_file,
+            "tags": [
+                {
+                    "raw_label": t.raw_label,
+                    "contexts": t.contexts,
+                }
+                for t in self.tags
+            ],
+        }
+
+        return [
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": _KGRAPH_SYSTEM_PROMPT,
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": json.dumps(payload, ensure_ascii=False),
+                    }
+                ],
+            },
+        ]
 
 
 def _iter_entries(source: Any, default_label: str | None = None) -> Iterable[dict[str, Any]]:
@@ -188,20 +293,29 @@ def _invoke_assistant(
     assistant_env: Optional[str] = None,
     settings: Optional[Any] = None,
 ) -> dict[str, Any]:
+    """
+    Invoca il modello per costruire il Tag KG usando l'API Responses.
+
+    Pattern: model-only, nessun `response_format`.
+    L'assistant_id viene usato solo per:
+    - logging,
+    - fallback di modello se ai.kgraph.model non è configurato.
+    """
     assistant_id = _resolve_kgraph_assistant_id(settings=settings, assistant_env=assistant_env)
     client = make_openai_client()
+
+    # modello da config; se manca, fallback al modello dell'assistant
     model = _resolve_kgraph_model(settings=settings) or _resolve_model_from_assistant(client, assistant_id)
     if not model:
         raise ConfigError(
             "Modello KGraph non configurato: imposta ai.kgraph.model o assegna un modello all'assistant "
             f"{assistant_id}."
         )
-    response_format = {"type": "json_object"}
+
     try:
         response = client.responses.create(
             model=model,
             input=messages,
-            response_format=response_format,
             temperature=0,
         )
     except AttributeError as exc:  # pragma: no cover - client privo di responses
@@ -230,20 +344,30 @@ def _invoke_assistant(
     text: Optional[str] = None
     for item in getattr(response, "output", []) or []:
         if getattr(item, "type", "") == "output_text":
-            text = getattr(getattr(item, "text", None), "value", None)
-            if text:
+            value = getattr(getattr(item, "text", None), "value", None)
+            if isinstance(value, str) and value.strip():
+                text = value.strip()
                 break
     if not text:
-        text = getattr(response, "output_text", None)
+        fallback = getattr(response, "output_text", None)
+        if isinstance(fallback, str) and fallback.strip():
+            text = fallback.strip()
+
     if not text:
         logger.error(
             "semantic.kg.responses.no_output",
             extra={"assistant_id": assistant_id},
         )
         raise ConfigError("Responses run completato ma nessun testo nel messaggio di output.")
+
     try:
         return json.loads(text)
     except json.JSONDecodeError as exc:
+        # DEBUG: stampa l'output grezzo per capire cosa sta rispondendo il modello
+        print("\n[DEBUG KGRAPH RAW OUTPUT]")
+        print(text[:2000])
+        print("[FINE DEBUG KGRAPH RAW OUTPUT]\n")
+
         logger.error(
             "semantic.kg.responses.invalid_json",
             extra={"assistant_id": assistant_id, "error": str(exc), "sample": text[:500]},
@@ -263,7 +387,12 @@ def _save_outputs(semantic_dir: Path, kg: TagKnowledgeGraph) -> dict[str, str]:
     kg_md_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.md")
 
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    safe_write_text(kg_json_path, json.dumps(kg.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8", atomic=True)
+    safe_write_text(
+        kg_json_path,
+        json.dumps(kg.to_dict(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+        atomic=True,
+    )
 
     def _render_md(graph: TagKnowledgeGraph) -> str:
         lines = [

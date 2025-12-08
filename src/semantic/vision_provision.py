@@ -371,16 +371,78 @@ def _load_vision_schema() -> Dict[str, Any]:
     return schema
 
 
+def _build_run_instructions(use_kb: bool) -> str:
+    """
+    Costruisce le istruzioni di run per il modello Vision, includendo
+    lo schema JSON completo di VisionOutput.
+
+    Obiettivo: massimizzare la probabilità che il modello restituisca
+    un singolo oggetto JSON conforme allo schema, senza testo extra.
+    """
+    schema = _load_vision_schema()
+    # Lo schema è già validato a monte; qui lo usiamo solo come testo guida.
+    schema_snippet = json.dumps(schema, ensure_ascii=False, indent=2)
+
+    prefix_lines = [
+        "Sei il modulo NeXT – Vision → Semantic Mapping.",
+        "Ricevi il Vision Statement del cliente e DEVI restituire UN SOLO oggetto JSON",
+        "che rispetta esattamente lo schema VisionOutput riportato qui sotto.",
+        "",
+        "Regole dure sull'output:",
+        "- restituisci solo JSON puro, senza testo prima o dopo, senza commenti, senza spiegazioni;",
+        "- la radice deve essere un oggetto che rispetta lo schema VisionOutput;",
+        "- il payload DEVE contenere almeno le chiavi richieste dallo schema,",
+        "  in particolare 'context' e 'areas';",
+        "- 'context.slug' e 'context.client_name' devono usare i valori del blocco 'Contesto cliente';",
+        "- non aggiungere chiavi fuori dallo schema.",
+        "",
+        "Schema JSON da rispettare (VisionOutput.schema.json):",
+        schema_snippet,
+        "",
+    ]
+
+    if use_kb:
+        suffix = (
+            "Durante QUESTA run puoi usare File Search (KB collegata al progetto/assistente) "
+            "per integrare e validare i contenuti, ma il testo autorevole è il blocco Vision "
+            "fornito nel messaggio utente.\n"
+            "In ogni caso, l'output finale deve SEMPRE essere il JSON conforme allo schema sopra."
+        )
+    else:
+        suffix = (
+            "Durante QUESTA run devi IGNORARE File Search e qualsiasi risorsa esterna: "
+            "usa esclusivamente il blocco Vision fornito nel messaggio utente.\n"
+            "L'output finale deve SEMPRE essere il JSON conforme allo schema sopra."
+        )
+
+    return "\n".join(prefix_lines) + "\n" + suffix
+
+
 def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") -> str:
     """
-    Estrae il testo dal PDF. Fallisce rapidamente se il file è corrotto o vuoto.
+    Estrae il testo dal PDF usando PyPDF2/pypdf.
+    Mantiene la stessa semantica di errore precedente:
+    - dependency-missing  -> libreria PDF non disponibile
+    - corrupted           -> file non leggibile / non-PDF
+    - empty               -> nessun testo estratto
     """
     try:
-        import fitz
+        import importlib
+
+        try:
+            module = importlib.import_module("pypdf")
+        except ImportError:
+            module = importlib.import_module("PyPDF2")
+
+        PdfReader = module.PdfReader
     except Exception as exc:  # pragma: no cover
         logger.warning(
             _evt("extract_failed"),
-            extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "dependency-missing"},
+            extra={
+                "slug": slug,
+                "pdf_path": str(pdf_path),
+                "reason": "dependency-missing",
+            },
         )
         raise ConfigError(
             "VisionStatement illeggibile: libreria PDF non disponibile",
@@ -389,14 +451,23 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
         ) from exc
 
     try:
-        with fitz.open(pdf_path) as doc:
-            texts: List[str] = []
-            for page in doc:
-                texts.append(page.get_text("text"))
+        reader = PdfReader(str(pdf_path))
+        texts: List[str] = []
+        for page in getattr(reader, "pages", []) or []:
+            try:
+                extracted = page.extract_text() or ""
+            except Exception:
+                extracted = ""
+            if extracted:
+                texts.append(extracted)
     except Exception as exc:
         logger.warning(
             _evt("extract_failed"),
-            extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "corrupted"},
+            extra={
+                "slug": slug,
+                "pdf_path": str(pdf_path),
+                "reason": "corrupted",
+            },
         )
         raise ConfigError(
             "VisionStatement illeggibile: file corrotto o non parsabile",
@@ -408,7 +479,11 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
     if not snapshot:
         logger.info(
             _evt("extract_failed"),
-            extra={"slug": slug, "pdf_path": str(pdf_path), "reason": "empty"},
+            extra={
+                "slug": slug,
+                "pdf_path": str(pdf_path),
+                "reason": "empty",
+            },
         )
         raise ConfigError(
             "VisionStatement vuoto: nessun contenuto testuale estraibile",
@@ -675,15 +750,9 @@ def _prepare_payload(
 
     strict_output = _resolve_vision_strict_output(ctx)
     use_kb = _resolve_vision_use_kb(ctx)
-    run_instructions = (
-        "Durante QUESTA run puoi usare File Search (KB collegata al progetto/assistente) "
-        "per integrare e validare i contenuti. Dai priorità al blocco Vision qui sopra. "
-        "Produci SOLO il JSON richiesto, niente testo extra."
-        if use_kb
-        else "Durante QUESTA run: ignora File Search e qualsiasi risorsa esterna; "
-        "usa esclusivamente il blocco Vision qui sopra. "
-        "Produci SOLO il JSON richiesto, niente testo extra."
-    )
+    # Le instructions includono lo schema VisionOutput completo, in modo da guidare
+    # il modello verso un output JSON strutturato e validabile.
+    run_instructions = _build_run_instructions(use_kb=use_kb)
 
     resolved_model = (model or "").strip() or _resolve_model_from_settings(ctx)
     if not resolved_model:
@@ -888,25 +957,32 @@ def _call_responses_json(
     )
 
     LOGGER.debug(_evt("responses.create"), extra={"assistant_id": assistant_id, "model": model})
-    tool_choice: Any = {"type": "file_search"} if use_kb else "auto"
-    input_payload = [
+
+    # Costruiamo il payload di input in modo compatibile con lo SDK attuale:
+    # - NIENTE parametri extra non supportati (response_format, tool_choice, tools, ...)
+    # - Le istruzioni vengono fornite come messaggio "system".
+    input_payload: List[Dict[str, str]] = []
+
+    if run_instructions:
+        input_payload.append(
+            {
+                "role": "system",
+                "content": str(run_instructions),
+            }
+        )
+
+    input_payload.extend(
         {
             "role": (msg.get("role") or "user").strip() or "user",
             "content": str(msg.get("content") or ""),
         }
         for msg in user_messages
-    ]
+    )
 
     request_kwargs: Dict[str, Any] = {
         "model": model,
         "input": input_payload,
-        "instructions": run_instructions or None,
-        "tool_choice": tool_choice,
     }
-    if response_format is not None:
-        request_kwargs["response_format"] = response_format
-    if use_kb:
-        request_kwargs["tools"] = [{"type": "file_search"}]
 
     try:
         resp = client.responses.create(**request_kwargs)

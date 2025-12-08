@@ -416,8 +416,8 @@ def test_prepare_payload_sets_instructions_by_use_kb(tmp_path: Path, monkeypatch
         logger=logging.getLogger("test"),
     )
     assert prepared_true.use_kb is True
-    assert "puoi usare File Search" in prepared_true.run_instructions
-    assert "Produci SOLO il JSON richiesto" in prepared_true.run_instructions
+    assert "File Search" in prepared_true.run_instructions
+    assert "output finale deve SEMPRE" in prepared_true.run_instructions
 
     monkeypatch.setenv("VISION_USE_KB", "false")
     prepared_false = vp._prepare_payload(
@@ -429,7 +429,7 @@ def test_prepare_payload_sets_instructions_by_use_kb(tmp_path: Path, monkeypatch
         logger=logging.getLogger("test"),
     )
     assert prepared_false.use_kb is False
-    assert "ignora File Search" in prepared_false.run_instructions
+    assert "IGNORARE File Search" in prepared_false.run_instructions
     assert "usa esclusivamente il blocco Vision" in prepared_false.run_instructions
 
 
