@@ -31,6 +31,26 @@ ai:
     timeout: 60
     max_retries: 4
     http2_enabled: true
+  prototimmy:
+    engine: assistants
+    model: gpt-4.1
+    assistant_id_env: DUMMY_PROTOTIMMY_ID
+    use_kb: true
+  planner_assistant:
+    engine: assistants
+    model: gpt-4.1
+    assistant_id_env: DUMMY_PLANNER_ID
+    use_kb: true
+  ocp_executor:
+    engine: assistants
+    model: gpt-4.1
+    assistant_id_env: DUMMY_OCP_ID
+    use_kb: true
+  kgraph:
+    engine: assistants
+    model: gpt-4.1
+    assistant_id_env: DUMMY_KGRAPH_ID
+    use_kb: true
   vision:
     engine: responses
     model: gpt-4o-mini-2024-07-18
@@ -60,6 +80,10 @@ def test_settings_loads_config(sample_config: Path) -> None:
     settings = Settings.load(sample_config.parent.parent, config_path=sample_config)
     data: Dict[str, object] = settings.as_dict()
     assert data["ai"]["vision"]["model"] == "gpt-4o-mini-2024-07-18"
+    assert "prototimmy" in data["ai"] and data["ai"]["prototimmy"]["model"] == "gpt-4.1"
+    assert "planner_assistant" in data["ai"] and data["ai"]["planner_assistant"]["model"] == "gpt-4.1"
+    assert "ocp_executor" in data["ai"] and data["ai"]["ocp_executor"]["model"] == "gpt-4.1"
+    assert "kgraph" in data["ai"] and data["ai"]["kgraph"]["model"] == "gpt-4.1"
     assert settings.client_name == "Cliente Demo"
     assert settings.vision_model == "gpt-4o-mini-2024-07-18"
     assert settings.vision_engine == "responses"
