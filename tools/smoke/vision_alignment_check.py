@@ -211,37 +211,11 @@ def main() -> None:
         "vision_alignment_check.strict_output",
         extra={"value": strict_output, "source": strict_output_source},
     )
-    text_cfg: Dict[str, Any] | None = None
-    if strict_output:
-        text_cfg = {
-            "format": {
-                "type": "json_schema",
-                "name": "VisionOutput_v2",
-                "schema": schema,
-                "strict": True,
-            }
-        }
-
-    # 4) Tools / File Search (se abilitato)
-    tools: Optional[List[Dict[str, Any]]] = None
-    tool_choice: Any = "none"
-
-    if use_kb:
-        # Se il progetto Ã¨ configurato con una KB / Vector Store di default,
-        # basta dichiarare il tool `file_search`.
-        tools = [
-            {
-                "type": "file_search",
-                # Se vuoi forzare un Vector Store specifico:
-                # "vector_store_ids": ["vs_..."],
-            }
-        ]
-        tool_choice = {"type": "file_search"}
 
     # Istruzioni per questa run (equivalente del vecchio `instructions` Assistants)
     run_instructions = (
         "Durante QUESTA run puoi usare File Search (KB collegata al progetto/assistente) "
-        "per integrare e validare i contenuti. Dai prioritÃ  al blocco Vision qui sopra. "
+        "per integrare e validare i contenuti. Dai priorita' al blocco Vision qui sopra. "
         "Produci SOLO il JSON richiesto, niente testo extra."
         if use_kb
         else "Durante QUESTA run: ignora File Search e qualsiasi risorsa esterna; "
@@ -249,20 +223,34 @@ def main() -> None:
         "Produci SOLO il JSON richiesto, niente testo extra."
     )
 
+    system_lines = [run_instructions]
+    if strict_output:
+        schema_snippet = json.dumps(schema, ensure_ascii=False, indent=2)
+        system_lines.append(
+            "Restituisci SOLO JSON conforme allo schema VisionOutput seguente, senza testo extra o spiegazioni."
+        )
+        system_lines.append(schema_snippet)
+
+    input_messages = [
+        {
+            "role": "system",
+            "content": [{"type": "input_text", "text": "\n".join(system_lines)}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "input_text", "text": TEST_BLOCK}],
+        },
+    ]
+
     metadata = {"source": "vision_alignment_check"}
     if assistant_id:
         metadata["assistant_id"] = assistant_id
 
     request_kwargs: Dict[str, Any] = {
         "model": model,
-        "input": TEST_BLOCK,
-        "instructions": run_instructions,
-        "tools": tools,
-        "tool_choice": tool_choice,
+        "input": input_messages,
         "metadata": metadata,
     }
-    if text_cfg:
-        request_kwargs["text"] = text_cfg
 
     # 5) Chiamata Responses API
     try:

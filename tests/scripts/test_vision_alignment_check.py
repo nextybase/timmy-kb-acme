@@ -120,7 +120,12 @@ def test_response_format_matches_strict_flag(
     assert result["assistant_env_source"] == "config"
     request = created[0].last_request
     assert request is not None
-    assert ("text" in request) is strict_output
+    assert "text" not in request
+    assert isinstance(request.get("input"), list)
+    assert request["input"][0]["role"] == "system"
+    assert request["input"][0]["content"][0]["type"] == "input_text"
+    assert request["input"][1]["role"] == "user"
+    assert request["input"][1]["content"][0]["type"] == "input_text"
 
 
 def test_strict_output_logged_default_source_when_settings_missing(

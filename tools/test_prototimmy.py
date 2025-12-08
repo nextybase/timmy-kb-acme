@@ -164,10 +164,15 @@ def main() -> None:
             input=[
                 {
                     "role": "user",
-                    "content": (
-                        "Ping di test da timmy-kb-acme (protoTimmy). "
-                        "Rispondi solo con la parola 'pong'."
-                    ),
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Ping di test da timmy-kb-acme (protoTimmy). "
+                                "Rispondi solo con la parola 'pong'."
+                            ),
+                        }
+                    ],
                 }
             ],
             temperature=0,
@@ -205,10 +210,15 @@ def main() -> None:
             input=[
                 {
                     "role": "user",
-                    "content": (
-                        "Test di integrazione. Genera una breve frase che inizi con "
-                        "'PROTO:' e non aggiungere spiegazioni."
-                    ),
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Test di integrazione. Genera una breve frase che inizi con "
+                                "'PROTO:' e non aggiungere spiegazioni."
+                            ),
+                        }
+                    ],
                 }
             ],
             temperature=0,
@@ -230,13 +240,18 @@ def main() -> None:
             input=[
                 {
                     "role": "user",
-                    "content": (
-                        "Test di integrazione Planner.\n"
-                        "Hai ricevuto questo input da protoTimmy:\n"
-                        f"{proto_text}\n\n"
-                        "Aggiungi alla fine della stringa esattamente ' PLANNER_OK' "
-                        "e restituisci SOLO la stringa risultante, senza spiegazioni."
-                    ),
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Test di integrazione Planner.\n"
+                                "Hai ricevuto questo input da protoTimmy:\n"
+                                f"{proto_text}\n\n"
+                                "Aggiungi alla fine della stringa esattamente ' PLANNER_OK' "
+                                "e restituisci SOLO la stringa risultante, senza spiegazioni."
+                            ),
+                        }
+                    ],
                 }
             ],
             temperature=0,
@@ -258,13 +273,18 @@ def main() -> None:
             input=[
                 {
                     "role": "user",
-                    "content": (
-                        "Test di integrazione OCP Executor.\n"
-                        "Hai ricevuto questo input dal Planner Assistant:\n"
-                        f"{planner_text}\n\n"
-                        "Aggiungi alla fine della stringa esattamente ' OCP_OK' "
-                        "e restituisci SOLO la stringa risultante, senza spiegazioni."
-                    ),
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Test di integrazione OCP Executor.\n"
+                                "Hai ricevuto questo input dal Planner Assistant:\n"
+                                f"{planner_text}\n\n"
+                                "Aggiungi alla fine della stringa esattamente ' OCP_OK' "
+                                "e restituisci SOLO la stringa risultante, senza spiegazioni."
+                            ),
+                        }
+                    ],
                 }
             ],
             temperature=0,

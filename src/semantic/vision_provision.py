@@ -960,21 +960,26 @@ def _call_responses_json(
 
     # Costruiamo il payload di input in modo compatibile con lo SDK attuale:
     # - NIENTE parametri extra non supportati (response_format, tool_choice, tools, ...)
-    # - Le istruzioni vengono fornite come messaggio "system".
-    input_payload: List[Dict[str, str]] = []
+    # - Le istruzioni vengono fornite come messaggio "system" usando input_text.
+    input_payload: List[Dict[str, Any]] = []
 
     if run_instructions:
         input_payload.append(
             {
                 "role": "system",
-                "content": str(run_instructions),
+                "content": [{"type": "input_text", "text": str(run_instructions)}],
             }
         )
 
     input_payload.extend(
         {
             "role": (msg.get("role") or "user").strip() or "user",
-            "content": str(msg.get("content") or ""),
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": str(msg.get("content") or ""),
+                }
+            ],
         }
         for msg in user_messages
     )
