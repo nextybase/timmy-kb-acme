@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -92,25 +91,7 @@ def test_call_openai_tag_kg_assistant_parses_tool_call(monkeypatch: pytest.Monke
         "relations": [],
     }
 
-    class DummyOutputItem:
-        def __init__(self, text: str) -> None:
-            self.type = "output_text"
-            self.text = SimpleNamespace(value=text)
-
-    class DummyClient:
-        def __init__(self) -> None:
-            self.responses = self
-
-        def create(self, **kwargs: object) -> SimpleNamespace:
-            return SimpleNamespace(output=[DummyOutputItem(json.dumps(tool_output, ensure_ascii=False))])
-
-    monkeypatch.setattr(kg_builder, "make_openai_client", lambda: DummyClient())
-
-    def _fake_get_env_var(name, default=None, **kwargs):
-        return "tag-kg" if name == "KGRAPH_ASSISTANT_ID" else default
-
-    monkeypatch.setattr(kg_builder, "get_env_var", _fake_get_env_var)
-    monkeypatch.setattr(kg_builder, "_resolve_kgraph_model", lambda **_: "gpt-4o-mini")
+    monkeypatch.setattr(kg_builder, "invoke_kgraph_messages", lambda *a, **k: tool_output)
 
     kg = call_openai_tag_kg_assistant(payload)
 
@@ -120,37 +101,20 @@ def test_call_openai_tag_kg_assistant_parses_tool_call(monkeypatch: pytest.Monke
 
 
 def test_invoke_assistant_raises_on_responses_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    class DummyClient:
-        def __init__(self) -> None:
-            self.responses = self
+    def _raise(*_a, **_k):
+        raise ConfigError("boom")
 
-        def create(self, **kwargs: object) -> None:
-            raise RuntimeError("boom")
-
-    monkeypatch.setattr(kg_builder, "make_openai_client", lambda: DummyClient())
-    monkeypatch.setattr(kg_builder, "get_env_var", lambda *_a, **_k: "tag-kg")
-    monkeypatch.setattr(kg_builder, "_resolve_kgraph_model", lambda **_: "gpt-4o-mini")
+    monkeypatch.setattr(kg_builder, "invoke_kgraph_messages", _raise)
 
     with pytest.raises(ConfigError):
         kg_builder._invoke_assistant([{"role": "user", "content": "hi"}], redact_logs=False)
 
 
 def test_invoke_assistant_raises_on_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    class DummyOutputItem:
-        def __init__(self, text: str) -> None:
-            self.type = "output_text"
-            self.text = SimpleNamespace(value=text)
+    def _raise(*_a, **_k):
+        raise ConfigError("invalid json")
 
-    class DummyClient:
-        def __init__(self) -> None:
-            self.responses = self
-
-        def create(self, **kwargs: object) -> SimpleNamespace:
-            return SimpleNamespace(output=[DummyOutputItem("not-json")])
-
-    monkeypatch.setattr(kg_builder, "make_openai_client", lambda: DummyClient())
-    monkeypatch.setattr(kg_builder, "get_env_var", lambda *_a, **_k: "tag-kg")
-    monkeypatch.setattr(kg_builder, "_resolve_kgraph_model", lambda **_: "gpt-4o-mini")
+    monkeypatch.setattr(kg_builder, "invoke_kgraph_messages", _raise)
 
     with pytest.raises(ConfigError):
         kg_builder._invoke_assistant([{"role": "user", "content": "hi"}], redact_logs=False)

@@ -13,6 +13,7 @@ yaml = pytest.importorskip("yaml")
 
 
 import semantic.vision_provision as vp
+from ai.types import ResponseJson
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
 from semantic.vision_provision import HaltError, provision_from_vision
@@ -526,18 +527,14 @@ def test_call_assistant_json_uses_schema_when_strict(monkeypatch: pytest.MonkeyP
 
 
 def test_call_responses_json_errors_on_exception(monkeypatch: pytest.MonkeyPatch):
-    class _DummyClient:
-        def responses(self) -> None:  # pragma: no cover - prevent attr access confusion
-            return None
-
-    def _raise(*_: object, **__: object) -> None:
+    def _raise(**_: object) -> None:
         raise RuntimeError("boom")
 
-    client = type("C", (), {"responses": type("R", (), {"create": staticmethod(_raise)})})()
+    monkeypatch.setattr(vp, "run_json_model", _raise)
 
     with pytest.raises(ConfigError):
         vp._call_responses_json(
-            client=client,
+            client=object(),
             assistant_id="asst",
             model="gpt-4o-mini",
             user_messages=[{"role": "user", "content": "hi"}],
@@ -551,15 +548,14 @@ def test_call_responses_json_errors_on_exception(monkeypatch: pytest.MonkeyPatch
 def test_call_responses_json_uses_model_not_assistant_id(monkeypatch: pytest.MonkeyPatch):
     captured: Dict[str, Any] = {}
 
-    def _fake_responses_create(**kwargs: Any) -> Any:
+    def _fake_run_json_model(**kwargs: Any) -> ResponseJson:
         captured.update(kwargs)
-        return type("R", (), {"status": "completed", "output_text": "{}", "output": []})()
+        return ResponseJson(model=kwargs.get("model", ""), data={}, raw_text="{}", raw={})
 
-    client = type("C", (), {"responses": type("R", (), {"create": staticmethod(_fake_responses_create)})})()
-    monkeypatch.setattr(vp, "_parse_json_output", lambda text, assistant_id, source: {"ok": True})
+    monkeypatch.setattr(vp, "run_json_model", _fake_run_json_model)
 
     vp._call_responses_json(
-        client=client,
+        client=object(),
         assistant_id="asst",
         model="gpt-4o-mini",
         user_messages=[{"role": "user", "content": "hi"}],
@@ -570,7 +566,7 @@ def test_call_responses_json_uses_model_not_assistant_id(monkeypatch: pytest.Mon
     )
 
     assert captured.get("model") == "gpt-4o-mini"
-    assert "assistant_id" not in captured
+    assert captured.get("metadata", {}).get("assistant_id") == "asst"
 
 
 def test_load_vision_schema_fills_required_when_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

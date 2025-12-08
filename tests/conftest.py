@@ -182,6 +182,10 @@ except ModuleNotFoundError as exc:
         _gen_dummy_main = None
     else:
         raise
+except Exception:
+    # In ambienti minimali alcuni import transitivi (es. ui.services.vision_provision) possono fallire:
+    # degradare a builder minimale del workspace dummy.
+    _gen_dummy_main = None
 
 DUMMY_SLUG = "dummy"
 

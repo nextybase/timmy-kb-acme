@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
+from ai import resolve_vision_config, run_json_model
 from pipeline import ontology
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
@@ -736,10 +737,7 @@ def _prepare_payload(
 
     client = make_openai_client()
 
-    env_name = _resolve_assistant_env(ctx)
-    assistant_id = _optional_env(env_name) or _optional_env("ASSISTANT_ID")
-    if not assistant_id:
-        raise ConfigError(f"Assistant ID non configurato: imposta {env_name} (o ASSISTANT_ID) nell'ambiente.")
+    cfg = resolve_vision_config(ctx, override_model=model)
 
     display_name = getattr(ctx, "client_name", None) or slug
     prompt_text = (
@@ -748,32 +746,20 @@ def _prepare_payload(
         else prepare_assistant_input(ctx=ctx, slug=slug, pdf_path=Path(safe_pdf), model=model or "", logger=logger)
     )
 
-    strict_output = _resolve_vision_strict_output(ctx)
-    use_kb = _resolve_vision_use_kb(ctx)
     # Le instructions includono lo schema VisionOutput completo, in modo da guidare
     # il modello verso un output JSON strutturato e validabile.
-    run_instructions = _build_run_instructions(use_kb=use_kb)
-
-    resolved_model = (model or "").strip() or _resolve_model_from_settings(ctx)
-    if not resolved_model:
-        resolved_model = _resolve_model_from_assistant(client, assistant_id)
-    if not resolved_model:
-        raise ConfigError(
-            "Modello Vision non configurato: imposta vision.model nel config o assegna un modello all'assistant "
-            f"{assistant_id}.",
-            slug=slug,
-        )
+    run_instructions = _build_run_instructions(use_kb=bool(cfg.use_kb))
 
     return _VisionPrepared(
         slug=slug,
         display_name=display_name,
         safe_pdf=Path(safe_pdf),
         prompt_text=prompt_text,
-        model=resolved_model,
-        assistant_id=assistant_id,
+        model=cfg.model,
+        assistant_id=cfg.assistant_id,
         run_instructions=run_instructions,
-        use_kb=use_kb,
-        strict_output=strict_output,
+        use_kb=bool(cfg.use_kb),
+        strict_output=bool(cfg.strict_output),
         client=client,
         paths=paths,
     )
@@ -958,42 +944,30 @@ def _call_responses_json(
 
     LOGGER.debug(_evt("responses.create"), extra={"assistant_id": assistant_id, "model": model})
 
-    # Costruiamo il payload di input in modo compatibile con lo SDK attuale:
-    # - NIENTE parametri extra non supportati (response_format, tool_choice, tools, ...)
-    # - Le istruzioni vengono fornite come messaggio "system" usando input_text.
-    input_payload: List[Dict[str, Any]] = []
-
+    messages: List[Dict[str, str]] = []
     if run_instructions:
-        input_payload.append(
-            {
-                "role": "system",
-                "content": [{"type": "input_text", "text": str(run_instructions)}],
-            }
-        )
+        messages.append({"role": "system", "content": str(run_instructions)})
 
-    input_payload.extend(
-        {
-            "role": (msg.get("role") or "user").strip() or "user",
-            "content": [
-                {
-                    "type": "input_text",
-                    "text": str(msg.get("content") or ""),
-                }
-            ],
-        }
-        for msg in user_messages
-    )
+    for msg in user_messages:
+        role = (msg.get("role") or "user").strip() or "user"
+        messages.append({"role": role, "content": str(msg.get("content") or "")})
 
-    request_kwargs: Dict[str, Any] = {
-        "model": model,
-        "input": input_payload,
+    metadata = {
+        "assistant_id": assistant_id,
+        "source": "vision",
+        "use_kb": use_kb,
+        "use_structured": use_structured,
     }
 
     try:
-        resp = client.responses.create(**request_kwargs)
-    except AttributeError as exc:  # pragma: no cover - adapter mancante
-        LOGGER.error(_evt("responses.unsupported"), extra={"assistant_id": assistant_id, "error": str(exc)})
-        raise ConfigError("Client OpenAI non supporta l'API Responses.") from exc
+        resp = run_json_model(
+            model=model,
+            messages=messages,
+            response_format=response_format,
+            metadata=metadata,
+        )
+    except ConfigError:
+        raise
     except Exception as exc:
         LOGGER.error(
             _evt("responses.exception"),
@@ -1001,26 +975,7 @@ def _call_responses_json(
         )
         raise ConfigError(f"Responses API fallita: {exc}") from exc
 
-    status = getattr(resp, "status", None)
-    if status and status != "completed":
-        extra = {
-            "assistant_id": assistant_id,
-            "status": status,
-            "id": getattr(resp, "id", None),
-        }
-        LOGGER.error(_evt("responses.failed"), extra=extra)
-        raise ConfigError(f"Responses run non completato (status={status}).")
-
-    text = None
-    for item in getattr(resp, "output", []) or []:
-        if getattr(item, "type", "") == "output_text":
-            text = getattr(getattr(item, "text", None), "value", None)
-            if text:
-                break
-    if not text:
-        text = getattr(resp, "output_text", None)
-
-    return _parse_json_output(text, assistant_id, source="responses")
+    return resp.data
 
 
 def _parse_json_output(text: Optional[str], assistant_id: str, *, source: str) -> Dict[str, Any]:

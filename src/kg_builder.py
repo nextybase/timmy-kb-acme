@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional
 
-from ai.client_factory import make_openai_client
+from ai import invoke_kgraph_messages
 from kg_models import TagKnowledgeGraph
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
@@ -293,86 +293,12 @@ def _invoke_assistant(
     assistant_env: Optional[str] = None,
     settings: Optional[Any] = None,
 ) -> dict[str, Any]:
-    """
-    Invoca il modello per costruire il Tag KG usando l'API Responses.
-
-    Pattern: model-only, nessun `response_format`.
-    L'assistant_id viene usato solo per:
-    - logging,
-    - fallback di modello se ai.kgraph.model non è configurato.
-    """
-    assistant_id = _resolve_kgraph_assistant_id(settings=settings, assistant_env=assistant_env)
-    client = make_openai_client()
-
-    # modello da config; se manca, fallback al modello dell'assistant
-    model = _resolve_kgraph_model(settings=settings) or _resolve_model_from_assistant(client, assistant_id)
-    if not model:
-        raise ConfigError(
-            "Modello KGraph non configurato: imposta ai.kgraph.model o assegna un modello all'assistant "
-            f"{assistant_id}."
-        )
-
-    try:
-        response = client.responses.create(
-            model=model,
-            input=messages,
-            temperature=0,
-        )
-    except AttributeError as exc:  # pragma: no cover - client privo di responses
-        logger.error(
-            "semantic.kg.responses.unsupported",
-            extra={"assistant_env": assistant_env or "KGRAPH_ASSISTANT_ID", "error": str(exc)},
-        )
-        raise ConfigError("Client OpenAI non supporta l'API Responses.") from exc
-    except Exception as exc:
-        logger.error(
-            "semantic.kg.responses.exception",
-            extra={"assistant_id": assistant_id, "error": str(exc)},
-        )
-        raise ConfigError(f"Responses API fallita per assistant {assistant_id}: {exc}") from exc
-
-    status = getattr(response, "status", None)
-    if status and status != "completed":
-        extra = {
-            "assistant_id": assistant_id,
-            "status": status,
-            "id": getattr(response, "id", None),
-        }
-        logger.error("semantic.kg.responses.failed", extra=extra)
-        raise ConfigError(f"Responses run non completato (status={status}).")
-
-    text: Optional[str] = None
-    for item in getattr(response, "output", []) or []:
-        if getattr(item, "type", "") == "output_text":
-            value = getattr(getattr(item, "text", None), "value", None)
-            if isinstance(value, str) and value.strip():
-                text = value.strip()
-                break
-    if not text:
-        fallback = getattr(response, "output_text", None)
-        if isinstance(fallback, str) and fallback.strip():
-            text = fallback.strip()
-
-    if not text:
-        logger.error(
-            "semantic.kg.responses.no_output",
-            extra={"assistant_id": assistant_id},
-        )
-        raise ConfigError("Responses run completato ma nessun testo nel messaggio di output.")
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as exc:
-        # DEBUG: stampa l'output grezzo per capire cosa sta rispondendo il modello
-        print("\n[DEBUG KGRAPH RAW OUTPUT]")
-        print(text[:2000])
-        print("[FINE DEBUG KGRAPH RAW OUTPUT]\n")
-
-        logger.error(
-            "semantic.kg.responses.invalid_json",
-            extra={"assistant_id": assistant_id, "error": str(exc), "sample": text[:500]},
-        )
-        raise ConfigError(f"Risposta del modello non è JSON valido: {exc}") from exc
+    return invoke_kgraph_messages(
+        messages,
+        settings=settings,
+        assistant_env=assistant_env,
+        redact_logs=redact_logs,
+    )
 
 
 def call_openai_tag_kg_assistant(payload: TagKgInput, *, redact_logs: bool = False) -> TagKnowledgeGraph:
