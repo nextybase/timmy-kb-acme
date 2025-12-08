@@ -139,60 +139,6 @@ except Exception:
         _print_err({"error": f"Impossibile importare semantic.vision_provision: {e}"}, 1)
 
 
-# ---- tracing wrappers (catturano thread_id/run_id e permettono steps/messages)
-class _RunsWrapper:
-    def __init__(self, beta_wrapper: "_BetaWrapper", runs: Any):
-        self._beta = beta_wrapper
-        self._runs = runs
-
-    def create_and_poll(self, *args, **kwargs):
-        thread_id = kwargs.get("thread_id") or (args[0] if args else None)
-        resp = self._runs.create_and_poll(*args, **kwargs)
-        self._beta._last_thread_id = thread_id
-        self._beta._last_run_id = getattr(resp, "id", None)
-        return resp
-
-    def __getattr__(self, name):
-        return getattr(self._runs, name)
-
-
-class _ThreadsWrapper:
-    def __init__(self, beta_wrapper: "_BetaWrapper", threads: Any):
-        self._beta = beta_wrapper
-        self._threads = threads
-        self.runs = _RunsWrapper(beta_wrapper, threads.runs)
-        self.messages = threads.messages
-
-    def create(self, *args, **kwargs):
-        t = self._threads.create(*args, **kwargs)
-        self._beta._last_thread_id = getattr(t, "id", None)
-        return t
-
-    def __getattr__(self, name):
-        return getattr(self._threads, name)
-
-
-class _BetaWrapper:
-    def __init__(self, client: "TracingClient", beta: Any):
-        self._client = client
-        self._beta = beta
-        self._last_thread_id: Optional[str] = None
-        self._last_run_id: Optional[str] = None
-        self.threads = _ThreadsWrapper(self, beta.threads)
-
-    def __getattr__(self, name):
-        return getattr(self._beta, name)
-
-
-class TracingClient:
-    def __init__(self, original: Any):
-        self._orig = original
-        self.beta = _BetaWrapper(self, original.beta)
-
-    def __getattr__(self, name):
-        return getattr(self._orig, name)
-
-
 # ---- guardie ambiente / .env -----------------------------------------------
 def _require_env() -> None:
     """Richiede OPENAI_API_KEY + OBNEXT_ASSISTANT_ID/ASSISTANT_ID, altrimenti esce (2)."""
@@ -230,44 +176,6 @@ def _ensure_kb_enabled_or_fail() -> None:
         )
 
 
-def _extract_text_and_annotations(client: TracingClient, thread_id: str):
-    """Estrae primo testo assistant + annotations (file_id/quote) dalle ultime 10 messages."""
-    msgs = client._orig.beta.threads.messages.list(thread_id=thread_id, order="desc", limit=10)
-    text = ""
-    annotations: List[Dict[str, Any]] = []
-    for msg in getattr(msgs, "data", []) or []:
-        if getattr(msg, "role", "") != "assistant":
-            continue
-        for part in getattr(msg, "content", None) or []:
-            t = getattr(part, "type", None)
-            if t in ("output_text", "text"):
-                txt = getattr(getattr(part, "text", None), "value", None)
-                if isinstance(txt, str) and txt.strip() and not text:
-                    text = txt.strip()
-                for ann in getattr(getattr(part, "text", None), "annotations", []) or []:
-                    file_id = getattr(ann, "file_id", None) or getattr(ann, "file", None)
-                    quote = getattr(ann, "quote", None)
-                    rec = {"type": getattr(ann, "type", None)}
-                    if file_id:
-                        rec.update({"file_id": file_id, "quote": quote})
-                        annotations.append(rec)
-        if text:
-            break
-    return text, annotations
-
-
-def _resolve_filenames(client: TracingClient, file_ids: List[str]) -> Dict[str, Optional[str]]:
-    """file_id -> filename (best-effort)."""
-    out: Dict[str, Optional[str]] = {}
-    for fid in file_ids:
-        try:
-            f = client.files.retrieve(fid)
-            out[fid] = getattr(f, "filename", None) or getattr(f, "name", None)
-        except Exception:
-            out[fid] = None
-    return out
-
-
 def _load_env() -> None:
     """Carica .env con l'helper centralizzato (best-effort)."""
     try:
@@ -292,20 +200,6 @@ def run_healthcheck(
             1,
         )
     workspace_pdf = _sync_workspace_pdf(base_dir, repo_pdf)
-
-    orig_factory = getattr(vp, "make_openai_client", None)
-    if orig_factory is None:
-        raise HealthcheckError({"error": "make_openai_client non trovato in semantic.vision_provision"}, 1)
-
-    LAST_CLIENT: Dict[str, Any] = {}
-
-    def _tracing_factory():
-        real = orig_factory()
-        traced = TracingClient(real)
-        LAST_CLIENT["client"] = traced
-        return traced
-
-    setattr(vp, "make_openai_client", _tracing_factory)
 
     class _Ctx:
         def __init__(self, base_dir: Path):
@@ -338,7 +232,6 @@ def run_healthcheck(
             prompt_requested = False
 
     run_skipped = False
-    traced_client: Optional[TracingClient] = None
     try:
         vision_result = run_vision(
             ctx=ctx,
@@ -350,7 +243,6 @@ def run_healthcheck(
             preview_prompt=False,
             prepared_prompt_override=prepared_prompt,
         )
-        traced_client = LAST_CLIENT.get("client")  # type: ignore[assignment]
     except Exception as exc:
         if prompt_requested and _is_gate_error(exc):
             run_skipped = True
@@ -358,51 +250,14 @@ def run_healthcheck(
         else:
             raise HealthcheckError({"error": f"Vision failed: {exc}"}, 1)
 
+    # Con il nuovo pattern model-only (Responses), non utilizziamo piÃ¹ thread/run.
+    # La diagnostica si basa sugli artefatti prodotti (mapping/cartelle) e su un breve
+    # estratto del contenuto YAML, senza introspezione di thread Assistant.
     used_file_search = False
     citations: List[Dict[str, Any]] = []
     excerpt = ""
     thread_id: Optional[str] = None
     run_id: Optional[str] = None
-
-    if not run_skipped:
-        traced: TracingClient = traced_client  # type: ignore[assignment]
-        if traced is None or traced.beta._last_thread_id is None or traced.beta._last_run_id is None:
-            raise HealthcheckError(
-                {"error": "Tracing non riuscito: nessun thread/run ID catturato."},
-                1,
-            )
-
-        thread_id = traced.beta._last_thread_id
-        run_id = traced.beta._last_run_id
-
-        try:
-            steps = traced._orig.beta.threads.runs.steps.list(
-                thread_id=thread_id,
-                run_id=run_id,
-            )
-            for st in getattr(steps, "data", []) or []:
-                tool = getattr(st, "type", None) or getattr(st, "step_type", None)
-                if "tool" in str(tool).lower():
-                    name = getattr(getattr(st, "tool", None), "name", None)
-                    if name == "file_search":
-                        used_file_search = True
-                        break
-        except Exception:
-            used_file_search = False
-
-        text, annotations = _extract_text_and_annotations(traced, thread_id)
-        file_ids = [a.get("file_id") for a in annotations if a.get("file_id")]
-        id_to_name = _resolve_filenames(traced, list(dict.fromkeys(file_ids))) if file_ids else {}
-
-        for a in annotations:
-            fid = a.get("file_id")
-            if not fid:
-                continue
-            citations.append({"file_id": fid, "filename": id_to_name.get(fid), "quote": a.get("quote")})
-
-        excerpt = (text or "").strip()
-        if len(excerpt) > 400:
-            excerpt = excerpt[:400].rstrip() + "..."
 
     mapping_text: Optional[str] = None
     try:
@@ -411,6 +266,18 @@ def run_healthcheck(
             mapping_text = Path(mp).read_text(encoding="utf-8")
     except Exception:
         mapping_text = None
+
+    if mapping_text:
+        excerpt = mapping_text.strip()
+        if len(excerpt) > 400:
+            excerpt = excerpt[:400].rstrip() + "..."
+        used_file_search = True
+
+    # NOTE:
+    # - used_file_search qui indica che Vision ha prodotto un mapping valido/leggibile,
+    #   NON l'uso diretto del tool file_search via API threads/runs.
+    # - citations è sempre [] in questa versione: se in futuro serviranno citazioni
+    #   esplicite, andrà esteso il prompt/JSON del modello.
 
     out: Dict[str, Any] = {
         "status": "skipped" if run_skipped else "completed",
