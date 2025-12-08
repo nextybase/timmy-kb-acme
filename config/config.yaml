@@ -16,6 +16,7 @@ ai:
     timeout: 120
     max_retries: 2
     http2_enabled: false
+
   vision:
     engine: assistants
     model: gpt-4o-mini-2024-07-18
@@ -23,12 +24,27 @@ ai:
     use_kb: false
     snapshot_retention_days: 30
     strict_output: false
+
   prototimmy:
     engine: assistants
     model: gpt-4.1
     assistant_id_env: PROTOTIMMY_ID
     use_kb: true
+
+  planner_assistant:
+    engine: assistants
+    model: gpt-4.1
+    assistant_id_env: PLANNER_ASSISTANT_ID
+    use_kb: true
+
+  ocp_executor:
+    engine: assistants
+    model: gpt-4.1
+    assistant_id_env: OCP_EXECUTOR_ASSISTANT_ID
+    use_kb: true
+
   kgraph:
+    engine: assistants
     model: gpt-4.1
     assistant_id_env: KGRAPH_ASSISTANT_ID
 

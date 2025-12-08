@@ -51,7 +51,7 @@ def test_prompt_contains_client_name(monkeypatch, tmp_ws: Path):
     seen = {"user_messages": None}
 
     # Finto assistant: payload conforme al contratto (≥3 aree + system_folders + metadata_policy)
-    def _fake_call(client, *, assistant_id, user_messages, **kwargs):
+    def _fake_call(client, *, assistant_id, model, user_messages, **kwargs):
         seen["user_messages"] = user_messages
         return {
             "version": "1.0-beta",

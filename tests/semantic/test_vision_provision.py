@@ -402,6 +402,7 @@ def test_prepare_payload_sets_instructions_by_use_kb(tmp_path: Path, monkeypatch
     pdf = tmp_path / "vision.pdf"
     pdf.write_bytes(b"%PDF-FAKE%")
     ctx = _Ctx(tmp_path)
+    ctx.settings["vision"]["model"] = "gpt-4o-mini"
 
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
     monkeypatch.delenv("VISION_USE_KB", raising=False)
@@ -449,6 +450,7 @@ def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_pat
         display_name="d",
         safe_pdf=tmp_path / "vision.pdf",
         prompt_text="p",
+        model="gpt-4o-mini",
         assistant_id="asst",
         run_instructions="instr",
         use_kb=False,
@@ -484,6 +486,7 @@ def test_call_assistant_json_skips_response_format_when_not_structured(monkeypat
     vp._call_assistant_json(
         client=_DummyClient(),
         assistant_id="asst",
+        model="gpt-4o-mini",
         user_messages=[{"role": "user", "content": "hi"}],
         strict_output=False,
         run_instructions=None,
@@ -510,6 +513,7 @@ def test_call_assistant_json_uses_schema_when_strict(monkeypatch: pytest.MonkeyP
     vp._call_assistant_json(
         client=_DummyClient(),
         assistant_id="asst",
+        model="gpt-4o-mini",
         user_messages=[{"role": "user", "content": "hi"}],
         strict_output=True,
         run_instructions=None,
@@ -535,12 +539,38 @@ def test_call_responses_json_errors_on_exception(monkeypatch: pytest.MonkeyPatch
         vp._call_responses_json(
             client=client,
             assistant_id="asst",
+            model="gpt-4o-mini",
             user_messages=[{"role": "user", "content": "hi"}],
             run_instructions=None,
             use_kb=False,
             use_structured=True,
             response_format={"type": "json_object"},
         )
+
+
+def test_call_responses_json_uses_model_not_assistant_id(monkeypatch: pytest.MonkeyPatch):
+    captured: Dict[str, Any] = {}
+
+    def _fake_responses_create(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return type("R", (), {"status": "completed", "output_text": "{}", "output": []})()
+
+    client = type("C", (), {"responses": type("R", (), {"create": staticmethod(_fake_responses_create)})})()
+    monkeypatch.setattr(vp, "_parse_json_output", lambda text, assistant_id, source: {"ok": True})
+
+    vp._call_responses_json(
+        client=client,
+        assistant_id="asst",
+        model="gpt-4o-mini",
+        user_messages=[{"role": "user", "content": "hi"}],
+        run_instructions=None,
+        use_kb=False,
+        use_structured=True,
+        response_format={"type": "json_object"},
+    )
+
+    assert captured.get("model") == "gpt-4o-mini"
+    assert "assistant_id" not in captured
 
 
 def test_load_vision_schema_fills_required_when_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

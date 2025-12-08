@@ -194,10 +194,31 @@ def _resolve_model_from_settings(ctx: Any) -> str:
                 return candidate.strip()
         except Exception:
             pass
+    vision_cfg = settings_payload.get("vision")
+    if isinstance(vision_cfg, Mapping):
+        candidate = vision_cfg.get("model")
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
     candidate = settings_payload.get("vision_model")
     if isinstance(candidate, str) and candidate.strip():
         return candidate.strip()
     return ""
+
+
+def _resolve_model_from_assistant(client: Any, assistant_id: str) -> str:
+    assistants = getattr(client, "assistants", None)
+    if assistants is None:
+        beta = getattr(client, "beta", None)
+        assistants = getattr(beta, "assistants", None)
+    if not assistants:
+        return ""
+    try:
+        assistant = assistants.retrieve(assistant_id)
+    except Exception as exc:  # pragma: no cover - retriever opzionale
+        LOGGER.warning(_evt("assistant_model.error"), extra={"assistant_id": assistant_id, "error": str(exc)})
+        return ""
+    model = getattr(assistant, "model", None)
+    return model.strip() if isinstance(model, str) else ""
 
 
 def _resolve_snapshot_retention_days(ctx: Any) -> int:
@@ -419,6 +440,7 @@ class _VisionPrepared:
     display_name: str
     safe_pdf: Path
     prompt_text: str
+    model: str
     assistant_id: str
     run_instructions: str
     use_kb: bool
@@ -476,6 +498,7 @@ def _call_assistant_json(
     client: Any,
     *,
     assistant_id: str,
+    model: str,
     user_messages: List[Dict[str, str]],
     strict_output: bool = True,
     run_instructions: Optional[str] = None,
@@ -500,6 +523,7 @@ def _call_assistant_json(
     return _call_responses_json(
         client=client,
         assistant_id=assistant_id,
+        model=model,
         user_messages=user_messages,
         run_instructions=run_instructions,
         use_kb=use_kb,
@@ -661,11 +685,22 @@ def _prepare_payload(
         "Produci SOLO il JSON richiesto, niente testo extra."
     )
 
+    resolved_model = (model or "").strip() or _resolve_model_from_settings(ctx)
+    if not resolved_model:
+        resolved_model = _resolve_model_from_assistant(client, assistant_id)
+    if not resolved_model:
+        raise ConfigError(
+            "Modello Vision non configurato: imposta vision.model nel config o assegna un modello all'assistant "
+            f"{assistant_id}.",
+            slug=slug,
+        )
+
     return _VisionPrepared(
         slug=slug,
         display_name=display_name,
         safe_pdf=Path(safe_pdf),
         prompt_text=prompt_text,
+        model=resolved_model,
         assistant_id=assistant_id,
         run_instructions=run_instructions,
         use_kb=use_kb,
@@ -679,6 +714,7 @@ def _invoke_assistant(prepared: _VisionPrepared) -> Dict[str, Any]:
     return _call_assistant_json(
         client=prepared.client,
         assistant_id=prepared.assistant_id,
+        model=prepared.model,
         user_messages=[{"role": "user", "content": prepared.prompt_text}],
         strict_output=prepared.strict_output,
         run_instructions=prepared.run_instructions,
@@ -834,6 +870,7 @@ def _call_responses_json(
     *,
     client: Any,
     assistant_id: str,
+    model: str,
     user_messages: List[Dict[str, str]],
     run_instructions: Optional[str],
     use_kb: bool,
@@ -850,7 +887,7 @@ def _call_responses_json(
         },
     )
 
-    LOGGER.debug(_evt("responses.create"), extra={"assistant_id": assistant_id})
+    LOGGER.debug(_evt("responses.create"), extra={"assistant_id": assistant_id, "model": model})
     tool_choice: Any = {"type": "file_search"} if use_kb else "auto"
     input_payload = [
         {
@@ -861,7 +898,7 @@ def _call_responses_json(
     ]
 
     request_kwargs: Dict[str, Any] = {
-        "assistant_id": assistant_id,
+        "model": model,
         "input": input_payload,
         "instructions": run_instructions or None,
         "tool_choice": tool_choice,

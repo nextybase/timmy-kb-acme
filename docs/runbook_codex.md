@@ -213,13 +213,6 @@ Riferimenti: [Developer Guide -> Logging](developer_guide.md), [Coding Rules -> 
 
 ---
 
-### Script legacy
-
-- Gli script non piu supportati sono stati spostati in `tools/archive/` ed esclusi dai flussi standard.
-- Milestone di stabilizzazione: vedi `docs/milestones/archive_cleanup.md`; al termine la cartella verra rimossa.
-
----
-
 ## 4) Flussi operativi (UI/CLI) - panoramica
 
 > Obiettivo: trasformare PDF -> **KB Markdown AI-ready** con frontmatter coerente, README/SUMMARY, preview HonKit e push opzionale su GitHub.

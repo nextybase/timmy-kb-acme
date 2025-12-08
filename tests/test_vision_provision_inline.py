@@ -185,6 +185,7 @@ def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
         client,
         *,
         assistant_id,
+        model,
         user_messages,
         strict_output=True,
         run_instructions=None,

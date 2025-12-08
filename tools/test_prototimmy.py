@@ -70,6 +70,33 @@ def _extract_text_from_response(resp: Any) -> str:
     return text or ""
 
 
+def _resolve_assistant_id(settings: Settings, yaml_key: str, label: str) -> str:
+    """
+    Risolve un assistant_id a partire dal path YAML *.assistant_id_env,
+    usando la stessa logica già usata per protoTimmy.
+    """
+    try:
+        assistant_id = settings.resolve_env_ref(
+            yaml_key,
+            required=True,
+        )
+    except ConfigError as exc:
+        print(
+            f"[ERRORE CONFIG] Problema nel risolvere {yaml_key} "
+            f"({label}) da .env: {exc}"
+        )
+        raise SystemExit(1)
+
+    if not assistant_id:
+        print(
+            f"[ERRORE CONFIG] {label} non risolto: controlla che {yaml_key} "
+            "punti alla variabile d'ambiente corretta e che sia valorizzata in .env"
+        )
+        raise SystemExit(1)
+
+    return assistant_id
+
+
 def main() -> None:
     # 1) Carico config + segreti usando l'infrastruttura esistente
     try:
@@ -78,26 +105,22 @@ def main() -> None:
         print(f"[ERRORE CONFIG] Impossibile caricare config/config.yaml: {exc}")
         raise SystemExit(1)
 
-    # 2) Risolvo l'ID di protoTimmy partendo da ai.prototimmy.assistant_id_env
-    try:
-        prototimmy_id = settings.resolve_env_ref(
-            "ai.prototimmy.assistant_id_env",
-            required=True,
-        )
-    except ConfigError as exc:
-        print(
-            "[ERRORE CONFIG] Problema nel risolvere ai.prototimmy.assistant_id_env "
-            f"da .env: {exc}"
-        )
-        raise SystemExit(1)
-
-    if not prototimmy_id:
-        print(
-            "[ERRORE CONFIG] PROTOTIMMY_ID non risolto: controlla che "
-            "ai.prototimmy.assistant_id_env punti a PROTOTIMMY_ID "
-            "e che PROTOTIMMY_ID sia valorizzato in .env"
-        )
-        raise SystemExit(1)
+    # 2) Risolvo l'ID di protoTimmy, Planner Assistant e OCP Executor
+    prototimmy_id = _resolve_assistant_id(
+        settings,
+        "ai.prototimmy.assistant_id_env",
+        "PROTOTIMMY_ID",
+    )
+    planner_id = _resolve_assistant_id(
+        settings,
+        "ai.planner_assistant.assistant_id_env",
+        "PLANNER_ASSISTANT_ID",
+    )
+    ocp_executor_id = _resolve_assistant_id(
+        settings,
+        "ai.ocp_executor.assistant_id_env",
+        "OCP_EXECUTOR_ASSISTANT_ID",
+    )
 
     # 3) Client OpenAI usando la factory centralizzata (gestisce .env, timeout, ecc.)
     try:
@@ -106,26 +129,38 @@ def main() -> None:
         print(f"[ERRORE OPENAI] Impossibile inizializzare il client OpenAI: {exc}")
         raise SystemExit(1)
 
-    # 4) Recupero i metadati dell'assistant (senza usare threads legacy)
+    # 4) Recupero metadati dei tre assistant (facoltativo ma utile per debug)
     try:
-        assistant = _retrieve_assistant(client, prototimmy_id)
+        proto_meta = _retrieve_assistant(client, prototimmy_id)
+        planner_meta = _retrieve_assistant(client, planner_id)
+        ocp_meta = _retrieve_assistant(client, ocp_executor_id)
     except Exception as exc:
-        print(
-            f"[ERRORE API] Impossibile recuperare l'assistant {prototimmy_id}: {exc}"
-        )
+        print(f"[ERRORE API] Impossibile recuperare uno degli assistant: {exc}")
         raise SystemExit(1)
 
+    proto_model = getattr(proto_meta, "model", None) or "gpt-4.1"
+    planner_model = getattr(planner_meta, "model", None) or "gpt-4.1"
+    ocp_model = getattr(ocp_meta, "model", None) or "gpt-4.1"
+
     print("✅ protoTimmy raggiungibile")
-    print(f"   id:    {assistant.id}")
-    print(f"   nome:  {getattr(assistant, 'name', '')}")
-    print(f"   model: {getattr(assistant, 'model', '')}")
+    print(f"   id:    {proto_meta.id}")
+    print(f"   nome:  {getattr(proto_meta, 'name', '')}")
+    print(f"   model: {proto_model}")
 
-    # 5) Ping minimale via Responses API (nessun uso di beta.threads.*)
-    model_for_ping = getattr(assistant, "model", None) or "gpt-4.1"
+    print("✅ Planner Assistant raggiungibile")
+    print(f"   id:    {planner_meta.id}")
+    print(f"   nome:  {getattr(planner_meta, 'name', '')}")
+    print(f"   model: {planner_model}")
 
+    print("✅ OCP Executor raggiungibile")
+    print(f"   id:    {ocp_meta.id}")
+    print(f"   nome:  {getattr(ocp_meta, 'name', '')}")
+    print(f"   model: {ocp_model}")
+
+    # 5) Ping minimale via Responses API per protoTimmy (con model, non assistant_id)
     try:
-        resp = client.responses.create(
-            model=model_for_ping,
+        resp_ping = client.responses.create(
+            model=proto_model,
             input=[
                 {
                     "role": "user",
@@ -144,21 +179,108 @@ def main() -> None:
         )
         raise SystemExit(1)
     except Exception as exc:
-        print(f"[ERRORE API] Chiamata Responses fallita: {exc}")
+        print(f"[ERRORE API] Chiamata Responses fallita (ping protoTimmy): {exc}")
         raise SystemExit(1)
 
-    text = _extract_text_from_response(resp)
+    text_ping = _extract_text_from_response(resp_ping)
 
-    if not text:
-        print("[WARN] Nessun testo restituito dalla Responses API.")
+    if not text_ping:
+        print("[WARN] Nessun testo restituito dalla Responses API (ping).")
         raise SystemExit(1)
 
-    print(f"   risposta assistant: {text!r}")
+    print(f"   risposta ping protoTimmy: {text_ping!r}")
 
-    # opzionale: se vuoi proprio essere pignolo sulla risposta
-    if text.strip().lower() != "pong":
-        print("[WARN] La risposta non è 'pong' come richiesto.")
+    if text_ping.strip().lower() != "pong":
+        print("[WARN] La risposta al ping non è 'pong' come richiesto.")
         raise SystemExit(1)
+
+    # 6) Giro completo: protoTimmy -> Planner Assistant -> OCP Executor
+
+    print("\n▶ Avvio giro completo: protoTimmy → Planner Assistant → OCP Executor")
+
+    # 6.1 protoTimmy genera un messaggio di test
+    try:
+        resp_proto = client.responses.create(
+            model=proto_model,
+            input=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Test di integrazione. Genera una breve frase che inizi con "
+                        "'PROTO:' e non aggiungere spiegazioni."
+                    ),
+                }
+            ],
+            temperature=0,
+        )
+    except Exception as exc:
+        print(f"[ERRORE API] Chiamata Responses fallita (protoTimmy → Planner): {exc}")
+        raise SystemExit(1)
+
+    proto_text = _extract_text_from_response(resp_proto).strip()
+    print(f"   output protoTimmy: {proto_text!r}")
+
+    if not proto_text.startswith("PROTO:"):
+        print("[WARN] L'output di protoTimmy non inizia con 'PROTO:' come atteso.")
+
+    # 6.2 Planner Assistant riceve il testo e aggiunge ' PLANNER_OK'
+    try:
+        resp_planner = client.responses.create(
+            model=planner_model,
+            input=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Test di integrazione Planner.\n"
+                        "Hai ricevuto questo input da protoTimmy:\n"
+                        f"{proto_text}\n\n"
+                        "Aggiungi alla fine della stringa esattamente ' PLANNER_OK' "
+                        "e restituisci SOLO la stringa risultante, senza spiegazioni."
+                    ),
+                }
+            ],
+            temperature=0,
+        )
+    except Exception as exc:
+        print(f"[ERRORE API] Chiamata Responses fallita (Planner → OCP): {exc}")
+        raise SystemExit(1)
+
+    planner_text = _extract_text_from_response(resp_planner).strip()
+    print(f"   output Planner Assistant: {planner_text!r}")
+
+    if not planner_text.endswith("PLANNER_OK"):
+        print("[WARN] L'output del Planner non termina con 'PLANNER_OK' come atteso.")
+
+    # 6.3 OCP Executor riceve il testo e aggiunge ' OCP_OK'
+    try:
+        resp_ocp = client.responses.create(
+            model=ocp_model,
+            input=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Test di integrazione OCP Executor.\n"
+                        "Hai ricevuto questo input dal Planner Assistant:\n"
+                        f"{planner_text}\n\n"
+                        "Aggiungi alla fine della stringa esattamente ' OCP_OK' "
+                        "e restituisci SOLO la stringa risultante, senza spiegazioni."
+                    ),
+                }
+            ],
+            temperature=0,
+        )
+    except Exception as exc:
+        print(f"[ERRORE API] Chiamata Responses fallita (OCP finale): {exc}")
+        raise SystemExit(1)
+
+    ocp_text = _extract_text_from_response(resp_ocp).strip()
+    print(f"   output OCP Executor: {ocp_text!r}")
+
+    if not ocp_text.endswith("OCP_OK"):
+        print("[WARN] L'output dell'OCP Executor non termina con 'OCP_OK' come atteso.")
+        raise SystemExit(1)
+
+    print("\n✅ Giro completo protoTimmy → Planner Assistant → OCP Executor completato con successo.")
 
 
 if __name__ == "__main__":

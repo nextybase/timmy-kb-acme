@@ -110,6 +110,7 @@ def test_call_openai_tag_kg_assistant_parses_tool_call(monkeypatch: pytest.Monke
         return "tag-kg" if name == "KGRAPH_ASSISTANT_ID" else default
 
     monkeypatch.setattr(kg_builder, "get_env_var", _fake_get_env_var)
+    monkeypatch.setattr(kg_builder, "_resolve_kgraph_model", lambda **_: "gpt-4o-mini")
 
     kg = call_openai_tag_kg_assistant(payload)
 
@@ -128,6 +129,7 @@ def test_invoke_assistant_raises_on_responses_exception(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(kg_builder, "make_openai_client", lambda: DummyClient())
     monkeypatch.setattr(kg_builder, "get_env_var", lambda *_a, **_k: "tag-kg")
+    monkeypatch.setattr(kg_builder, "_resolve_kgraph_model", lambda **_: "gpt-4o-mini")
 
     with pytest.raises(ConfigError):
         kg_builder._invoke_assistant([{"role": "user", "content": "hi"}], redact_logs=False)
@@ -148,6 +150,7 @@ def test_invoke_assistant_raises_on_invalid_json(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(kg_builder, "make_openai_client", lambda: DummyClient())
     monkeypatch.setattr(kg_builder, "get_env_var", lambda *_a, **_k: "tag-kg")
+    monkeypatch.setattr(kg_builder, "_resolve_kgraph_model", lambda **_: "gpt-4o-mini")
 
     with pytest.raises(ConfigError):
         kg_builder._invoke_assistant([{"role": "user", "content": "hi"}], redact_logs=False)

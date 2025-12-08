@@ -147,6 +147,40 @@ def _resolve_kgraph_assistant_id(settings: Optional[Any] = None, assistant_env: 
     return get_env_var(env_name, required=True)
 
 
+def _resolve_kgraph_model(settings: Optional[Any] = None) -> str:
+    if isinstance(settings, Settings):
+        try:
+            candidate = settings.get("ai.kgraph.model")
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+        except Exception:
+            pass
+    if isinstance(settings, Mapping):
+        ai_cfg = settings.get("ai", {})
+        kgraph_cfg = ai_cfg.get("kgraph") if isinstance(ai_cfg, Mapping) else None
+        if isinstance(kgraph_cfg, Mapping):
+            candidate = kgraph_cfg.get("model")
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return ""
+
+
+def _resolve_model_from_assistant(client: Any, assistant_id: str) -> str:
+    assistants = getattr(client, "assistants", None)
+    if assistants is None:
+        beta = getattr(client, "beta", None)
+        assistants = getattr(beta, "assistants", None)
+    if not assistants:
+        return ""
+    try:
+        assistant = assistants.retrieve(assistant_id)
+    except Exception as exc:  # pragma: no cover
+        logger.warning("semantic.kg.assistant_model.error", extra={"assistant_id": assistant_id, "error": str(exc)})
+        return ""
+    model = getattr(assistant, "model", None)
+    return model.strip() if isinstance(model, str) else ""
+
+
 def _invoke_assistant(
     messages: list[dict[str, Any]],
     *,
@@ -156,10 +190,16 @@ def _invoke_assistant(
 ) -> dict[str, Any]:
     assistant_id = _resolve_kgraph_assistant_id(settings=settings, assistant_env=assistant_env)
     client = make_openai_client()
+    model = _resolve_kgraph_model(settings=settings) or _resolve_model_from_assistant(client, assistant_id)
+    if not model:
+        raise ConfigError(
+            "Modello KGraph non configurato: imposta ai.kgraph.model o assegna un modello all'assistant "
+            f"{assistant_id}."
+        )
     response_format = {"type": "json_object"}
     try:
         response = client.responses.create(
-            assistant_id=assistant_id,
+            model=model,
             input=messages,
             response_format=response_format,
             temperature=0,
