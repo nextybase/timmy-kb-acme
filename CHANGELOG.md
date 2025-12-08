@@ -22,6 +22,9 @@
 - Semantic index: eventi `semantic.index.embedding_pruned` arricchiti (cause mismatch/empty e contatori completi) e rimossi i messaggi testuali duplicati.
 - Semantic vocab loader: slug derivato da `REPO_NAME_PREFIX` e logging uniformato (`semantic.vocab.db_missing`, `semantic.vocab.db_empty`, `semantic.vocab.loaded`).
 - Retriever cosine: ora usa generatori con `itertools.tee`, evitando copie in memoria e mantenendo scaling numerico controllato.
+- Vision & KGraph: chiamate Responses API ora modello-only (assistant_id solo per logging/metadata), istruzioni spostate in messaggio system e payload messaggi in formato `input_text`; `TagKgInput` adegua `to_messages` al formato Responses.
+- Documentazione: `docs/developer_guide.md` e `docs/coding_rule.md` descrivono l'uso corretto dell'SDK OpenAI interno (model-only, input_text/output_text, assistant come SSoT di config, pattern di risoluzione modello) e il divieto dei pattern legacy thread/run.
+- Debug tooling: `kg_debug_dummy` gestisce run offline con output sintetico e riduce eccezioni inattese; logging KGraph include dump raw in caso di JSON non valido.
 
 ### Added
 - Test di integrazione su indexing (mismatch parziale, invariance ranking, metriche coerce, casi artifacts=0).
@@ -29,6 +32,7 @@
 - Test per il vocabolario semantico con CapLog sui nuovi eventi e scenario `streamlit` assente in Timmy KB Coder.
 - Test UI di parita firma wrapper `safe_write_text` UI vs backend; TypedDict `SearchResult` per l'output di `retriever.search`.
 - Documentazione aggiornata su cache frontmatter LRU bounded e hardening retriever (developer guide + runbook).
+- Test settings: copertura delle nuove sezioni ai (`prototimmy`, `planner_assistant`, `ocp_executor`, `kgraph`) e risoluzione modello KGraph; fixture Vision aggiornate alle nuove instructions.
 
 ### Compatibility
 - Nessun breaking change; API pubbliche invariate, schema DB stabile.
@@ -37,6 +41,7 @@
 - `src/tools/gen_dummy_kb.py`: import lazy e path workspace allineato a `output/timmy-kb-<slug>`.
 - PDF discovery case-insensitive (.pdf/.PDF) in API, content_utils e tags_extractor.
 - Cache frontmatter Markdown ora LRU bounded (evita crescita infinita su run lunghi).
+- Vision: estrazione PDF passa a pypdf/PyPDF2 (fallback) mantenendo codici di errore invariati; chiamate Responses API evitano keyword non supportate e sollevano ConfigError coerenti.
 
 ## [1.9.7] - 2025-09-28
 
