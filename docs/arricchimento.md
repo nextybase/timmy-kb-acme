@@ -68,9 +68,7 @@ Questa pagina descrive, passo per passo, cosa succede quando avvii l'arricchimen
 6. Arricchimento frontmatter + SUMMARY/README.
 7. Se SpaCy manca/fallisce -> fallback euristico, nessun blocco.
 
-## 9) Revisione doc_entities (SpaCy) via CLI
-- Backend: `semantic.entities_review` legge/scrive `doc_entities` (tag SpaCy) con status `suggested`/`approved`/`rejected`.
-- CLI: `cli/tag_review_cli.py`
-  - `python -m cli.tag_review_cli list --db semantic/tags.db` mostra i doc con tag suggested.
-  - `python -m cli.tag_review_cli review --db semantic/tags.db --mapping semantic/semantic_mapping.yaml --doc-uid <uid>` per approvare/rifiutare i tag.
-- UI future: puo' riusare lo stesso backend (fetch/update) senza logica duplicata.
+## 9) Revisione doc_entities (SpaCy) e hook disponibili
+- Il DB `semantic/tags.db` mantiene la tabella `doc_entities` con status `suggested`, `approved` e `rejected`.
+- Il modulo `semantic.entities_review` espone helper riutilizzabili (`fetch_docs_with_suggested_tags`, `fetch_tags_for_doc`, `update_tag_status`, `bulk_update_tag_status`) per costruire script o UI che elaborano manualmente i suggerimenti SpaCy.
+- Le funzioni sono import-safe, non hanno effetti a import-time e possono essere invocate da tool ad-hoc (CLI/Script/Modalità offline) senza duplicare la logica già presente nel backend.

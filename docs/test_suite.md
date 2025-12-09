@@ -125,7 +125,6 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 - **Convert phases & logging:** `test_semantic_convert_phase_scope.py`, `test_context_logging_events.py`.
 - **Redazione log:** `tests/test_logging_redaction.py`.
 - **Observability smoke:** `test_observability_smoke.py`.
-- **Coder logging:** `test_timmy_kb_coder_logging.py`.
 
 ### 10) Prompting e layout  Prompt builder, suggerimenti
 - **Prompt builder:** `test_prompt_builder.py`.

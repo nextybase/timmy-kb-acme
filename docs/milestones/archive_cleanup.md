@@ -14,7 +14,7 @@ Aggiornamento: la cartella `tools/archive/` è stata rimossa (nessuna dipendenza
   - `tools/archive/quick_openai_diag.py`
   - `tools/archive/refactor_logging_ui.py`
   - `tools/archive/vision_alignment_check.py`
-- Nessun cambiamento funzionale al flusso attivo (`onboarding_ui.py`, `timmy_kb_coder.py`, CLI pipeline).
+- Nessun cambiamento funzionale al flusso attivo (`onboarding_ui.py`, CLI pipeline); il flusso `timmy_kb_coder.py` è stato rimosso.
 - Validazione che non esistano riferimenti residui (import, make target, documentazione operativa).
 
 ## Attivita

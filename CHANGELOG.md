@@ -10,6 +10,7 @@
 
 ### Breaking
 - Schema `config/config.yaml` riorganizzato in macro-sezioni `meta`, `ui`, `ai` (openai/vision), `pipeline` (retriever/raw_cache), `security`, `integrations`, `ops`, `finance`; aggiornare eventuali tool esterni che leggevano le chiavi legacy.
+- Timmy KB Coder è stato rimosso insieme ai test/strumenti che si appoggiavano al DB globale `.timmykb`; il workflow 1.0 ora è totalmente slug-based e la documentazione riflette il flusso supportato.
 
 ### Changed
 - Dev tooling: gli script legacy sono stati consolidati in `tools/` (`tools/smoke` per gli smoke); aggiornati riferimenti in CI (`.github/workflows/ci.yaml`), pre-commit (`.pre-commit-config.yaml`), `makefile` e documentazione (`docs/*`, `README`).
@@ -20,7 +21,7 @@
 - Path-safety: ingest/estrattori ora leggono PDF/Markdown solo tramite guardie `ensure_within_and_resolve` + handle sicuri; self-check usa `safe_write_text`.
 - Retriever: logging armonizzato e short-circuit su embedding piatti `list[float]` con metriche `{total, embed, fetch, score_sort}` e contatori `coerce`; hardening su errori embedding (log `retriever.query.embed_failed` + ritorno `[]`) e check del budget di latenza prima di embedding/fetch.
 - CLI pre-onboarding: dry-run e gestione errori loggano eventi strutturati (`cli.pre_onboarding.*`) con extra coerenti.
-- Timmy KB Coder: gestione RAG piu tollerante (nessun hard fail senza streamlit) con eventi `coder.rag.disabled` e `coder.embeddings.ui_error`.
+- Timmy KB Coder: RAG ora richiede `OPENAI_API_KEY` e non usa piu fallback `OPENAI_API_KEY_CODEX`; se la chiave manca il RAG si disabilita in modo esplicito con `coder.rag.disabled`, rendendo piu evidente la dipendenza dalla configurazione 1.0.
 - Semantic index: eventi `semantic.index.embedding_pruned` arricchiti (cause mismatch/empty e contatori completi) e rimossi i messaggi testuali duplicati.
 - Semantic vocab loader: slug derivato da `REPO_NAME_PREFIX` e logging uniformato (`semantic.vocab.db_missing`, `semantic.vocab.db_empty`, `semantic.vocab.loaded`).
 - Retriever cosine: ora usa generatori con `itertools.tee`, evitando copie in memoria e mantenendo scaling numerico controllato.

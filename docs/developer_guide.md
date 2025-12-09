@@ -20,7 +20,7 @@ Per un percorso rapido step-by-step vedi anche [Developer Quickstart](developer_
 - **UI/Service Layer** (`src/ui/*`): presenta funzioni e schermate Streamlit, delega alla pipeline senza cambiare semantica.
 - **Semantic** (`semantic.*`): conversione PDFMarkdown, arricchimento frontmatter, generazione `SUMMARY.md`/`README.md`.
 - **Workspace cliente**: `output/timmy-kb-<slug>/` con sottocartelle `raw/`, `book/`, `semantic/`, `config/`, `logs/`.
-- **DB KB per slug**: `semantic/kb.sqlite` vive nel workspace cliente; fallback legacy sul DB globale `data/kb.sqlite` solo per tool/test espliciti.
+- **DB KB per slug**: `semantic/kb.sqlite` vive nel workspace cliente e rappresenta l’unica sorgente supportata nel flusso 1.0.
 
 ---
 
