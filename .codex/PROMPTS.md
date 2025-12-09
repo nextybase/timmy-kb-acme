@@ -23,6 +23,32 @@ Test: <nuovi/aggiornati; es. pytest -k ...>
 QA: isort  black  ruff --fix  mypy  pytest
 Note docs: <se tocchi X, aggiorna Y/Z>
 
+## Contratto operativo della Prompt Chain
+Il contratto operativo della Prompt Chain descrive esplicitamente il modello di dialogo tra OCP e Codex e impone al Codex un comportamento idempotente, attento e allineato con le policy gia raccolte in `docs/runbook_codex.md`, `docs/codex_integrazione.md` e `docs/PromptChain_spec.md`. E fondamentale che ogni prompt venga eseguito come micro-PR indipendente, con scope fissato e senza deviazioni creative non richieste.
+- Rispondi sempre a un solo prompt alla volta: dopo ogni output interrompi l'esecuzione, attendi il prompt successivo e non generare autonomamente Prompt 2..N.
+- Non inventare nuove architetture, refactor o iniziative "di tua mano": resta nello scope fornito dall'OCP e aderisci alle richieste operative ricevute.
+- Applica il principio "micro-PR idempotente": modifiche minime, revert mentale rapido, nessuna persistenza o effetto collaterale esteso oltre il change set.
+- Ricorda che `docs/PromptChain_spec.md` e la SSoT della Prompt Chain e che `docs/runbook_codex.md`/`docs/codex_integrazione.md` descrivono il contesto operativo in cui il contratto viene attivato.
+
+## Gestione errori nella Prompt Chain
+La gestione degli errori deve essere trasparente e coordinata con l'OCP: se incontri anomalie, documenta i tentativi, evita cicli infiniti e chiedi istruzioni quando serve.
+- Segnala sempre le anomalie descrivendo lo stato, gli output e i passaggi gia tentati, in modo che l'OCP abbia tutte le informazioni per decidere.
+- Se lo stesso errore (stesso test o stack trace) si ripete per piu di due tentativi nello stesso step, interrompi, registra i tentativi e chiedi conferma all'OCP prima di procedere.
+- Non procedere finche non ricevi istruzioni al prompt successivo e non nascondere la ripetizione dell'errore; definisci chiaramente quante iterazioni hai gia eseguito.
+- Il ciclo di tentativi del Prompt finale di QA (`pytest -q` + `pre-commit run --all-files`) segue le soglie illustrate in `docs/PromptChain_spec.md`; evita numeri divergenti, limita i retry al buon senso operativo e documenta ogni nuovo tentativo.
+
+## Uso dei test nella Prompt Chain
+L'esecuzione dei test e guidata dallo scope del singolo prompt, con due momenti distinti: test occasionali solo se richiesti e test finali obbligatori di chiusura.
+- Durante ogni prompt esegui test solo se il prompt lo specifica espressamente; annota quali comandi sono stati lanciati e perche.
+- Il Prompt finale di chiusura Chain richiede `pytest -q` e `pre-commit run --all-files`, come prescritto da `docs/PromptChain_spec.md` e ribadito in `docs/runbook_codex.md`; se falliscono, applica fix minimi e rilancia i comandi fino a raggiungere il verde (entro limiti di buon senso).
+- Documenta ogni fallimento/test ripetuto nella risposta al prompt, indicando quali fix sono stati applicati e che passaggi sono stati ripetuti.
+
+## Commit e push nella Prompt Chain
+Codex propone patch, attende conferma e non effettua push autonomi: il commit finale segue la semantica ufficiale di `docs/PromptChain_spec.md`.
+- Proponi il diff, chiedi conferma all'umano/OCP e non eseguire commit/push prima della validazione completa.
+- Il push viene eseguito solo dopo QA conclusa (`pytest -q`, `pre-commit run --all-files`) e con il via libera esplicito dell'OCP o dell'umano responsabile.
+- Il "commit finale di chiusura Chain" e disciplinato da `docs/PromptChain_spec.md`: documenta che il commit proposto chiude la Prompt Chain, riassume QA/test e rimanda all'OCP per eventuali azioni successive.
+
 ## Prompt Chain (OCP → Codex) — modalita operativa
 - **SSoT**: per governance e contratto operativo della Prompt Chain vedi `docs/PromptChain_spec.md`.
 - Sequenza numerata di prompt (Prompt 0, 1, 2, ...) generati dall'OrchestratoreChainPrompt (OCP) su richiesta utente; ogni prompt ha scope limitato e corrisponde a un micro-PR con le stesse regole Codex (HiTL, AGENT-first, QA, path-safety, I/O atomico).

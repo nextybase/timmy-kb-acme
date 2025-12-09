@@ -5,6 +5,8 @@
 - Test minimi aggiornati; build verde; linter ok.
 - Se tocchi firme/flow: aggiorna **docs** (+ note migrazione).
 - 0 warning cSpell in `docs/`.
+- Prompt Chain: rispetta il modello turn-based OCP <-> Codex, segui i prompt numerati nell'ordine ricevuto e fai riferimento a `docs/PromptChain_spec.md` come SSoT operativo.
+- QA finale Prompt Chain: `pytest -q` e `pre-commit run --all-files` eseguiti e documentati come parte del Prompt finale di chiusura.
 
 ### Revisione con Senior Reviewer
 - [ ] Per modifiche non banali (new feature, logica di sicurezza/I/O, integrazioni) ho usato il prompt "Dev task con review del Senior" in `.codex/PROMPTS.md` prima di chiedere aiuto a Codex.
