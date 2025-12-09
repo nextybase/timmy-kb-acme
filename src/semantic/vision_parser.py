@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Tuple, cast
 
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
+from semantic.document_ingest import read_document
 
 try:
     import yaml as _yaml
@@ -23,27 +24,11 @@ vision_run_params = SimpleNamespace(run_for_vision=SimpleNamespace(use_kb=False)
 
 
 def _read_pdf_text(pdf_path: Path) -> str:
-    try:  # lazy import to avoid hard dependency at import time
-        import importlib
-
-        module = importlib.import_module("PyPDF2")
-        PdfReader = module.PdfReader
-    except Exception as exc:  # pragma: no cover
-        raise RuntimeError("PyPDF2 non disponibile: impossibile estrarre testo dal PDF.") from exc
-
     try:
-        reader = PdfReader(str(pdf_path))
-        texts: List[str] = []
-        for page in getattr(reader, "pages", []) or []:
-            try:
-                extracted = page.extract_text() or ""
-            except Exception:
-                extracted = ""
-            if extracted:
-                texts.append(extracted)
-        return "\n\n".join(texts).strip()
+        doc = read_document(pdf_path)
+        return doc.full_text
     except Exception as exc:  # pragma: no cover
-        raise RuntimeError(f"Estrazione testo fallita: {exc}") from exc
+        raise RuntimeError(f"Impossibile leggere il PDF: {exc}") from exc
 
 
 def _clean_text(text: str) -> str:

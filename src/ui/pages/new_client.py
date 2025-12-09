@@ -27,6 +27,8 @@ from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.settings import Settings
+from semantic.vision_ingest import compile_document_to_vision_yaml
+from system.self_check import run_system_self_check
 from ui.chrome import header, sidebar
 from ui.clients_store import ClientEntry, set_state, upsert_client
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
@@ -137,6 +139,11 @@ def _semantic_dir_client(slug: str) -> Path:
 def _client_pdf_path(slug: str) -> Path:
     cfg_dir = _config_dir_client(slug)
     return cast(Path, ensure_within_and_resolve(cfg_dir, cfg_dir / "VisionStatement.pdf"))
+
+
+def _client_vision_yaml_path(slug: str) -> Path:
+    cfg_dir = _config_dir_client(slug)
+    return cast(Path, ensure_within_and_resolve(cfg_dir, cfg_dir / "visionstatement.yaml"))
 
 
 def _has_drive_ids(slug: str) -> bool:
@@ -371,6 +378,15 @@ if current_phase == UI_PHASE_INIT:
         if not pdf_bytes:
             st.error("Il file PDF caricato è vuoto o non leggibile.")
             st.stop()
+        # 2b) Self-check ambiente prima di procedere
+        report = run_system_self_check()
+        if not report.ok:
+            messages = "; ".join(f"{item.name}: {item.message}" for item in report.items if not item.ok)
+            raise ConfigError(
+                f"Self-check fallito: {messages}",
+                slug=s or "-",
+                file_path="config/config.yaml",
+            )
         # Avviso soft su PDF molto grande (diagnostica)
         try:
             if isinstance(pdf_bytes, (bytes, bytearray)) and len(pdf_bytes) > 20 * 1024 * 1024:
@@ -388,6 +404,33 @@ if current_phase == UI_PHASE_INIT:
                 ensure_local_workspace_for_ui(s, client_name=(name or None), vision_statement_pdf=pdf_bytes)
                 _semantic_dir_client(s).mkdir(parents=True, exist_ok=True)
                 _mirror_repo_config_into_client(s, pdf_bytes=pdf_bytes)
+                yaml_target = _client_vision_yaml_path(s)
+                try:
+                    compile_document_to_vision_yaml(_client_pdf_path(s), yaml_target)
+                except Exception as exc:
+                    LOGGER.warning(
+                        "ui.new_client.vision_yaml_generation_failed",
+                        extra={"slug": s, "error": str(exc), "pdf": str(_client_pdf_path(s))},
+                    )
+                    fallback_payload = {
+                        "version": 1,
+                        "metadata": {
+                            "source_pdf_path": str(_client_pdf_path(s)),
+                            "source_pdf_sha256": "",
+                            "pipeline_version": "1.0",
+                            "source_type": "pdf",
+                        },
+                        "content": {
+                            "pages": [],
+                            "full_text": "Vision statement non disponibile: usa il PDF originale o rigenera lo YAML.",
+                        },
+                    }
+                    safe_write_text(
+                        yaml_target,
+                        yaml.safe_dump(fallback_payload, allow_unicode=True, sort_keys=False),
+                        encoding="utf-8",
+                        atomic=True,
+                    )
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Workspace locale pronto.", state="complete")
                 progress.progress(30, text="Workspace locale pronto.")

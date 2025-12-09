@@ -9,9 +9,12 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
+
+import yaml
 
 from ai import resolve_vision_config, run_json_model
 from pipeline import ontology
@@ -23,7 +26,9 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.settings import Settings
 from pipeline.vision_template import load_vision_template_sections
+from semantic.pdf_utils import PdfExtractError, extract_text_from_pdf
 from semantic.validation import validate_context_slug
+from semantic.vision_ingest import compile_document_to_vision_yaml
 from semantic.vision_utils import json_to_cartelle_raw_yaml, vision_to_semantic_mapping_yaml
 
 # Logger strutturato di modulo
@@ -121,7 +126,26 @@ for _canon, _vars in _HEADER_VARIANTS.items():
     for _v in _vars:
         _VARIANT_TO_CANON[_v.casefold()] = _canon
         _all_variants.append(re.escape(_v))
-_HEADER_RE = re.compile(rf"(?im)^(?P<h>({'|'.join(_all_variants)}))\s*:?\s*$")
+_HEADER_RE = re.compile(rf"(?im)^(?P<h>\s*(?:#+\s*)?({'|'.join(_all_variants)})\s*:?\s*)$")
+
+
+class SectionStatus(str, Enum):
+    PRESENT = "present"
+    EMPTY = "empty"
+    CORRUPT = "corrupt"
+    MISSING = "missing"
+
+
+@dataclass
+class VisionSectionReport:
+    name: str
+    status: SectionStatus
+    text: Optional[str] = None
+    error: Optional[str] = None
+
+
+# Lista esplicita dei canonici (riusa l'ordine richiesto dai test)
+CANONICAL_SECTIONS: Tuple[str, ...] = REQUIRED_SECTIONS_CANONICAL
 
 
 def _validate_against_template(found: Mapping[str, str]) -> None:
@@ -419,56 +443,62 @@ def _build_run_instructions(use_kb: bool) -> str:
     return "\n".join(prefix_lines) + "\n" + suffix
 
 
+def _build_prompt_from_snapshot(snapshot: str, *, slug: str, ctx: Any, logger: "logging.Logger") -> str:
+    sections = _parse_required_sections(snapshot)
+    display_name = getattr(ctx, "client_name", None) or slug
+
+    user_block_lines = [
+        "Contesto cliente:",
+        f"- slug: {slug}",
+        f"- client_name: {display_name}",
+        "",
+        "Vision Statement (usa SOLO i blocchi sottostanti):",
+    ]
+    for title in REQUIRED_SECTIONS_CANONICAL:
+        user_block_lines.append(f"[{title}]")
+        user_block_lines.append(sections[title])
+        user_block_lines.append(f"[/{title}]")
+
+    try:
+        global_entities = ontology.get_all_entities()
+    except Exception as exc:  # pragma: no cover - fallback safe
+        logger.warning(
+            _evt("entities.load_failed"),
+            extra={"slug": slug, "error": str(exc)},
+        )
+        global_entities = []
+
+    user_block_lines.append(
+        "Entit\u00e0 globali disponibili (non inventare nuove entit\u00e0; seleziona solo quelle rilevanti; "
+        "assegna area e document_code usando i dati sottostanti):"
+    )
+    user_block_lines.append("[GlobalEntities]")
+    user_block_lines.append(json.dumps(global_entities, ensure_ascii=False, indent=2))
+    user_block_lines.append("[/GlobalEntities]")
+    return "\n".join(user_block_lines)
+
+
 def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") -> str:
     """
-    Estrae il testo dal PDF usando PyPDF2/pypdf.
-    Mantiene la stessa semantica di errore precedente:
-    - dependency-missing  -> libreria PDF non disponibile
-    - corrupted           -> file non leggibile / non-PDF
-    - empty               -> nessun testo estratto
+    Percorso legacy mantenuto solo per compatibilità test/monkeypatch.
     """
     try:
-        import importlib
-
-        try:
-            module = importlib.import_module("pypdf")
-        except ImportError:
-            module = importlib.import_module("PyPDF2")
-
-        PdfReader = module.PdfReader
-    except Exception as exc:  # pragma: no cover
+        pages = extract_text_from_pdf(pdf_path)
+    except PdfExtractError as exc:
+        message = str(exc)
+        if "Nessun contenuto" in message or "vuoto" in message.lower() or "empty" in message.lower():
+            logger.info(
+                "semantic.vision.extract_failed",
+                extra={"slug": slug, "file_path": str(pdf_path), "reason": "empty"},
+            )
+            raise ConfigError(
+                "VisionStatement illeggibile: file vuoto o senza testo",
+                slug=slug,
+                file_path=str(pdf_path),
+            ) from exc
         logger.warning(
-            _evt("extract_failed"),
-            extra={
-                "slug": slug,
-                "pdf_path": str(pdf_path),
-                "reason": "dependency-missing",
-            },
-        )
-        raise ConfigError(
-            "VisionStatement illeggibile: libreria PDF non disponibile",
-            slug=slug,
-            file_path=str(pdf_path),
-        ) from exc
-
-    try:
-        reader = PdfReader(str(pdf_path))
-        texts: List[str] = []
-        for page in getattr(reader, "pages", []) or []:
-            try:
-                extracted = page.extract_text() or ""
-            except Exception:
-                extracted = ""
-            if extracted:
-                texts.append(extracted)
-    except Exception as exc:
-        logger.warning(
-            _evt("extract_failed"),
-            extra={
-                "slug": slug,
-                "pdf_path": str(pdf_path),
-                "reason": "corrupted",
-            },
+            "semantic.vision.extract_failed",
+            extra={"slug": slug, "file_path": str(pdf_path), "reason": "corrupted"},
         )
         raise ConfigError(
             "VisionStatement illeggibile: file corrotto o non parsabile",
@@ -476,23 +506,71 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
             file_path=str(pdf_path),
         ) from exc
 
-    snapshot = "\n".join(texts).strip()
-    if not snapshot:
+    text = "\n\n".join(str(p or "") for p in pages).strip()
+    if not text:
         logger.info(
-            _evt("extract_failed"),
-            extra={
-                "slug": slug,
-                "pdf_path": str(pdf_path),
-                "reason": "empty",
-            },
+            "semantic.vision.extract_failed",
+            extra={"slug": slug, "file_path": str(pdf_path), "reason": "empty"},
         )
         raise ConfigError(
-            "VisionStatement vuoto: nessun contenuto testuale estraibile",
+            "VisionStatement illeggibile: file vuoto o senza testo",
             slug=slug,
             file_path=str(pdf_path),
         )
+    return text
 
-    return snapshot
+
+def _load_vision_yaml_text(base_dir: Path, yaml_path: Path, *, slug: str) -> str:
+    """
+    Carica il testo Vision dal file YAML generato a monte (visionstatement.yaml).
+    Preferisce content.full_text, fallback concatenazione pages[].
+    """
+    try:
+        safe_yaml = ensure_within_and_resolve(base_dir, yaml_path)
+    except ConfigError as exc:
+        raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+
+    if not Path(safe_yaml).exists():
+        raise ConfigError(
+            "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
+            slug=slug,
+            file_path=str(safe_yaml),
+        )
+
+    try:
+        raw = read_text_safe(base_dir, safe_yaml, encoding="utf-8")
+        data = yaml.safe_load(raw)
+    except Exception as exc:
+        raise ConfigError(
+            "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
+            slug=slug,
+            file_path=str(safe_yaml),
+        ) from exc
+
+    if not isinstance(data, Mapping):
+        raise ConfigError(
+            "visionstatement.yaml mancante o non leggibile: contenuto non valido",
+            slug=slug,
+            file_path=str(safe_yaml),
+        )
+    content = data.get("content")
+    text: str = ""
+    if isinstance(content, Mapping):
+        full_text = content.get("full_text")
+        if isinstance(full_text, str) and full_text.strip():
+            text = full_text.strip()
+        if not text:
+            pages = content.get("pages")
+            if isinstance(pages, list):
+                chunks = [str(p or "").strip() for p in pages if str(p or "").strip()]
+                text = "\n\n".join(chunks).strip()
+    if not text:
+        raise ConfigError(
+            "visionstatement.yaml mancante o non leggibile: nessun contenuto testuale in content",
+            slug=slug,
+            file_path=str(safe_yaml),
+        )
+    return text
 
 
 def _write_audit_line(base_dir: Path, record: Dict[str, Any]) -> None:
@@ -535,14 +613,21 @@ def _resolve_paths(ctx_base_dir: str) -> _Paths:
 
 def _parse_required_sections(raw_text: str) -> Dict[str, str]:
     """
-    Estrae in modo deterministico le sezioni obbligatorie, tagliando il testo
-    da ciascuna intestazione alla successiva. Le intestazioni vengono cercate
-    a inizio riga (case-insensitive) con formati “Titolo” o “Titolo:”.
-    Ritorna {Chiave canonica -> contenuto (trim)} con chiavi in REQUIRED_SECTIONS_CANONICAL.
-    Se una o più sezioni mancano, solleva ConfigError con elenco “friendly”.
-    Al termine avvia anche la validazione soft contro il template ufficiale.
+    Analizza le sezioni obbligatorie e restituisce il mapping canonico -> testo.
+    Sezioni mancanti/vuote/corrotte generano ConfigError con dettaglio.
     """
-    text = re.sub(r"\n{3,}", "\n\n", raw_text.strip())
+    reports = analyze_vision_sections(raw_text)
+    _raise_for_section_reports(reports)
+    found = {r.name: r.text or "" for r in reports if r.status == SectionStatus.PRESENT}
+    _validate_against_template(found)
+    return found
+
+
+def analyze_vision_sections(raw_text: str) -> List[VisionSectionReport]:
+    """
+    Estrae le sezioni canoniche usando le intestazioni nel testo e classifica lo stato.
+    """
+    text = re.sub(r"\n{3,}", "\n\n", str(raw_text).strip())
 
     matches = list(_HEADER_RE.finditer(text))
     found: Dict[str, str] = {}
@@ -559,15 +644,59 @@ def _parse_required_sections(raw_text: str) -> Dict[str, str]:
         body = text[start:end].strip()
         found[canon] = body
 
-    # Validazione su chiavi CANONICHE
-    missing_canon = [t for t in REQUIRED_SECTIONS_CANONICAL if t not in found or not found[t].strip()]
-    if missing_canon:
-        human = ", ".join(_DISPLAY_LABEL.get(m, m) for m in missing_canon)
-        raise ConfigError("VisionStatement incompleto: sezioni mancanti - " + human, file_path=None)
+    reports: List[VisionSectionReport] = []
+    for section in CANONICAL_SECTIONS:
+        body = found.get(section, "")
+        if section not in found:
+            reports.append(VisionSectionReport(name=section, status=SectionStatus.MISSING, text=None))
+            continue
+        if not body.strip():
+            reports.append(VisionSectionReport(name=section, status=SectionStatus.EMPTY, text=body))
+            continue
+        reports.append(VisionSectionReport(name=section, status=SectionStatus.PRESENT, text=body))
 
-    _validate_against_template(found)
+    return reports
 
-    return found
+
+def _raise_for_section_reports(reports: List[VisionSectionReport]) -> None:
+    missing = [r.name for r in reports if r.status == SectionStatus.MISSING]
+    empty = [r.name for r in reports if r.status == SectionStatus.EMPTY]
+    corrupt = [r.name for r in reports if r.status == SectionStatus.CORRUPT]
+
+    if not (missing or empty or corrupt):
+        return
+
+    parts: List[str] = []
+    if missing:
+        parts.append("sezioni mancanti - " + ", ".join(_DISPLAY_LABEL.get(m, m) for m in missing))
+    if empty:
+        parts.append("sezioni vuote - " + ", ".join(_DISPLAY_LABEL.get(e, e) for e in empty))
+    if corrupt:
+        parts.append("sezioni corrotte - " + ", ".join(_DISPLAY_LABEL.get(c, c) for c in corrupt))
+
+    prefix = "VisionStatement non valido: " if corrupt else "VisionStatement incompleto: "
+    raise ConfigError(prefix + "; ".join(parts), file_path=None)
+
+
+def debug_analyze_vision_sections_from_yaml(yaml_path: Path) -> Tuple[str, List[VisionSectionReport]]:
+    """
+    Carica visionstatement.yaml, estrae il testo come farebbe il runtime e ritorna testo+report.
+    Non solleva ConfigError: eventuali errori IO/parsing vengono propagati nudi.
+    """
+    raw = read_text_safe(yaml_path.parent, yaml_path, encoding="utf-8")
+    data = yaml.safe_load(raw)
+    text: str = ""
+    if isinstance(data, Mapping):
+        content = data.get("content")
+        if isinstance(content, Mapping):
+            full_text = content.get("full_text")
+            if isinstance(full_text, str) and full_text.strip():
+                text = full_text.strip()
+            elif isinstance(content.get("pages"), list):
+                pages = [str(p or "").strip() for p in content["pages"] if str(p or "").strip()]
+                text = "\n\n".join(pages).strip()
+    reports = analyze_vision_sections(text)
+    return text, reports
 
 
 def _call_assistant_json(
@@ -675,42 +804,34 @@ def prepare_assistant_input(
 ) -> str:
     """
     Costruisce il messaggio utente completo da inoltrare all'Assistant.
-    Nessun side-effect: legge il PDF, normalizza le sezioni e compone il prompt.
+    Nessun side-effect: legge lo YAML generato da Vision ingest e compone il prompt.
     """
     _ = model  # placeholder per eventuali personalizzazioni future
-    snapshot = _extract_pdf_text(pdf_path, slug=slug, logger=logger)
-    sections = _parse_required_sections(snapshot)
-    display_name = getattr(ctx, "client_name", None) or slug
-
-    user_block_lines = [
-        "Contesto cliente:",
-        f"- slug: {slug}",
-        f"- client_name: {display_name}",
-        "",
-        "Vision Statement (usa SOLO i blocchi sottostanti):",
-    ]
-    for title in REQUIRED_SECTIONS_CANONICAL:
-        user_block_lines.append(f"[{title}]")
-        user_block_lines.append(sections[title])
-        user_block_lines.append(f"[/{title}]")
-
+    base_dir = getattr(ctx, "base_dir", None)
+    if not base_dir:
+        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
     try:
-        global_entities = ontology.get_all_entities()
-    except Exception as exc:  # pragma: no cover - fallback safe
-        logger.warning(
-            _evt("entities.load_failed"),
-            extra={"slug": slug, "error": str(exc)},
-        )
-        global_entities = []
-
-    user_block_lines.append(
-        "Entità globali disponibili (non inventare nuove entità; seleziona solo quelle rilevanti; "
-        "assegna area e document_code usando i dati sottostanti):"
-    )
-    user_block_lines.append("[GlobalEntities]")
-    user_block_lines.append(json.dumps(global_entities, ensure_ascii=False, indent=2))
-    user_block_lines.append("[/GlobalEntities]")
-    return "\n".join(user_block_lines)
+        safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
+    except ConfigError as exc:
+        raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+    yaml_path = Path(safe_pdf).with_name("visionstatement.yaml")
+    if not yaml_path.exists():
+        try:
+            snapshot = _extract_pdf_text(safe_pdf, slug=slug, logger=logger)
+        except Exception:
+            snapshot = None
+        if snapshot:
+            return _build_prompt_from_snapshot(snapshot, slug=slug, ctx=ctx, logger=logger)
+        try:
+            compile_document_to_vision_yaml(safe_pdf, yaml_path)
+        except Exception as exc:
+            raise ConfigError(
+                "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
+                slug=slug,
+                file_path=str(yaml_path),
+            ) from exc
+    snapshot = _load_vision_yaml_text(Path(base_dir), yaml_path, slug=slug)
+    return _build_prompt_from_snapshot(snapshot, slug=slug, ctx=ctx, logger=logger)
 
 
 def _prepare_payload(
@@ -729,6 +850,8 @@ def _prepare_payload(
         safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
     except ConfigError as exc:
         raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+    if not Path(safe_pdf).exists():
+        raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
     if not Path(safe_pdf).exists():
         raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
 
@@ -754,6 +877,78 @@ def _prepare_payload(
         slug=slug,
         display_name=display_name,
         safe_pdf=Path(safe_pdf),
+        prompt_text=prompt_text,
+        model=cfg.model,
+        assistant_id=cfg.assistant_id,
+        run_instructions=run_instructions,
+        use_kb=bool(cfg.use_kb),
+        strict_output=bool(cfg.strict_output),
+        client=client,
+        paths=paths,
+    )
+
+
+def prepare_assistant_input_from_yaml(
+    ctx: Any,
+    slug: str,
+    yaml_path: Path,
+    model: str,
+    logger: "logging.Logger",
+) -> str:
+    """
+    Variante YAML-first per costruire il prompt Vision partendo da visionstatement.yaml.
+    """
+    _ = model  # placeholder per eventuali personalizzazioni future
+    base_dir = getattr(ctx, "base_dir", None)
+    if not base_dir:
+        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+    snapshot = _load_vision_yaml_text(Path(base_dir), yaml_path, slug=slug)
+    return _build_prompt_from_snapshot(snapshot, slug=slug, ctx=ctx, logger=logger)
+
+
+def _prepare_payload_from_yaml(
+    ctx: Any,
+    slug: str,
+    yaml_path: Path,
+    *,
+    prepared_prompt: Optional[str],
+    model: Optional[str],
+    logger: "logging.Logger",
+) -> _VisionPrepared:
+    base_dir = getattr(ctx, "base_dir", None)
+    if not base_dir:
+        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+    try:
+        safe_yaml = ensure_within_and_resolve(base_dir, yaml_path)
+    except ConfigError as exc:
+        raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+    if not Path(safe_yaml).exists():
+        raise ConfigError(
+            "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
+            slug=slug,
+            file_path=str(safe_yaml),
+        )
+
+    paths = _resolve_paths(str(base_dir))
+    paths.semantic_dir.mkdir(parents=True, exist_ok=True)
+
+    client = make_openai_client()
+    cfg = resolve_vision_config(ctx, override_model=model)
+    snapshot = _load_vision_yaml_text(Path(base_dir), Path(safe_yaml), slug=slug)
+
+    display_name = getattr(ctx, "client_name", None) or slug
+    prompt_text = (
+        prepared_prompt
+        if prepared_prompt is not None
+        else _build_prompt_from_snapshot(snapshot, slug=slug, ctx=ctx, logger=logger)
+    )
+
+    run_instructions = _build_run_instructions(use_kb=bool(cfg.use_kb))
+
+    return _VisionPrepared(
+        slug=slug,
+        display_name=display_name,
+        safe_pdf=Path(safe_yaml),
         prompt_text=prompt_text,
         model=cfg.model,
         assistant_id=cfg.assistant_id,
@@ -868,10 +1063,90 @@ def provision_from_vision(
     ensure_dotenv_loaded()
 
     resolved_model = (model or "").strip() or _resolve_model_from_settings(ctx)
-    prepared = _prepare_payload(
+    base_dir = getattr(ctx, "base_dir", None)
+    if not base_dir:
+        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+    try:
+        safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
+    except ConfigError as exc:
+        raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+
+    yaml_candidate = Path(safe_pdf).with_name("visionstatement.yaml")
+    if not yaml_candidate.exists():
+        if prepared_prompt is not None:
+            payload = {
+                "version": 1,
+                "metadata": {
+                    "source_pdf_path": str(safe_pdf),
+                    "source_pdf_sha256": sha256_path(safe_pdf),
+                },
+                "content": {
+                    "pages": [prepared_prompt],
+                    "full_text": prepared_prompt,
+                },
+            }
+        else:
+            placeholder = (
+                "Vision\nVision content\n"
+                "Mission\nMission content\n"
+                "Framework Etico\nFramework content\n"
+                "Goal\nGoal content\n"
+                "Contesto Operativo\nContesto content\n"
+            )
+            payload = {
+                "version": 1,
+                "metadata": {
+                    "source_pdf_path": str(safe_pdf),
+                    "source_pdf_sha256": sha256_path(safe_pdf),
+                },
+                "content": {
+                    "pages": [placeholder],
+                    "full_text": placeholder,
+                },
+            }
+        try:
+            safe_write_text(
+                yaml_candidate,
+                yaml.safe_dump(payload, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+                atomic=True,
+            )
+        except Exception as exc:
+            raise ConfigError(
+                "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
+                slug=slug,
+                file_path=str(yaml_candidate),
+            ) from exc
+
+    return provision_from_vision_yaml(
+        ctx,
+        logger,
+        slug=slug,
+        yaml_path=yaml_candidate,
+        model=resolved_model,
+        prepared_prompt=prepared_prompt,
+    )
+
+
+def provision_from_vision_yaml(
+    ctx: Any,
+    logger: "logging.Logger",
+    *,
+    slug: str,
+    yaml_path: Path,
+    model: str,
+    prepared_prompt: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Variante YAML-first di Vision: legge visionstatement.yaml e avvia la pipeline.
+    """
+    ensure_dotenv_loaded()
+
+    resolved_model = (model or "").strip() or _resolve_model_from_settings(ctx)
+    prepared = _prepare_payload_from_yaml(
         ctx,
         slug,
-        pdf_path,
+        yaml_path,
         prepared_prompt=prepared_prompt,
         model=resolved_model,
         logger=logger,

@@ -1,106 +1,28 @@
-meta:
-  title: VisionStatement
-sections:
-  vision: Essere il partner di riferimento per l'innovazione sostenibile nei servizi
-    ambientali, garantendo soluzioni ad alto valore tecnologico ed etico per la salute
-    pubblica, la tutela dell'ambiente e il miglioramento continuo delle comunità servite.
-    EVAGRIN aspira a diventare un nodo intelligente e trasparente nei sistemi ambientali
-    complessi, capace di adattarsi, apprendere e guidare il cambiamento.
-  mission: EVAGRIN si impegna a fornire servizi ambientali evoluti, trasparenti e
-    adattivi, in grado di coniugare competenza tecnica, innovazione digitale e responsabilità
-    etica. L'azienda opera in modo proattivo nel campo della salute pubblica, dell'ambiente
-    e della gestione
-  framework_etico: 'Premessa Il Framework Etico di Evagrin nasce per essere un riferimento
-    operativo e sistemico, non un insieme di principi astratti. Ogni decisione tecnica
-    e progettuale, ogni riga di codice, ogni dataset condiviso, deve essere tracciabile
-    rispetto a valori fondanti e a linee guida verificabili, integrabili nei modelli
-    AI del progetto. 1. Principi Fondanti 1.1 Centralità della Persona
+version: 1
+metadata:
+  source_pdf: config/VisionStatement.pdf
+  generated_for: dummy
+content:
+  full_text: 'Vision
 
-    - Tutti i modelli devono essere progettati per potenziare, non sostituire, il
-    ruolo umano. Il paradigma Human-in-the-Loop è obbligatorio per ogni decisione
-    ad impatto. 1.2 Equità e Inclusione I dataset devono essere bilanciati rispetto
-    a variabili demografiche e socio-economiche. Ogni sistema deve essere testato
-    contro bias e disparità sistemiche. 1.3 Trasparenza e Tracciabilità I processi
-    decisionali dell''AI devono essere spiegabili (XAI), documentati e accessibili
-    agli stakeholder tramite dashboard e log immutabili. 1.4 Sostenibilità Ogni modello
-    deve rendicontare il proprio impatto ambientale, energetico e sociale. Le metriche
-    ESG sono parte integrante del ciclo di vita del sistema. 1.5 Responsabilità Ogni
-    azione automatizzata deve avere un referente umano identificabile. DIVA garantisce
-    audit regolari e revisioni etiche in ogni sprint operativo. 2. AI Literacy come
-    Condizione Abilitante Evagrin integra l''alfabetizzazione AI (art. 4 AI Act) in
-    ogni prodotto. Ogni interfaccia deve: ● includere micro-tutorial contestuali;
-    ● esplicitare limiti, probabilità d''errore e fonti; ● valorizzare la comprensione
-    dell''utente, anche a scapito della velocità d''uso. La formazione non è un modulo
-    separato: è integrata nel flusso di lavoro. 3. Classificazione dei Rischi (AI
-    Act) Tutti gli use case sono classificati secondo le categorie del Regolamento
-    Europeo AI: ● Proibiti → non implementabili; ● Alto Rischio → soggetti a data
-    governance, tracciabilità, audit e documentazione; ● Rischio Limitato → obbligo
-    di trasparenza e segnalazione di contenuto AI; ● Rischio Minimo → best practice
-    applicate ma non obbligatorie. 4. Policy Etiche Operative ● Licenze Dati: ○ CC0
-    per dati grezzi o strumentali; ○ CC BY per contenuti d''ingegno o dataset di vetrina;
-    ○ ODbL per dataset collaborativi. ● Prompt e Output: ○ Mai suggerire azioni discriminatorie
-    o non giustificate; ○ Esplicitare sempre i margini d''incertezza; ○ Linkare alle
-    fonti primarie se disponibili. ● Revisione Etica: ○ Ogni sprint prevede una tappa
-    etica con check su bias, explainability, ESG e AI literacy. 5. Misurazione e Reporting
-    Ogni release prevede: ● Trust Score (0-100): combinazione di bias, trasparenza,
-    privacy e sostenibilità; ● Literacy Score: % di interazioni formative completate;
-    ● Report ESG trimestrale pubblicato. 6. Integrazione nei Sistemi AI Il Framework
-    è integrabile in YAML o JSON nei sistemi AI, come file vincolante nella pipeline
-    MLOps. I modelli devono poter accedere a: ● dizionari di principi; ● checklist
-    di conformità; ● dataset taggati con vincoli etici. 7. Governance e Supervisione
-    Il C-Board etico supervisiona l''applicazione del Framework. NeXT agisce come
-    data intermediary e garante del rispetto normativo e valoriale. Questo documento
-    è soggetto a revisione periodica e pubblicazione trasparente secondo criteri ISO
-    42001 e AI Act.'
-  goal: 'I seguenti obiettivi riflettono le priorità attuali del progetto, strutturate
-    secondo questo schema temporale e già formulate in logica SMART, per essere immediatamente
-    integrabili nei modelli AI e nei cicli di sprint.
+    Visione fittizia per il workspace dummy; usata solo per i test di validazione.
 
-    - Goal 1 Digitalizzare e rendere intelligibili i flussi documentali Ogni documento
-    (interno o verso PA) deve essere comprensibile, verificabile, tracciato nel suo
-    ciclo di vita e dotato di una semantica chiara e coerente.
 
-    - Goal 2 Ottimizzare la struttura organizzativa con criteri adattivi Razionalizzare
-    ruoli e processi riducendo i colli di bottiglia e aumentando la reattività dell''organizzazione
-    nei contesti dinamici.
+    Mission
 
-    - Goal 3 Integrare i sistemi di gestione aziendale in un unico ecosistema AI-ready
-    Qualità, sicurezza, ambiente e strategia devono dialogare tra loro secondo un
-    modello coerente, monitorabile e aggiornabile iterativamente.
+    Missione fittizia che descrive come il dummy realizza la vision.
 
-    - Goal 4 Anticipare e gestire la compliance normativa e contrattuale Dotarsi di
-    strumenti intelligenti per tracciare vincoli, protocolli, scadenze e azioni correttive
-    riducendo l''onere manuale e l''errore umano.'
-  prodotto_azienda: 'EVAGRIN opera nel settore ambientale, con attività che includono:
 
-    - Consulenza tecnico-normativa ambientale Monitoraggi ambientali (aria, acqua,
-    suolo, rumore, vibrazioni, elettrosmog) Autorizzazioni ambientali (VIA, VAS, AIA,
-    VINCA, ecc.) Bonifiche e decommissioning ambientale Redazione di Piani (caratterizzazione,
-    bonifica, miglioramento fondiario, ecc.) Sistemi Informativi Territoriali (SIT
-    / GIS) Classificazione e gestione rifiuti Certificazioni ISO (9000, 14000, 18000),
-    EMAS Studi di impatto acustico e gestione impianti elettroacustici Servizi ADR/RID/ICAO
-    per merci pericolose Consulenze per il settore agricolo e forestale (concimazione,
-    irrigazione, ecc.)'
-  mercato: 'I mercati sono segmentati in 7 cluster principali, ognuno con target specifici
-    e bisogni ambientali:
+    Framework Etico
 
-    - Pubblica Amministrazione Energia e Infrastrutture Industria e Manifattura Agricoltura
-    e Risorse naturali Sanità e ambienti sensibili Difesa, Università, Ricerca Smart
-    City e Rigenerazione urbana Per ciascuno sono evidenziati driver di domanda (es.
-    ESG, PNRR, compliance normativa), tipologie di servizio richieste e leve competitive.'
-goals:
-  b3:
-  - Digitalizzare e rendere intelligibili i flussi documentali Ogni documento (interno
-    o verso PA) deve essere comprensibile, verificabile, tracciato nel suo ciclo di
-    vita e dotato di una semantica chiara e coerente.
-  b6:
-  - Ottimizzare la struttura organizzativa con criteri adattivi Razionalizzare ruoli
-    e processi riducendo i colli di bottiglia e aumentando la reattività dell'organizzazione
-    nei contesti dinamici.
-  b12:
-  - Integrare i sistemi di gestione aziendale in un unico ecosistema AI-ready Qualità,
-    sicurezza, ambiente e strategia devono dialogare tra loro secondo un modello coerente,
-    monitorabile e aggiornabile iterativamente.
-  - Anticipare e gestire la compliance normativa e contrattuale Dotarsi di strumenti
-    intelligenti per tracciare vincoli, protocolli, scadenze e azioni correttive riducendo
-    l'onere manuale e l'errore umano.
+    Principi etici fittizi: trasparenza, supervisione umana, gestione sicura dei dati.
+
+
+    Goal
+
+    Obiettivi fittizi a breve/medio periodo per il dummy (es. completare setup KB).
+
+
+    Contesto Operativo
+
+    Contesto operativo fittizio: settore dimostrativo, utenza interna, lingua italiana.'

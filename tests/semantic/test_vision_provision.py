@@ -16,7 +16,14 @@ import semantic.vision_provision as vp
 from ai.types import ResponseJson
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
-from semantic.vision_provision import HaltError, provision_from_vision
+from semantic.vision_provision import (
+    CANONICAL_SECTIONS,
+    HaltError,
+    SectionStatus,
+    _parse_required_sections,
+    analyze_vision_sections,
+    provision_from_vision,
+)
 
 pytestmark = pytest.mark.regression_light
 
@@ -396,6 +403,49 @@ def test_resolve_vision_use_kb_defaults_true(monkeypatch: pytest.MonkeyPatch):
     ctx = _Ctx(Path("dummy"))
     ctx.settings = {}
     assert vp._resolve_vision_use_kb(ctx) is True
+
+
+def test_analyze_sections_happy_path():
+    reports = analyze_vision_sections(_fake_pdf_text())
+    assert all(r.status == SectionStatus.PRESENT for r in reports)
+    assert {r.name for r in reports} == set(vp.CANONICAL_SECTIONS)
+
+
+def test_parse_required_sections_missing_raises():
+    text = _fake_pdf_text().replace("Mission\nLa missione...\n", "")
+    with pytest.raises(ConfigError) as excinfo:
+        _parse_required_sections(text)
+    assert "sezioni mancanti" in str(excinfo.value)
+
+
+def test_parse_required_sections_empty_raises():
+    text = _fake_pdf_text().replace("Goal\nObiettivi...\n", "Goal\n   \n")
+    with pytest.raises(ConfigError) as excinfo:
+        _parse_required_sections(text)
+    assert "sezioni vuote" in str(excinfo.value)
+
+
+def test_analyze_vision_sections_realistic_text():
+    text = (
+        "Vision Statement di NeXT\n"
+        "Vision\n"
+        "NeXT si configura come un sistema adattivo di Intelligenza Artificiale.\n"
+        "\n"
+        "Mission\n"
+        "La missione di NeXT è supportare imprese e territori con AI human-in-the-loop.\n"
+        "\n"
+        "Framework Etico\n"
+        "Principi etici fittizi: trasparenza, supervisione umana, gestione sicura dei dati.\n"
+        "\n"
+        "Goal\n"
+        "Obiettivi strutturati secondo logica temporale (Basket 3/6/12).\n"
+        "\n"
+        "Contesto Operativo\n"
+        "Ambito settoriale: trasformazione digitale e organizzativa.\n"
+    )
+    reports = analyze_vision_sections(text)
+    status_by_name = {r.name: r.status for r in reports}
+    assert all(status_by_name[name] == SectionStatus.PRESENT for name in CANONICAL_SECTIONS)
 
 
 def test_prepare_payload_sets_instructions_by_use_kb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

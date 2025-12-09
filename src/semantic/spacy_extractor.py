@@ -5,10 +5,6 @@
 Obiettivo: leggere il testo dei PDF in raw/, estrarre termini e frasi chiave,
 collegarli alle aree definite nel mapping e restituire candidati per tags_raw.csv.
 
-Note:
-- Import lazy di spacy e PyPDF2 per evitare dipendenze pesanti a import-time.
-- Fallback silenzioso: in caso di errori (mancanza modello, parsing PDF) ritorna
-  dizionario vuoto; chi lo usa effettua merge con l'euristica esistente.
 """
 
 from __future__ import annotations
@@ -20,7 +16,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within, iter_safe_pdfs
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
 
 from .config import SemanticConfig
 from .lexicon import LexiconEntry, build_lexicon
@@ -30,6 +26,30 @@ LOGGER = get_structured_logger("semantic.spacy_extractor")
 # --------------------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------------------
+
+
+def _read_markdown_text(md_path: Path) -> str:
+    """
+    Legge il contenuto di un file Markdown e lo restituisce come stringa.
+    """
+    md_path = md_path.expanduser().resolve()
+    if not md_path.is_file():
+        raise FileNotFoundError(f"Markdown non trovato: {md_path}")
+    safe_md = ensure_within_and_resolve(md_path.parent, md_path)
+    with safe_md.open("r", encoding="utf-8") as handle:
+        return handle.read()
+
+
+def _resolve_markdown_path_from_raw(raw_path: Path, *, workspace_root: Path) -> Path:
+    """
+    Dato un path raw (PDF), calcola il path al corrispondente Markdown in book/.
+
+    Convenzione: raw/<categoria>/file.pdf -> book/<categoria>/file.md
+    """
+    raw_root = ensure_within(workspace_root, workspace_root / "raw")
+    rel = raw_path.resolve().relative_to(raw_root)
+    md_root = ensure_within(workspace_root, workspace_root / "book")
+    return md_root / rel.with_suffix(".md")
 
 
 def _load_spacy(model_name: str) -> Any:
@@ -51,31 +71,6 @@ def _load_spacy(model_name: str) -> Any:
 def _get_nlp(model_name: str) -> Any:
     """Restituisce (con cache) il modello SpaCy richiesto."""
     return _load_spacy(model_name)
-
-
-def _read_pdf_text(pdf_path: Path) -> str:
-    """Estrae testo dal PDF usando PyPDF2 (lazy import)."""
-    try:
-        import importlib
-
-        try:
-            module = importlib.import_module("PyPDF2")
-        except ImportError:
-            module = importlib.import_module("pypdf")
-        PdfReader = module.PdfReader
-    except Exception as exc:  # pragma: no cover
-        raise ConfigError("PyPDF2/pypdf non disponibile: impossibile estrarre testo dal PDF.") from exc
-
-    reader = PdfReader(str(pdf_path))
-    texts: List[str] = []
-    for page in getattr(reader, "pages", []) or []:
-        try:
-            extracted = page.extract_text() or ""
-        except Exception:
-            extracted = ""
-        if extracted:
-            texts.append(extracted)
-    return "\n\n".join(texts).strip()
 
 
 def _collect_phrases(doc: Any, limit: int) -> Tuple[List[str], List[Tuple[str, str]]]:
@@ -184,7 +179,7 @@ def extract_spacy_tags(
     logger: Optional[logging.Logger] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
-    Estrae candidati tag dai PDF in raw/ usando SpaCy, mappandoli alle aree.
+    Estrae candidati tag dai documenti (Markdown derivati da raw/) usando SpaCy, mappandoli alle aree.
 
     Ritorna un dict: relative_path -> {tags, entities, keyphrases, score, sources}
     """
@@ -213,10 +208,16 @@ def extract_spacy_tags(
                 continue
 
         try:
-            text = _read_pdf_text(pdf_path)
+            md_path = _resolve_markdown_path_from_raw(pdf_path, workspace_root=cfg.base_dir)
+            text = _read_markdown_text(md_path)
+        except FileNotFoundError as exc:
+            raise ConfigError(
+                f"Markdown non trovato per il documento {pdf_path.name}: esegui prima la conversione PDF→Markdown.",
+                file_path=str(pdf_path),
+            ) from exc
         except Exception as exc:
             log.warning(
-                "semantic.spacy.pdf_read_failed",
+                "semantic.spacy.markdown_read_failed",
                 extra={"file_path": str(pdf_path), "error": str(exc)},
             )
             continue

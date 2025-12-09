@@ -14,6 +14,7 @@ from typing import Any, Iterable
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
 from semantic.config import load_semantic_config
+from semantic.document_ingest import read_document
 from semantic.entities_extractor import (
     DocEntityHit,
     build_lexicon_map,
@@ -27,25 +28,9 @@ from storage.tags_store import DocEntityRecord, save_doc_entities
 LOG = get_structured_logger("semantic.entities_runner")
 
 
-def _read_pdf_text(pdf_path: Path) -> str:
-    try:
-        import importlib
-
-        module = importlib.import_module("PyPDF2")
-        PdfReader = module.PdfReader
-    except Exception as exc:  # pragma: no cover
-        raise RuntimeError(f"PyPDF2 non disponibile: {exc}") from exc
-
-    reader = PdfReader(str(pdf_path))
-    texts: list[str] = []
-    for page in getattr(reader, "pages", []) or []:
-        try:
-            extracted = page.extract_text() or ""
-        except Exception:
-            extracted = ""
-        if extracted:
-            texts.append(extracted)
-    return "\n\n".join(texts).strip()
+def _read_document_text(pdf_path: Path) -> str:
+    doc = read_document(pdf_path)
+    return doc.full_text
 
 
 def _load_spacy(model_name: str) -> Any:
@@ -100,7 +85,7 @@ def run_doc_entities_pipeline(
     for pdf_path in iter_safe_pdfs(raw_dir):
         rel_uid = pdf_path.relative_to(base_dir).as_posix()
         try:
-            text = _read_pdf_text(pdf_path)
+            text = _read_document_text(pdf_path)
         except Exception as exc:
             log.warning("semantic.entities.pdf_read_failed", extra={"file": str(pdf_path), "error": str(exc)})
             continue

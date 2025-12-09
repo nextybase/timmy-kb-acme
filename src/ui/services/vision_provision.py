@@ -31,11 +31,34 @@ class _ProvisionFromVisionFunc(Protocol):
     ) -> Dict[str, Any]: ...
 
 
+class _ProvisionFromVisionYamlFunc(Protocol):
+    def __call__(
+        self,
+        *,
+        ctx: Any,
+        logger: logging.Logger,
+        slug: str,
+        yaml_path: Path,
+        model: str,
+        prepared_prompt: Optional[str] = None,
+    ) -> Dict[str, Any]: ...
+
+
 class _PreparePromptFunc(Protocol):
     def __call__(self, *, ctx: Any, slug: str, pdf_path: Path, model: str, logger: Any) -> str: ...
 
 
-def _load_semantic_bindings() -> tuple[Type[Exception], _ProvisionFromVisionFunc, _PreparePromptFunc]:
+class _PreparePromptYamlFunc(Protocol):
+    def __call__(self, *, ctx: Any, slug: str, yaml_path: Path, model: str, logger: Any) -> str: ...
+
+
+def _load_semantic_bindings() -> tuple[
+    Type[Exception],
+    _ProvisionFromVisionFunc,
+    _PreparePromptFunc,
+    Optional[_ProvisionFromVisionYamlFunc],
+    Optional[_PreparePromptYamlFunc],
+]:
     """Carica dinamicamente le binding da semantic.vision_provision."""
     candidates = (
         "src.semantic.vision_provision",
@@ -49,23 +72,43 @@ def _load_semantic_bindings() -> tuple[Type[Exception], _ProvisionFromVisionFunc
         halt_error = getattr(module, "HaltError", None)
         provision = getattr(module, "provision_from_vision", None)
         prepare = getattr(module, "prepare_assistant_input", None)
+        provision_yaml = getattr(module, "provision_from_vision_yaml", None)
+        prepare_yaml = getattr(module, "prepare_assistant_input_from_yaml", None)
         if isinstance(halt_error, type) and callable(provision) and callable(prepare):
             return (
                 cast(Type[Exception], halt_error),
                 cast(_ProvisionFromVisionFunc, provision),
                 cast(_PreparePromptFunc, prepare),
+                cast(Optional[_ProvisionFromVisionYamlFunc], provision_yaml) if callable(provision_yaml) else None,
+                cast(Optional[_PreparePromptYamlFunc], prepare_yaml) if callable(prepare_yaml) else None,
             )
     from ...semantic.vision_provision import HaltError as fallback_error
     from ...semantic.vision_provision import prepare_assistant_input as fallback_prepare
     from ...semantic.vision_provision import provision_from_vision as fallback_provision
+    from ...semantic.vision_provision import provision_from_vision_yaml as fallback_provision_yaml
 
-    return fallback_error, fallback_provision, fallback_prepare
+    try:
+        from ...semantic.vision_provision import prepare_assistant_input_from_yaml as fallback_prepare_yaml
+    except Exception:
+        fallback_prepare_yaml = None
+
+    return (
+        fallback_error,
+        fallback_provision,
+        fallback_prepare,
+        cast(Optional[_ProvisionFromVisionYamlFunc], fallback_provision_yaml),
+        cast(Optional[_PreparePromptYamlFunc], fallback_prepare_yaml) if callable(fallback_prepare_yaml) else None,
+    )
 
 
 HaltError: Type[Exception]
 _provision_from_vision: _ProvisionFromVisionFunc
 _prepare_prompt: _PreparePromptFunc
-HaltError, _provision_from_vision, _prepare_prompt = _load_semantic_bindings()
+_provision_from_vision_yaml: Optional[_ProvisionFromVisionYamlFunc]
+_prepare_prompt_yaml: Optional[_PreparePromptYamlFunc]
+HaltError, _provision_from_vision, _prepare_prompt, _provision_from_vision_yaml, _prepare_prompt_yaml = (
+    _load_semantic_bindings()
+)
 
 
 def _resolve_model(slug: str, model: Optional[str]) -> str:
@@ -112,6 +155,17 @@ def _artifacts_paths(base_dir: Path) -> VisionArtifacts:
     mapping = ensure_within_and_resolve(sdir, sdir / "semantic_mapping.yaml")
     cartelle = ensure_within_and_resolve(sdir, sdir / "cartelle_raw.yaml")
     return VisionArtifacts(mapping_yaml=cast(Path, mapping), cartelle_yaml=cast(Path, cartelle))
+
+
+def _vision_yaml_path(base_dir: Path, *, pdf_path: Optional[Path] = None) -> Path:
+    base = Path(base_dir)
+    candidate = (
+        (pdf_path.parent / "visionstatement.yaml")
+        if pdf_path is not None
+        else (base / "config" / "visionstatement.yaml")
+    )
+    resolved = ensure_within_and_resolve(base, candidate)
+    return cast(Path, resolved)
 
 
 def _artifacts_exist(base_dir: Path) -> bool:
@@ -224,6 +278,13 @@ def provision_from_vision(
     safe_pdf = cast(Path, ensure_within_and_resolve(base_dir, pdf_path))
     if not safe_pdf.exists():
         raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
+    yaml_path = _vision_yaml_path(base_dir, pdf_path=safe_pdf)
+    if not yaml_path.exists():
+        raise ConfigError(
+            "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
+            slug=slug,
+            file_path=str(yaml_path),
+        )
 
     digest = _sha256_of_file(base_dir, safe_pdf)
     last = _load_last_hash(base_dir)
@@ -247,15 +308,25 @@ def provision_from_vision(
 
     # Esecuzione reale (delegata al layer semantic)
     try:
-        result = _provision_from_vision(
-            ctx=ctx,
-            logger=logger,
-            slug=slug,
-            pdf_path=safe_pdf,
-            # modello risolto a monte (richiesto da semantic)
-            model=resolved_model,
-            prepared_prompt=prepared_prompt,
-        )
+        provision_from_semantic_module = getattr(_provision_from_vision, "__module__", "").endswith("vision_provision")
+        if _provision_from_vision_yaml is not None and provision_from_semantic_module:
+            result = _provision_from_vision_yaml(
+                ctx=ctx,
+                logger=logger,
+                slug=slug,
+                yaml_path=yaml_path,
+                model=resolved_model,
+                prepared_prompt=prepared_prompt,
+            )
+        else:
+            result = _provision_from_vision(
+                ctx=ctx,
+                logger=logger,
+                slug=slug,
+                pdf_path=safe_pdf,
+                model=resolved_model,
+                prepared_prompt=prepared_prompt,
+            )
     except HaltError:
         # Propaga direttamente verso la UI per consentire un messaggio dedicato.
         raise
@@ -293,8 +364,18 @@ def run_vision(
     pdf_path = Path(pdf_path)
     base_dir = getattr(ctx, "base_dir", None)
     safe_pdf: Path = pdf_path
+    safe_yaml: Optional[Path] = None
     if base_dir is not None:
         safe_pdf = cast(Path, ensure_within_and_resolve(base_dir, pdf_path))
+        safe_yaml = _vision_yaml_path(base_dir, pdf_path=safe_pdf)
+    else:
+        safe_yaml = safe_pdf.parent / "visionstatement.yaml"
+    if safe_yaml is not None and not safe_yaml.exists():
+        raise ConfigError(
+            "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
+            slug=slug,
+            file_path=str(safe_yaml),
+        )
 
     prepared_prompt: Optional[str] = prepared_prompt_override
     if preview_prompt:
@@ -303,14 +384,24 @@ def run_vision(
             st.subheader("Anteprima prompt inviato all’Assistant")
             st.caption("Verifica il testo generato. Premi **Prosegui** per continuare.")
             if prepared_prompt is None:
-                prepared_prompt = _prepare_prompt(
-                    ctx=ctx,
-                    slug=slug,
-                    pdf_path=safe_pdf,
-                    # stessa sorgente del default usato in esecuzione
-                    model=(model or get_vision_model()),
-                    logger=eff_logger,
-                )
+                preferred_model = model or get_vision_model()
+                if _prepare_prompt_yaml is not None and safe_yaml is not None:
+                    prepared_prompt = _prepare_prompt_yaml(
+                        ctx=ctx,
+                        slug=slug,
+                        yaml_path=safe_yaml,
+                        model=preferred_model,
+                        logger=eff_logger,
+                    )
+                else:
+                    prepared_prompt = _prepare_prompt(
+                        ctx=ctx,
+                        slug=slug,
+                        pdf_path=safe_pdf,
+                        # stessa sorgente del default usato in esecuzione
+                        model=preferred_model,
+                        logger=eff_logger,
+                    )
             st.text_area("Prompt", value=prepared_prompt, height=420, disabled=True)
             proceed = st.button("Prosegui", type="primary")
             if not proceed:

@@ -37,6 +37,8 @@ def test_init_workspace_skips_drive_when_helper_missing(
 ) -> None:
     slug = "dummy"
     monkeypatch.chdir(tmp_path)
+    # Isola il repo root per il test: evita che le write vadano sotto output/ del repo reale.
+    monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path))
     client_root = tmp_path / "output" / f"timmy-kb-{slug}"
     if client_root.exists():
         shutil.rmtree(client_root)

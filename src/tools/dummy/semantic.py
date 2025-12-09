@@ -315,6 +315,90 @@ def ensure_minimal_tags_db(base_dir: Path, categories: Optional[dict[str, dict[s
         )
 
 
+def write_minimal_tags_raw(base_dir: Path) -> Path:
+    """
+    Scrive un tags_raw.json minimale compatibile con kg_builder.
+    """
+    sem_dir = base_dir / "semantic"
+    sem_dir.mkdir(parents=True, exist_ok=True)
+    target = sem_dir / "tags_raw.json"
+    payload = [
+        {
+            "label": "contratti",
+            "path": "book/alpha.md",
+            "contexts": ["contratti", "forniture"],
+        },
+        {
+            "label": "report",
+            "path": "book/beta.md",
+            "contexts": ["reportistica", "metriche"],
+        },
+    ]
+    data = json.dumps(payload, ensure_ascii=False, indent=2)
+    if safe_write_text:
+        safe_write_text(target, data + "\n", encoding="utf-8", atomic=True)
+    else:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("w", encoding="utf-8") as handle:
+            handle.write(data + "\n")
+    return target
+
+
+def write_dummy_vision_yaml(base_dir: Path) -> Path:
+    """
+    Scrive un visionstatement.yaml fittizio ma completo per il dummy.
+    Include tutte le sezioni canoniche con testo non vuoto compatibile col validator.
+    Path SSoT: <base_dir>/config/visionstatement.yaml (schema v1 con full_text).
+    """
+    cfg_dir = ensure_within_and_resolve(base_dir, base_dir / "config")
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    target = cfg_dir / "visionstatement.yaml"
+
+    content_lines = [
+        "Vision",
+        "Visione fittizia per il workspace dummy; usata solo per i test di validazione.",
+        "",
+        "Mission",
+        "Missione fittizia che descrive come il dummy realizza la vision.",
+        "",
+        "Framework Etico",
+        "Principi etici fittizi: trasparenza, supervisione umana, gestione sicura dei dati.",
+        "",
+        "Goal",
+        "Obiettivi fittizi a breve/medio periodo per il dummy (es. completare setup KB).",
+        "",
+        "Contesto Operativo",
+        "Contesto operativo fittizio: settore dimostrativo, utenza interna, lingua italiana.",
+    ]
+
+    payload = {
+        "version": 1,
+        "metadata": {
+            "source_pdf": "config/VisionStatement.pdf",
+            "generated_for": "dummy",
+        },
+        "content": {
+            "full_text": "\n".join(content_lines),
+        },
+    }
+
+    if yaml is not None and safe_write_text:
+        safe_write_text(
+            target,
+            yaml.safe_dump(payload, allow_unicode=True, sort_keys=False),  # type: ignore[arg-type]
+            encoding="utf-8",
+            atomic=True,
+        )
+    elif safe_write_text:
+        safe_write_text(target, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", atomic=True)
+    else:  # pragma: no cover - fallback emergenza
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False, indent=2))
+
+    return target
+
+
 def ensure_local_readmes(base_dir: Path, categories: Optional[dict[str, dict[str, Any]]] = None) -> list[str]:
     raw_dir = base_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -409,6 +493,8 @@ __all__ = [
     "ensure_local_readmes",
     "load_mapping_categories",
     "ensure_book_skeleton",
+    "write_minimal_tags_raw",
+    "write_dummy_vision_yaml",
     "_MINIMAL_RAW_PDF",
 ]
 

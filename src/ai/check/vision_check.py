@@ -12,7 +12,8 @@ from ai import resolve_vision_config
 from pipeline.env_utils import ensure_dotenv_loaded
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from semantic.vision_provision import provision_from_vision
+from semantic.vision_provision import debug_analyze_vision_sections_from_yaml, provision_from_vision
+from tools.dummy.bootstrap import ensure_dummy_vision_pdf
 
 LOGGER = logging.getLogger("ai.check.vision")
 
@@ -48,14 +49,13 @@ def run_vision_dummy_check(
     Ritorna un dict con percorsi output e configurazione risolta.
     """
     ensure_dotenv_loaded()
-    repo_root = Path(__file__).resolve().parents[2]
+    # Root del repo: vision_check.py è in src/ai/check → saliamo di 3 livelli
+    repo_root = Path(__file__).resolve().parents[3]
     workspace = Path(base_dir) if base_dir else repo_root / "output" / f"timmy-kb-{workspace_slug}"
     if not workspace.exists():
         raise ConfigError(f"Workspace non trovato: {workspace}", slug=workspace_slug, file_path=str(workspace))
 
-    pdf_path = workspace / "config" / "VisionStatement.pdf"
-    if not pdf_path.exists():
-        raise ConfigError(f"VisionStatement.pdf non trovato: {pdf_path}", slug=workspace_slug, file_path=str(pdf_path))
+    pdf_path = ensure_dummy_vision_pdf(workspace)
 
     cfg = _load_workspace_config(workspace)
     ctx = _make_ctx(workspace, cfg)
@@ -94,3 +94,28 @@ def run_vision_dummy_check(
     if verbose:
         output["config"] = cfg
     return output
+
+
+def debug_dummy_vision_sections(
+    slug: str = "dummy",
+    base_dir: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Carica visionstatement.yaml del dummy e ritorna un report sezioni (diagnostico, no ConfigError).
+    """
+    repo_root = Path(__file__).resolve().parents[3]
+    workspace = Path(base_dir) if base_dir else repo_root / "output" / f"timmy-kb-{slug}"
+    yaml_path = workspace / "config" / "visionstatement.yaml"
+    vision_text, reports = debug_analyze_vision_sections_from_yaml(yaml_path)
+    return {
+        "yaml_path": str(yaml_path),
+        "text_preview": vision_text[:400],
+        "sections": [
+            {
+                "name": r.name,
+                "status": r.status.value,
+                "text_preview": (r.text or "")[:200],
+            }
+            for r in reports
+        ],
+    }

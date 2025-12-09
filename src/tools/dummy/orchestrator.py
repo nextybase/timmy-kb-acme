@@ -8,7 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
+from pipeline.file_utils import safe_write_bytes
 from pipeline.path_utils import ensure_within_and_resolve
+from semantic.vision_ingest import compile_document_to_vision_yaml
 
 from .bootstrap import build_generic_vision_template_pdf
 from .drive import call_drive_build_from_mapping, call_drive_emit_readmes, call_drive_min
@@ -19,6 +21,8 @@ from .semantic import (
     ensure_raw_pdfs,
     load_mapping_categories,
     write_basic_semantic_yaml,
+    write_dummy_vision_yaml,
+    write_minimal_tags_raw,
 )
 from .vision import run_vision_with_timeout
 
@@ -139,6 +143,7 @@ def build_dummy_payload(
     ensure_raw_pdfs_fn: Callable[..., Any] = ensure_raw_pdfs,
     ensure_local_readmes_fn: Callable[..., Any] = ensure_local_readmes,
     ensure_book_skeleton_fn: Callable[[Path], None] = ensure_book_skeleton,
+    write_minimal_tags_raw_fn: Callable[[Path], Path] = write_minimal_tags_raw,
     validate_dummy_structure_fn: Callable[[Path, logging.Logger], None] | None = validate_dummy_structure,
     call_drive_min_fn: Callable[..., Optional[dict[str, Any]]] = call_drive_min,
     call_drive_build_from_mapping_fn: Callable[..., Optional[dict[str, Any]]] = call_drive_build_from_mapping,
@@ -177,6 +182,46 @@ def build_dummy_payload(
 
     base_dir = client_base(slug)
     pdf_path_resolved = pdf_path(slug)
+    if not pdf_path_resolved.exists():
+        try:
+            pdf_path_resolved.parent.mkdir(parents=True, exist_ok=True)
+            if safe_write_bytes:
+                safe_write_bytes(pdf_path_resolved, pdf_bytes, atomic=True)
+            else:  # pragma: no cover - fallback
+                with pdf_path_resolved.open("wb") as handle:
+                    handle.write(pdf_bytes)
+        except Exception:
+            logger.error(
+                "tools.gen_dummy_kb.vision_template_write_failed",
+                extra={"slug": slug, "file_path": str(pdf_path_resolved)},
+            )
+            raise
+    yaml_target = ensure_within_and_resolve(base_dir, base_dir / "config" / "visionstatement.yaml")
+    try:
+        compile_document_to_vision_yaml(pdf_path_resolved, yaml_target)
+    except Exception as exc:
+        if enable_vision:
+            logger.error(
+                "tools.gen_dummy_kb.vision_yaml_generation_failed",
+                extra={"slug": slug, "error": str(exc), "pdf": str(pdf_path_resolved)},
+            )
+        else:
+            logger.warning(
+                "tools.gen_dummy_kb.vision_yaml_generation_skipped",
+                extra={"slug": slug, "error": str(exc), "pdf": str(pdf_path_resolved)},
+            )
+        # Fallback: YAML dummy strutturato per superare il validator
+        try:
+            yaml_target = write_dummy_vision_yaml(base_dir)
+            logger.info(
+                "tools.gen_dummy_kb.vision_yaml_dummy_written",
+                extra={"slug": slug, "file_path": str(yaml_target)},
+            )
+        except Exception as inner_exc:  # pragma: no cover - fallback estrema
+            logger.error(
+                "tools.gen_dummy_kb.vision_yaml_dummy_failed",
+                extra={"slug": slug, "error": str(inner_exc)},
+            )
 
     drive_min_info: Dict[str, Any] | None = None
     drive_build_info: Dict[str, Any] | None = None
@@ -245,6 +290,18 @@ def build_dummy_payload(
         fallback_info = write_basic_semantic_yaml_fn(base_dir, slug=slug, client_name=client_name)
         categories_for_readmes = fallback_info.get("categories", {})
 
+    try:
+        yaml_target = write_dummy_vision_yaml(base_dir)
+        logger.info(
+            "tools.gen_dummy_kb.vision_dummy_yaml_written",
+            extra={"slug": slug, "file_path": str(yaml_target)},
+        )
+    except Exception as exc:
+        logger.warning(
+            "tools.gen_dummy_kb.vision_dummy_yaml_failed",
+            extra={"slug": slug, "error": str(exc)},
+        )
+
     if not categories_for_readmes:
         categories_for_readmes = load_mapping_categories_fn(base_dir)
 
@@ -253,6 +310,13 @@ def build_dummy_payload(
 
     local_readmes = ensure_local_readmes_fn(base_dir, categories_for_readmes)
     ensure_book_skeleton_fn(base_dir)
+    try:
+        write_minimal_tags_raw_fn(base_dir)
+    except Exception as exc:
+        logger.warning(
+            "tools.gen_dummy_kb.tags_raw_seed_failed",
+            extra={"slug": slug, "error": str(exc)},
+        )
 
     if validate_dummy_structure_fn:
         validate_dummy_structure_fn(base_dir, logger)

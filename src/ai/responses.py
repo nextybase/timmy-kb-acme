@@ -39,6 +39,15 @@ def _mask_metadata(metadata: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     return {key: type(val).__name__ for key, val in metadata.items()}
 
 
+def _normalize_metadata(metadata: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """
+    Converte tutti i valori del metadata in stringa, come richiesto dalla Responses API.
+    """
+    if not metadata:
+        return {}
+    return {str(k): str(v) for k, v in metadata.items()}
+
+
 def _to_input_blocks(messages: Iterable[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     input_payload: List[Dict[str, Any]] = []
     for msg in messages:
@@ -70,6 +79,7 @@ def run_text_model(
     client = client or make_openai_client()
     msg_list: List[Mapping[str, Any]] = list(messages)
     input_payload = _to_input_blocks(msg_list)
+    normalized_metadata = _normalize_metadata(metadata)
 
     LOGGER.info(
         "ai.responses.text",
@@ -80,6 +90,7 @@ def run_text_model(
         resp = client.responses.create(
             model=model,
             input=input_payload,
+            metadata=normalized_metadata,
         )
     except AttributeError as exc:  # pragma: no cover - client privo di responses
         LOGGER.error("ai.responses.unsupported", extra={"error": str(exc)})
@@ -106,6 +117,7 @@ def run_json_model(
     client = make_openai_client()
     input_payload = _to_input_blocks(messages)
     rf_payload = response_format or {"type": "json_object"}
+    normalized_metadata = _normalize_metadata(metadata)
 
     LOGGER.info(
         "ai.responses.json",
@@ -121,6 +133,7 @@ def run_json_model(
         request_kwargs: Dict[str, Any] = {
             "model": model,
             "input": input_payload,
+            "metadata": normalized_metadata,
         }
         if response_format is not None:
             request_kwargs["response_format"] = rf_payload
@@ -128,6 +141,24 @@ def run_json_model(
     except AttributeError as exc:  # pragma: no cover
         LOGGER.error("ai.responses.unsupported", extra={"error": str(exc)})
         raise ConfigError("Client OpenAI non supporta l'API Responses.") from exc
+    except TypeError as exc:
+        message = str(exc)
+        if "response_format" in message:
+            LOGGER.warning(
+                "ai.responses.responses_v2_incompatible",
+                extra={
+                    "error": message,
+                    "reason": "response_format_unsupported",
+                },
+            )
+            fallback_kwargs: Dict[str, Any] = {
+                "model": model,
+                "input": input_payload,
+                "metadata": normalized_metadata,
+            }
+            resp = client.responses.create(**fallback_kwargs)
+        else:
+            raise
     except Exception as exc:
         LOGGER.error("ai.responses.error", extra={"error": str(exc)})
         raise ConfigError(f"Chiamata Responses fallita: {exc}") from exc

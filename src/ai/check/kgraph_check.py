@@ -20,7 +20,7 @@ def run_kgraph_dummy_check(
     """
     Esegue il flusso KGraph in modalità diagnostica su uno workspace.
     """
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     workspace = Path(base_dir) if base_dir else repo_root / f"output/timmy-kb-{workspace_slug}"
     if not workspace.exists():
         raise ConfigError(f"Workspace inesistente: {workspace}", slug=workspace_slug, file_path=str(workspace))

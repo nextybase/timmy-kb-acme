@@ -7,6 +7,8 @@ import io
 from pathlib import Path
 from typing import Callable, Iterable
 
+from pipeline.file_utils import safe_write_bytes
+
 DEFAULT_VISION_PDF = (
     b"%PDF-1.4\n"
     b"1 0 obj\n<< /Type /Catalog >>\nendobj\n"
@@ -134,3 +136,44 @@ def build_generic_vision_template_pdf(load_sections: Callable[[], Iterable[dict]
 
 
 __all__ = ["client_base", "pdf_path", "build_generic_vision_template_pdf", "DEFAULT_VISION_PDF"]
+
+
+def ensure_dummy_vision_pdf(workspace: Path, *, repo_root: Path | None = None) -> Path:
+    """
+    Garantisce che esista un VisionStatement.pdf leggibile nel workspace dummy.
+
+    - Se il PDF manca o è vuoto, prova a copiarlo dal template del repo (config/VisionStatement.pdf).
+    - Se il template non è presente o non leggibile, genera un PDF minimale di default.
+    Ritorna sempre il path del PDF nel workspace.
+    """
+    pdf_target = workspace / "config" / "VisionStatement.pdf"
+    pdf_target.parent.mkdir(parents=True, exist_ok=True)
+
+    def _is_invalid(path: Path) -> bool:
+        try:
+            return (not path.exists()) or path.stat().st_size <= 0
+        except Exception:
+            return True
+
+    if _is_invalid(pdf_target):
+        repo_root_resolved = repo_root or workspace.parents[2]
+        repo_pdf = repo_root_resolved / "config" / "VisionStatement.pdf"
+        pdf_bytes: bytes
+        if repo_pdf.exists():
+            try:
+                with repo_pdf.open("rb") as handle:
+                    pdf_bytes = handle.read()
+            except Exception:
+                pdf_bytes = DEFAULT_VISION_PDF
+        else:
+            pdf_bytes = DEFAULT_VISION_PDF
+        try:
+            if safe_write_bytes:
+                safe_write_bytes(pdf_target, pdf_bytes, atomic=True)
+            else:  # pragma: no cover - fallback
+                with pdf_target.open("wb") as handle:
+                    handle.write(pdf_bytes)
+        except Exception:
+            # se la scrittura fallisce, lascia invariato il path (fallirà a valle)
+            pass
+    return pdf_target

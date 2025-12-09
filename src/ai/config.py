@@ -14,29 +14,43 @@ from .types import AssistantConfig
 LOGGER = get_structured_logger("ai.config")
 
 
-def _get_from_settings(settings: Any, path: str) -> Any:
+def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
     """
     Recupera un valore da Settings o da un Mapping usando una path dot-separated.
-    Tollerante ad assenze: restituisce None se non risolvibile.
+    - Prima prova settings.get(path); se restituisce un valore non-None, lo ritorna.
+    - Altrimenti prova a navigare settings.as_dict() (se esiste) o il mapping stesso.
+    - Se una chiave manca, restituisce default.
     """
     parts = path.split(".")
 
+    # 1) Tentativo diretto via .get (se presente)
     if hasattr(settings, "get"):
         try:
-            return settings.get(path)
+            value = settings.get(path)
+            if value is not None:
+                return value
         except Exception:
             pass
 
-    if isinstance(settings, Mapping):
-        current: Any = settings
-        for part in parts:
-            if isinstance(current, Mapping) and part in current:
-                current = current.get(part)
-            else:
-                return None
-        return current
+    # 2) Fallback: as_dict() oppure mapping diretto
+    mapping: Any = None
+    if hasattr(settings, "as_dict"):
+        try:
+            mapping = settings.as_dict()
+        except Exception:
+            mapping = None
+    if mapping is None and isinstance(settings, Mapping):
+        mapping = settings
+    if not isinstance(mapping, Mapping):
+        return default
 
-    return None
+    current: Any = mapping
+    for part in parts:
+        if isinstance(current, Mapping) and part in current:
+            current = current.get(part)
+        else:
+            return default
+    return current
 
 
 def _extract_context_settings(ctx: Any) -> Tuple[Optional[Settings], Mapping[str, Any]]:
