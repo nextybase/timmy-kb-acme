@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from pathlib import Path
 
-from pypdf import PdfReader
+try:
+    from pypdf import PdfReader
+except Exception:  # pragma: no cover - dipendenza opzionale in alcuni ambienti
+    PdfReader = None  # type: ignore
 
 
 class PdfExtractError(Exception):
@@ -14,6 +17,9 @@ def extract_text_from_pdf(path: Path) -> list[str]:
     Solleva PdfExtractError per file mancanti, corrotti o non leggibili.
     Ritorna una lista di stringhe, una per pagina.
     """
+    if PdfReader is None:
+        raise PdfExtractError("Dipendenza 'pypdf' non disponibile: installare il pacchetto per l'estrazione PDF.")
+
     pdf_path = Path(path)
     if not pdf_path.is_file():
         raise PdfExtractError(f"PDF non trovato: {pdf_path}")
