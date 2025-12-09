@@ -999,7 +999,7 @@ def _persist_outputs(
     safe_write_text(prepared.paths.mapping_yaml, mapping_yaml_str)
 
     doc_map = payload.get("entity_to_document_type", {})
-    raw_folders = None
+    raw_folders: dict[str, list[str]] | None = None
     if isinstance(doc_map, dict) and doc_map:
         codes = [str(code).strip() for code in doc_map.values() if str(code).strip()]
         raw_folders = {code: [] for code in codes}
@@ -1250,7 +1250,7 @@ def _call_responses_json(
         )
         raise ConfigError(f"Responses API fallita: {exc}") from exc
 
-    return resp.data
+    return cast(Dict[str, Any], resp.data)
 
 
 def _parse_json_output(text: Optional[str], assistant_id: str, *, source: str) -> Dict[str, Any]:
@@ -1296,12 +1296,13 @@ def _parse_json_output(text: Optional[str], assistant_id: str, *, source: str) -
                 pass
             # Tolleranza minima: se l'output è racchiuso in ```...``` o ```json ...```, rimuovi i fence.
             text = _strip_code_fences(stripped)
+    text_value = text if isinstance(text, str) else str(text)
     try:
-        return _try_json_load(text)  # type: ignore[arg-type]
+        return _try_json_load(text_value)
     except json.JSONDecodeError as exc:
         # Se arrivano fence ```...``` non rimossi o testo extra, prova un parse best-effort sul blocco tra i fence.
-        if isinstance(text, str) and "```" in text:
-            fences = text.split("```")
+        if isinstance(text_value, str) and "```" in text_value:
+            fences = text_value.split("```")
             for chunk in fences:
                 candidate = _strip_code_fences(chunk)
                 if not candidate:

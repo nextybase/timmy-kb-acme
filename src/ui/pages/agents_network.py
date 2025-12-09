@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Tuple, cast
+from typing import Callable, Dict, List, Protocol, Tuple, cast
 
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -17,7 +17,14 @@ from ui.utils.stubs import get_streamlit
 st = get_streamlit()
 LOGGER = get_structured_logger("ui.agents_network")
 
-CacheDecorator = Callable[[Callable[[str], str]], Callable[[str], str]]
+
+class CachedMarkdownFn(Protocol):
+    def __call__(self, rel_path: str) -> str: ...
+
+    def clear(self) -> None: ...
+
+
+CacheDecorator = Callable[[Callable[[str], str]], CachedMarkdownFn]
 cache_markdown = cast(CacheDecorator, st.cache_data(show_spinner=False))
 
 
@@ -314,8 +321,11 @@ def _open_markdown_modal(title: str, rel_path: str, *, editable: bool = True) ->
         sections = []
 
     if _supports_dialog():
+        dialog_builder = cast(
+            Callable[[str], Callable[[Callable[[], None]], Callable[[], None]]], getattr(st, "dialog")
+        )
 
-        @st.dialog(f"Dettaglio - {title}")
+        @dialog_builder(f"Dettaglio - {title}")
         def _modal() -> None:
             _inject_wide_dialog_css()
             st.markdown(f"### {title}")

@@ -117,7 +117,7 @@ class ClientEntry:
     dummy: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        payload = {"slug": self.slug, "nome": self.nome, "stato": self.stato}
+        payload: dict[str, Any] = {"slug": self.slug, "nome": self.nome, "stato": self.stato}
         if self.created_at:
             payload["created_at"] = self.created_at
         if self.dummy is not None:

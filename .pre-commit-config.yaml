@@ -83,7 +83,7 @@ repos:
         name: mypy
         entry: mypy
         language: python
-        additional_dependencies: ["mypy", "types-PyYAML"]
+        additional_dependencies: ["mypy", "types-PyYAML", "types-requests==2.32.4.20250809"]
         files: ^src/(config_ui/|pipeline/drive/)|^src/pipeline/drive_utils\.py$
         pass_filenames: false
         args: ["--config-file", "mypy.ini"]
@@ -126,6 +126,7 @@ repos:
         additional_dependencies: [
             "PyMuPDF==1.24.14",
             "PyPDF2==3.0.1",
+            "pypdf==6.4.0",
             "pydantic==2.7.1",
             "pydantic-settings==2.0.0",
             "python-dotenv==1.0.1",

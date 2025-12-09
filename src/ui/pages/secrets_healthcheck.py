@@ -10,7 +10,7 @@ Secrets Healthcheck: panoramica delle variabili d'ambiente sensibili.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, cast
 
 import yaml
 
@@ -123,9 +123,11 @@ def main() -> None:
 
     # Modal (se disponibile) per mostrare l'howto dettagliato
     dialog_factory = getattr(st, "dialog", None)
-    if dialog_factory is not None:
+    if callable(dialog_factory):
+        DialogFactory = Callable[[str], Callable[[Callable[[], None]], Callable[[], None]]]
+        dialog = cast(DialogFactory, dialog_factory)
 
-        @dialog_factory("Guida variabile d'ambiente")  # type: ignore[misc]
+        @dialog("Guida variabile d'ambiente")
         def _show_secret_dialog() -> None:
             name = st.session_state.get("secret_info_name")
             if not name:

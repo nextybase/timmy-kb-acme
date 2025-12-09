@@ -4,7 +4,7 @@ from pathlib import Path
 try:
     from pypdf import PdfReader
 except Exception:  # pragma: no cover - dipendenza opzionale in alcuni ambienti
-    PdfReader = None  # type: ignore
+    PdfReader = None
 
 
 class PdfExtractError(Exception):

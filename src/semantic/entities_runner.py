@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, cast
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
@@ -30,7 +30,7 @@ LOG = get_structured_logger("semantic.entities_runner")
 
 def _read_document_text(pdf_path: Path) -> str:
     doc = read_document(pdf_path)
-    return doc.full_text
+    return cast(str, doc.full_text)
 
 
 def _load_spacy(model_name: str) -> Any:

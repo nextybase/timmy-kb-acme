@@ -87,6 +87,7 @@ def _load_semantic_bindings() -> tuple[
     from ...semantic.vision_provision import provision_from_vision as fallback_provision
     from ...semantic.vision_provision import provision_from_vision_yaml as fallback_provision_yaml
 
+    fallback_prepare_yaml: Optional[_PreparePromptYamlFunc]
     try:
         from ...semantic.vision_provision import prepare_assistant_input_from_yaml as fallback_prepare_yaml
     except Exception:

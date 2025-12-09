@@ -26,7 +26,7 @@ vision_run_params = SimpleNamespace(run_for_vision=SimpleNamespace(use_kb=False)
 def _read_pdf_text(pdf_path: Path) -> str:
     try:
         doc = read_document(pdf_path)
-        return doc.full_text
+        return cast(str, doc.full_text)
     except Exception as exc:  # pragma: no cover
         raise RuntimeError(f"Impossibile leggere il PDF: {exc}") from exc
 

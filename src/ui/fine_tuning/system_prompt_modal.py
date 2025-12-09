@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
@@ -94,7 +94,10 @@ def _join_sections(sections: Dict[str, str]) -> str:
 
 def _resolve_ui_assistant_id() -> str:
     """Risoluzione assistant_id: OBNEXT_ASSISTANT_ID -> ASSISTANT_ID -> errore."""
-    asst_id = get_env_var("OBNEXT_ASSISTANT_ID", default=None) or get_env_var("ASSISTANT_ID", default=None)
+    asst_id = cast(
+        Optional[str],
+        get_env_var("OBNEXT_ASSISTANT_ID", default=None) or get_env_var("ASSISTANT_ID", default=None),
+    )
     if not asst_id:
         raise ConfigError("Assistant ID mancante (env: OBNEXT_ASSISTANT_ID o ASSISTANT_ID).")
     return asst_id

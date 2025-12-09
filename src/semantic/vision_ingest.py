@@ -2,17 +2,20 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Optional
 
 import yaml
 
 from semantic.document_ingest import DocumentContent, read_document
 
+safe_write_text: Optional[Callable[[Path, str], Any]]
 try:
     # Usato per scrittura atomica e sicura, coerente con gli altri moduli.
-    from pipeline.file_utils import safe_write_text
+    from pipeline.file_utils import safe_write_text as _safe_write_text
+
+    safe_write_text = _safe_write_text
 except Exception:  # pragma: no cover - fallback se l'import fallisce in ambienti limitati
-    safe_write_text = None  # type: ignore[misc]
+    safe_write_text = None
 
 
 def _build_payload(source_path: Path, pages: list[str], sha256: str) -> Dict[str, Any]:

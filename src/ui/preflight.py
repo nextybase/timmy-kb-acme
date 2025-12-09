@@ -6,7 +6,7 @@ import json
 import os
 import socket
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Any, Callable, Iterable, List, Tuple, cast
 
 try:
     from dotenv import load_dotenv
@@ -34,9 +34,9 @@ DEPENDENCY_CHECKS = [
 
 def _maybe_load_dotenv() -> None:
     """Carica .env solo quando serve (no side-effects a import-time)."""
-    loaders = []
+    loaders: list[Callable[[], None]] = []
     if load_dotenv:
-        loaders.append(lambda: load_dotenv(override=False))
+        loaders.append(lambda: cast(Callable[..., None], load_dotenv)(override=False))
     loaders.append(ensure_dotenv_loaded)
 
     for fn in loaders:
@@ -129,7 +129,7 @@ def _has_openai_key() -> bool:
 
 def _vision_schema_ok() -> tuple[bool, str]:
     def _resolve_schema_path(repo_root: Path) -> Path:
-        return ensure_within_and_resolve(repo_root, repo_root / "schemas" / "VisionOutput.schema.json")
+        return cast(Path, ensure_within_and_resolve(repo_root, repo_root / "schemas" / "VisionOutput.schema.json"))
 
     def _load_schema_text(repo_root: Path, schema_path: Path) -> tuple[bool, str]:
         if not schema_path.exists():
@@ -137,13 +137,13 @@ def _vision_schema_ok() -> tuple[bool, str]:
         schema_text = read_text_safe(repo_root, schema_path, encoding="utf-8")
         return True, schema_text
 
-    def _parse_schema(schema_text: str) -> tuple[bool, dict | str]:
+    def _parse_schema(schema_text: str) -> tuple[bool, dict[str, Any] | str]:
         try:
             return True, json.loads(schema_text)
         except json.JSONDecodeError as exc:
             return False, f"schema JSON invalido: {exc}"
 
-    def _compare_required(schema: dict) -> tuple[bool, str]:
+    def _compare_required(schema: dict[str, Any]) -> tuple[bool, str]:
         props = set(schema.get("properties", {}).keys())
         required = set(schema.get("required", []))
         missing = props - required
@@ -170,7 +170,7 @@ def _vision_schema_ok() -> tuple[bool, str]:
     if not parsed_ok:
         return False, str(parsed)
 
-    return _compare_required(parsed)
+    return _compare_required(cast(dict[str, Any], parsed))
 
 
 def _collect_schema_checks() -> list[CheckItem]:

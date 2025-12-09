@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
@@ -35,7 +35,7 @@ def _read_markdown_text(md_path: Path) -> str:
     md_path = md_path.expanduser().resolve()
     if not md_path.is_file():
         raise FileNotFoundError(f"Markdown non trovato: {md_path}")
-    safe_md = ensure_within_and_resolve(md_path.parent, md_path)
+    safe_md = cast(Path, ensure_within_and_resolve(md_path.parent, md_path))
     with safe_md.open("r", encoding="utf-8") as handle:
         return handle.read()
 
@@ -46,9 +46,9 @@ def _resolve_markdown_path_from_raw(raw_path: Path, *, workspace_root: Path) -> 
 
     Convenzione: raw/<categoria>/file.pdf -> book/<categoria>/file.md
     """
-    raw_root = ensure_within(workspace_root, workspace_root / "raw")
+    raw_root = cast(Path, ensure_within(workspace_root, workspace_root / "raw"))
     rel = raw_path.resolve().relative_to(raw_root)
-    md_root = ensure_within(workspace_root, workspace_root / "book")
+    md_root = cast(Path, ensure_within(workspace_root, workspace_root / "book"))
     return md_root / rel.with_suffix(".md")
 
 
