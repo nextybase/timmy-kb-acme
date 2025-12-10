@@ -32,5 +32,5 @@ Regole per l’area AI (`src/ai/`), con focus su integrazione OpenAI/SDK, SSoT d
 
 - `docs/AGENTS_INDEX.md`
 - `docs/runbook_codex.md`
-- `docs/codex_integrazione.md`
+- `docs/guida_codex.md`
 - `src/ai/client_factory.py`

@@ -1,125 +1,54 @@
-# Runbook Codex - Timmy KB (v1.0 Beta)
+# Runbook Codex – Timmy KB (v1.0 Beta)
 
-> Questo runbook e' la guida **operativa** per lavorare in sicurezza ed efficacia sul repository **Timmy KB** con approccio *Agent-first* e supervisione **HiTL**. E' la fonte principale per i flussi quotidiani; i dettagli di design vivono negli altri documenti tecnici indicati nei rimandi.
+> This runbook is the operational guide for working safely and effectively on the Timmy KB repository with an agent-first, HiTL approach. It serves as the day-to-day reference for flows; design details live in the supporting documents cited below.
 
-- **Audience:** developer, tech writer, QA, maintainers, agent "Codex" (repo-aware).
-- **Scope:** operazioni locali, UI/CLI, integrazioni OpenAI/Drive/GitHub, sicurezza I/O e path-safety, qualita', rollback e risoluzione problemi.
-- **Rimandi canonici:** [Developer Guide](developer_guide.md), [Coding Rules](coding_rule.md), [Architecture Overview](architecture.md), [AGENTS Index](AGENTS_INDEX.md), [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md), [User Guide](user_guide.md).
+- **Audience:** developers, tech writers, QA, maintainers, and the repo-aware agent Codex.
+- **Scope:** local operations, UI/CLI flows, OpenAI/Drive/GitHub integrations, secure I/O and path safety, rollback, and incident response.
+- **Canonical references:** [Developer Guide](developer_guide.md), [Coding Rules](coding_rule.md), [Architecture Overview](architecture.md), [AGENTS Index](AGENTS_INDEX.md), [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md), [User Guide](user_guide.md).
 
-## Mappa visuale del sistema Codex (Repo-aware, v2)
+## Visual summary of the Codex system
 
-Di seguito una rappresentazione ASCII del flusso completo che governa l’esecuzione
-di Codex nel repository, integrando policy (AGENTS_INDEX), regole locali (AGENTS),
-prompt operativi (PROMPTS.md), runbook e workflow tecnici.
+This repository blends the shared policies (`docs/AGENTS_INDEX.md`), area overrides (`AGENTS.md`), prompt APIs (`.codex/PROMPTS.md`), the runbook, and workflow documentation. Codex follows the integration guidelines (`docs/guida_codex.md`) and uses the Onboarding Task as the entry point. The flow is: AGENTS → Onboarding prompt → micro-PR + QA → matrix updates.
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    CODICE DI GOVERNO DEL REPO                │
-└──────────────────────────────────────────────────────────────┘
-
-                 ┌───────────────────────────────┐
-                 │    docs/AGENTS_INDEX.md       │
-                 └───────────────┬───────────────┘
-                                 │
-                                 ▼
-                     ┌─────────────────────┐
-                     │ AGENTS.md (area)    │
-                     └───────────┬─────────┘
-                                 │
-                                 ▼
-               ┌─────────────────────────────────┐
-               │ ~/.codex/AGENTS.md (preferenze) │
-               └─────────────────┬───────────────┘
-                                 │
-                                 ▼
-          ┌───────────────────────────────────────────────┐
-          │ .codex/PROMPTS.md = API operativa Codex       │
-          │ - Task di avvio                               │
-          │ - Onboarding Task Codex                       │
-          │ - micro-PR + QA + safety                      │
-          └──────────────────────────┬────────────────────┘
-                                     │
-                                     ▼
-                      ┌─────────────────────────┐
-                      │ docs/runbook_codex.md   │
-                      └─────────────┬───────────┘
-                                    │
-                                    ▼
-                         ┌──────────────────────┐
-                         │ .codex/WORKFLOWS.md │
-                         └──────────┬──────────┘
-                                    │
-                                    ▼
-                 ┌────────────────────────────────────────┐
-                 │ Azione Codex (refactor / feature / UI) │
-                 │ - collector + orchestratore            │
-                 │ - path-safety                          │
-                 │ - log strutturati                      │
-                 └────────────────────────────────────────┘
-                                    │
-                                    ▼
-               ┌────────────────────────────────────┐
-               │ micro-PR idempotente + QA locale   │
-               └────────────────────┬───────────────┘
-                                    │
-                                    ▼
-                   ┌────────────────────────────────┐
-                   │ Aggiornamento Matrice AGENTS   │
-                   └────────────────────────────────┘
-```
-
-> **Nota:** questo runbook si integra con il documento
-> **[`docs/codex_integrazione.md`](codex_integrazione.md)**
-> che definisce il *Workflow Codex + Repo-Aware (v2)*, l’uso dei tre SSoT (AGENTS_INDEX, AGENTS di area, `~/.codex/AGENTS.md`),
-> e l’entrypoint operativo *Onboarding Task Codex*.
-> Il runbook resta la guida pratica per l’esecuzione dei flussi, mentre `codex_integrazione.md` definisce il modello mentale e metodologico.
+> Note: `docs/guida_codex.md` describes the mental model for the Codex + Repo-aware workflow (v2) and mandates the three SSoT documents (AGENTS index, area AGENTS, `~/.codex/AGENTS.md`). The runbook remains the practical flow guide.
 
 ---
 
-## 1) Prerequisiti & setup rapido
+## 1) Prerequisites & quick setup
 
-**Tooling minimo**
-- Python **>= 3.11**, `pip`, `pip-tools`; (opz.) **Docker** per preview HonKit.
-  Vedi anche README -> *Prerequisiti rapidi*.
-- Credenziali: `OPENAI_API_KEY`, `GITHUB_TOKEN`; per Drive: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`. <!-- pragma: allowlist secret -->
-- Pre-commit: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
-- Preflight UI: verifica che i moduli pipeline siano importabili dalla stessa root della UI; in caso di mismatch attiva il venv corretto ed esegui `pip install -e .` dal root del repo.
+### Minimal tooling
+- Python **>= 3.11**, pip, pip-tools; optional Docker for HonKit preview.
+- Required credentials: `OPENAI_API_KEY`, `GITHUB_TOKEN`. Drive access also needs `SERVICE_ACCOUNT_FILE` and `DRIVE_ID`. <!-- pragma: allowlist secret -->
+- Install pre-commit hooks: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
+- Ensure the pipeline modules import from the same repo root as the UI; activate the correct venv and run `pip install -e .` at the repo root if necessary.
 
-**Ambiente**
+### Environment setup
 ```bash
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
-pip install -r requirements-optional.txt   # se serve Drive
+pip install -r requirements-optional.txt   # for Drive integration
 make qa-safe
 pytest -q
 ```
-Riferimenti: [README](../README.md), [Developer Guide -> Dipendenze & QA](developer_guide.md).
 
-### Workflow Codex (operativo) – Allineamento rapido
-- Prima di eseguire attività di sviluppo/refactor, l’agente Codex deve caricare i tre SSoT:
-  `docs/AGENTS_INDEX.md` + `AGENTS.md` dell’area + `~/.codex/AGENTS.md`.
-- L’entrypoint suggerito è **Onboarding Task Codex** definito in `.codex/PROMPTS.md`.
-- Ogni intervento deve produrre una *micro-PR* idempotente, con QA documentata nel messaggio finale.
-- I flussi e le azioni Codex devono essere coerenti con le policy del runbook e la Matrice AGENTS.
+References: [README](../README.md), [Developer Guide → Dependencies & QA](developer_guide.md).
 
-### Integrazione con `.codex/PROMPTS.md` (obbligatoria)
-- I prompt in `.codex/PROMPTS.md` costituiscono la **API operativa** ufficiale per l’agente Codex.
-- Prima di ogni task agent-based, Codex esegue il blocco “Task di avvio” definito in `.codex/PROMPTS.md`: lettura di `docs/AGENTS_INDEX.md`, dell’`AGENTS.md` dell’area, di `.codex/AGENTS.md` e di questo stesso runbook.
-- Il prompt **Onboarding Task Codex** è l’entrypoint vincolante per i task di sviluppo/refactor:
-  - definisce il piano di lavoro prima delle modifiche,
-  - impone micro-PR non-breaking,
-  - applica la checklist QA (path-safety, scritture atomiche, logging strutturato),
-  - richiede l’aggiornamento della documentazione e della matrice AGENTS quando toccate.
-- In questo modo tutti i flussi descritti nel runbook restano allineati alle regole operative codificate in `.codex/PROMPTS.md`.
+### Codex operational alignment
+- Before any work, the Codex agent loads the three SSoT documents (`docs/AGENTS_INDEX.md`, the relevant `AGENTS.md`, and `~/.codex/AGENTS.md`) and uses `.codex/PROMPTS.md` as the API.
+- The recommended entry point is the Onboarding Task Codex; it inflicts a plan-first, micro-PR, QA-compliant workflow and insists on updating the documentation and AGENTS matrix when touched.
+- Codex flows must remain consistent with the policies in this runbook and the AGENTS matrix.
+
+### Codex integration
+- `.codex/PROMPTS.md` defines the operational API for Codex.
+- Before each agent-based job, run the startup block: read `docs/AGENTS_INDEX.md`, the relevant area `AGENTS.md`, `.codex/AGENTS.md`, and this runbook.
+- The Onboarding Task codex prompt enforces planning, micro-PR behavior, QA guardrails (path safety, atomic writes, structured logging), and AGENTS matrix maintenance.
 
 ---
 
-## 2) Configurazione: `.env` (segreti) vs `config/config.yaml` (config)
+## 2) Configuration: secrets vs versioned config
 
-- **SSoT:** segreti **fuori** repo in `.env`; configurazione applicativa **versionata** in `config/config.yaml`.
-  Esempi e policy: [docs/configurazione.md](configurazione.md).
-
-**Esempio corretto (`config/config.yaml`, vedi anche `config/config.example.yaml`):**
+- **SSoT:** keep secrets outside the repo (`.env`), and versioned configuration inside `config/config.yaml`. Reference: [docs/configurazione.md](configurazione.md).
+- Example snippet (for reference: `config/config.yaml`, see also `config/config.example.yaml`):
 ```yaml
 meta:
   client_name: "Cliente Demo"
@@ -149,298 +78,264 @@ pipeline:
     ttl_seconds: 300
     max_entries: 8
 ```
-**Regole operative**
-- Le chiamate **dirette** leggono `ai.vision.model` (UI/CLI).
-- Il flusso **Assistant** usa l'ID letto da `ai.vision.assistant_id_env` (ENV).
-- La UI legge il modello tramite `get_vision_model()` (SSoT).
-- Il retriever applica i limiti da `pipeline.retriever.throttle.*` (candidate_limit, latency, parallelism).
-- Il retriever logga `retriever.query.embed_failed` e short-circuita a `[]` su errori embedding; se `latency_budget_ms` e gia esaurito interrompe prima di embedding/fetch.
-- I flag `ui.allow_local_only` e `ui.admin_local_mode` governano gating e accesso al pannello Admin.
 
-Riferimenti: [Developer Guide -> Configurazione](developer_guide.md), [Configuration](configurazione.md).
+- Operational rules:
+  - CLI/UI consumers read `ai.vision.model`.
+  - The Assistant flow uses `ai.vision.assistant_id_env` for the ENV override.
+  - UI obtains the model via `get_vision_model()` (SSoT).
+  - Retriever adheres to throttle limits and logs `retriever.query.embed_failed`, short-circuiting to an empty result when budgets are exhausted.
+  - Flags such as `ui.allow_local_only` and `ui.admin_local_mode` gate Admin access.
 
----
-
-## 3) Sicurezza & path-safety (vincolante)
-
-- **Path-safety:** qualsiasi I/O passa da `pipeline.path_utils.ensure_within*`.
-- **Scritture atomiche:** `pipeline.file_utils.safe_write_text/bytes` (temp + replace).
-- **Logging strutturato:** `pipeline.logging_utils.get_structured_logger` con **redazione** segreti quando `LOG_REDACTION` e' attivo.
-  - Rotazione file configurabile via ENV `TIMMY_LOG_MAX_BYTES` / `TIMMY_LOG_BACKUP_COUNT` (default 1 MiB, 3 backup).
-  - I log cliente vivono in `output/timmy-kb-<slug>/logs/`; i log UI globali in `.timmykb/logs/`. Entrambi sono consultabili dalla pagina Streamlit **Log dashboard**.
-  - L'entrypoint UI crea automaticamente `.timmykb/logs/ui.log` con handler condiviso; Promtail estrae `run_id` e (se OTEL attivo) `trace_id`/`span_id` dai log per la correlazione Grafana.
-  - `TIMMY_LOG_PROPAGATE` forza la propagazione verso handler parent; senza override rimane `False` per evitare duplicazioni console.
-  - Export tracing (OTLP/HTTP) con `TIMMY_OTEL_ENDPOINT` + `TIMMY_SERVICE_NAME` + `TIMMY_ENV`: `phase_scope` aggiunge `trace_id`/`span_id` ai log e crea span nidificati.
-- **Hash & masking:** le funzioni `hash_identifier` / `sha256_path` producono digest a 32 caratteri e accettano `TIMMY_HASH_SALT` per rafforzare l'entropia dei log; `mask_id_map` resta la via raccomandata per extra sensibili.
-- **Cache RAW PDF:** `iter_safe_pdfs` usa cache LRU con TTL/cap configurabili in `config/config.yaml` (`pipeline.raw_cache.ttl_seconds`/`max_entries`); le scritture PDF con `safe_write_*` invalidano e pre-riscaldano la cache.
-- **Cache frontmatter Markdown (refresh):** dopo le write il contenuto e riallineato nella cache LRU (256 entry); i workflow semantici orchestrati da `semantic.api` svuotano sempre la cache a fine run per evitare riuso involontario di stato nella stessa process.
-- **Cache frontmatter Markdown:** `_FRONTMATTER_CACHE` e LRU bounded (256 entry) con promotion; nei run lunghi (UI/CLI) puoi chiamare `clear_frontmatter_cache()` per liberare memoria o isolare batch non semantici.
-- **UI import-safe:** nessun side-effect a import-time; wrapper mantengono la **parita' di firma** col backend.
-- **Download Drive safe-by-default:** la modale UI scarica solo i PDF mancanti; per sovrascrivere attiva il toggle *"Sovrascrivi i file locali in conflitto"* (abilitato solo se il piano rileva conflitti) oppure rimuovi/rinomina i file a mano.
-- **Preview stub log dir:** `PREVIEW_LOG_DIR` puo' indicare anche un path assoluto; se la directory non e' raggiungibile la UI avvisa e ripiega su `logs/preview` sotto il repository.
-- **Ingest telemetry:** `ingest_path` / `ingest_folder` emettono `phase_scope` (`ingest.embed`, `ingest.persist`, `ingest.process_file`, `ingest.summary`) con `artifact_count` impostato ai chunk/embedding salvati; usa questi eventi per dashboard e alerting sul flusso di ingestion.
-- **Ingest streaming:** `ingest_folder` processa i glob in streaming (`iglob`) e accetta i limiti opzionali `max_files` / `batch_size` per throttling su corpus molto grandi; sfruttali negli script di migrazione per evitare OOM.
-
-**Snippet tipici**
-```python
-from pipeline.path_utils import ensure_within_and_resolve
-from pipeline.file_utils import safe_write_text
-from pipeline.logging_utils import get_structured_logger
-
-log = get_structured_logger("ui.manage.tags", context={"slug": "acme"})
-yaml_path = ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml")
-safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True)
-log.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
-```
-
-Riferimenti: [Developer Guide -> Logging](developer_guide.md), [Coding Rules -> I/O sicuro & Path-safety](coding_rule.md).
+References: [Developer Guide → Configuration](developer_guide.md), [Configuration Overview](configurazione.md).
 
 ---
 
-### Stack osservabilita (Loki/Grafana/Promtail)
+## 3) Security & path safety (mandatory)
 
-- Config pronta in `observability/docker-compose.yaml` + `observability/promtail-config.yaml`.
-- Promtail monta `../output/` e `../.timmykb/logs/` (relative alla cartella `observability/`), legge `*.log`, estrae le label `slug`, `run_id`, `event` dalle tuple `key=value` dei log Timmy.
-- Avvio locale:
-  ```bash
-  cd observability
-  docker compose up -d
-  ```
-  Grafana: `http://localhost:3000` (`admin`/`admin` da cambiare via `GF_SECURITY_ADMIN_PASSWORD`), Loki: `http://localhost:3100`.
-- Spegnimento: `docker compose down`. Per ambienti Windows ricordarsi di condividere i percorsi `output` e `.timmykb` con Docker Desktop.
-- Il docker compose ora include anche `tempo` (porta 3200/4317) e `otel-collector` (porta 4318) per esporre il tracing; il collector riceve OTLP HTTP dal TIMMY_OTEL_ENDPOINT del host e invia OTLP gRPC a Tempo, che a sua volta viene collegato da Grafana tramite il datasource `Tempo`.
-- Le stesse operazioni possono essere eseguite anche dalla UI *Log dashboard* (Start/Stop Stack) o dallo script `tools/observability_stack.py` che chiama `docker compose` con gli stessi file `.env`/compose della UI. Lancia `python tools/observability_stack.py start|stop` e, se hai bisogno di percorsi alternativi, usa `--env-file` e `--compose-file` (o imposta `TIMMY_OBSERVABILITY_ENV_FILE` / `TIMMY_OBSERVABILITY_COMPOSE_FILE`).
+- **Path safety:** route all I/O through `pipeline.path_utils.ensure_within*`.
+- **Atomic writes:** use `pipeline.file_utils.safe_write_text/bytes` with temporary files and replacements.
+- **Structured logging:** use `pipeline.logging_utils.get_structured_logger`, enabling redaction when `LOG_REDACTION` is active.
+  - Log rotation is adjustable via `TIMMY_LOG_MAX_BYTES` and `TIMMY_LOG_BACKUP_COUNT`.
+  - Customer logs live in `output/timmy-kb-<slug>/logs/`; global UI logs are in `.timmykb/logs/`.
+  - The UI entrypoint writes `.timmykb/logs/ui.log` with shared handlers; Promtail augments logs with `run_id`, `trace_id`, and `span_id`.
+  - `TIMMY_LOG_PROPAGATE` forces handler propagation; avoid console duplication by not overriding it unless required.
+  - OTLP tracing uses `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, and `TIMMY_ENV`.
+- **Hashing & masking:** use `hash_identifier`/`sha256_path` with `TIMMY_HASH_SALT`, and prefer `mask_id_map` for sensitive extras.
+- **RAW PDF cache:** `iter_safe_pdfs` uses an LRU cache controlled by config TTL and size; safe writes invalidate and preload caches.
+- **Frontmatter caching:** post-write cache alignment with a 256-entry LRU; `semantic.api` clears caches after runs to avoid stale reuse.
+- **UI import safety:** avoid import-time side effects; wrappers must keep signature parity with the backend.
+- **Drive downloads:** UI downloads only missing PDFs. To overwrite, toggle "Overwrite conflicting local files" or manually rename files.
+- **Preview stubs:** `PREVIEW_LOG_DIR` may point to absolute paths; if unreachable, fallback to `logs/preview` and notify the user.
+- **Ingest telemetry:** events such as `ingest.embed`, `ingest.persist`, `ingest.process_file`, `ingest.summary` must include `artifact_count`. Use these for dashboards and alerts.
+- **Streaming ingest:** `ingest_folder` runs streaming globs with throttling controls (`max_files`, `batch_size`) to prevent OOM in migrations.
 
----
-
-## 4) Flussi operativi (UI/CLI) - panoramica
-
-> Obiettivo: trasformare PDF -> **KB Markdown AI-ready** con frontmatter coerente, README/SUMMARY, preview HonKit e push opzionale su GitHub.
-
-**End-to-end (workflow standard)**
-1. **pre_onboarding** -> crea workspace `output/timmy-kb-<slug>/...`, opz. provisioning Drive + upload config.
-2. **tag_onboarding** -> `semantic/tags_raw.csv` + **checkpoint HiTL** -> `tags_reviewed.yaml` (authoring).
-3. **semantic_onboarding** (via `semantic.api`) -> **PDF->Markdown** (`book/`), **frontmatter enrichment** (SSoT `semantic/tags.db`), **README/SUMMARY** e preview **Docker**; le fasi condividono l'orchestratore `_run_build_workflow` e loggano `semantic.book.frontmatter`.
-4. **onboarding_full** -> preflight (solo `.md` in `book/`) -> **push GitHub**.
-
-**Gating UX (UI)**
-- La tab **Semantica** si abilita **solo** se `raw/` locale e' presente.
-- Preview Docker: validazione porta e `container_name` sicuro.
-- Telemetria semantica: `semantic.book.frontmatter` logga il numero di file arricchiti (UI/CLI).
-
-Riferimenti: [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [User Guide](user_guide.md), [Architecture](architecture.md).
+### Observability stack
+- Config lives in `observability/docker-compose.yaml` and `observability/promtail-config.yaml`.
+- Promtail monitors `../output/` and `../.timmykb/logs/`, tagging logs with `slug`, `run_id`, and `event`.
+- Start locally with `docker compose up -d` inside `observability/`; Grafana listens on port 3000, Loki on 3100. Remember to map `output` and `.timmykb` in Docker Desktop on Windows.
+- Newer stack includes `tempo` (ports 3200/4317) and `otel-collector` (port 4318) for OTLP tracing.
+- The UI log dashboard or `tools/observability_stack.py` can pulse the stack with the same env/compose files.
 
 ---
 
-## 5) Scenari Codex (repository-aware)
+## 4) Operational flows (UI/CLI)
 
-> Lo scenario **Agent** e' predefinito; **Full Access** e' eccezione con branch dedicati. Chat "solo testo" e' possibile ma **non** effettua write/push.
+> Objective: turn PDFs into KB Markdown with coherent frontmatter, README/SUMMARY updates, a HonKit Docker preview, and an optional GitHub push.
 
-### 5.0 Principi operativi comuni (v2)
-- Lo scenario **Agent** è predefinito; usa path-safety, scritture atomiche e aggiornamento docs/test.
-- Tutte le attività devono rispettare:
-  - workflow Codex v2 (`codex_integrazione.md`)
-  - perimetro AGENTS (AGENTS_INDEX + AGENTS locali)
-  - micro-PR + QA esplicita.
-- I prompt Codex vanno selezionati da `.codex/PROMPTS.md`; l’entrypoint raccomandato è **Onboarding Task Codex**.
-- Il modello a tre attori (Sviluppatore ↔ Codex ↔ Senior Reviewer) guida la collaborazione per i task sensibili.
+### Standard workflow
+1. **pre_onboarding:** create the workspace (`output/timmy-kb-<slug>/...`), optionally provision Drive, and upload `config.yaml`.
+2. **tag_onboarding:** produce `semantic/tags_raw.csv` and the HiTL checkpoint `tags_reviewed.yaml`.
+3. **semantic_onboarding (via `semantic.api`):** convert PDFs to Markdown in `book/`, enrich frontmatter using `semantic/tags.db`, and rebuild README/SUMMARY with Docker preview orchestration.
+4. **onboarding_full:** run Markdown preflight on `book/` and perform the GitHub push.
 
-### 5.1 Scenario *Chat*
-- Solo reasoning/risposte; nessun I/O. Utile per grooming, draft e check veloci.
+### UI gating
+- Enable the Semantica tab only once local RAW data exists.
+- Docker preview needs safe port validation and container naming.
+- Telemetry event `semantic.book.frontmatter` tracks enriched file counts.
 
-### 5.2 Scenario *Agent* (consigliato)
-- L'agente opera **on-rails**: path-safety, scritture atomiche, micro-PR, aggiornamento docs/test nello stesso change set.
-- **Matrice di policy**: vedi [AGENTS Index](AGENTS_INDEX.md). Gli `AGENTS.md` locali definiscono **solo** override di ambito.
+References: [.codex/WORKFLOWS.md](../.codex/WORKFLOWS.md), [User Guide](user_guide.md), [Architecture](architecture.md).
 
-### 5.3 Scenario *Full Access* (eccezione)
-- Consentito **solo** su branch di lavoro dedicati per task espliciti (migrazioni/operazioni massive).
-- Deve usare gli helper GitHub interni: `pipeline.github_push_flow._prepare_repo/_stage_changes/_push_with_retry/_force_push_with_lease`, oltre ai flag gestiti in `pipeline.github_env_flags`.
-- Per la pipeline semantic, delega sempre a `semantic.convert_service`, `semantic.frontmatter_service` e `semantic.embedding_service`; `semantic.api` resta un facade che re-esporta le funzioni pubbliche.
-- Le fasi NLP (doc_terms/cluster) vanno orchestrate tramite `semantic.nlp_runner.run_doc_terms_pipeline` e lo shim `tag_onboarding.run_nlp_to_db`, che gestiscono telemetria, retry e accessi DB in modo sicuro.
-- Ogni operazione e' tracciata a log; PR o commit devono essere **atomici** e verificabili.
+---
+
+## 5) Codex scenarios (repo-aware)
+
+### 5.0 Common operating principles (v2)
+- The default scenario is Agent mode with path safety, atomic writes, and doc/test updates.
+- All activities follow Codex v2 (see `docs/guida_codex.md`), the AGENTS perimeter, and explicit micro-PR + QA.
+- Select prompts from `.codex/PROMPTS.md`; the Onboarding Task Codex is mandatory.
+- Collaboration between developer, Codex, and Senior Reviewer guides sensitive tasks.
+
+### 5.1 Chat scenario
+- Reasoning/drafting only; no I/O. Useful for grooming, drafts, or quick checks.
+
+### 5.2 Agent scenario (recommended)
+- Codex works on-rails: path safety, atomic writes, micro-PRs, docs/tests updated in the same change set.
+- The policy matrix (`AGENTS Index`) defines scope limits.
+
+### 5.3 Full Access scenario (exceptional)
+- Restricted to dedicated branches for explicit tasks (scale migrations).
+- Use internal GitHub helpers: `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`, along with `pipeline.github_env_flags`.
+- Delegated semantic pipeline steps call `semantic.convert_service`, `semantic.frontmatter_service`, and `semantic.embedding_service`; the `semantic.api` facade re-exports public helpers.
+- NLP stages such as doc_terms/cluster go through `semantic.nlp_runner.run_doc_terms_pipeline` and `tag_onboarding.run_nlp_to_db`.
+- Log every step; keep PRs/commits atomic and traceable.
 
 ### 5.4 Multi-agent alignment
-- Allinea flag e configurazioni (`TIMMY_NO_GITHUB`, `GIT_FORCE_ALLOWED_BRANCHES`, `TAGS_MODE`, throttle NLP) su UI, CLI e agent: aggiorna `.env.sample` e documentazione quando cambiano.
-- Verifica che gli adapter opzionali (`ui.services.tags_adapter`, servizi Drive) siano disponibili oppure che la UI mostri fallback (modalita' stub) e messaggi di help coerenti.
-- Monitora la telemetria `phase_scope`: tutte le pipeline devono emettere `prepare_repo`, `stage_changes`, `push_with_retry`/`force_push` per semplificare il triage cross-team.
-- Sincronizza le cache condivise (`clients_store`, `safe_pdf_cache`) invalidandole dopo le write atomiche e tracciando nei log `reset_gating_cache`.
+- Sync shared flags (`TIMMY_NO_GITHUB`, `GIT_FORCE_ALLOWED_BRANCHES`, `TAGS_MODE`, throttles) across UI, CLI, and agents; update `.env.sample` and docs when they change.
+- Ensure adapters (`ui.services.tags_adapter`, Drive services) load or that the UI shows stub help/fallback.
+- Emit `phase_scope` telemetry for `prepare_repo`, `stage_changes`, and push phases.
+- Reset shared caches (`clients_store`, `safe_pdf_cache`) after atomic writes and log `reset_gating_cache`.
 
-### 5.5 Scenario: Esecuzione Prompt Chain Timmy/ProtoTimmy → OCP → Codex
-- Flusso: 1) Utente ↔ Timmy/ProtoTimmy (planner/logico) definisce obiettivi; 2) Timmy/ProtoTimmy → OrchestratoreChainPrompt (OCP) genera prompt numerati (0..N) uno per volta; 3) OCP → Codex che esegue ogni passo come micro-PR.
-- Entrypoint: resta obbligatorio l'Onboarding Task Codex da `.codex/PROMPTS.md` prima di avviare la sequenza. Ogni prompt mantiene scope limitato e non puo estendersi oltre quanto richiesto.
-- Regole: ogni step segue le stesse policy (AGENT-first, HiTL, path-safety, QA, scritture atomiche). L'OCP non modifica il repository; Codex e l'esecutore repo-aware.
-- Output: la chain deve essere tracciata nei riepiloghi/log; ciascun passo resta rilanciabile e idempotente.
-- SSoT: per la definizione completa del modello Prompt Chain (governance + contratto operativo), fare riferimento a `docs/PromptChain_spec.md`. In questo runbook restano solo riferimenti sintetici e flusso operativo (prompt operativo → patch limitata → QA → decisione del Planner).
+### 5.5 Prompt Chain execution
+- Flow: User (Timmy/ProtoTimmy) → OrchestratoreChainPrompt (OCP) generates numbered prompts → OCP sends each prompt to Codex, who executes it as a micro-PR.
+- Always start with the Onboarding Task Codex and respect the provided scope.
+- Each step adheres to AGENT-first, HiTL, path safety, QA, and atomic writes. The OCP never edits the repo.
+- Track every step in summaries/logs so the chain remains reproducible and idempotent.
+- For governance details, refer to `docs/PromptChain_spec.md`.
 
-Riferimenti: [AGENTS Index](AGENTS_INDEX.md), [.codex/AGENTS](../.codex/AGENTS.md).
-
----
-
-## 6) Qualita', test & CI
-
-- **Piramide test:** unit -> contract/middle -> smoke E2E (dataset **dummy**, zero rete).
-- **Hook pre-commit:** format/lint (`isort`, `black`, `ruff --fix`), type-check (`mypy`/`pyright`), spell-check cSpell su `docs/`, guard rail `forbid-*`.
-- **CI locale rapida:** `make qa-safe` -> `make ci-safe` -> `pytest -q`.
-
-**Casi minimi obbligatori**
-- Slug invalidi scartati/normalizzati.
-- Traversal via symlink in `raw/` negato.
-- Parita' di firma wrapper UI <-> backend e pass-through parametri.
-- Invarianti `book/`: `README.md`/`SUMMARY.md` sempre presenti; `.md.fp` **esclusi** da push.
-
-Riferimenti: [Developer Guide -> Test](developer_guide.md), [Coding Rules -> Test & Qualita'](coding_rule.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md).
+References: [AGENTS Index](AGENTS_INDEX.md), [.codex/AGENTS.md](../.codex/AGENTS.md).
 
 ---
 
-## 7) Telemetria & sicurezza operativa
+## 6) Quality, testing & CI
 
-- Log centralizzati in `output/timmy-kb-<slug>/logs/` con formatter **key=value**.
-- Redazione automatica dei segreti con `LOG_REDACTION=1`.
-- Healthcheck caratteri/encoding: hook `fix-control-chars` / `forbid-control-chars` e script dedicato.
-- Throttling retriever: warning `retriever.throttle.deadline` se il budget latenza si esaurisce; `candidate_limit` viene clampato e loggato.
+- Test pyramid: units → contract/middle → smoke E2E (dummy datasets, no network).
+- Pre-commit hooks run formatters/linters (`isort`, `black`, `ruff --fix`), typechecks (`mypy`/`pyright`), spell-check (`cspell`), and guard rails (`forbid-*`).
+- Rapid local CI: `make qa-safe` → `make ci-safe` → `pytest -q`.
 
-Riferimenti: [README -> Telemetria & sicurezza](../README.md), [User Guide -> Controllo caratteri](user_guide.md).
+### Required checks
+- Reject invalid slugs or normalize them.
+- Deny traversal via symlinks in `raw/`.
+- Maintain UI/backend wrapper parity and parameter pass-through.
+- Keep `book/` invariants: `README.md`/`SUMMARY.md` must exist; `.md.fp` files stay out of pushes.
 
----
-
-## Debug explainability (lineage)
-
-- Se un embedding/chunk risulta sospetto, individua `slug/scope/path` e usa i log `semantic.input.received`, `semantic.lineage.chunk_created`, `semantic.lineage.embedding_registered` per ricostruire origine (`source_id`) e `chunk_id/embedding_id`.
-- In modalita Codex (Chat/Agent) puoi interrogare il DB o i log strutturati per verificare `meta["lineage"]` senza cambiare schema; proporre fix solo se idempotenti e preservando il passaporto esistente.
-- Per modifiche ai flussi ingest/semantic mantieni gli eventi di explainability coerenti con `docs/logging_events.md` e aggiorna `meta["lineage"]` se cambia il modo di creare chunk/embedding.
-
-### Audit risposte (Explainability)
-- Ogni ricerca/reply puo' salvare un manifest per-risposta (`response_id.json`) in una cartella dedicata, con scrittura atomica path-safe.
-- Il retriever emette `retriever.response.manifest` con path locale ed evidenze sintetiche (source_id/chunk_id/k/selected_count); i log non includono snippet o testo.
-- Usa `ExplainabilityService` per arricchire lineage/log a partire dal manifest e generare l'Explainability Packet per audit/debug locale.
+References: [Developer Guide → Test](developer_guide.md), [Coding Rules → Test & Quality](coding_rule.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md).
 
 ---
 
-## 8) Procedure GitHub (push/publish) & rollback
+## 7) Telemetry & operational security
 
-**Publish (CLI)**
+- Centralize logs in `output/timmy-kb-<slug>/logs/` using key=value format.
+- Automatically redact secrets by setting `LOG_REDACTION=1`.
+- Use health-check scripts and hooks (`fix-control-chars`, `forbid-control-chars`) to manage characters/encoding.
+- Throttle retriever queries: emit a warning (`retriever.throttle.deadline`) when budgets are depleted and clamp `candidate_limit`.
+
+References: [README → Telemetry & Security](../README.md), [User Guide → Character Checks](user_guide.md).
+
+---
+
+## 8) Debug explainability (lineage)
+
+- For suspicious embeddings/chunks, log `slug/scope/path` and use events such as `semantic.input.received`, `semantic.lineage.chunk_created`, and `semantic.lineage.embedding_registered`.
+- In Chat/Agent mode, query the DB or logs for `meta["lineage"]` without changing the schema; propose fixes only if they remain idempotent.
+- Align explainability events with `docs/logging_events.md` and update `meta["lineage"]` if chunk/embedding creation changes.
+
+### Explainability audits
+- Store a per-response manifest (`response_id.json`) path-safely and atomically.
+- Retriever emits `retriever.response.manifest` without exposing text snippets.
+- Use `ExplainabilityService` to enrich lineage/logs for auditing.
+
+---
+
+## 9) GitHub operations & rollback
+
+### Publishing CLI
 ```bash
 py src/onboarding_full.py --slug <slug>
-# pubblica solo i .md da book/ sul branch di destinazione
 ```
+Push only `.md` files from `book/` to the destination branch.
 
-**Orchestrazione interna (regole)**
-- Usa sempre gli helper Git: `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`.
-- Nelle unit test, stubbare `_prepare_repo`/`_stage_changes` secondo gli esempi nei test.
-- Lock GitHub configurabile via env: `TIMMY_GITHUB_LOCK_TIMEOUT_S`, `TIMMY_GITHUB_LOCK_POLL_S`, `TIMMY_GITHUB_LOCK_DIRNAME` (default 10s/0.25s/.github_push.lockdir).
+### Orchestration rules
+- Always use the Git helpers `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`.
+- Stub `_prepare_repo`/`_stage_changes` in tests per `tests/pipeline/test_github_push.py`.
+- Configure GitHub locks via env flags (`TIMMY_GITHUB_LOCK_TIMEOUT_S`, etc.).
 
-**Rollback**
-- **Push fallito (rete/rate):** `_push_with_retry` ripete con backoff; se esaurito, lascia stato locale coerente (ripetibile).
-- **Divergenza branch:** usare `_force_push_with_lease` assicurando diff ristretto; aprire PR con spiegazione.
-- **Contenuti non validi:** revert atomico del change set; ripetere preflight (solo `.md`, niente `.md.fp`).
+### Rollback guidance
+- On push failures, `_push_with_retry` retries with backoff while leaving the local state repeatable.
+- For diverging branches, use `_force_push_with_lease` with explanations.
+- Revert invalid content atomically and rerun preflight (Markdown only, no `.md.fp`).
 
-Riferimenti: [.codex/AGENTS](../.codex/AGENTS.md).
-
----
-
-## 9) Governance AGENTS & matrice
-
-- **SSoT di policy:** [AGENTS Index](AGENTS_INDEX.md).
-- Gli `AGENTS.md` locali (UI, Pipeline, Semantica, Test, Documentazione, Codex) contengono **solo override** e rimandano all'indice.
-- Tenere allineata la **matrice** con `pre-commit run agents-matrix-check --all-files` quando si toccano gli `AGENTS.md`.
-- La CI (`job build` in `.github/workflows/ci.yaml`) esegue `python tools/gen_agents_matrix.py --check` e fallisce se la matrice non e' aggiornata.
-
-Riferimenti: [AGENTS Index](AGENTS_INDEX.md), [docs/AGENTS.md](AGENTS.md), [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/semantic/AGENTS.md](../src/semantic/AGENTS.md), [src/pipeline/AGENTS.md](../src/pipeline/AGENTS.md), [tests/AGENTS.md](../tests/AGENTS.md), [.codex/AGENTS.md](../.codex/AGENTS.md).
+References: [.codex/AGENTS](../.codex/AGENTS.md).
 
 ---
 
-### Pattern operativi aggiuntivi (UI/Refactor)
-- Nei moduli UI (es. preflight), adottare il pattern **Collector + Orchestratore**
-  per separare raccolta check e coordinamento, mantenendo ordine e output invariati.
-- I refactor devono essere **non-breaking**, mantenere firma e semantica dei messaggi,
-  ed evitare side-effect a import-time.
-- Il logging deve restare minimale e strutturato: eventi sintetici (`run_start`, `check_failed`, `run_complete`)
-  senza includere dati sensibili (PII/segreti).
+## 10) Governance & AGENTS matrix
+
+- The AGENTS Index (`AGENTS_INDEX.md`) is the SSoT.
+- Local `AGENTS.md` files define overrides and link back to the index.
+- Keep the matrix aligned using `pre-commit run agents-matrix-check --all-files` whenever AGENTS files change.
+- CI runs `python tools/gen_agents_matrix.py --check` and fails if the matrix is outdated.
+
+References highlighted area AGENTS as needed.
 
 ---
 
-## 10) Operazioni UI (Streamlit)
+## 11) UI/refactor patterns
 
-- Router obbligatorio (`st.Page` + `st.navigation`); helper `ui.utils.route_state`/`ui.utils.slug` per deep-link.
-- Gating **Semantica** solo con `raw/` presente.
-- Messaggi utente brevi; dettagli a log.
-- I/O solo tramite util SSoT; nessuna write manuale.
-
-Riferimenti: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](../src/ui/pages/AGENTS.md), [User Guide -> Guida UI](user_guide.md).
+- Apply the Collector + Orchestrator pattern to separate checks from coordination while respecting output order.
+- Refactors must remain non-breaking, maintain signatures and message semantics, and avoid import-time side effects.
+- Logging should be minimal, structured (`run_start`, `check_failed`, `run_complete`), and free of sensitive data.
 
 ---
 
-## 11) Vision Statement & strumenti AI
+## 12) Streamlit operations
 
-- Generazione mapping: `tools/gen_vision_yaml.py` produce `semantic/semantic_mapping.yaml` a partire da `config/VisionStatement.pdf`.
-- La UI legge sempre il modello da `config/config.yaml` via `get_vision_model()` (SSoT).
-- Preferire scenario **Agent**; *Full Access* solo con motivazione esplicita e branch dedicato.
-- Health-check Vision (`tools/vision_alignment_check.py`) esporta `use_kb_source`, `strict_output_source`, `assistant_id`, `assistant_id_source`, `assistant_env` e `assistant_env_source` nell'output JSON (oltre ai log) per agevolare diagnosi end-to-end.
-- `use_kb` segue lSSoT Settings/config con override opzionale `VISION_USE_KB` (0/false/no/off  False); le istruzioni runtime abilitano File Search solo se il flag risulta attivo.
+- Enforce native routing (`st.Page` + `st.navigation`) with `ui.utils.route_state`/`ui.utils.slug`.
+- Gate Semantica on `raw/` presence and keep messages short while logging details.
+- Perform all I/O via SSoT utilities; avoid manual writes.
 
-Riferimenti: [User Guide -> Vision Statement](user_guide.md), [Developer Guide -> Configurazione](developer_guide.md).
+References: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](../src/ui/pages/AGENTS.md), [User Guide → UI](user_guide.md).
 
 ---
 
-## 12) Checklists operative (estratto)
+## 13) Vision statement & AI tooling
 
-- **PR/Commit:** conventional messages; test minimi aggiornati; 0 warning cSpell su `docs/`.
-- **Sicurezza & I/O:** `ensure_within*` ovunque; scritture atomiche; rollback definito.
-- **UI/Workflow:** Gating Semantica; Preview Docker sicura; SSoT `semantic/tags.db`.
-- **Drive/Git:** credenziali presenti; push: **solo** `.md` da `book/`.
-- **Documentazione (blocking):** per ogni cambio funzionale/firma/UX aggiornare Architecture/Developer Guide/User Guide (e `.codex/WORKFLOWS` se tocca pipeline) e indicare in PR `Docs: ...`; senza nota esplicita la review non passa.
+- `tools/gen_vision_yaml.py` generates `semantic/semantic_mapping.yaml` from `config/VisionStatement.pdf`.
+- UI always reads the model from `config/config.yaml` via `get_vision_model()` (SSoT).
+- Prefer the Agent scenario; allow Full Access only with explicit justification and on a dedicated branch.
+- `tools/vision_alignment_check.py` exports assistant metadata for diagnostics and logs.
+- `use_kb` follows SSoT settings with optional overrides (`VISION_USE_KB`) for File Search gating.
 
-Riferimenti: [.codex/CHECKLISTS](../.codex/CHECKLISTS.md).
-
----
-
-## 13) Troubleshooting (rapido)
-
-- **Drive non scarica PDF:** genera README in `raw/`, verifica permessi e `DRIVE_ID`.
-- **Preview HonKit non parte:** controlla Docker e porta libera.
-- **Conversione fallita (solo README/SUMMARY):** `raw/` privo di PDF validi o fuori perimetro (symlink).
-- **Spell-check/docs mis-match:** esegui cSpell sui docs e riallinea titoli/frontmatter alla versione.
-- **Modello non coerente:** verifica `config/config.yaml` e `get_vision_model()`.
-
-Riferimenti: [User Guide -> Troubleshooting](user_guide.md).
+References: [User Guide → Vision Statement](user_guide.md), [Developer Guide → Configuration](developer_guide.md).
 
 ---
 
-## 14) ADR & cambi di design
+## 14) Operational checklists (excerpt)
 
-- Qualsiasi decisione architetturale rilevante va registrata come **ADR** in `docs/adr/`.
-- Aggiorna l'indice ADR e collega i documenti interessati; se superata, marca *Superseded* e link al successore.
+- PR/Commit: conventional messages, updated tests, zero cSpell warnings.
+- Security & I/O: path-safe ensures, atomic writes, defined rollback paths.
+- UI/Workflow: gate Semantica, secure Docker preview, maintain `semantic/tags.db`.
+- Drive/Git: credentials ready, push only `.md` from `book/`.
+- Documentation (blocking): update Architecture/Developer Guide/User Guide (and `.codex/WORKFLOWS.md` when pipeline changes) and list the updates in the PR's `Docs:` section.
 
-Riferimenti: [docs/adr/README.md](adr/README.md).
-
----
-
-## 15) Policy sintetiche (obbligatorie)
-
-1. **SSoT & Safety:** utility obbligatorie per I/O; nessuna write fuori workspace cliente.
-2. **Micro-PR:** modifiche piccole e motivate; se tocchi X, aggiorna Y/Z (docs/test/UX).
-3. **UI import-safe:** nessun side-effect a import-time.
-4. **Gating UX:** azioni guidate dallo stato (es. Semantica solo con RAW presente).
-5. **Docs & Versioning:** allinea README/Docs/Frontmatter alla versione `v1.0 Beta`.
-6. **Matrice AGENTS:** sempre aggiornata; esegui `agents-matrix-check` quando tocchi gli `AGENTS.md`.
+References: [.codex/CHECKLISTS](../.codex/CHECKLISTS.md).
 
 ---
 
-## 16) Appendice: comandi utili
+## 15) Troubleshooting
 
+- **Drive doesn’t download PDFs:** regenerate the README in `raw/`, verify permissions and `DRIVE_ID`.
+- **HonKit preview doesn’t start:** check Docker and the port availability.
+- **Conversion failures:** ensure valid PDFs exist within the allowed perimeter (avoid symlinks).
+- **Spell-check/docs mismatch:** run cSpell on the docs and align frontmatter/title versions.
+- **Model inconsistency:** check `config/config.yaml` and `get_vision_model()`.
+
+References: [User Guide → Troubleshooting](user_guide.md).
+
+---
+
+## 16) ADR & design changes
+
+- Log architectural decisions as ADRs inside `docs/adr/`.
+- Update the ADR index and link new documents; mark superseded entries accordingly.
+
+References: [docs/adr/README.md](adr/README.md).
+
+---
+
+## 17) Synthetic policies
+
+1. **SSoT & Safety:** enforce utility-based I/O; never write outside the workspace.
+2. **Micro-PR:** keep diffs small and grounded; update dependent docs/tests when touching an area.
+3. **UI import-safe:** avoid import-time side effects.
+4. **Gating UX:** state-driven actions (Semantica only with RAW).
+5. **Docs & Versioning:** keep README/docs/frontmatter aligned with `v1.0 Beta`.
+6. **AGENTS matrix:** always current; run `agents-matrix-check` when editing AGENTS files.
+
+---
+
+## 18) Useful commands
 ```bash
 # UI
-streamlit run onboarding_ui.py   # la UI imposta REPO_ROOT_DIR e lancia Streamlit dallo stesso repo
+streamlit run onboarding_ui.py
 
-# Orchestrazione CLI
+# CLI orchestrators
 py src/pre_onboarding.py --slug <slug> --name "<Cliente>" --non-interactive
 py src/tag_onboarding.py --slug <slug> --non-interactive --proceed
-# Tuning NLP parallelo (worker auto se non specificato)
 py src/tag_onboarding.py --slug <slug> --nlp --nlp-workers 6 --nlp-batch-size 8
 py src/semantic_onboarding.py --slug <slug> --non-interactive
 py src/onboarding_full.py --slug <slug> --non-interactive
 
-# QA locale
+# QA
 make qa-safe
 pytest -q
 pre-commit run --all-files

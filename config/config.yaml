@@ -2,21 +2,18 @@ meta:
   cartelle_raw_yaml: config/cartelle_raw.yaml
   N_VER: 0
   DATA_VER: ''
-  client_name: "prova srl"
-  semantic_mapping_yaml: "semantic/tags_reviewed.yaml"
-  vision_statement_pdf: "config/VisionStatement.pdf"
-
+  client_name: prova srl
+  semantic_mapping_yaml: semantic/tags_reviewed.yaml
+  vision_statement_pdf: config/VisionStatement.pdf
 ui:
   skip_preflight: true
   allow_local_only: true
   admin_local_mode: false
-
 ai:
   openai:
     timeout: 120
     max_retries: 2
     http2_enabled: false
-
   vision:
     engine: assistants
     model: gpt-4o-mini-2024-07-18
@@ -24,31 +21,25 @@ ai:
     use_kb: false
     snapshot_retention_days: 30
     strict_output: false
-
   prototimmy:
     engine: assistants
     model: gpt-4.1
     assistant_id_env: PROTOTIMMY_ID
     use_kb: true
-
   planner_assistant:
     engine: assistants
     model: gpt-4.1
     assistant_id_env: PLANNER_ASSISTANT_ID
     use_kb: true
-
   ocp_executor:
     engine: assistants
     model: gpt-4.1
     assistant_id_env: OCP_EXECUTOR_ASSISTANT_ID
     use_kb: true
-
   kgraph:
     engine: assistants
     model: gpt-4.1
     assistant_id_env: KGRAPH_ASSISTANT_ID
-
-
 pipeline:
   retriever:
     auto_by_budget: false
@@ -60,7 +51,6 @@ pipeline:
   raw_cache:
     ttl_seconds: 300
     max_entries: 8
-
 security:
   oidc:
     enabled: false
@@ -70,16 +60,13 @@ security:
     token_request_url_env: ACTIONS_ID_TOKEN_REQUEST_URL
     token_request_token_env: ACTIONS_ID_TOKEN_REQUEST_TOKEN
     ci_required: false
-
 integrations:
   drive:
     folder_id: ''
     raw_folder_id: ''
     contrattualistica_folder_id: ''
     config_folder_id: ''
-
 ops:
   log_level: DEBUG
-
 finance:
   import_enabled: false

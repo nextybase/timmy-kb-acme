@@ -104,7 +104,12 @@
     "rilanciabili",
     "explainability",
     "anonimizzato",
-    "rilanciabile"
+    "rilanciabile",
+    "autodiagnostica",
+    "autocorrections",
+    "unrequired",
+    "typecheckers",
+    "typechecks"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

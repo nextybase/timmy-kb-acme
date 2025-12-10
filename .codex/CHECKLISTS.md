@@ -1,44 +1,50 @@
-# Checklist operative
+# Operational Checklists
 
 ## PR / Commit
-- Messaggi conventional (feat/fix/docs/chore). Descrivi Cosa/Perche'/Come.
-- Test minimi aggiornati; build verde; linter ok.
-- Se tocchi firme/flow: aggiorna **docs** (+ note migrazione).
-- 0 warning cSpell in `docs/`.
-- Prompt Chain: rispetta il modello turn-based OCP <-> Codex, segui i prompt numerati nell'ordine ricevuto e fai riferimento a `docs/PromptChain_spec.md` come SSoT operativo.
-- QA finale Prompt Chain: `pytest -q` e `pre-commit run --all-files` eseguiti e documentati come parte del Prompt finale di chiusura.
+- Use conventional commit messages (feat/fix/docs/chore) describing what, why, how.
+- Update minimal tests; keep the build green and linters passing.
+- When touching signatures or flows, update the relevant docs (note migration steps as needed).
+- Zero cSpell warnings in `docs/`.
+- Respect the turn-based OCP ⇄ Codex model defined in `docs/PromptChain_spec.md`: process prompts in order, cite the specification as the SSoT, and never skip or reorder prompts.
+- Document final QA in the closing prompt: `pytest -q` plus `pre-commit run --all-files`.
 
-### Revisione con Senior Reviewer
-- [ ] Per modifiche non banali (new feature, logica di sicurezza/I/O, integrazioni) ho usato il prompt "Dev task con review del Senior" in `.codex/PROMPTS.md` prima di chiedere aiuto a Codex.
-- [ ] Ho preparato un messaggio di riepilogo seguendo il prompt "Preparare la richiesta di review per il Senior".
-- [ ] Ho condiviso con il Senior contesto del task, sintesi dei cambi, esito della pipeline QA e i dubbi/trade-off principali.
-- [ ] Ho applicato (o discusso) i feedback del Senior prima del merge su branch protette.
 
-## Sicurezza & I/O
-- Path validati (ensure_within); nessuna write "a mano".
-- Scritture atomiche; rollback definito su errori.
+### Senior Reviewer Checklist
+- For non-trivial updates (new features, security/I/O logic, integrations), run the “Dev task with Senior review” prompt in `.codex/PROMPTS.md` before inviting Codex.
+- Prepare a summary message following the “Prepare the Senior review request” prompt.
+- Share context, change summary, QA pipeline results, and major doubts/trade-offs with the Senior Reviewer.
+- Incorporate (or discuss) the Senior Reviewer’s feedback before finishing work on protected branches.
 
-## Pre-commit policies
-- Nessun `assert` runtime in `src/` (solo nei test). Hook: `forbid-runtime-asserts`.
-- Nessun `Path.write_text/bytes` in `src/`. Usa `safe_write_text/bytes` + `ensure_within`. Hook: `forbid-path-write-text-bytes`.
-- Guard-rail SSoT: prima di ogni write/copy/delete chiama `ensure_within(base, target)`.
+
+## Security & I/O
+- Validate every path via `ensure_within*`; avoid ad hoc writes.
+- Write atomically and define rollback procedures for failures.
+
+
+## Pre-commit Policies
+- No runtime `assert` statements in `src/` (tests only); enforced by the `forbid-runtime-asserts` hook.
+- Never call `Path.write_text/bytes` in `src/`; use `safe_write_text/bytes` plus `ensure_within`. The `forbid-path-write-text-bytes` hook ensures compliance.
+- Always call `ensure_within(base, target)` before writes/copies/deletes.
+
 
 ## UI / Workflow
-- Gating tab **Semantica** -> `raw/` presente.
-- Preview Docker: valida porta (1..65535) e `container_name` sicuro.
-- **SSoT tag runtime**: `semantic/tags.db` presente/aggiornato.
+- Gate the Semantica tab based on the presence of local `raw/`.
+- Validate Docker preview port numbers (1–65535) and use safe container names.
+- Keep `semantic/tags.db` up-to-date as the runtime SSoT.
 
-## Drive/Git
-- Drive: credenziali/ID presenti prima di lanciare il runner.
-- Push: solo `.md` da `book/`; escludi `.md.fp` e binari.
+
+## Drive & Git
+- Ensure Drive credentials/IDs are present before running the pipeline.
+- Push only `.md` files from `book/`; exclude `.md.fp` and binaries.
+
 
 ## Multi-agent alignment
-- Allinea i flag condivisi (`TIMMY_NO_GITHUB`, `GIT_DEFAULT_BRANCH`, `GIT_FORCE_ALLOWED_BRANCHES`, `TAGS_MODE`, `ui.skip_preflight`) tra CLI, UI e agent: aggiorna `.env.sample`/docs se cambiano.
-- Verifica che i servizi in UI siano caricati (`ui.services.tags_adapter`, drive runner). Se un adapter manca, assicurati che la UI mostri help e fallback (modalita' stub).
-- Monitora la telemetria strutturata: tutte le pipeline devono emettere `phase_scope` coerenti (prepare_repo/stage_changes/push_with_retry o force_push) e rispettare `LeaseLock`.
-- Controlla le impostazioni di throttling/cache (`NLP_THREADS`, `TIMMY_SAFE_PDF_CACHE_TTL`, cache clients_db) per evitare fork divergenti fra agent e orchestratori.
+- Synchronize shared flags (`TIMMY_NO_GITHUB`, `GIT_DEFAULT_BRANCH`, `GIT_FORCE_ALLOWED_BRANCHES`, `TAGS_MODE`, `ui.skip_preflight`) across CLI, UI, and agents; update `.env.sample`/docs when they change.
+- Confirm UI services (`ui.services.tags_adapter`, Drive runners) load; if an adapter is missing, the UI must present help/fallback (stub mode).
+- Ensure structural telemetry emits consistent `phase_scope` values (prepare_repo/stage_changes/push workflows) and respects `LeaseLock`.
+- Monitor throttling/cache settings (`NLP_THREADS`, `TIMMY_SAFE_PDF_CACHE_TTL`, clients_db cache); avoid divergent forks between agents and orchestrators.
 
-## Documentazione
-- **[BLOCKING]** Se cambi firme, flussi o UX: aggiorna **architecture.md / developer_guide.md / guida_ui.md** (o altri doc interessati). Nessun merge senza nota esplicita nella PR.
-- Documenta sempre le modifiche alla pipeline anche in `.codex/WORKFLOWS.md` / Runbook quando necessario.
-- Nel testo della PR inserisci la sezione `Docs:` elencando i file aggiornati (o `n/a` solo se davvero non servono update).
+
+## Documentation
+- **[BLOCKING]** When changing signatures, flows, or UX, update `architecture.md`, `developer_guide.md`, `guida_ui.md`, or other affected docs; the PR must include an explicit `Docs:` section listing the updated files (or `n/a` if no docs change).
+- Document pipeline changes in `.codex/WORKFLOWS.md` and the runbook when necessary.

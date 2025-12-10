@@ -1,13 +1,16 @@
-# Scopo
-Gestione test con piramide unit -> middle/contract -> smoke E2E su dataset dummy.
+# Purpose
+Testing guidance emphasizing the unit → middle/contract → smoke E2E pyramid on dummy datasets.
 
-# Regole (override)
-- Dataset dummy generati con tool dedicati (mai dati reali).
-- Nessuna dipendenza di rete: Drive/Git vanno mockati o bypassati.
-- Contract test sui guard di `book/` (solo `.md`, ignorare `.md.fp`).
 
-# Criteri di accettazione
-- Build/test verdi in locale; smoke E2E su slug dummy riproducibile.
+# Rules (overrides)
+- Generate dummy data with dedicated tools; never use real datasets.
+- Avoid network dependencies: mock or bypass Drive/Git interactions.
+- Enforce contract tests around the `book/` guard (`.md` files only; ignore `.md.fp`).
 
-# Riferimenti
+
+# Acceptance Criteria
+- Local builds/tests pass with smoke E2E executed on reproducible dummy slugs.
+
+
+# References
 - docs/AGENTS_INDEX.md

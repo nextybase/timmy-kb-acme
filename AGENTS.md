@@ -1,13 +1,16 @@
-# Scopo
-Indice radice che rimanda alle policy comuni e ai documenti operativi `.codex/` prima di qualsiasi intervento.
+# Purpose
+Reference index that directs agents to the shared policies and the `.codex/` operational documents before any work begins.
 
-# Regole (override)
-- Prima di lavorare rileggi `docs/runbook_codex.md` e i documenti `.codex/` per allineare workflow e standard.
 
-# Criteri di accettazione
-- Le attività partono solo dopo avere consultato `docs/runbook_codex.md` e le guide `.codex/`.
+# Rules (overrides)
+- Read `docs/runbook_codex.md` and the `.codex/` guides before starting any task to align on workflows and standards.
 
-# Riferimenti
+
+# Acceptance Criteria
+- No activity starts until the runbook and supporting `.codex/` documents have been reviewed.
+
+
+# References
 - docs/AGENTS_INDEX.md
 - docs/runbook_codex.md
 - .codex/CONSTITUTION.md

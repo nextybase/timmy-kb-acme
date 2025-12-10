@@ -1,14 +1,17 @@
-# Scopo
-Area pipeline core con focus su I/O sicuro e idempotente.
+# Purpose
+Pipeline core guidance focused on secure, idempotent I/O and consistent instrumentation.
 
-# Regole (override)
-- Path-safety obbligatoria: tutte le write/copy/rm passano da `ensure_within*` (no join manuali).
-- Scritture atomiche tramite `safe_write_text/bytes`.
-- Logging strutturato con redazione attiva (`LOG_REDACTION`) quando disponibile.
 
-# Criteri di accettazione
-- Nessuna scrittura fuori dal workspace cliente.
-- Operazioni ripetibili senza corrompere stato.
+# Rules (overrides)
+- Path safety is mandatory: all writes/copies/deletes must travel through `ensure_within*` instead of manual joins.
+- Enforce atomic writes via `safe_write_text`/`safe_write_bytes`.
+- Structured logging with active redaction (`LOG_REDACTION`) whenever the facility exists.
 
-# Riferimenti
+
+# Acceptance Criteria
+- No write or delete happens outside the customer workspace.
+- Operations remain repeatable without corrupting state.
+
+
+# References
 - docs/AGENTS_INDEX.md

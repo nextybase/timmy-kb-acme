@@ -1,122 +1,144 @@
 # Pipeline & I/O
 
-## Task di avvio
-- Leggi `docs/AGENTS_INDEX.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, `docs/runbook_codex.md`.
-- Usa solo utility SSoT (`ensure_within*`, `safe_write_*`), scope write: `src/`, `tests/`, `docs/`, `.codex/`.
+## Startup Tasks
+- Read `docs/AGENTS_INDEX.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, and `docs/runbook_codex.md`.
+- Use only SSoT utilities (`ensure_within*`, `safe_write_*`); restrict writes to `src/`, `tests/`, `docs/`, `.codex/`.
 
-## Hardening path-safety e scritture atomiche
-- Rimpiazza join manuali con `ensure_within_and_resolve`.
-- Applica `safe_write_text/bytes` atomici e guard su slug/perimetro.
-- Aggiungi test unit per traversal/symlink e path fuori perimetro.
+## Path Safety Hardening and Atomic Writes
+- Replace manual joins with `ensure_within_and_resolve`.
+- Apply atomic `safe_write_text/bytes` calls with slug/perimeter guards.
+- Add unit tests for traversal/symlink handling and out-of-perimeter paths.
 
-## Orchestrazione GitHub (helper obbligatori)
-- Usa `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`.
-- Nei test stubba `_prepare_repo`/`_stage_changes` come in `tests/pipeline/test_github_push.py`.
-- Log strutturato del flusso (`prepare_repo`, `stage_changes`, `push`).
+## GitHub Orchestration (required helpers)
+- Use `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`.
+- Stub `_prepare_repo`/`_stage_changes` in tests as shown in `tests/pipeline/test_github_push.py`.
+- Emit structured logs for the flow (`prepare_repo`, `stage_changes`, `push`).
 
-## Template micro-PR
-Titolo: <breve, imperativo>
-Motivazione: <bugfix/security/robustezza; impatto>
-Scope: <file toccati e perche; 1 change set>
-Regole rispettate: path-safety / atomiche / no side-effects a import-time
-Test: <nuovi/aggiornati; es. pytest -k ...>
+## Micro-PR Template
+Title: <brief, imperative>
+Motivation: <bugfix/security/robustness; impact>
+Scope: <files touched and why; single change set>
+Rules honored: path safety / atomicity / no import-time side effects
+Tests: <new/updated; e.g., pytest -k ...>
 QA: isort  black  ruff --fix  mypy  pytest
-Note docs: <se tocchi X, aggiorna Y/Z>
+Docs notes: <if you touch X, update Y/Z>
 
-## Contratto operativo della Prompt Chain
-Il contratto operativo della Prompt Chain descrive esplicitamente il modello di dialogo tra OCP e Codex e impone al Codex un comportamento idempotente, attento e allineato con le policy gia raccolte in `docs/runbook_codex.md`, `docs/codex_integrazione.md` e `docs/PromptChain_spec.md`. E fondamentale che ogni prompt venga eseguito come micro-PR indipendente, con scope fissato e senza deviazioni creative non richieste.
-- Rispondi sempre a un solo prompt alla volta: dopo ogni output interrompi l'esecuzione, attendi il prompt successivo e non generare autonomamente Prompt 2..N.
-- Non inventare nuove architetture, refactor o iniziative "di tua mano": resta nello scope fornito dall'OCP e aderisci alle richieste operative ricevute.
-- Applica il principio "micro-PR idempotente": modifiche minime, revert mentale rapido, nessuna persistenza o effetto collaterale esteso oltre il change set.
-- Ricorda che `docs/PromptChain_spec.md` e la SSoT della Prompt Chain e che `docs/runbook_codex.md`/`docs/codex_integrazione.md` descrivono il contesto operativo in cui il contratto viene attivato.
+## Prompt Chain Operational Contract
+The Prompt Chain operational contract spells out the dialogue model between the OCP and Codex and requires Codex to act idempotently, attentively, and aligned with the policies documented in `docs/runbook_codex.md`, `docs/codex_integrazione.md`, and `docs/PromptChain_spec.md`. Every prompt must be treated as an independent micro-PR with a fixed scope and no unauthorized creative deviations.
+- Always answer only one prompt at a time: after you reply, halt execution, wait for the next OCP prompt, and never invent additional prompts.
+- Do not design new architectures, refactors, or self-initiatives beyond the OCP's explicit requirements; stay within the provided scope.
+- Observe the "idempotent micro-PR" rule: keep changes minimal, mentally reversible, and free of import-time side effects.
+- Remember that `docs/PromptChain_spec.md` is the SSoT for the Prompt Chain and that `docs/runbook_codex.md`/`docs/codex_integrazione.md` describe the operational context.
 
-## Gestione errori nella Prompt Chain
-La gestione degli errori deve essere trasparente e coordinata con l'OCP: se incontri anomalie, documenta i tentativi, evita cicli infiniti e chiedi istruzioni quando serve.
-- Segnala sempre le anomalie descrivendo lo stato, gli output e i passaggi gia tentati, in modo che l'OCP abbia tutte le informazioni per decidere.
-- Se lo stesso errore (stesso test o stack trace) si ripete per piu di due tentativi nello stesso step, interrompi, registra i tentativi e chiedi conferma all'OCP prima di procedere.
-- Non procedere finche non ricevi istruzioni al prompt successivo e non nascondere la ripetizione dell'errore; definisci chiaramente quante iterazioni hai gia eseguito.
-- Il ciclo di tentativi del Prompt finale di QA (`pytest -q` + `pre-commit run --all-files`) segue le soglie illustrate in `docs/PromptChain_spec.md`; evita numeri divergenti, limita i retry al buon senso operativo e documenta ogni nuovo tentativo.
+## Active Rules for Operational Prompts
+- Active Rules: path safety ON, micro-PR discipline, zero side effects, documentation updates when functionality changes, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Language Policy for Italian conversations.
+- After Prompt 0/1, OCP issues one prompt at a time, Codex responds with diff/report/QA, OCP evaluates, and only then emits the next prompt; never stack multiple OCP prompts without a Codex reply.
+- Include this memo at the start of every operational response to reinforce the OCP⇄Codex turn cycle and remind that each step is a narrow micro-PR with mandatory intermediate QA.
+- Micro-PR + QA: apply focused changes, run `pytest -q -k "not slow"` before moving on, document tests and retries, and perform the full final QA run plus `pre-commit run --all-files` at the concluding prompt.
+- Escalation: after two failed correction attempts during intermediate or final QA, ask the OCP/user for instructions before proceeding.
 
-## Uso dei test nella Prompt Chain
-L'esecuzione dei test e guidata dallo scope del singolo prompt, con due momenti distinti: test occasionali solo se richiesti e test finali obbligatori di chiusura.
-- Durante ogni prompt esegui test solo se il prompt lo specifica espressamente; annota quali comandi sono stati lanciati e perche.
-- Il Prompt finale di chiusura Chain richiede `pytest -q` e `pre-commit run --all-files`, come prescritto da `docs/PromptChain_spec.md` e ribadito in `docs/runbook_codex.md`; se falliscono, applica fix minimi e rilancia i comandi fino a raggiungere il verde (entro limiti di buon senso).
-- Documenta ogni fallimento/test ripetuto nella risposta al prompt, indicando quali fix sono stati applicati e che passaggi sono stati ripetuti.
+## Patch Pre-Check Validation
+- Before generating or applying any patch, run a static pre-check: ensure the diff avoids raw `open(...)` calls, `Path` usage without safe path-utils, raw file writes, imports from `_private` or forbidden wrappers, hardcoded directories or magic strings, unstructured logging, and modifications to REPO_ROOT/SSoT.
+- Verify the diff remains atomic, limits changes to the scoped objective, and does not introduce unplanned refactors or semantic ambiguity relative to the "Active Rules" memo.
+- If the pre-check fails, halt before QA, rewrite the patch using safe-write utilities and path safety, and attempt corrections up to twice; after the third failure, pause and request new instructions from the OCP.
 
-## Commit e push nella Prompt Chain
-Codex propone patch, attende conferma e non effettua push autonomi: il commit finale segue la semantica ufficiale di `docs/PromptChain_spec.md`.
-- Proponi il diff, chiedi conferma all'umano/OCP e non eseguire commit/push prima della validazione completa.
-- Il push viene eseguito solo dopo QA conclusa (`pytest -q`, `pre-commit run --all-files`) e con il via libera esplicito dell'OCP o dell'umano responsabile.
-- Il "commit finale di chiusura Chain" e disciplinato da `docs/PromptChain_spec.md`: documenta che il commit proposto chiude la Prompt Chain, riassume QA/test e rimanda all'OCP per eventuali azioni successive.
+## Error Handling in the Prompt Chain
+- Keep error handling transparent and coordinated with the OCP: document anomalies, avoid infinite loops, and seek guidance when needed.
+- Always report the current state, outputs, and steps already attempted so the OCP can make informed decisions.
+- If the same issue (test or stack trace) repeats more than twice in a single step, stop, log the attempts, and confirm the next action with the OCP.
+- Do not proceed until the following prompt arrives; disclose how many iterations you have exhausted.
+- Every operational prompt (except the final one) must state that it ran `pytest -q -k "not slow"` (plus any additional tests requested); record retries and outcomes before continuing.
+- The final QA cycle (`pytest -q` + `pre-commit run --all-files`) follows the thresholds in `docs/PromptChain_spec.md`; avoid divergent retry counts, keep retries reasonable, and describe each rerun explicitly.
 
-## Prompt Chain (OCP → Codex) — modalita operativa
-- **SSoT**: per governance e contratto operativo della Prompt Chain vedi `docs/PromptChain_spec.md`.
-- Sequenza numerata di prompt (Prompt 0, 1, 2, ...) generati dall'OrchestratoreChainPrompt (OCP) su richiesta utente; ogni prompt ha scope limitato e corrisponde a un micro-PR con le stesse regole Codex (HiTL, AGENT-first, QA, path-safety, I/O atomico).
-- OCP non modifica il repo, traduce gli obiettivi di Timmy/ProtoTimmy in prompt formali e chiama Codex un passo alla volta. Codex esegue senza anticipare passi successivi, senza generare prompt autonomi e senza uscire dallo scope.
-- Onboarding Task Codex resta l'entrypoint obbligatorio prima della chain; applica le regole standard: non estendere lo scope, non toccare file non richiesti, produrre output idempotente e tracciabile per ogni prompt.
+## Using Tests in the Prompt Chain
+- Test execution is scoped per prompt, with two distinct phases: optional tests when requested and mandatory closing QA.
+- Run only the commands explicitly enumerated in the prompt, and explain which tests were executed and why.
+- Each intermediate prompt must include the standard QA `pytest -q -k "not slow"` (and any additional targeted tests); the final prompt executes the full suite without filtering.
+- The closing prompt always runs `pytest -q` and `pre-commit run --all-files` (per `docs/PromptChain_spec.md` and `docs/runbook_codex.md`); if they fail, apply minimal fixes and rerun until both succeed.
+- Document failed tests or repeated retries in your final reply, specifying the fixes and the number of attempts.
+
+## Commits and Pushes in the Prompt Chain
+- Codex proposes patches, waits for confirmation, and never pushes autonomously: the final commit must follow the semantics in `docs/PromptChain_spec.md`.
+- Present the diff, request human/OCP confirmation, and do not perform commit/push before full validation.
+- Pushes happen only after QA completes (`pytest -q`, `pre-commit run --all-files`) and with explicit approval from the OCP or responsible human.
+- The closing Prompt Chain commit must state that the chain is sealed, summarize QA/tests, and notify the OCP of next steps or outstanding issues.
+
+## Turn-Based Prompt Chain (OCP?Codex Cycle)
+- **SSoT:** refer to `docs/PromptChain_spec.md` for governance and the operational contract.
+- The OrchestratoreChainPrompt (OCP) issues numbered prompts (Prompt 0, 1, 2, ...); each stays within a fixed scope and corresponds to a micro-PR under the same Codex rules (HiTL, AGENT-first, QA, path safety, atomic I/O).
+- The OCP never edits the repository; it converts Timmy/ProtoTimmy's goals into formal prompts and drives Codex one step at a time. Codex must not anticipate future steps, generate additional prompts, or expand the defined scope.
+- The Onboarding Task Codex remains the required entrypoint: it enforces scope, prohibits touching unrequested files, and ensures idempotent, traceable outputs per prompt.
 
 ## Onboarding Task Codex
-- Leggi obbligatoriamente i 3 SSoT prima di ogni intervento: `docs/AGENTS_INDEX.md`, `AGENTS.md` locale, `.codex/AGENTS.md`.
-- Prima di modificare file, proponi un piano d'azione sintetico (passi e ordine).
-- Applica modello Micro-PR: scope singolo, diff minimo, idempotente, motivazione chiara.
-- Checklist QA da confermare: path-safety (utility SSoT, scope `src/` `tests/` `docs/` `.codex/`), write-atomicity, logging strutturato, aggiornare la matrice AGENTS se toccati gli `AGENTS.md`, aggiornare documentazione se necessario, rispetto degli override specifici dell'area.
+- Read the three SSoT documents before making edits: `docs/AGENTS_INDEX.md`, the relevant area `AGENTS.md`, and `.codex/AGENTS.md`.
+- Propose a concise action plan (steps and order) before modifying files.
+- Apply the micro-PR model: single scope, minimal diff, idempotent, and clearly motivated.
+- QA checklist: path safety via SSoT utilities, scoped writes, atomic logging; keep the AGENTS matrix updated when touching `AGENTS.md`, refresh documentation if behavior changes, and honor area-specific overrides.
+## Language Policy
+- All conversational exchanges between Codex, the OCP, and the user must occur in Italian unless the prompt explicitly authorizes another language; technical files and documentation can remain in English when needed.
 
-# Semantica & tags.db
+## Codex Smoke Chain - Diagnostic Test
+- **Goal:** verify that the Prompt Chain respects turn-taking, memo recognition, QA rules, escalation limits, the Italian Language Policy, and the Pre-Check validation without editing the repository.
+- **Structure:** S0: OCP issues a minimal prompt; Codex confirms that the Active Rules memo is recognized. S1: Codex describes how it would run the Pre-Check validation on a mock diff (no files created). S2: OCP simulates an operational prompt; Codex replies with a conceptual micro-PR description. S3: Codex articulates the intermediate QA (`pytest -q -k "not slow"`) it would run and explains how it would interpret outcomes (without executing anything). S4: Codex summarizes the escalation/retry plan, final QA (`pytest -q` + `pre-commit run --all-files`), and reconfirms Italian-language compliance.
+- **Rules:** no actual patches, no disk writes, no QA commands executed; perform the entire chain conceptually as a fast diagnostic after modifying Prompt Chain metadata.
+- **Use cases:** diagnose governance issues, validate Prompt Chain updates, and provide HiTL evidence that the OCP?Codex cycle, QA policies, Pre-Check validation, and Italian-language policy remain synchronized.
+# Semantics & tags.db
 
-## Task di avvio
-- Leggi `docs/AGENTS_INDEX.md` e `src/semantic/AGENTS.md`.
-- Verifica presenza `semantic/tags.db`; `tags_reviewed.yaml` solo per authoring/migrazione.
+## Startup tasks
+- Read `docs/AGENTS_INDEX.md` and `src/semantic/AGENTS.md`.
+- Ensure `semantic/tags.db` exists; treat `tags_reviewed.yaml` as a human authoring checkpoint.
 
-## Enrichment frontmatter
-- Usa `semantic.api` (niente `_private`); SSoT tag in `tags.db`.
-- Se `tags.db` manca: proponi migrazione/rigenerazione safe (no fallback silenzioso).
-- README/SUMMARY via utility repo con fallback idempotenti.
+## Enrichment front matter
+- Use `semantic.api` (avoid `_private`); treat `tags.db` as the SSoT for canonical tags.
+- If `tags.db` is missing, propose a safe migration/regeneration (no silent fallback).
+- Generate README/SUMMARY files via repository utilities with idempotent fallbacks.
 
-## Allineamento facade vs servizi
-- Controlla parita di firma tra `semantic.api` e servizi (`convert/frontmatter/embedding`).
-- Aggiungi test di compatibilita e alias/sinonimi per tag.
+## Facade vs services alignment
+- Confirm signature parity between `semantic.api` and services (`convert/frontmatter/embedding`).
+- Add compatibility tests and alias/synonym coverage for tags.
 
 # UI Streamlit
 
-## Task di avvio
-- Leggi `docs/streamlit_ui.md`, `src/ui/AGENTS.md`, `src/ui/pages/AGENTS.md`.
-- Verifica gating RAW/slug, router `st.Page` + `st.navigation`, import-safe (no I/O a import).
+## Startup tasks
+- Read `docs/streamlit_ui.md`, `src/ui/AGENTS.md`, and `src/ui/pages/AGENTS.md`.
+- Verify RAW/slug gating, the `st.Page` + `st.navigation` router, and import safety (no I/O during import).
 
-## Router e gating onboarding
-- Forza routing nativo (`st.navigation(pages).run()`), link interni con `st.page_link`.
-- Gating: tab Semantica attiva solo se `raw/` presente; messaggi utente brevi, log dettagliati.
-- Stato/slug tramite `ui.utils.route_state` e `ui.utils.slug`; niente query hacks.
+## Router and onboarding gating
+- Enforce native routing (`st.navigation(pages).run()`), using internal links through `st.page_link`.
+- Semantics gating: enable the Semantica tab only after `raw/` exists; keep user messages short and log details.
+- Manage state and slug with `ui.utils.route_state` and `ui.utils.slug`; avoid query tricks.
 
-## Sweep deprecazioni e layout
-- Rimuovi `st.cache`, `st.experimental_*`, `unsafe_allow_html`, `use_container_width`.
-- Layout compat con stub (evita `with col` non supportati); preferisci `st.dialog` con fallback.
-- Logging `get_structured_logger("ui.<pagina>")`, senza `print()`/PII.
+## Deprecation sweep and layout
+- Remove `st.cache`, `st.experimental_*`, `unsafe_allow_html`, and `use_container_width`.
+- Keep layouts stub-friendly (avoid unsupported `with col` blocks); prefer `st.dialog` with fallbacks.
+- Log via `get_structured_logger("ui.<page>")`; avoid `print()` and PII leaks.
 
 # Test & QA
 
-## Task di avvio
-- Leggi `docs/AGENTS_INDEX.md`, `tests/AGENTS.md`.
-- Setup dataset dummy; nessuna dipendenza di rete (mock Drive/Git).
+## Startup tasks
+- Read `docs/AGENTS_INDEX.md` and `tests/AGENTS.md`.
+- Prepare dummy datasets; avoid network dependencies by mocking Drive/Git.
 
 ## QA pipeline
-- Esegui: `isort`, `black`, `ruff --fix`, `mypy`, `pytest -q -k 'not slow'`.
-- Contract test su guard `book/` (solo `.md`, ignora `.md.fp`), smoke E2E su slug dummy.
+- Run `isort`, `black`, `ruff --fix`, `mypy`, and `pytest -q -k 'not slow'` (for intermediate prompts).
+- The final QA prompt instead runs `pytest -q` (without filters) and `pre-commit run --all-files`.
+- Include contract tests for the `book/` guard (only `.md`, ignore `.md.fp`) and smoke E2E runs on dummy slugs.
 
 # Docs & Runbook
 
-## Task di avvio
-- Leggi `docs/runbook_codex.md`, `docs/AGENTS_INDEX.md`, `docs/AGENTS.md`.
-- Mantieni frontmatter/titoli coerenti (`v1.0 Beta`), cSpell su `docs/` e `README.md`.
+## Startup tasks
+- Read `docs/runbook_codex.md`, `docs/AGENTS_INDEX.md`, and `docs/AGENTS.md`.
+- Keep front matter/titles aligned with `v1.0 Beta` and maintain cSpell checks on `docs/` and `README.md`.
 
-## Doc-sync (API o flow cambiati)
-- Confronta codice vs `docs/architecture.md`, `docs/developer_guide.md`, `docs/guida_ui.md`.
-- Applica patch minime; aggiorna `.codex/WORKFLOWS.md` se il flow cambia.
-- Verifica cSpell e link relativi.
+## Doc sync (API or flow changes)
+- Align the code with `docs/architecture.md`, `docs/developer_guide.md`, and `docs/guida_ui.md`.
+- Apply minimal patches; update `.codex/WORKFLOWS.md` if the flow changes.
+- Verify cSpell and relative links.
 
-## cSpell cleanup su docs/
-- Raccogli parole ignote; aggiorna `cspell.json` / `.vscode/settings.json` solo per termini di dominio.
-- Evita ignore per file interi.
+## cSpell cleanup on docs/
+- Gather unknown words; update `cspell.json`/`.vscode/settings.json` only for domain-specific terms.
+- Avoid ignoring entire files.
 
-## Richiesta review al Senior Reviewer
-- Output: titolo sintetico, contesto, file toccati + modifiche, esito QA (formatter/linter/type/test), test mancanti/known issues, 2-3 domande al Senior.
-- Rispetta `.codex/CONSTITUTION.md`, `.codex/AGENTS.md`, `docs/AGENTS_INDEX.md`; scope micro-PR.
+## Senior Reviewer request
+- Deliver: concise title, context, files touched + changes, QA results (formatter/linter/type/test), missing tests/known issues, and 2-3 questions for the Senior.
+- Respect `.codex/CONSTITUTION.md`, `.codex/AGENTS.md`, and `docs/AGENTS_INDEX.md`; keep the scope to a micro-PR.

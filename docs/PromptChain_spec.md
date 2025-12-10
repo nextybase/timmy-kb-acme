@@ -1,68 +1,82 @@
 # Prompt Chain Spec (SSoT)
 
-## 1. Introduzione
-- **Scopo**: separare la fase progettuale (Planner → OCP) dalla fase operativa (Codex), garantendo che ogni passaggio sia controllato, tracciabile e micro-PR compliant.
-- **Perché uno SSoT**: evitare frammentazione tra documenti, fornire un riferimento unico su attori, regole e output attesi per la Prompt Chain.
-- **Principi**: micro-PR, sicurezza (path-safety, I/O atomico), controllo umano (HiTL) e QA esplicita.
+## 1. Introduction
+- **Purpose:** separate the planning phase (Planner -> OCP) from the operational work (Codex), ensuring that every step remains controlled, traceable, and compliant with micro-PR discipline.
+- **Why a SSoT:** avoid fragmentation across docs, provide a single reference for actors, rules, and expected outputs.
+- **Principles:** micro-PRs, safety (path safety, atomic I/O), human oversight (HiTL), and explicit QA.
 
-## 2. Parte A – Governance (Planner + OCP)
+## 2. Part A - Governance (Planner + OCP)
 
-### 2.1 Attori
-- **Planner**: pianifica obiettivi, decide se procedere, correggere o chiudere la chain; non modifica il codice.
-- **OCP (OrchestratoreChainPrompt)**: traduce obiettivi del Planner in prompt numerati (Prompt 0, 1, ...), mantiene lo scope e l’ordine; non modifica il repository.
-- **Codex**: esegue un prompt alla volta, agente repo-aware; applica patch limitate con QA e rispetto delle policy AGENT.
+### 2.1 Actors
+- **Planner:** defines objectives, decides whether to proceed, adjust, or close the chain; it never touches the code.
+- **OCP (OrchestratoreChainPrompt):** translates planner objectives into numbered prompts (Prompt 0, 1, ...), maintains scope and order, and never edits the repo.
+- **Codex:** executes one prompt at a time as the repo-aware agent; applies limited patches with QA while respecting AGENT policies.
 
-### 2.2 Onboarding Task Codex (entrypoint obbligatorio)
-- Procedura iniziale con cui Codex carica contesto e regole del repo (AGENTS_INDEX, AGENTS locali, policy operative).
-- Serve per attivare path-safety, confermare applicabilità del modello micro-PR e impostare gli SSoT.
-- Eseguito una sola volta all’inizio della Prompt Chain, prima di qualsiasi prompt operativo.
+### 2.2 Onboarding Task Codex (mandatory entry point)
+- The onboarding process lets Codex load repository context and all governance rules (AGENTS_INDEX, local AGENTS, operational policies).
+- It activates path safety, confirms that the micro-PR model applies, and establishes the SSoT.
+- It runs once at the start of the Prompt Chain before any operational prompt.
 
-### 2.3 Definizione di Prompt Chain
-- Sequenza numerata di prompt (Prompt 0..N).
-- Ogni prompt è uno step autonomo, con scope limitato e trattato come micro-PR con QA.
-- Non esecuzioni in batch: un prompt alla volta.
+### 2.3 Prompt Chain definition
+- A numbered sequence of prompts (Prompt 0..N).
+- Each prompt is an autonomous step with a limited scope and is handled as a micro-PR with QA.
+- No batch execution: one prompt at a time.
 
-### 2.4 Ciclo di vita della Prompt Chain
+### 2.4 Prompt Chain lifecycle
 
-- **Avvio**
-  - Il Planner decide di iniziare una Prompt Chain.
-  - L’Onboarding Task Codex viene eseguito come prerequisito, assicurando che Codex abbia caricato SSoT, policy AGENT e regole di path-safety.
-  - Solo dopo l’Onboarding l’OCP può generare il Prompt 0.
+- **Kick-off**
+  - The Planner decides to start a Prompt Chain.
+  - Onboarding Task Codex runs as a prerequisite, ensuring Codex has loaded the SSoT, AGENT policies, and path safety rules.
+  - Only after onboarding may the OCP issue Prompt 0.
 
-- **Svolgimento**
-  - L’OCP genera un solo prompt alla volta (Prompt N).
-  - Codex esegue il prompt, applica micro-PR limitati allo scope, e produce:
-    - diff unificato,
-    - report strutturato con esito e note operative.
-  - Il Planner decide se proseguire, modificare la direzione o avviare la chiusura.
+- **Execution**
+  - The OCP issues one prompt at a time.
+  - Codex executes the prompt, applies scoped micro-PRs, and produces a unified diff plus a structured report.
+- Every operational prompt must start with the "Active Rules" memo reminding teams about path safety ON, micro-PR discipline, zero side effects, documentation updates, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Italian Language Policy. Codex responses must include this memo and confirm compliance with the OCP⇄Codex turn-based cycle (OCP -> Codex response -> evaluation -> next prompt).
+  - Before moving to the next prompt, execute the filtered QA `pytest -q -k "not slow"` plus any prompt-specific tests; the final prompt runs the full suite.
+  - The Planner decides whether to continue, adjust direction, or start closing.
 
-- **Chiusura (regola obbligatoria)**
-  - Anche se il Planner richiede una chiusura anticipata, l’OCP genera comunque un **Prompt finale di QA**.
-  - Il Prompt finale di QA ha l’obiettivo di portare a verde l’intera repository eseguendo realmente:
+- **Closure (mandatory rule)**
+  - Even if the Planner asks for an early shutdown, the OCP still issues a final QA prompt.
+  - The final QA prompt aims to bring the entire repository green by running:
     ```
     pre-commit run --all-files
     pytest -q
     ```
-  - Se uno dei due comandi fallisce, Codex applica micro-correzioni e reitera l’esecuzione (fino a un massimo di 10 tentativi).
-  - La Prompt Chain è considerata conclusa solo quando entrambi i comandi risultano verdi.
-  - In risposta al Prompt finale, **Codex deve proporre un commit one-line di sintesi** del lavoro svolto nella catena, come chiusura formale del ciclo.
+  - If either command fails, Codex applies micro-corrections and retries (up to 10 attempts).
+  - The Prompt Chain is considered complete only when both commands pass.
+  - The final response must include a one-line commit summary that closes the chain.
 
-## 3. Parte B – Contratto Operativo per Codex
+## 3. Part B - Operational Contract for Codex
 
-### 3.1 Che cos’è una Prompt Chain per Codex
-- Sequenza di prompt numerati, ciascuno con scope limitato e rappresentante un micro-PR.
-- Esegui un solo prompt alla volta; non anticipare futuri passi; non generare prompt autonomi.
+### 3.1 What is a Prompt Chain for Codex?
+- A sequence of numbered prompts, each limited in scope and mapped to a micro-PR.
+- Execute one prompt at a time; do not anticipate future steps or generate prompts autonomously.
 
-### 3.2 Regole fondamentali
-- Rispetta sempre: path-safety, scritture atomiche, AGENTS_INDEX + AGENTS locali, questo SSoT, QA locale (formatter/linter/type/pytest mirato).
-- Modifica solo i file esplicitamente permessi nel prompt; segui lo scope indicato.
+### 3.2 Core rules
+- Always respect path safety, atomic writes, AGENTS_INDEX + local AGENTS, this SSoT, and the local QA stack (formatters/linters/types/targeted `pytest`).
+- Pre-Check Validation: Before applying any diff, confirm there are no raw `open(...)` calls, `Path` usage outside path-utils, `_private` imports or forbidden wrappers, hardcoded paths/magic strings, unstructured logging, REPO_ROOT/SSoT modifications, or non-atomic patches that conflict with the Active Rules memo. A failed pre-check halts QA, allows two autocorrections, and then requires OCP instructions.
+- Micro-PR: each prompt is a focused, idempotent change set with a clear scope; run intermediate QA (`pytest -q -k "not slow"`) before proceeding, and perform the final QA (`pytest -q` + `pre-commit run --all-files`). After two failed autocorrections, request guidance from the Planner/OCP.
+- All conversational exchanges between Codex, the OCP, and the user must be in Italian unless the prompt explicitly says otherwise; technical documentation may stay English.
+- Edit only the files explicitly permitted by the prompt and adhere strictly to the defined scope.
 
-### 3.3 Formato dei prompt di una Prompt Chain
-- Ogni prompt esplicita: Scopo (1–3 righe), File ammessi/proibiti, Output richiesto (diff, report, QA), Divieti espliciti.
+### 3.3 Prompt format
+- Every prompt declares purpose (1-3 lines), allowed/prohibited files, expected outputs (diff, report, QA), and explicit prohibitions.
 
-### 3.4 Output richiesto per ogni prompt
-- Diff unificato (se ci sono modifiche).
-- Report strutturato con: Modifiche applicate, Impatto, QA eseguita, Step successivi suggeriti; dichiarare assunzioni se il prompt non era completo.
+### 3.4 Required output per prompt
+- Produce a unified diff (if changes exist).
+- Provide a structured report covering applied changes, impact, QA performed, and suggested next steps; mention any assumptions if the prompt was incomplete.
 
-### 3.5 Anti-pattern
-- Aggiungere contesto non richiesto; modificare file non menzionati; interventi troppo ampi; unire domini eterogenei nello stesso prompt (codice + config + doc pesante).
+### 3.5 Anti-patterns
+- Adding unrequired context, touching unspecified files, creating overly broad interventions, or combining unrelated domains (code + config + heavy documentation) in the same prompt.
+
+## Codex Smoke Chain - Diagnostic Test
+- **Objective:** simulate a conceptual mini-cycle (S0-S4) to confirm turn-taking, the Active Rules memo, QA policies, escalation, Italian language, and the Pre-Check validation are wired correctly, without editing the repo.
+- **Structure:**
+  - S0: OCP sends a toy prompt; Codex acknowledges the Active Rules memo.
+  - S1: Codex explains how it would perform the Pre-Check validation on a mock diff (no files created).
+  - S2: OCP issues a hypothetical operational prompt; Codex replies with a conceptual micro-PR summary.
+  - S3: Codex states the intermediate QA (`pytest -q -k "not slow"`) it would run and how it would interpret the result (without executing commands).
+  - S4: Codex describes the escalation path (max two autocorrections), final QA plan (`pytest -q` + `pre-commit run --all-files`), and reconfirms Italian conversation compliance.
+- **Rules:** no real patches or disk writes, no QA commands executed; always respect path safety/micro-PR, and treat the Smoke Chain as a HiTL health check after any Prompt Chain update.
+- **Use cases:** diagnose Prompt Chain misconfigurations, validate new meta-file updates, and demonstrate that the OCP⇄Codex orchestration remains intact.

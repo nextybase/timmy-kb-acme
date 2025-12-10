@@ -1,17 +1,20 @@
-# Scopo
-Regole per l'onboarding UI Streamlit, orientate a gating corretto e I/O sicuro.
+# Purpose
+Rules for the Streamlit onboarding UI that prioritize correct gating and safe I/O.
 
-# Regole (override)
-- Seguire `docs/streamlit_ui.md` per router, stato, I/O e logging; flusso: configurazione -> Drive (provisioning + README + download RAW) -> Semantica (convert/enrich -> README/SUMMARY -> Preview).
-- Gating: la tab **Semantica** e attiva solo se `raw/` locale esiste.
-- Router obbligatorio con `st.Page` + `st.navigation` e helper `ui.utils.route_state`/`ui.utils.slug`; evitare side-effect non idempotenti.
-- I/O path-safe con `ensure_within_and_resolve`, `safe_write_text/bytes`, `iter_safe_pdfs` (nessun `os.walk` non previsto).
-- Messaggi utente brevi, dettagli nei log; logging strutturato `ui.<pagina>` con contesto minimo (slug, path relativo, esito).
 
-# Criteri di accettazione
-- Nessuna azione "Semantica" se `raw/` e vuoto o mancante.
-- Progress/feedback utente chiaro su Drive e conversione.
+# Rules (overrides)
+- Follow `docs/streamlit_ui.md` for routing, state management, I/O, and logging; the flow should cover configuration → Drive (provisioning + README + RAW download) → Semantics (convert/enrich → README/SUMMARY → Preview).
+- Gate the Semantica tab so it is enabled only when `raw/` is present locally.
+- Use native routing with `st.Page`, `st.navigation`, and helpers such as `ui.utils.route_state`/`ui.utils.slug`; avoid non-idempotent side effects.
+- Enforce path-safe I/O with `ensure_within_and_resolve`, `safe_write_text`/`safe_write_bytes`, and `iter_safe_pdfs` (no unexpected `os.walk`).
+- Keep user-facing messages concise while logging structured context (`ui.<page>` with slug, relative path, outcome).
 
-# Riferimenti
+
+# Acceptance Criteria
+- Never trigger Semantica actions if `raw/` is empty or missing.
+- Provide clear progress/feedback for Drive provisioning and conversion steps.
+
+
+# References
 - docs/AGENTS_INDEX.md
 - docs/streamlit_ui.md

@@ -1,18 +1,17 @@
-# AGENTS Index  Policy Comuni per Agent
+# AGENTS Index – Shared Policies for All Agents
 
-Questo indice raccoglie le regole comuni che gli agent devono seguire nel repository. Evitare duplicazioni: i singoli `AGENTS.md` nelle sottocartelle devono contenere solo gli override specifici del loro ambito e rimandare qui per tutto il resto.
+This index gathers the shared policies that every agent must follow in the repository. Avoid duplicating rules: the individual `AGENTS.md` files under their respective areas should contain only the minimal, scope-specific overrides and point back to this index for everything else.
 
-## Approccio operativo (AGENT-first, HiTL)
 
-Questo repository tratta l'agente come un *teammate* con responsabilita chiare: le **policy comuni** vivono qui, gli `AGENTS.md` di area definiscono solo **override minimi** e rimandano all'indice. L'approccio e **Human-in-the-Loop**: l'agente propone micro-PR idempotenti, **non** introduce side-effects, e chiude il loop con lint/type/test.
+## Operational Approach (Agent-first, HiTL)
 
-Cardini dell'approccio:
-- **SSoT & Safety**  tutte le read/write passano dalle utility e restano nel perimetro del workspace; niente effetti collaterali non dichiarati.
-- **Micro-PR**  cambi piccoli, motivati, con diff chiaro; se tocchi X allinea Y/Z (docs, test, frontmatter).
-- **Matrix come contratto**  questa tabella e il *punto di verita* tra aree: build/test/lint/path-safety/documentazione sono obblighi, non suggerimenti.
-- **Gating UX**  nelle superfici UI le azioni seguono lo **stato** (es. la Semantica si abilita solo con RAW presente), evitando operazioni non idempotenti.
+The repository treats the agent as a teammate with clear responsibilities: the **common policies** live here, and area-specific `AGENTS.md` files define only **local overrides**. The workflow is **Human-in-the-Loop**: the agent proposes idempotent micro-PRs, avoids side effects, and closes the loop with lint/type/test.
 
-In sintesi: policy **qui**, override **nei loro AGENTS**, e l'agente lavora *on-rails* per garantire coerenza e ripetibilita.
+Core principles:
+- **SSoT & Safety:** all reads/writes go through the utility belt and stay within the workspace; no unannounced collateral effects.
+- **Micro-PR:** small, motivated changes with a clear diff; touching area X requires syncing docs/tests and related buffers.
+- **Matrix as contract:** the table below is the single source of truth across domains: build/test/lint/path-safety/documentation are obligations, not suggestions.
+- **Gating UX:** UI surfaces obey state (e.g., Semantica unlocks only when RAW exists) to avoid non-idempotent operations.
 
 
 <!-- MATRIX:BEGIN -->
@@ -21,52 +20,38 @@ In sintesi: policy **qui**, override **nei loro AGENTS**, e l'agente lavora *on-
 
 | Area | File | Override chiave (sintesi) | Criteri di accettazione (key) | Note | Task tipici dell'agente |
 |------|------|---------------------------|-------------------------------|------|-------------------------|
-| Root | `AGENTS.md` | Prima di lavorare rileggi `docs/runbook_codex.md` e i documenti `.codex/` per allineare workflow e standard. | Le attività partono solo dopo avere consultato `docs/runbook_codex.md` e le guide `.codex/`. |  | Allineamento runbook `.codex/`<br>Verifica documenti obbligatori |
-| Pipeline Core | `src/pipeline/AGENTS.md` | Path-safety obbligatoria: tutte le write/copy/rm passano da `ensure_within*` (no join manuali).; Scritture atomiche tramite `safe_write_text/bytes`. | Nessuna scrittura fuori dal workspace cliente. |  | Hardening path-safety pipeline<br>Refactor I/O su utility SSoT<br>Log strutturato pipeline/run |
-| Semantica | `src/semantic/AGENTS.md` | Uso della facade pubblica `semantic.api`; niente import/invocazioni di funzioni `_private`.; SSoT tag runtime: `semantic/tags.db`; `tags_reviewed.yaml` solo per authoring/migrazione. | Enrichment non duplica tag, rispetta sinonimi/alias e non altera contenuti non frontmatter. |  | Allineamento `semantic.api` vs service<br>Rigenerazione/migrazione `tags.db`<br>Fallback README/SUMMARY idempotenti |
-| UI (Streamlit) | `src/ui/AGENTS.md` | Seguire `docs/streamlit_ui.md` per router, stato, I/O e logging; flusso: configurazione -> Drive (provisioning + README + download RAW) -> Semantica (convert/enrich -> README/SUMMARY -> Preview).; Gating: la tab **Semantica** e attiva solo se `raw/` locale esiste. | Nessuna azione "Semantica" se `raw/` e vuoto o mancante. | UX guidata da stato | Refactor orchestratori UI onboarding<br>Audit gating RAW/slug e router `st.navigation`<br>Messaggistica/log `ui.<pagina>` coerente |
-| UI (Streamlit) | `src/ui/pages/AGENTS.md` | Versione minima Streamlit 1.50.0 con router nativo obbligatorio (`st.Page` + `st.navigation`); nessun router custom.; Import-safe: niente I/O o side-effect a import; `st.set_page_config` resta centralizzato nell'entrypoint. | Router nativo presente (`st.Page`/`st.navigation`) e link interni via `st.page_link`; query/slug gestiti solo dagli helper dedicati. | UX guidata da stato | Sweep deprecazioni Streamlit 1.50<br>Router nativo `st.Page`/`st.navigation` compliance<br>Path-safety e logging per pagine |
-| UI Fine Tuning | `src/ui/fine_tuning/AGENTS.md` | Flusso vincolante: lettura assistant (id, modello, system prompt) in modal read-only con copia/esporta; dry-run con output grezzo; revisione di campi configurabili senza write remota fino a conferma; eventuali export/backup solo nel workspace con I/O atomico.; Modifiche all'Assistant proposte come micro-PR HiTL, con motivazione chiara e diff esplicito. | Il modal System Prompt mostra `assistant_id`, `model`, istruzioni complete e pulsante Copia; il dry-run espone l'output grezzo non alterato. |  | Modal Assistant read-only + export<br>Dry-run con output grezzo<br>Proposte micro-PR per config Assistant |
-| Test | `tests/AGENTS.md` | Dataset dummy generati con tool dedicati (mai dati reali).; Nessuna dipendenza di rete: Drive/Git vanno mockati o bypassati. | Build/test verdi in locale; smoke E2E su slug dummy riproducibile. |  | Mock Drive/Git e fixture dummy<br>Contract test su guard `book/`<br>Smoke E2E slug di esempio |
-| Documentazione | `docs/AGENTS.md` | Documentazione in italiano; i documenti architetturali possono restare in inglese se dichiarato nell'indice.; Gli aggiornamenti di codice che toccano UX/flow devono riflettersi nei testi nello stesso PR. | Spell check pulito su `docs/` e `README.md` senza ignorati ad hoc. |  | Sweep cSpell e frontmatter versione<br>Allineamento README/docs su nuove feature<br>Aggiornare guide con orchestratori correnti |
-| Codex (repo) | `.codex/AGENTS.md` | Path-safety: scrivo solo in `src/`, `tests/`, `docs/`, `.codex/`; mai in `config/**`, `.env*`, `output/**`.; I/O atomico via utility SSoT (`ensure_within*`, `safe_write_*`), nessun side-effect a import-time. | Path-safety rispettata (solo `src/`, `tests/`, `docs/`, `.codex/`; nessuna eccezione). |  | Esecuzione pipeline QA standard<br>Allineamento uso helper GitHub<br>Riuso tool vision/UI condivisi |
+| Root | `AGENTS.md` | ???'???? | No activity starts until the runbook and supporting `.codex/` documents have been reviewed. |  | Allineamento runbook `.codex/`<br>Verifica documenti obbligatori |
+| Pipeline Core | `src/pipeline/AGENTS.md` | ???'???? | No write or delete happens outside the customer workspace. |  | Hardening path-safety pipeline<br>Refactor I/O su utility SSoT<br>Log strutturato pipeline/run |
+| Semantica | `src/semantic/AGENTS.md` | ???'???? | Enrichment must not duplicate tags, must honor synonyms/aliases, and must leave non-frontmatter content untouched. |  | Allineamento `semantic.api` vs service<br>Rigenerazione/migrazione `tags.db`<br>Fallback README/SUMMARY idempotenti |
+| UI (Streamlit) | `src/ui/AGENTS.md` | ???'???? | Never trigger Semantica actions if `raw/` is empty or missing. | UX guidata da stato | Refactor orchestratori UI onboarding<br>Audit gating RAW/slug e router `st.navigation`<br>Messaggistica/log `ui.<pagina>` coerente |
+| UI (Streamlit) | `src/ui/pages/AGENTS.md` | ???'???? | Native routing (`st.Page`/`st.navigation`) is present with internal links handled by `st.page_link`; queries/slugs rely solely on dedicated helpers. | UX guidata da stato | Sweep deprecazioni Streamlit 1.50<br>Router nativo `st.Page`/`st.navigation` compliance<br>Path-safety e logging per pagine |
+| UI Fine Tuning | `src/ui/fine_tuning/AGENTS.md` | ???'???? | The System Prompt modal displays `assistant_id`, `model`, full instructions, and a copy button; dry-run output remains unaltered. |  | Modal Assistant read-only + export<br>Dry-run con output grezzo<br>Proposte micro-PR per config Assistant |
+| Test | `tests/AGENTS.md` | ???'???? | Local builds/tests pass with smoke E2E executed on reproducible dummy slugs. |  | Mock Drive/Git e fixture dummy<br>Contract test su guard `book/`<br>Smoke E2E slug di esempio |
+| Documentazione | `docs/AGENTS.md` | ???'???? | Clean spell-check results on `docs/` and `README.md` without ad-hoc ignores. |  | Sweep cSpell e frontmatter versione<br>Allineamento README/docs su nuove feature<br>Aggiornare guide con orchestratori correnti |
+| Codex (repo) | `.codex/AGENTS.md` | ???'???? | Path safety enforced (writes limited to `src/`, `tests/`, `docs/`, `.codex/` without exception). |  | Esecuzione pipeline QA standard<br>Allineamento uso helper GitHub<br>Riuso tool vision/UI condivisi |
 
 <!-- MATRIX:END -->
 
 
----
+## Common Policies
+- **Build:** keep scripts idempotent; avoid global side effects or undeclared state changes.
+- **Test:** run tests locally deterministically; no network dependencies in unit tests. Use markers/filters as needed (e.g., `-m drive`, `-m push`, `-m slow`).
+- **Lint & Typecheck:** apply configured formatters/linters (`Ruff`, `Black`, `isort`) and typecheckers (`mypy`/`pyright`) when present. Respect the project's existing standards.
+- **Path-safety & I/O:** every read/write must flow through the SSoT helpers (`ensure_within*`, `safe_write_*`). Never create/delete files outside the customer perimeter.
+- **Documentation & QA:** update documentation when UX/flow changes occur. Keep cSpell clean on tracked paths; only expand dictionaries for domain-specific terms.
 
-## Policy comuni
-- Build
-  - Mantieni gli script/target di build idempotenti e ripetibili.
-  - Non introdurre effetti collaterali globali o modifiche di stato non dichiarate.
-- Test
-  - Esegui test locali in modo deterministico; niente dipendenze di rete nei test unit.
-  - Usa marker/filtri per isolare aree (es. `-m drive`, `-m push`, `-m slow`).
-- Lint & Typecheck
-  - Applica i linters configurati (Ruff/Black/isort) e il typecheck (mypy/pyright) quando presenti.
-  - Non alterare gli standard del progetto; rispetta le regole gia in `pyproject.toml`.
-- path-safety & I/O
-  - Qualsiasi lettura/scrittura deve passare dalle utility SSoT (`ensure_within*`, `safe_write_*`).
-  - Vietato creare/cancellare file fuori dal perimetro del workspace cliente.
-- Documentazione & QA
-  - Aggiorna la documentazione quando cambi UX/flow.
-  - Mantieni cSpell pulito sulle path previste; aggiorna i dizionari solo per termini tecnici/di dominio.
 
----
-
-## Rimandi (AGENTS locali)
+## Local AGENTS references
 - Pipeline Core: `src/pipeline/AGENTS.md`
-- Semantica: `src/semantic/AGENTS.md`
-- UI (Streamlit): `src/ui/AGENTS.md`
-- UI (Streamlit): `src/ui/pages/AGENTS.md`
+- Semantics: `src/semantic/AGENTS.md`
+- UI: `src/ui/AGENTS.md`
+- UI (Pages): `src/ui/pages/AGENTS.md`
 - Test: `tests/AGENTS.md`
-- Documentazione: `docs/AGENTS.md`
-- Radice progetto: `AGENTS.md`
+- Documentation: `docs/AGENTS.md`
+- Repository root: `AGENTS.md`
 - Codex (repo): `.codex/AGENTS.md`
 
----
 
-## Nota anti-duplicazione
-- Le sezioni comuni vivono in questo indice.
-- I file `AGENTS.md` locali devono contenere solo regole/deroghe specifiche del loro ambito (es. vincoli UI, contratti semantici, piramide test), con un link esplicito a questo indice.
+## Anti-duplication note
+- Common sections belong in this index.
+- Local `AGENTS.md` files should only describe area-specific overrides and link explicitly back to this index.

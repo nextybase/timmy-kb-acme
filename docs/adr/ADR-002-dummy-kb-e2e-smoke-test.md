@@ -183,7 +183,7 @@ Il refactor viene implementato nei seguenti file:
 
 - Documentazione di riferimento:
 `docs/developer_guide.md`,
-`docs/codex_integrazione.md`,
+`docs/guida_codex.md`,
 `docs/streamlit_ui.md`.
 
 ---

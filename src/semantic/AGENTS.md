@@ -1,15 +1,18 @@
-# Scopo
-Regole per i flussi semantici (enrichment/frontmatter) mantenendo SSoT e idempotenza.
+# Purpose
+Govern semantic workflows (enrichment/frontmatter) while preserving the SSoT and idempotent behavior.
 
-# Regole (override)
-- Uso della facade pubblica `semantic.api`; niente import/invocazioni di funzioni `_private`.
-- SSoT tag runtime: `semantic/tags.db`; `tags_reviewed.yaml` solo per authoring/migrazione.
-- README/SUMMARY tramite utility repo con fallback idempotenti (nessuna sovrascrittura distruttiva).
-- Nessun side-effect a import-time; funzioni pure dove possibile.
 
-# Criteri di accettazione
-- Enrichment non duplica tag, rispetta sinonimi/alias e non altera contenuti non frontmatter.
-- Se `tags.db` manca, proporre rigenerazione/migrazione invece di fallback silenziosi.
+# Rules (overrides)
+- Use the public `semantic.api` facade; avoid imports or invocations of `_private` helpers.
+- Treat `semantic/tags.db` as the runtime SSoT; reserve `tags_reviewed.yaml` for manual authoring or migration checkpoints.
+- Generate README/SUMMARY through repository utilities with idempotent fallbacks that avoid destructive overwrites.
+- Ensure no import-time side effects; prefer pure functions wherever feasible.
 
-# Riferimenti
+
+# Acceptance Criteria
+- Enrichment must not duplicate tags, must honor synonyms/aliases, and must leave non-frontmatter content untouched.
+- If `tags.db` is missing, propose a safe regeneration/migration instead of silently falling back.
+
+
+# References
 - docs/AGENTS_INDEX.md

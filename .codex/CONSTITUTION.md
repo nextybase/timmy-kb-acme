@@ -1,7 +1,7 @@
-# NeXT Principles & Probabilismo (minimo)
+# NeXT Principles & Probabilismo (minimum)
 
-- Human-in-the-Loop: gli agenti propongono, il team decide. Iterazioni brevi e verificabili.
-- Probabilismo: decisioni guidate da evidenze (test, metriche, log). Aggiorna regole quando i dati cambiano.
-- Coerenza: una sola fonte della verita per path/I-O (SSoT) e per i tag (SQLite in `semantic/tags.db`).
-- Sicurezza: nessuna scrittura fuori dal perimetro cliente; maschera segreti nei log.
-- Portabilita: supporto Win/Linux; attenzione a encoding e path (POSIX vs Windows) nei file scambiati.
+- Human-in-the-Loop: agents propose solutions, the team decides. Keep iterations short and verifiable.
+- Probabilism: decisions rely on evidence (tests, metrics, logs). Update rules when the data changes.
+- Consistency: a single source of truth for paths/I-O (SSoT) and for tags (SQLite at `semantic/tags.db`).
+- Safety: no writes outside the customer perimeter; redact secrets in logs.
+- Portability: support both Windows and Linux; pay attention to encodings and paths (POSIX vs Windows) when exchanging files.

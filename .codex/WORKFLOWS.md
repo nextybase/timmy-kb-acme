@@ -1,66 +1,70 @@
-# Workflow operativi (UI/CLI)
+# Operational Workflows (UI/CLI)
 
-## Panorama
-- Doppio approccio: **orchestratori CLI** o **UI Streamlit** (`onboarding_ui.py`).
-- Obiettivo: trasformare PDF in **KB Markdown AIready** con frontmatter coerente, README/SUMMARY e **preview HonKit (Docker)**; infine **push**.
+## Overview
+- A dual approach offering both CLI orchestrators and the Streamlit UI (`onboarding_ui.py`).
+- Goal: turn PDFs into AI-ready KB Markdown with coherent front matter, a synchronized README/SUMMARY, an HonKit Docker preview, and eventually a push to GitHub.
 
-### Integrazione Codex (Repo-aware, v2)
-  - Tutti i workflow UI/CLI possono essere eseguiti anche tramite l'agente **Codex repo-aware**, seguendo quanto definito in `docs/codex_integrazione.md` e nel `docs/runbook_codex.md`.
-  - Prima di ogni esecuzione assistita da Codex vengono caricati obbligatoriamente i tre SSoT: `docs/AGENTS_INDEX.md`, l'`AGENTS.md` dell'area interessata e `~/.codex/AGENTS.md`.
-  - L'entrypoint operativo raccomandato e' **Onboarding Task Codex** (vedi `.codex/PROMPTS.md`), che garantisce piano preliminare, micro-PR idempotenti, QA esplicita e aggiornamento della matrice AGENTS.
-  - I workflow descritti in questo file devono quindi mantenere: path-safety, scritture atomiche, logging strutturato e assenza di side-effects a import-time, anche quando eseguiti via agente.
-  - Alcuni workflow possono essere eseguiti dentro una Prompt Chain orchestrata da OCP: l'entrypoint resta Onboarding Task Codex, poi la sequenza di prompt viene guidata dall'OCP (un prompt alla volta) senza cambiare il flusso base micro-PR + QA.
-  - `docs/PromptChain_spec.md` resta la SSoT della Prompt Chain: ogni turno OCP <-> Codex e turn-based (risposta, stop, attesa) e la chiusura richiede `pytest -q` e `pre-commit run --all-files` prima di dichiarare il change set completato.
+### Codex Integration (Repo-aware, v2)
+- Every UI/CLI workflow can also be executed through the repo-aware Codex agent, following `docs/codex_integrazione.md` and `docs/runbook_codex.md`.
+- Each Codex-assisted execution must load the three mandated SSoT documents: `docs/AGENTS_INDEX.md`, the relevant area `AGENTS.md`, and `~/.codex/AGENTS.md`.
+- The recommended entrypoint is the Onboarding Task Codex (see `.codex/PROMPTS.md`), which enforces a preliminary plan, idempotent micro-PRs, explicit QA, and AGENTS matrix updates.
+- Workflows in this file must honor path safety, atomic writes, structured logging, and import-time safety even when driven by Codex.
+- Some workflows can be run inside a Prompt Chain orchestrated by the OCP: the entrypoint remains the Onboarding Task, and the prompt sequence is guided one-turn-at-a-time by the OCP without altering the baseline micro-PR + QA flow.
+- `docs/PromptChain_spec.md` remains the single source of truth for the Prompt Chain: each OCP⇄Codex turn is strictly regulated (respond, stop, wait) and the closing step requires `pytest -q` plus `pre-commit run --all-files` before declaring the change set complete.
+- Active Rules: each operational prompt begins with the memo that reminds teams about path safety ON, micro-PR discipline, zero side effects, documenting behavior changes, the pre-check, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Italian Language Policy; this header enforces the OCP?Codex turn-based cycle.
+- Governance forbids chaining multiple OCP prompts without Codex responses; the cycle is OCP⇄Codex (response) ⇄ evaluation/feedback ⇄ next OCP prompt, with escalation after two failed correction attempts.
+- Micro-PRs and QA are mandatory: each step is limited in scope, covered by intermediate QA, and the final prompt closes with full QA and escalation to the OCP if retries (max two autocorrections) do not succeed.
 
-## Flusso end-to-end
-1) **pre_onboarding**  crea sandbox locale (`output/timmy-kb-<slug>/...`), risolve YAML struttura, opzionale **provisioning Drive** + upload `config.yaml`.
-    2) **tag_onboarding**  genera `semantic/tags_raw.csv` (euristiche filename/path) + checkpoint HiTL  `tags_reviewed.yaml` (stub revisione).
-3) **Tag KG Builder** (`kg_build.py` / UI "Knowledge Graph dei tag")  legge `semantic/tags_raw.json`, invoca lassistant OpenAI `build_tag_kg`, salva `semantic/kg.tags.json` + `semantic/kg.tags.md` e mantiene la vista human-first per revisioni (occhio ai namespace).
-4) **semantic_onboarding** (UI via `semantic.api` / CLI)  **PDFMarkdown** in `book/`, arricchimento frontmatter usando **vocabolario canonico su SQLite (`tags.db`)**, rigenera il frontmatter, costruisce `README/SUMMARY` e prepara la preview Docker.
-4) **onboarding_full**  preflight (solo `.md` in `book/`)  **push GitHub**.
+### Static Patch Pre-Check
+- Each Codex workflow starts with a static diff pre-check: forbid raw `open`, `Path` usage without path-utils, `_private` imports or forbidden wrappers, hardcoded paths, unstructured logging, REPO_ROOT/SSoT mutations, and non-atomic multi-topic patches; confirm the Active Rules memo is honored.
+- The pre-check must complete before running QA; if it fails, do not launch tests, rewrite the patch using safe utilities, and repeat up to two attempts. After the third failure, pause and ask the OCP for guidance.
+- Every intermediate Prompt Chain step must execute the filtered QA `pytest -q -k "not slow"` plus the mandated formatter/linter suite; the final prompt runs the full `pytest -q` and `pre-commit run --all-files` for closure.
 
-### Gating in UI
-La tab **Semantica** compare **solo dopo** il download RAW locale (Drive  `raw/`).
-Preview Docker: start/stop con nome container sicuro e validazione porta.
+### Language Policy
+- All conversational interactions between Codex, the OCP, and the user must proceed in Italian unless the prompt explicitly requests another language; technical files and documentation may remain in English as required.
 
-### SSoT dei tag
-- Authoring umano: `semantic/tags_reviewed.yaml` (revisione).
-- **Runtime**: `semantic/tags.db` (SQLite) consumato da orchestratori/UI per larricchimento.
-- **Knowledge Graph**: `semantic/kg.tags.json` (machine-first) e `semantic/kg.tags.md` (human-friendly) costruiti da `kg_build.py`/UI `Knowledge Graph dei tag` e consumati dai futuri ingest/embedding.
+### Codex Smoke Chain - Diagnostic Test
+- **Objective:** simulate a micro-cycle to confirm that turn-taking, memo awareness, QA interpretation, retry escalation, Italian-language policy, and pre-check validation all function without writing files.
+- **Steps:**
+  - S0: OCP issues a minimal prompt; Codex acknowledges the Active Rules memo.
+  - S1: Codex describes the Pre-Check validation it would apply to a mock patch (no files created).
+  - S2: OCP sends a sample operational prompt; Codex replies with a conceptual micro-PR narrative only.
+  - S3: Codex states it would run `pytest -q -k "not slow"` and explains how it would interpret pass/fail results without executing the command.
+  - S4: Codex spells out the escalation/retry plan (two autocorrections max) and reconfirms Italian-language compliance.
+- **Rules:** no real patch, no disk I/O, no QA commands executed; treat it as a fast diagnostic after changing the Prompt Chain documentation.
+- **Use cases:** governance health-check, post-update validation, and HiTL evidence that Codex and the OCP stay aligned.
 
-### Invarianti
-- **Idempotenza** (rilanci sicuri), **path-safety** (tutte le write passano da util dedicate),
-- **Logging con redazione** dove richiesto; **portabilita** Win/Linux.
-- **Pattern Collector + Orchestratore (UI Refactor v2):**
-  le funzioni che aggregano check, validazioni o fasi ripetitive devono essere
-  strutturate in collector composabili, mentre l'orchestratore principale
-  mantiene ordine, output invariati e semantica originale (vedi refactor preflight).
-- **Coerenza con Codex PROMPTS:**
-  quando un workflow viene attivato da Codex, l'agente deve applicare i prompt di
-  `.codex/PROMPTS.md` (dipendenze, path-safety, QA, aggiornamento doc/matrice),
-  mantenendo l'intero flusso nel perimetro definito da `docs/AGENTS_INDEX.md`.
+## End-to-End Flow
+1) **pre_onboarding** builds a local sandbox (`output/timmy-kb-<slug>/...`), resolves the YAML definition, optionally provisions Drive, and uploads `config.yaml`.
+2) **tag_onboarding** generates `semantic/tags_raw.csv` (heuristic filenames/paths) and the HiTL checkpoint `tags_reviewed.yaml` for manual review.
+3) **Tag KG Builder** (`kg_build.py` / UI Knowledge Graph) reads `semantic/tags_raw.json`, calls the OpenAI assistant `build_tag_kg`, saves `semantic/kg.tags.json` + `semantic/kg.tags.md`, and keeps a human-first inspection layer (watch namespaces).
+4) **semantic_onboarding** (via `semantic.api` or CLI) converts PDFs to Markdown in `book/`, enriches front matter via the canonical `tags.db`, rebuilds README/SUMMARY, and prepares the Docker preview.
+5) **onboarding_full** runs preflight for Markdown files in `book/` and performs the GitHub push.
 
-## API Semantiche Additive (v1)
+### UI Gating
+- The Semantica tab appears only after the local RAW data (`raw/`) is downloaded.
+- Docker preview: start/stop with a safe container name and port validation.
 
-Queste funzioni estendono la pipeline semantica senza cambiare i flussi UI/CLI. Sono idempotenti, offline, rispettano la path-safety (SSoT) con scritture atomiche e possono essere invocate anche dall'agente Codex in modalita' workflow, nel rispetto dei criteri Micro-PR e delle regole di QA definite in `.codex/PROMPTS.md`.
+### Tag SSoT
+- Human authoring relies on `semantic/tags_reviewed.yaml` as the review artifact.
+- **Runtime** uses SQLite `semantic/tags.db` for orchestrators/UI enrichments.
+- **Knowledge Graph** outputs `semantic/kg.tags.json` (machine-friendly) and `semantic/kg.tags.md` (human-readable) are built via `kg_build.py`/UI and consumed by future ingest/embedding steps.
 
-- build_mapping_from_vision(context, logger, slug) -> Path:
-  genera `config/semantic_mapping.yaml` a partire da `config/vision_statement.yaml`.
-  Input: vision YAML. Output: mapping normalizzato. Errori chiari, nessuna rete.
+### Invariants
+- **Idempotence** (safe reruns) and **path safety** (all writes via dedicated utilities).
+- **Structured logging** with redaction where required; portability across Windows/Linux.
+- **Collector + Orchestrator patterns (UI refactor v2):** aggregator functions must be composable collectors, while the orchestrator keeps original order, outputs, and semantics (see preflight refactor).
+- **Alignment with `.codex/PROMPTS.md`:** workflows triggered by Codex must apply the prompts defined therein (dependencies, path safety, QA, documentation/matrix updates) and stay within the perimeter defined in `docs/AGENTS_INDEX.md`.
 
-- build_tags_csv(context, logger, slug) -> Path:
-  scandisce `raw/` (PDF) e produce `semantic/tags_raw.csv` (euristica conservativa) + `README_TAGGING.md`.
-  Idempotente; CSV con header esteso: `relative_path | suggested_tags | entities | keyphrases | score | sources`.
+## Semantic APIs Additions (v1)
+These functions extend the semantic pipeline without altering UI/CLI flows. They remain idempotent, offline, path-safe, and employ atomic writes, allowing invocation from Codex workflows while honoring micro-PR and QA rules in `.codex/PROMPTS.md`.
 
-- build_markdown_book(context, logger, slug) -> list[Path]:
-  converte RAWMarkdown (uno `.md` per cartella di primo livello) e garantisce `README.md`/`SUMMARY.md` in `book/`.
-  Se presente il vocabolario consolidato (`semantic/tags.db`), arricchisce i frontmatter (title/tags). Fallback minimale se i repo util non sono disponibili.
+- `build_mapping_from_vision(context, logger, slug) -> Path`: generates `config/semantic_mapping.yaml` from `config/vision_statement.yaml`. Input: vision YAML. Output: normalized mapping. Clear errors, no network.
+- `build_tags_csv(context, logger, slug) -> Path`: scans `raw/` (PDF) and produces `semantic/tags_raw.csv` (conservative heuristics) plus `README_TAGGING.md`. Idempotent; CSV headers: `relative_path | suggested_tags | entities | keyphrases | score | sources`.
+- `build_markdown_book(context, logger, slug) -> list[Path]`: converts RAW Markdown (one `.md` per top-level folder), ensures `README.md`/`SUMMARY.md` in `book/`. If `semantic/tags.db` is available, adds front matter enrichment (title/tags). Minimal fallback if helper repos are missing.
+- `index_markdown_to_db(context, logger, slug, scope="book", embeddings_client, db_path=None) -> int`: indexes `.md` files into SQLite (one chunk per file, embeddings via `embeddings_client`). Metadata: `{file: <name>}`; daily versioned by `YYYYMMDD`. `db_path` allows isolated storage in tests.
 
-- index_markdown_to_db(context, logger, slug, scope="book", embeddings_client, db_path=None) -> int:
-  indicizza i `.md` in SQLite (un chunk per file, embedding via `embeddings_client`).
-  Meta: `{file: <name>}`; versione giornaliera `YYYYMMDD`. Parametro `db_path` per storage isolato nei test.
-
-Invarianti comuni
-- path-safety: `pipeline.path_utils.ensure_within(...)` su output (e input dove sensato).
-- Scritture atomiche: `pipeline.file_utils.safe_write_text/bytes`.
-- Logging strutturato via `pipeline.logging_utils.get_structured_logger`.
+Common invariants
+- path safety via `pipeline.path_utils.ensure_within(...)` on outputs (and inputs where appropriate).
+- Atomic writes through `pipeline.file_utils.safe_write_text/bytes`.
+- Structured logging using `pipeline.logging_utils.get_structured_logger`.

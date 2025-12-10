@@ -1,29 +1,22 @@
-# Scopo
-
-Regole dedicate alla documentazione: lingua, aggiornamento coerente con UX/flow e allineamento di versioni/frontmatter.
-
+# Purpose
+Documentation-specific rules covering language, alignment with UX/flow, and consistent versioning.
 
 
-# Regole (override)
-
-- Documentazione in italiano; i documenti architetturali possono restare in inglese se dichiarato nell'indice.
-- Gli aggiornamenti di codice che toccano UX/flow devono riflettersi nei testi nello stesso PR.
-- Titoli/frontmatter allineati alla versione corrente (`v1.0 Beta`) e coerenti tra README e docs/.
-- Eseguire `pre-commit run cspell --all-files` (o `--files docs/...`) e usare link relativi con snippet aggiornati (es. Python 3.11, Streamlit 1.50.0).
-- Se la guida cita workflow Streamlit/CLI, documentare gli orchestratori correnti (`pipeline.github_push_flow.*`, `tools.gen_dummy_kb.build_payload`, `ui.pages.tools_check._is_gate_error`).
-- Preferire i service `semantic.*_service`/`semantic.mapping_loader` quando si documenta `semantic.api`; nei test esempi di monkeypatch sui wrapper riesportati.
-
+# Rules (overrides)
+- Prefer English fr technical narratives; Italian can remain for conversational explanations when noted in the index.
+- Reflect UX/flow-relevant code changes within the same PR through documentation updates.
+- Keep titles/frontmatter aligned with the current release (`v1.0 Beta`) across README and docs.
+- Run `pre-commit run cspell --all-files` (or limit to `docs/...` when appropriate) and favor relative links with up-to-date snippets (e.g., Python 3.11, Streamlit 1.50.0).
+- When documenting Streamlit/CLI workflows, describe the orchestrators currently in use (`pipeline.github_push_flow.*`, `tools.gen_dummy_kb.build_payload`, `ui.pages.tools_check._is_gate_error`).
+- Prefer service wrappers (`semantic.*_service`, `semantic.mapping_loader`) when documenting `semantic.api`; example tests should monkeypatch the re-exported wrappers.
 
 
-# Criteri di accettazione
-
-- Spell check pulito su `docs/` e `README.md` senza ignorati ad hoc.
-- Frontmatter/titoli coerenti con la versione pubblicata.
-- ADR/changelog aggiornati quando cambiano prassi o strumenti documentali.
-
+# Acceptance Criteria
+- Clean spell-check results on `docs/` and `README.md` without ad-hoc ignores.
+- Frontmatter and titles consistent with published versioning.
+- Update ADR/changelog entries when documentation practices or tooling change.
 
 
-# Riferimenti
-
+# References
 - docs/AGENTS_INDEX.md
 - docs/runbook_codex.md

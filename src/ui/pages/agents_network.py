@@ -468,10 +468,10 @@ def _render_codex_docs_panel() -> None:
                 editable=False,
             )
     with col2:
-        if st.button("Guida integrazione Codex", key="doc_codex_integrazione"):
+        if st.button("Guida Codex", key="doc_codex_guide"):
             _open_markdown_modal(
                 title="Integrazione Codex",
-                rel_path="docs/codex_integrazione.md",
+                rel_path="docs/guida_codex.md",
                 editable=False,
             )
 
