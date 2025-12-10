@@ -39,6 +39,7 @@ Core principles:
 - **Lint & Typecheck:** apply configured formatters/linters (`Ruff`, `Black`, `isort`) and typecheckers (`mypy`/`pyright`) when present. Respect the project's existing standards.
 - **Path-safety & I/O:** every read/write must flow through the SSoT helpers (`ensure_within*`, `safe_write_*`). Never create/delete files outside the customer perimeter.
 - **Documentation & QA:** update documentation when UX/flow changes occur. Keep cSpell clean on tracked paths; only expand dictionaries for domain-specific terms.
+ - **Prompt Chain etiquette:** Planner → OCP → Codex → OCP → Planner is mandatory; Phase 0 stays analytical, phases 1..N implement micro-PRs with `pytest -q -k "not slow"`, and Prompt N+1 executes `pytest -q` + `pre-commit run --all-files`, ending with an Italian one-line closing commit. Documentazione SSoT resta in inglese, ma Codex risponde sempre in italiano. Reference: `docs/PromptChain_spec.md`, `docs/runbook_codex.md`, `.codex/PROMPTS.md`.
 
 
 ## Local AGENTS references

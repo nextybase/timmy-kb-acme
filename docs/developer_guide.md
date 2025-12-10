@@ -265,16 +265,11 @@ logger.info("debug.raw_output", extra={"sample": text[:500]})
 ```
 
 ### Prompt Chain & agenti (vista sviluppatore)
-- Per modifiche non banali usa il modello Prompt Chain definito nello SSoT `docs/PromptChain_spec.md`.
-- **Ruoli**: Planner definisce obiettivi/vincoli; OCP (OrchestratoreChainPrompt) genera i prompt numerati; Codex esegue ogni prompt come micro-PR con QA locale e rispetto delle policy AGENT.
-- **Quando usarla**: cambi articolati in piu step o quando serve garanzia di chiusura QA completa.
-- **Regole operative minime**: un prompt alla volta, scope limitato, diff + report in uscita; il Planner decide se proseguire o chiudere.
-- **Chiusura obbligatoria**: il Prompt finale di QA deve portare a verde
-  ```bash
-  pre-commit run --all-files
-  pytest -q
-  ```
-  e Codex risponde con un commit one-line di sintesi del lavoro svolto. Per dettagli completi vedi `docs/PromptChain_spec.md`.
+- Il Prompt Chain segue il protocollo Planner → OCP → Codex → OCP → Planner definito in `docs/PromptChain_spec.md` con la sequenza Phase 0 (analisi read-only), Phase 1..N (micro-PR operativi) e Prompt N+1 (final QA + closing summary).
+- Phase 0 risponde solo con ragionamento strutturato e piano operativo dopo aver caricato gli SSoT (`docs/PromptChain_spec.md`, `docs/runbook_codex.md`, `.codex/PROMPTS.md`, `.codex/WORKFLOWS.md`, `docs/AGENTS_INDEX.md`); nessun diff o QA viene eseguito in questa fase.
+- I prompt Phase 1..N applicano micro-PR limitati allo scope dichiarato, includono il memo Active Rules definito in `.codex/PROMPTS.md`, confermano path safety, eseguono `pytest -q -k "not slow"` (o giustificano l’eccezione) e producono una risposta italiana con diff e report.
+- Prompt N+1 chiude la chain: esegue `pre-commit run --all-files` e `pytest -q`, documenta eventuali retry (fino a dieci tentativi) e termina con un one-line commit summary in italiano.
+- Il linguaggio delle guide, dell’SSoT e dei template rimane inglese, ma tutte le risposte, i report QA e le comunicazioni tra Codex, OCP e Planner sono in italiano per rispettare la policy linguistica.
 
 ---
 

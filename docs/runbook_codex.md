@@ -41,7 +41,15 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](deve
 ### Codex integration
 - `.codex/PROMPTS.md` defines the operational API for Codex.
 - Before each agent-based job, run the startup block: read `docs/AGENTS_INDEX.md`, the relevant area `AGENTS.md`, `.codex/AGENTS.md`, and this runbook.
-- The Onboarding Task codex prompt enforces planning, micro-PR behavior, QA guardrails (path safety, atomic writes, structured logging), and AGENTS matrix maintenance.
+- The Onboarding Task Codex prompt enforces planning, micro-PR behavior, QA guardrails (path safety, atomic writes, structured logging), and AGENTS matrix maintenance.
+
+### Prompt Chain governance
+- The Prompt Chain follows the turn-based protocol in `docs/PromptChain_spec.md`: Planner → OCP → Codex → OCP → Planner with exactly one action per prompt.
+- Phase 0 prompts (Prompt 0, 0a..0x) are analytical/read-only and must confirm the SSoT documents before any diff is produced.
+- Phase 1..N prompts are operational micro-PRs that touch files declared by the OCP, include the Active Rules memo, and run at least `pytest -q -k "not slow"` before proceeding.
+- Prompt N+1 runs the final QA (`pre-commit run --all-files` + `pytest -q`), documents retries (up to ten), and ends with an Italian one-line closing commit summary.
+- Codex responses must be in Italian on every prompt; documentation and templates remain in English to preserve the SSoT.
+- The OCP issues one prompt at a time, Codex replies with a diff/report and waits, and no prompt may skip a phase or bypass the final QA.
 
 ---
 

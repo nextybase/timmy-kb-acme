@@ -74,6 +74,8 @@ pre-commit run --all-files
 pytest -q
 ```
 Questo modello consente interventi profondi mantenendo massima sicurezza, coerenza e tracciabilita'.
+Il ciclo completo è Planner → OCP → Codex → OCP → Planner, con Phase 0 dedicata all’analisi read-only, Phase 1..N ai micro-PR intermedi (con `pytest -q -k "not slow"` e Active Rules memo) e Prompt N+1 alla QA finale (`pre-commit run --all-files` + `pytest -q`) e al riepilogo italiano.
+Per i dettagli operativi vedi `.codex/PROMPTS.md`, `docs/runbook_codex.md` e `.codex/WORKFLOWS.md`.
 
 ---
 

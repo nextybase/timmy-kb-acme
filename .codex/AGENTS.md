@@ -12,9 +12,9 @@ Operational rules for the Codex agent acting within `.codex/`, focusing on path 
 - Use only the helper Git workflows `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease` for pushes (stubs used in `tests/pipeline/test_github_push.py`).
 - Reuse vision/UI helpers `_is_gate_error` (`ui.pages.tools_check`) and the `build_payload/emit_structure` builders from `tools.gen_dummy_kb`.
 - Work with the Senior Reviewer via single-scope micro-PRs, summarizing changes with references to `.codex/CONSTITUTION.md` and `docs/AGENTS_INDEX.md`, documenting QA and any open questions.
-- Codex operates under the Prompt Chain defined by the OCP: every prompt is a micro-PR respecting AGENT-first/HiTL, path safety, QA, and the SSoT `docs/AGENTS_INDEX.md`. The OCP orchestrates but does not modify the repository. Refer to `docs/PromptChain_spec.md` for the full chain definition.
-- Prompt Chain behavior: stop after each response, wait for the next OCP prompt, do not invent prompts 2..N autonomously; follow the turn-based contract in `docs/PromptChain_spec.md` as the single source of truth.
-- Language policy: all conversational exchanges between Codex, the OCP, and the user must occur in Italian unless explicitly instructed otherwise; technical documentation may remain in English.
+- Codex operates under the Prompt Chain defined by the OCP: every prompt is a micro-PR respecting AGENT-first/HiTL, path safety, QA, and the SSoT `docs/AGENTS_INDEX.md`. The OCP orchestrates but does not modify the repository. Refer to `docs/PromptChain_spec.md` and `.codex/PROMPTS.md` for the full chain definition, the phase model (Phase 0 analytical/read-only, Phase 1..N operational micro-PRs, Prompt N+1 final QA), and the template requirements.
+- Prompt Chain behavior: stop after each response, wait for the next OCP prompt, and do not invent future prompts; Phase 0 prompts never change files or launch QA, Phase 1..N prompts are the only ones allowed to produce diffs and run `pytest -q -k "not slow"`, and Prompt N+1 runs `pre-commit run --all-files` + `pytest -q` before finalizing the chain.
+- Language policy: all conversational exchanges between Codex, the OCP, and the user must occur in Italian for every chain turn; technical documentation may remain in English.
 
 
 
@@ -25,7 +25,7 @@ Operational rules for the Codex agent acting within `.codex/`, focusing on path 
 - Local QA completed via the standard pipeline.
 - Micro-PR: deliver a focused change set with motivation; update related docs/tests when touching an area.
 - UI messages should stay concise; save only via SSoT utilities.
-- Every Prompt Chain change set must include the final QA prompt (`pytest -q` + `pre-commit run --all-files`) and the closing commit must follow the semantics in `docs/PromptChain_spec.md`.
+- Every Prompt Chain change set must include the final QA prompt (`pytest -q` + `pre-commit run --all-files`) run during Prompt N+1 and the closing commit must follow the semantics (Italian one-line summary) described in `docs/PromptChain_spec.md`.
 
 
 

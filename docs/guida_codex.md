@@ -6,48 +6,32 @@ La modalità principale e consigliata per usare Codex nel progetto NeXT/Timmy-KB
 
 L’idea di base:
 - L’utente (tu) definisce lo scopo del lavoro.
-- L’OCP traduce questo obiettivo in una **sequenza di prompt numerati** (Prompt 0, 1, 2, …), ognuno con uno scope molto preciso.
-- Ogni prompt viene inviato a Codex **uno alla volta**, come micro-PR, con QA e controlli di sicurezza integrati.
+- L’OCP traduce questo obiettivo nel protocollo Planner → OCP → Codex → OCP → Planner, con Phase 0 (analisi read-only), Phase 1..N (micro-PR operativi) e Prompt N+1 (QA finale e riepilogo in italiano).
+- Ogni prompt viene inviato a Codex **uno alla volta**, come micro-PR con memo Active Rules, QA intermedia e finale, e risposte sempre in italiano, mentre la documentazione di riferimento resta in inglese.
 
 ### 1.1 Come funziona la Prompt Chain
 
-1. **Prompt 0 – Onboarding**
-   - Fornisce il contesto generale (repo, obiettivi, regole attive).
-   - Ricorda a Codex di leggere gli SSoT chiave:
-     - `.github/codex-instructions.md`
-     - `docs/PromptChain_spec.md`
-     - `docs/AGENTS_INDEX.md`
-     - gli `AGENTS.md` di area (es. `src/ui/AGENTS.md`, `src/pipeline/AGENTS.md`, ecc.).
-   - Definisce l’obiettivo della catena (es. refactor di una parte, introduzione di una feature, hardening QA).
+1. **Prompt 0 – Onboarding (Phase 0)**
+   - Fornisce il contesto generale (repo, obiettivi, regole attive) senza toccare il filesystem.
+   - Ricorda a Codex di leggere gli SSoT chiave: `.github/codex-instructions.md`, `docs/PromptChain_spec.md`, `docs/AGENTS_INDEX.md`, gli `AGENTS.md` di area e `.codex/PROMPTS.md`.
+   - Definisce l’obiettivo della catena (es. refactor, feature, hardening QA) e conferma il piano operativo con risposta in italiano.
 
-2. **Prompt 1/2 – Analisi e allineamento**
-   - Codex lavora **in sola lettura**: legge i file interessati, mappa dipendenze, rischi e incongruenze.
-   - L’OCP mostra il riepilogo all’utente (HiTL): qui puoi correggere, restringere o ampliare lo scope, prima di passare alla fase operativa.
+2. **Prompt 1/2 – Analisi e allineamento (Phase 0)**
+   - Codex lavora in sola lettura, mappa dipendenze/rischi e non produce diff né lancia QA.
+   - L’OCP mostra il riepilogo all’utente (HiTL) per confermare o restringere lo scope prima di passare ai prompt operativi.
 
-3. **Prompt operativi (3..N)**
+3. **Prompt operativi (3..N) – Phase 1..N**
    - Ogni prompt ha uno scope ristretto: una modifica singola, un refactor piccolo, un fix mirato.
-   - Tutti i prompt operativi partono con un memo sintetico del tipo:
-     *"Regole attive: path-safety ON, micro-PR, zero side-effects, doc update se necessario, pre-check statico sul diff, QA intermedia `pytest -q -k "not slow"`, QA finale `pytest -q` + `pre-commit run --all-files`, conversazione in italiano."*
-   - Per ogni step Codex:
-     - prepara la patch,
-     - applica il **pre-check statico** (evita I/O raw, path hardcoded, import privati, patch non atomiche),
-     - esegue QA intermedia (`pytest -q -k "not slow"` quando applicabile),
-     - riporta diff, comandi eseguiti e risultati.
+   - I prompt operativi iniziano con il memo Active Rules (path safety, micro-PR, zero side effects, QA intermedia `pytest -q -k "not slow"`, lingua italiana) definito in `.codex/PROMPTS.md`.
+   - In ciascuno step Codex prepara la patch, applica il pre-check statico (no I/O raw/import privati/path hardcoded/patch non atomiche), esegue QA intermedia, e fornisce diff/report/risultato in italiano.
 
-4. **Prompt finale di QA**
-   - Un prompt dedicato esegue la QA completa:
-     - `pre-commit run --all-files`
-     - `pytest -q` (senza filtro).
-   - Se i test falliscono, Codex ha un massimo di 2 tentativi di autocorrezione.
-   - Se dopo 2 tentativi il problema persiste, Codex deve fermarsi e chiedere istruzioni (HiTL).
+4. **Prompt finale di QA (Prompt N+1)**
+   - Esegue la QA completa: `pre-commit run --all-files` e `pytest -q`, documenta eventuali retry (fino a 10) e termina con una one-line commit summary in italiano.
+   - Dopo due tentativi falliti Codex chiede istruzioni (HiTL).
 
 5. **Codex Smoke Chain**
-   - È una mini-catena di diagnostica che simula il comportamento di Codex senza toccare i file.
-   - Serve per verificare che:
-     - le Regole Attive siano comprese,
-     - la QA sia interpretata correttamente,
-     - il pre-check statico sia attivo,
-     - la Language Policy (italiano) sia rispettata.
+   - È una mini-catena diagnostica che simula il comportamento di Codex senza modificare i file.
+   - Serve per verificare che: le Regole Attive siano comprese, la QA venga interpretata correttamente, il pre-check statico sia attivo e la Language Policy (italiano) sia rispettata.
    - Può essere usata come “test rapido” della Prompt Chain dopo modifiche ai meta-file.
 
 ### 1.2 Quando usare la Prompt Chain

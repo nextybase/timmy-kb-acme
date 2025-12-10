@@ -1,4 +1,48 @@
-# Pipeline & I/O
+# Prompt Chain Operational API
+
+## Turn-Based Protocol & Single-Turn Execution
+- Planner → OCP → Codex → OCP → Planner is the only valid sequence; each prompt must contain exactly one action and never bundles multiple turns.
+- OCP issues prompt numbers in order; after Codex replies, the cycle pauses until the next OCP instruction (no autopilot beyond the current prompt).
+- Prompts 0/0a..0x remain analytical/read-only, prompts 1..N are operational micro-PRs, and prompt N+1 finalizes the chain with full QA.
+- The Onboarding Task Codex sets this protocol before any edits can happen, so its acknowledgement is mandatory in Prompt 0.
+
+## Language Policy for Codex
+- All codified documents and templates stay in English to preserve the SSoT grammar.
+- Codex responses must always be written in Italian within every prompt of the chain unless an explicit exception is granted in a prompt.
+- This policy covers narrative reports, QA summaries, and communication with Planner/OCP.
+
+## Prompt Template Requirements
+- Templates below are the only structures permitted; every prompt must state its purpose, phase, allowed files, Active Rules memo, and expected outputs.
+- Operational prompts (1..N) exclusively produce diffs, touch files, and run intermediate QA (`pytest -q -k "not slow"`). Phase 0 prompts stay analytical and perform no edits, while prompt N+1 runs the full QA suite plus final narration.
+
+### Template: Prompt 0
+- Purpose: define the final goal of the Prompt Chain, the high-level plan, and instruct Codex to ingest the SSoT.
+- Required actions: load `docs/coding_rule.md`, `docs/developer_guide.md`, `docs/PromptChain_spec.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, `.codex/WORKFLOWS.md`, `.codex/CHECKLISTS.md`, and `.codex/PROMPTS.md`, then confirm comprehension.
+- Mode: analytical, read-only; no files changed, no QA commands executed.
+- Output: Italian summary of the plan, statement of loaded documents, and risks.
+
+### Template: Prompt 0a..0x
+- Purpose: refine the plan with deeper analysis, file-by-file mapping, and sequencing of upcoming prompts.
+- Mode: analytical/read-only; still no edits or QA.
+- Output: Italian reasoning for each mandated document, points of ambiguity, proposed sequence for prompts 1..N, and explicit confirmation that no files or tests were touched.
+
+### Template: Prompt 1..N
+- Purpose: deliver operational micro-PRs that implement the scoped changes declared by the OCP.
+- Mandatory sections: purpose statement, phase identifier, allowed/prohibited files, Active Rules memo (with path safety, micro-PR scope, intermediate QA requirements, Italian language reminder), expected outputs (diff + structured report + intermediate QA results), dependencies, and tests executed.
+- Action: apply a diff, document the behavior change in the report, run `pytest -q -k "not slow"` (or a justified substitute) and describe the result; mention whether additional linters/types were run.
+- Language: the entire response must be in Italian.
+
+### Template: Prompt N+1
+- Purpose: conclude the chain via final QA and a closing narrative.
+- Mandatory content: QA results for `pre-commit run --all-files` and `pytest -q`, documentation of retries/micro-fixes (up to ten attempts), full summary of the chain’s work, and the one-line closing commit message in Italian (unless otherwise specified).
+- Action: only after both QA commands succeed may the chain be considered complete; Codex must report any remaining issues before ending.
+
+## Active Rules Memo
+- Begin every operational response (Prompt 1..N) with the Active Rules memo that reminds the team about path safety ON, micro-PR focus, zero side effects, documentation updates, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Italian language policy referenced in `docs/PromptChain_spec.md`.
+- Confirm compliance with the turn-based protocol inside each memo.
+
+## Prompt Chain Operational Contract
+The Prompt Chain contract spells out dialogue practices between OCP and Codex, requiring idempotent micro-PRs that respect the SSoT (`docs/PromptChain_spec.md`) and the phase model above.
 
 ## Startup Tasks
 - Read `docs/AGENTS_INDEX.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, and `docs/runbook_codex.md`.

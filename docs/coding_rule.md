@@ -127,18 +127,23 @@ safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True, fsync=Fa
   - Invarianti su `book/` (solo `.md` tracciati; `README.md`/`SUMMARY.md` sempre presenti; eventuali `.md.fp` restano locali e non vengono commessi).
 - Tooling: `ruff`, `black`, `isort`; type-check con `mypy`/`pyright`.
 - Hook:
-```bash
+```
 pre-commit install --hook-type pre-commit --hook-type pre-push
 make qa-safe
 make ci-safe
 ```
 
 ### Prompt Chain e QA
-Se la modifica deriva da una Prompt Chain Codex, la chiusura richiede:
+- Il Prompt Chain segue il protocollo Planner → OCP → Codex → OCP → Planner descritto in `docs/PromptChain_spec.md` con Phase 0 analitica/read-only, Phase 1..N micro-PR e Prompt N+1 finale.
+- Phase 0 è read-only: nessun diff, nessun QA, solo analisi e piano operativo dei prompt 0 e 0a..0x.
+- I prompt Phase 1..N producono micro-PR con diff limitati allo scope dichiarato, includono il memo Active Rules di `.codex/PROMPTS.md`, confermano path safety, eseguono `pytest -q -k "not slow"` (o giustificano l’eccezione) e rispondono in italiano.
+- Prompt N+1 esegue `pre-commit run --all-files` e `pytest -q`, documenta eventuali retry e chiude con una one-line commit summary in italiano.
+- Il QA intermedio e finale è parte integrante del turn-based protocol: non avanzare senza il filtro `pytest -q -k "not slow"` nei prompt 1..N e non concludere senza la suite completa nel Prompt N+1 (`docs/runbook_codex.md`, `.codex/WORKFLOWS.md`).
+- Documentazione e template restano in inglese mentre Codex risponde esclusivamente in italiano per report, memo e QA.
+- Successo di `pre-commit run --all-files` e `pytest -q` durante Prompt N+1.
+- Proposta del commit one-line finale da parte di Codex, come descritto in `docs/PromptChain_spec.md`.
 
-- successo di `pre-commit run --all-files` e `pytest -q`;
-- proposta del commit one-line finale da parte di Codex, come descritto in `docs/PromptChain_spec.md`.
-
+Solo dopo questa fase la modifica e pronta per PR.
 Solo dopo questa fase la modifica e pronta per PR.
 
 ---
