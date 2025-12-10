@@ -29,10 +29,14 @@ from __future__ import annotations
 import dataclasses
 import re
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, cast
+from typing import Any, Dict, Iterable, List, Optional
 
-from pipeline.constants import LOGS_DIR_NAME
+from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.paths import get_repo_root, global_logs_dir
+
+LOGGER = get_structured_logger("pipeline.log_viewer")
 
 __all__ = [
     "LogFileInfo",
@@ -41,12 +45,6 @@ __all__ = [
     "parse_log_line",
     "load_log_sample",
 ]
-
-# Root del repository (es. .../timmy-kb-acme)
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
-# Cartella globale dei log UI, relativa alla root del repository.
-_DOT_TIMMY_DIRNAME = ".timmykb"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -85,14 +83,15 @@ class LogFileInfo:
 def get_global_logs_dir() -> Path:
     """Restituisce la cartella dei log globali della UI.
 
-    Convenzione attuale:
-    - locale: `<repo_root>/.timmykb/logs/`
-
-    Non crea la cartella se mancante.
+    Determina la repo root tramite `get_repo_root()` e usa il SSoT `global_logs_dir`.
+    Solleva ConfigError se la root non puo' essere determinata.
     """
-    candidate = REPO_ROOT / _DOT_TIMMY_DIRNAME / LOGS_DIR_NAME
-    # Path-safety: i log globali devono sempre stare sotto il repo.
-    return cast(Path, ensure_within_and_resolve(REPO_ROOT, candidate))
+    try:
+        repo_root = get_repo_root()
+    except ConfigError as exc:
+        LOGGER.error("log_viewer.repo_root_missing", extra={"error": str(exc)})
+        raise
+    return global_logs_dir(repo_root)
 
 
 def _iter_log_files_from_dir(log_dir: Path) -> Iterable[LogFileInfo]:

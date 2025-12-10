@@ -15,6 +15,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
+from pipeline.paths import ensure_src_on_sys_path, get_repo_root
 from ui.types import StreamlitLike
 
 try:
@@ -22,33 +25,70 @@ try:
 except Exception:  # pragma: no cover
     load_dotenv = None
 
+LOGGER = get_structured_logger("ui.bootstrap")
 
-REPO_ROOT = Path(__file__).resolve().parent
+try:
+    REPO_ROOT = get_repo_root()
+except ConfigError as exc:
+    LOGGER.error("ui.bootstrap.repo_root_missing", extra={"error": str(exc)})
+    raise
+
+# Non vogliamo che REPO_ROOT_DIR da env interferisca col SSoT.
 os.environ.pop("REPO_ROOT_DIR", None)
 
 
 # --------------------------------------------------------------------------------------
 # Path bootstrap: aggiunge <repo>/src a sys.path il prima possibile
 # --------------------------------------------------------------------------------------
+
+
 def _ensure_repo_src_on_sys_path() -> None:
-    repo_root = Path(__file__).parent.resolve()
-    src_dir = repo_root / "src"
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
+    """Compat wrapper attorno a pipeline.paths.ensure_src_on_sys_path."""
+    ensure_src_on_sys_path(REPO_ROOT)
 
 
 def _bootstrap_sys_path() -> None:
+    """
+    Garantisce che il repo sia importabile.
+
+    1. Prova ad usare tools.smoke.smoke_e2e._add_paths se disponibile.
+    2. In fallback usa ensure_src_on_sys_path(REPO_ROOT).
+
+    In tutti i casi logga successi e fallimenti in modo strutturato.
+    """
     try:
-        from tools.smoke.smoke_e2e import _add_paths as _repo_add_paths
+        from tools.smoke.smoke_e2e import _add_paths as _repo_add_paths  # type: ignore
 
         try:
             _repo_add_paths()
+            LOGGER.info(
+                "ui.bootstrap.smoke_paths",
+                extra={"repo_root": str(REPO_ROOT)},
+            )
             return
-        except Exception:
-            pass
-    except Exception:
-        pass
-    _ensure_repo_src_on_sys_path()
+        except Exception as exc:  # pragma: no cover - helper best-effort
+            LOGGER.warning(
+                "ui.bootstrap.smoke_paths_failed",
+                extra={"error": repr(exc)},
+            )
+    except Exception as exc:  # pragma: no cover - helper non disponibile
+        LOGGER.warning(
+            "ui.bootstrap.smoke_import_failed",
+            extra={"error": repr(exc)},
+        )
+
+    try:
+        _ensure_repo_src_on_sys_path()
+        LOGGER.info(
+            "ui.bootstrap.fallback_src",
+            extra={"repo_root": str(REPO_ROOT)},
+        )
+    except Exception as exc:
+        LOGGER.error(
+            "ui.bootstrap.paths_failed",
+            extra={"error": repr(exc)},
+        )
+        raise
 
 
 def _init_ui_logging() -> None:
