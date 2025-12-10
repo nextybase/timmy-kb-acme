@@ -8,7 +8,7 @@ Si applica sia all'ambiente locale sia all'esecuzione CI (GitHub Actions).
 | Ambito | `config/config.yaml` (SSoT non segreto) | `.env` (segreti/processo) |
 |--------|-----------------------------------------|---------------------------|
 | **Meta** | `meta.client_name`, `meta.semantic_mapping_yaml`, `meta.vision_statement_pdf`, `meta.N_VER`, `meta.DATA_VER` |  |
-| **OpenAI** | `ai.openai.timeout: 120`<br>`ai.openai.max_retries: 2`<br>`ai.openai.http2_enabled: false` | `OPENAI_API_KEY`, `OPENAI_API_KEY_CODEX`, `OPENAI_BASE_URL`, `OPENAI_PROJECT` |
+| **OpenAI** | `ai.openai.timeout: 120`<br>`ai.openai.max_retries: 2`<br>`ai.openai.http2_enabled: false` | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_PROJECT` |
 | **Vision** | `ai.vision.model: gpt-4o-mini-2024-07-18`<br>`ai.vision.engine: assistants`<br>`ai.vision.snapshot_retention_days: 30`<br>`ai.vision.assistant_id_env: OBNEXT_ASSISTANT_ID` (solo il nome ENV) | `OBNEXT_ASSISTANT_ID`, `ASSISTANT_ID` |
 | **UI** | `ui.skip_preflight`, `ui.allow_local_only`, `ui.admin_local_mode` |  |
 | **Retriever** | `pipeline.retriever.auto_by_budget`, `pipeline.retriever.throttle.latency_budget_ms`, `candidate_limit`, `parallelism`, `sleep_ms_between_calls` |  |
@@ -29,6 +29,8 @@ Si applica sia all'ambiente locale sia all'esecuzione CI (GitHub Actions).
 > `SERVICE_ACCOUNT_FILE` nel file YAML, verranno ignorate (con warning
 > `settings.yaml.env_denied`) e lapp continuera a leggere tali valori solo
 > da l'ambiente.
+
+> **Nota 1.0:** per ogni funzionalità operativa viene richiesta solo `OPENAI_API_KEY`; non esistono alternative legacy.
 
 Regola doro: se un campo richiede un segreto, il valore in YAML **termina con `_env`**
 e contiene solo il nome della variabile:

@@ -16,6 +16,7 @@ Aggiornamento: la cartella `tools/archive/` è stata rimossa (nessuna dipendenza
   - `tools/archive/vision_alignment_check.py`
 - Nessun cambiamento funzionale al flusso attivo (`onboarding_ui.py`, CLI pipeline); il flusso `timmy_kb_coder.py` è stato rimosso.
 - Validazione che non esistano riferimenti residui (import, make target, documentazione operativa).
+- Clean-up aggiuntivo: i fallback su storage non slug-based (es. `data/kb.sqlite`) e i test di legacy compatibility sono stati eliminati.
 
 ## Attivita
 1. **Monitoraggio build/CI**  assicurarsi che pre-commit e suite CI restino verdi per almeno due cicli completi.

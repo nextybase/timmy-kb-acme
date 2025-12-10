@@ -2,13 +2,10 @@
 # tests/test_kb_store.py
 from pathlib import Path
 
-from kb_db import get_db_path
+import pytest
+
+from pipeline.exceptions import ConfigError
 from storage.kb_store import KbStore
-
-
-def test_default_uses_global_db() -> None:
-    store = KbStore.default()
-    assert store.effective_db_path() == get_db_path()
 
 
 def test_workspace_path_semantic_dir(tmp_path: Path) -> None:
@@ -32,7 +29,14 @@ def test_override_absolute_and_relative(tmp_path: Path) -> None:
     assert store_rel.effective_db_path() == (workspace / relative).resolve()
 
 
-def test_override_relative_without_base_dir(tmp_path: Path) -> None:
+def test_for_slug_requires_base_dir(tmp_path: Path) -> None:
+    store = KbStore.for_slug("dummy", base_dir=None)
+    with pytest.raises(ConfigError):
+        store.effective_db_path()
+
+
+def test_relative_override_without_base_dir_disallowed(tmp_path: Path) -> None:
     relative = Path("kb-alt.sqlite")
     store = KbStore.for_slug("x", base_dir=None, db_path=relative)
-    assert store.effective_db_path() == relative
+    with pytest.raises(ConfigError):
+        store.effective_db_path()
