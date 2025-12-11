@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-'"""SSoT dei percorsi workspace derivati da uno slug Timmy-KB.""'
+"""SSoT dei percorsi workspace derivati da uno slug Timmy-KB."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,7 +45,7 @@ class WorkspaceLayout:
         config_path_attr = getattr(context, "config_path", None)
         config_path = config_path_attr or (root / "config" / "config.yaml")
         mapping_path_attr = getattr(context, "mapping_path", None)
-        mapping_path = mapping_path_attr or (root / "semantic" / "semantic_mapping.yaml")
+        mapping_path = mapping_path_attr or (semantic_dir / "semantic_mapping.yaml")
 
         raw_dir = ensure_within_and_resolve(root, raw_dir)
         semantic_dir = ensure_within_and_resolve(root, semantic_dir)
@@ -83,7 +83,7 @@ class WorkspaceLayout:
         workspace: Path,
         *,
         slug: str | None = None,
-        run_id: str | None = None,
+        _run_id: str | None = None,
     ) -> "WorkspaceLayout":
         """Costruisce il layout quando viene passato un workspace già esistente."""
         repo_root = workspace.resolve()
@@ -95,7 +95,7 @@ class WorkspaceLayout:
         semantic_dir = repo_root / "semantic"
         logs_dir = repo_root / LOGS_DIR_NAME
         config_path = repo_root / "config" / "config.yaml"
-        mapping_path = repo_root / "semantic" / "semantic_mapping.yaml"
+        mapping_path = semantic_dir / "semantic_mapping.yaml"
 
         raw_dir = ensure_within_and_resolve(repo_root, raw_dir)
         semantic_dir = ensure_within_and_resolve(repo_root, semantic_dir)
