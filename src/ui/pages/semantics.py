@@ -17,14 +17,10 @@ st: StreamlitLike = get_streamlit()
 
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger, tail_path
+from pipeline.workspace_layout import WorkspaceLayout
+from semantic.api import get_paths  # noqa: F401 - usato dai test tramite monkeypatch
 from semantic.api import load_reviewed_vocab  # noqa: F401
-from semantic.api import (
-    convert_markdown,
-    enrich_frontmatter,
-    get_paths,
-    require_reviewed_vocab,
-    write_summary_and_readme,
-)
+from semantic.api import convert_markdown, enrich_frontmatter, require_reviewed_vocab, write_summary_and_readme
 from semantic.book_readiness import is_book_ready
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
@@ -55,11 +51,28 @@ except Exception:  # pragma: no cover
 ALLOWED_STATES = SEMANTIC_ENTRY_STATES
 
 
-def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger]:
+def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger, WorkspaceLayout]:
     run_id = uuid.uuid4().hex
     logger = get_structured_logger("ui.semantics", run_id=run_id)
     ctx = get_client_context(slug, interactive=False, require_env=False, run_id=run_id)
-    return ctx, logger
+    layout = WorkspaceLayout.from_context(ctx)
+    return ctx, logger, layout
+
+
+def _ctx_logger_layout(slug: str) -> tuple[Any, logging.Logger, WorkspaceLayout]:
+    """Supporta sia la firma legacy (ctx, logger) sia la nuova (ctx, logger, layout)."""
+    result = _make_ctx_and_logger(slug)
+    if len(result) == 3:
+        return result
+    ctx, logger = result
+    try:
+        layout = WorkspaceLayout.from_context(ctx)
+    except Exception:
+        base_dir = getattr(ctx, "base_dir", None) or getattr(ctx, "repo_root_dir", None)
+        if base_dir is None:
+            raise
+        layout = WorkspaceLayout.from_workspace(workspace=Path(base_dir), slug=slug)
+    return ctx, logger, layout
 
 
 def _display_user_error(exc: Exception) -> None:
@@ -123,7 +136,7 @@ def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[st
 
 def _run_convert(slug: str) -> None:
     _require_semantic_gating(slug, reuse_last=True)
-    ctx, logger = _make_ctx_and_logger(slug)
+    ctx, logger, _ = _ctx_logger_layout(slug)
     with status_guard(
         "Converto PDF in Markdown...",
         expanded=True,
@@ -151,8 +164,8 @@ def _get_canonical_vocab(
 
 def _run_enrich(slug: str) -> None:
     _require_semantic_gating(slug, reuse_last=True)
-    ctx, logger = _make_ctx_and_logger(slug)
-    base_dir = getattr(ctx, "base_dir", None) or get_paths(slug)["base"]
+    ctx, logger, layout = _ctx_logger_layout(slug)
+    base_dir = layout.base_dir
     try:
         vocab = _get_canonical_vocab(base_dir, logger, slug=slug)
     except ConfigError as exc:
@@ -178,7 +191,7 @@ def _run_enrich(slug: str) -> None:
 
 def _run_summary(slug: str) -> None:
     _require_semantic_gating(slug, reuse_last=True)
-    ctx, logger = _make_ctx_and_logger(slug)
+    ctx, logger, _ = _ctx_logger_layout(slug)
     with status_guard(
         "Genero SUMMARY.md e README.md...",
         expanded=True,
@@ -275,9 +288,9 @@ def main() -> None:
                 raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from stop_exc
 
         try:
-            _book_dir = get_paths(slug).get("book")
-            if _book_dir is not None:
-                _book_ready = is_book_ready(_book_dir)
+            _, _, layout = _ctx_logger_layout(slug)
+            _book_dir = layout.book_dir
+            _book_ready = is_book_ready(_book_dir)
         except Exception as exc:  # pragma: no cover - best effort
             try:
                 _GATING_LOG.warning(

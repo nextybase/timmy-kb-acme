@@ -127,6 +127,41 @@ sequenceDiagram
     GH-->>FS: publish book/ to remote repo (branch)
 ```
 
+## Workspace SSoT & Path Flow
+
+The onboarding pipeline (CLI, UI, semantic stages) now relies on a unified WorkspaceLayout as the Single Source of Truth (SSoT) for all workspace-related filesystem paths. Paths such as raw/, semantic/, book/, logs/, config/, and mapping/ are no longer constructed manually. They are instead resolved through WorkspaceLayout, which enforces path-safety, consistency across orchestrators, and eliminates drift between CLI and UI components.
+
+`
+                     ┌────────────────────────────┐
+                     │       ClientContext        │
+                     │  (slug, settings, env)     │
+                     └─────────────┬──────────────┘
+                                   │
+                                   ▼
+                     ┌────────────────────────────┐
+                     │      WorkspaceLayout       │
+                     │  SSoT dei path derivati    │
+                     │  raw/ semantic/ book/      │
+                     │  logs/ config/ mapping     │
+                     └─────────────┬──────────────┘
+                                   │
+     ┌─────────────────────────────┼───────────────────────────────┐
+     ▼                             ▼                               ▼
+┌──────────────────┐ ┌────────────────────┐ ┌──────────────────────┐
+│ CLI Orchestrators │ │ Streamlit UI / Services │ │ Semantic Pipeline │
+│ pre, tag, semantic, │ │ new_client, tagging, │ │ convert, enrich, readme│
+│ kg_build, full │ │ builder, semantics UI │ │ indexing, mapping │
+└─────────┬──────────┘ └──────────┬──────────────┘ └─────────────┬──────────┘
+│ │ │
+▼ ▼ ▼
+Uses always:       Uses always:            Uses always:
+WorkspaceLayout.*  WorkspaceLayout.*       WorkspaceLayout.*
+log_file, raw_dir,  base_dir, raw_dir,      semantic_dir, book_dir,
+semantic_dir …     semantic_dir …          mapping_path, tags_db
+`
+
+Manual construction of workspace paths (e.g. base_dir/'raw', base_dir/'semantic') is deprecated. All components must rely on WorkspaceLayout or ClientContext helpers to ensure filesystem consistency and security guarantees. Refer to the Coding Rules and Developer Guide for the enforced workflow and examples.
+
 Note operative
 
 - YAML e usato per il bootstrap iniziale; a runtime la fonte di verita e SQLite (semantic/tags.db).

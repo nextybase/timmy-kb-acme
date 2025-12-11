@@ -40,7 +40,6 @@ from pipeline.config_utils import (
     update_config_with_drive_ids,
     write_client_config_file,
 )
-from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError, PipelineError
@@ -57,6 +56,7 @@ from pipeline.metrics import start_metrics_server_once
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_valid_slug, ensure_within, read_text_safe  # STRONG guard SSoT
 from pipeline.tracing import start_root_trace
+from pipeline.workspace_layout import WorkspaceLayout
 
 create_drive_folder = None
 create_drive_minimal_structure = None
@@ -269,9 +269,9 @@ def _prepare_context_and_logger(
 
     if context.base_dir is None:
         raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)
-    log_file = context.base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
-    ensure_within(context.base_dir, log_file)
-    log_file.parent.mkdir(parents=True, exist_ok=True)
+    layout = WorkspaceLayout.from_context(context)
+    layout.logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = layout.log_file
 
     logger = get_structured_logger(
         "pre_onboarding",

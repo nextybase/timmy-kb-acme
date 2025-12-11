@@ -10,11 +10,11 @@ from typing import Optional
 
 from kg_builder import build_kg_for_workspace
 from pipeline.cli_runner import run_cli_orchestrator
-from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME, OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_valid_slug, ensure_within_and_resolve
+from pipeline.workspace_layout import WorkspaceLayout
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -44,7 +44,10 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _resolve_workspace(args: argparse.Namespace, run_id: str) -> tuple[Path, Optional[ClientContext], str]:
+def _resolve_workspace(
+    args: argparse.Namespace,
+    run_id: str,
+) -> tuple[Path, WorkspaceLayout, Optional[ClientContext], str]:
     slug_input = args.slug or args.slug_pos
     context: Optional[ClientContext] = None
 
@@ -52,7 +55,8 @@ def _resolve_workspace(args: argparse.Namespace, run_id: str) -> tuple[Path, Opt
         raw = Path(args.workspace).expanduser().resolve()
         workspace = ensure_within_and_resolve(REPO_ROOT, raw)
         slug = slug_input or Path(workspace).name
-        return workspace, context, slug
+        layout = WorkspaceLayout.from_workspace(workspace=workspace, slug=slug, run_id=run_id)
+        return workspace, layout, context, slug
 
     if not slug_input:
         raise ConfigError("Serve uno slug o il path workspace (--workspace).")
@@ -71,27 +75,22 @@ def _resolve_workspace(args: argparse.Namespace, run_id: str) -> tuple[Path, Opt
         run_id=run_id,
     )
 
-    base_attr = getattr(context, "base_dir", None)
-    if base_attr is not None:
-        workspace = Path(base_attr).resolve()
-    else:
-        workspace = Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}"
-    workspace = workspace.resolve()
+    layout = WorkspaceLayout.from_context(context)
+    workspace = layout.base_dir
     workspace = ensure_within_and_resolve(REPO_ROOT, workspace)
-    return workspace, context, slug
-
-
-def _ensure_log_file(base_workspace: Path) -> Path:
-    log_dir = ensure_within_and_resolve(base_workspace, base_workspace / LOGS_DIR_NAME)
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = ensure_within_and_resolve(log_dir, log_dir / LOG_FILE_NAME)
-    return log_file
+    return workspace, layout, context, slug
 
 
 def kg_build_main(
-    workspace: Path, namespace: Optional[str], slug: str, run_id: str, context: Optional[ClientContext]
+    workspace: Path,
+    layout: WorkspaceLayout,
+    namespace: Optional[str],
+    slug: str,
+    run_id: str,
+    context: Optional[ClientContext],
 ) -> None:
-    log_file = _ensure_log_file(workspace)
+    layout.logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = layout.log_file
     logger = get_structured_logger("kg_build", log_file=log_file, context=context, run_id=run_id)
     logger.info("cli.kg_build.started", extra={"workspace": str(workspace), "namespace": namespace})
 
@@ -109,13 +108,13 @@ def main(args: argparse.Namespace) -> None:
     early_logger = get_structured_logger("kg_build", run_id=run_id)
 
     try:
-        workspace, context, slug = _resolve_workspace(args, run_id)
+        workspace, layout, context, slug = _resolve_workspace(args, run_id)
     except ConfigError as exc:
         early_logger.error("cli.kg_build.invalid_input", extra={"error": str(exc)})
         raise
 
     try:
-        kg_build_main(workspace, args.namespace, slug, run_id, context)
+        kg_build_main(workspace, layout, args.namespace, slug, run_id, context)
     except KeyboardInterrupt:
         early_logger.error("cli.kg_build.interrupted", extra={"slug": slug, "run_id": run_id})
         raise

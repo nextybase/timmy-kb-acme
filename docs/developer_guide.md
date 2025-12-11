@@ -105,13 +105,43 @@ Nota cache: dopo le scritture il frontmatter viene riallineato nella cache LRU (
 - Prima di leggere/scrivere, **risolvi** e **valida** il path con gli helper della pipeline.
 - Usa writer atomici per evitare file parziali/corruzione.
 
-```python
-from pipeline.path_utils import ensure_within_and_resolve
-from pipeline.file_utils import safe_write_text
+ ```python
+ from pipeline.path_utils import ensure_within_and_resolve
+ from pipeline.file_utils import safe_write_text
 
-yaml_path = ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml")
-safe_write_text(yaml_path, content, encoding="utf-8", atomic=True, fsync=False)
+ yaml_path = ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml")
+ safe_write_text(yaml_path, content, encoding="utf-8", atomic=True, fsync=False)
+ ```
+
+ ---
+
+## Workspace SSoT (WorkspaceLayout)
+
+Il progetto utilizza WorkspaceLayout come Single Source of Truth (SSoT) per tutti i percorsi derivati dallo slug del workspace. WorkspaceLayout sostituisce la costruzione manuale dei path e garantisce:
+- coerenza tra CLI, UI e servizi,
+- sicurezza dei path tramite `ensure_within` e `ensure_within_and_resolve`,
+- riduzione del rischio di drift e regressioni,
+- struttura prevedibile e uniforme dei workspace.
+
+WorkspaceLayout viene sempre costruito a partire dal `ClientContext`: lo slug viene validato, il workspace radice viene risolto e tutti i percorsi (`raw/`, `semantic/`, `book/`, `logs/`, `config/`, `mapping/`) sono derivati in modo deterministico. Ogni nuovo modulo che necessita di percorsi workspace deve passare da questo flusso.
+
 ```
+slug -> ClientContext.load() -> WorkspaceLayout.from_context()
+
+workspace_path -> WorkspaceLayout.from_workspace()
+```
+
+Esempio aggiornato:
+
+```python
+layout = WorkspaceLayout.from_context(context)
+semantic_dir = layout.semantic_dir
+log_file = layout.log_file
+```
+
+Ogni componente deve evitare di ricostruire `raw_dir`, `semantic_dir` o `logs_dir` partendo da `base_dir / "..."` o `output/timmy-kb-<slug>`. L'uso di join manuali o concatenazioni di stringhe per ottenere i percorsi del workspace è deprecato e espone il codice a rischi di incoerenza e vulnerabilità sui path.
+
+Questo approccio centralizzato rende più semplice la manutenzione e i refactor perché la logica dei path è vincolata a un’unica API con controlli di sicurezza condivisi.
 
 ---
 

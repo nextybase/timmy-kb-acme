@@ -46,7 +46,6 @@ from pathlib import Path
 from typing import Any, Optional, cast
 
 from pipeline.cli_runner import run_cli_orchestrator
-from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, tail_path
@@ -60,6 +59,7 @@ from pipeline.path_utils import (  # STRONG guard SSoT
     open_for_read_bytes_selfguard,
 )
 from pipeline.tracing import start_root_trace
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic import nlp_runner
 from semantic.tags_validator import validate_tags_reviewed as validate_tags_payload
 from semantic.tags_validator import write_validation_report as write_validation_report_payload
@@ -359,40 +359,19 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
         run_id=run_id,
         stage="validate",
     )
-
-    base_attr = getattr(context, "base_dir", None) or getattr(context, "repo_root_dir", None)
-
-    if base_attr is None:
-
-        base_attr = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-
-    base_dir = Path(base_attr).resolve()
-
-    semantic_attr = getattr(context, "semantic_dir", None)
-
-    semantic_candidate = Path(semantic_attr) if semantic_attr is not None else (base_dir / "semantic")
-
-    semantic_dir = ensure_within_and_resolve(base_dir, semantic_candidate)
+    layout = WorkspaceLayout.from_context(context)
+    semantic_dir = layout.semantic_dir
 
     yaml_candidate = semantic_dir / "tags_reviewed.yaml"
-
     yaml_path = ensure_within_and_resolve(semantic_dir, yaml_candidate)
-
     report_candidate = semantic_dir / "tags_review_validation.json"
-
     report_path = ensure_within_and_resolve(semantic_dir, report_candidate)
 
     db_candidate = Path(derive_db_path_from_yaml_path(yaml_path))
+    db_path = ensure_within_and_resolve(layout.base_dir, db_candidate)
 
-    db_path = ensure_within_and_resolve(base_dir, db_candidate)
-
-    log_dir = ensure_within_and_resolve(base_dir, base_dir / LOGS_DIR_NAME)
-
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    log_file = ensure_within_and_resolve(log_dir, log_dir / LOG_FILE_NAME)
-
-    log_file.parent.mkdir(parents=True, exist_ok=True)
+    layout.logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = layout.log_file
 
     logger = get_structured_logger(
         "tag_onboarding.validate",
@@ -562,44 +541,13 @@ def _resolve_cli_paths(
 ) -> tuple[Path, Path, Path, Path]:
     """Calcola i percorsi CLI garantendo path-safety rispetto al contesto cliente."""
 
-    base_attr = getattr(context, "base_dir", None) or getattr(context, "repo_root_dir", None)
-
-    if base_attr is None:
-
-        base_candidate = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{context.slug}"
-
-    else:
-
-        base_candidate = Path(base_attr)
-
-    base_dir = base_candidate.resolve()
-
-    raw_attr = Path(raw_override) if raw_override else getattr(context, "raw_dir", None)
-
-    if raw_attr is None:
-
-        raw_candidate = base_dir / "raw"
-
-    else:
-
-        raw_candidate = Path(raw_attr)
-
-    semantic_attr = getattr(context, "semantic_dir", None)
-
-    if semantic_attr is None:
-
-        semantic_candidate = base_dir / "semantic"
-
-    else:
-
-        semantic_candidate = Path(semantic_attr)
-
+    layout = WorkspaceLayout.from_context(context)
+    base_dir = layout.base_dir
+    raw_candidate = Path(raw_override) if raw_override else layout.raw_dir
     raw_dir = ensure_within_and_resolve(base_dir, raw_candidate)
-
-    semantic_dir = ensure_within_and_resolve(base_dir, semantic_candidate)
+    semantic_dir = layout.semantic_dir
 
     db_candidate = Path(db_override) if db_override else (semantic_dir / "tags.db")
-
     db_path = ensure_within_and_resolve(base_dir, db_candidate)
 
     return base_dir, raw_dir, db_path, semantic_dir

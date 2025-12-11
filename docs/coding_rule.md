@@ -91,6 +91,8 @@ pip install -r requirements-optional.txt
 - Valida e risolvi i path prima dell'uso; scritture **atomiche**.
 - Mai seguire symlink non attesi in `raw/`/`book/`.
 
+La sicurezza dei path deve essere applicata al perimetro del workspace attraverso `WorkspaceLayout`. Qualsiasi operazione che costruisce o risolve percorsi all'interno del workspace deve passare da `WorkspaceLayout.from_context`, `WorkspaceLayout.from_slug` oppure `WorkspaceLayout.from_workspace`.
+
 Esempio:
 ```python
 from pipeline.path_utils import ensure_within_and_resolve
@@ -99,6 +101,31 @@ from pipeline.file_utils import safe_write_text
 yaml_path = ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml")
 safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True, fsync=False)
 ```
+
+---
+
+## Percorsi del workspace e WorkspaceLayout
+
+Tutti i componenti (CLI, interfaccia web, servizi, pipeline semantica) devono ottenere i percorsi del workspace esclusivamente tramite `WorkspaceLayout`. La costruzione manuale dei percorsi del workspace è vietata. Questo vale, in particolare, per le directory `raw/`, `semantic/`, `book/`, `logs/`, `config/` e per i file di mapping. `WorkspaceLayout` garantisce:
+- un’unica fonte di verità per la struttura delle directory,
+- l’applicazione sistematica dei controlli di sicurezza (`ensure_within` / `ensure_within_and_resolve`),
+- la coerenza tra orchestratori CLI e UI,
+- la riduzione del rischio di drift e regressioni silenziose.
+
+```python
+# Corretto
+layout = WorkspaceLayout.from_context(ctx)
+raw_dir = layout.raw_dir
+log_file = layout.log_file
+
+# NON corretto (deprecato)
+raw_dir = ctx.base_dir / "raw"
+log_file = ctx.base_dir / "logs" / "log.txt"
+```
+
+Qualsiasi nuovo modulo introdotto nel progetto deve usare `WorkspaceLayout` per risolvere il workspace. Non sono ammessi fallback manuali basati su concatenazioni di stringhe o `Path.join` sui percorsi del workspace.
+
+Per esempi operativi completi e per seguire il flusso slug → `ClientContext` → `WorkspaceLayout`, rimanda alla sezione “Workspace SSoT (WorkspaceLayout)” del Developer Guide.
 
 ---
 

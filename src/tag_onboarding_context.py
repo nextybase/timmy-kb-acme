@@ -8,10 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within
+from pipeline.workspace_layout import WorkspaceLayout
 
 
 @dataclass(frozen=True)
@@ -41,25 +40,12 @@ def prepare_context(
         run_id=run_id,
     )
 
-    base_dir = getattr(context, "base_dir", None) or (
-        Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-    )
-    base_dir = Path(base_dir).resolve()
-    ensure_within(base_dir.parent, base_dir)
-
-    raw_dir = getattr(context, "raw_dir", None)
-    raw_dir = Path(raw_dir) if raw_dir is not None else base_dir / "raw"
-    semantic_dir = getattr(context, "semantic_dir", None)
-    semantic_dir = Path(semantic_dir) if semantic_dir is not None else base_dir / "semantic"
-
-    ensure_within(base_dir, raw_dir)
-    ensure_within(base_dir, semantic_dir)
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    semantic_dir.mkdir(parents=True, exist_ok=True)
-
-    log_file = base_dir / LOGS_DIR_NAME / LOG_FILE_NAME
-    ensure_within(base_dir, log_file)
-    log_file.parent.mkdir(parents=True, exist_ok=True)
+    layout = WorkspaceLayout.from_context(context)
+    base_dir = layout.base_dir
+    raw_dir = layout.raw_dir
+    semantic_dir = layout.semantic_dir
+    layout.logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = layout.log_file
 
     logger = get_structured_logger("tag_onboarding", log_file=log_file, context=context, run_id=run_id)
 

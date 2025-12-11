@@ -8,6 +8,7 @@ from typing import Any, Iterator, Optional, Tuple, cast
 
 from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.path_utils import clear_iter_safe_pdfs_cache, ensure_within_and_resolve, iter_safe_pdfs, validate_slug
+from pipeline.workspace_layout import WorkspaceLayout
 from ui.utils.context_cache import get_client_context, invalidate_client_context
 
 # Import opzionale di Streamlit senza type: ignore.
@@ -20,23 +21,28 @@ except Exception:  # pragma: no cover
 st: Any = _st  # st rimane Any; accessi protetti da guardie runtime
 _log = get_structured_logger("ui.workspace")
 _BASE_CACHE: dict[str, Path] = {}
+_LAYOUT_CACHE: dict[str, WorkspaceLayout] = {}
 _UI_RAW_CACHE_TTL = 3.0  # secondi, garantisce feedback rapido in UI
 
 
-def _load_context_base_dir(slug: str) -> Optional[Path]:
-    """Prova a caricare il base_dir dal ClientContext (se disponibile)."""
-    default_candidate = Path("output") / f"timmy-kb-{slug}"
-    if not default_candidate.exists():
+def _load_context_layout(slug: str) -> Optional[WorkspaceLayout]:
+    """Prova a caricare il layout dal ClientContext (se disponibile)."""
+    slug_key = (slug or "").strip().lower()
+    if not slug_key:
         return None
+    cached = _LAYOUT_CACHE.get(slug_key)
+    if cached:
+        return cached
     try:
-        ctx = get_client_context(slug, interactive=False, require_env=False)
+        ctx = get_client_context(slug_key, interactive=False, require_env=False)
     except Exception:
         return None
-
-    base_dir = getattr(ctx, "base_dir", None)
-    if not base_dir:
+    try:
+        layout = WorkspaceLayout.from_context(ctx)
+    except Exception:
         return None
-    return Path(base_dir)
+    _LAYOUT_CACHE[slug_key] = layout
+    return layout
 
 
 def _fallback_base_dir(slug: str) -> Path:
@@ -58,10 +64,13 @@ def resolve_raw_dir(slug: str) -> Path:
 
     if slug_value in _BASE_CACHE:
         base_dir = _BASE_CACHE[slug_value]
+        layout = _LAYOUT_CACHE.get(slug_value)
     else:
-        base_dir = _load_context_base_dir(slug_value) or _fallback_base_dir(slug_value)
+        layout = _load_context_layout(slug_value)
+        base_dir = layout.base_dir if layout else _fallback_base_dir(slug_value)
         _BASE_CACHE[slug_value] = base_dir
-    # Impedisci traversal/symlink: raw deve stare sotto la base del workspace
+    if layout:
+        return layout.raw_dir
     return cast(Path, ensure_within_and_resolve(base_dir, Path(base_dir) / "raw"))
 
 
@@ -73,6 +82,10 @@ def clear_base_cache(*, slug: str | None = None) -> None:
         _BASE_CACHE.clear()
     clear_iter_safe_pdfs_cache()
     invalidate_client_context(slug)
+    if slug:
+        _LAYOUT_CACHE.pop(slug.strip().lower(), None)
+    elif slug is None:
+        _LAYOUT_CACHE.clear()
 
 
 def workspace_root(slug: str) -> Path:
@@ -80,6 +93,9 @@ def workspace_root(slug: str) -> Path:
     Restituisce la radice del workspace per lo slug validato.
     Invariante: sempre dentro al perimetro sicuro del cliente.
     """
+    layout = _load_context_layout(slug)
+    if layout:
+        return layout.base_dir
     raw_dir = resolve_raw_dir(slug)
     return raw_dir.parent
 

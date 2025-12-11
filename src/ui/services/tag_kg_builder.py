@@ -9,8 +9,8 @@ from kg_builder import build_kg_for_workspace
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.workspace_layout import WorkspaceLayout
 from ui.utils.context_cache import get_client_context
-from ui.utils.workspace import workspace_root
 
 try:
     import streamlit as st
@@ -23,14 +23,12 @@ def _require_streamlit() -> None:
         raise ConfigError("Streamlit non disponibile per il Tag KG Builder.")
 
 
-def _resolve_workspace(slug: str) -> Path:
+def _resolve_workspace(slug: str) -> tuple[Path, WorkspaceLayout]:
     ctx = get_client_context(slug, interactive=False, require_env=False)
-    base_dir_obj = getattr(ctx, "base_dir", None)
-    if base_dir_obj is None:
-        base_dir_obj = workspace_root(slug)
-    candidate = Path(base_dir_obj).resolve()
+    layout = WorkspaceLayout.from_context(ctx)
+    candidate = layout.base_dir.resolve()
     workspace: Path = ensure_within_and_resolve(candidate.parent, candidate)
-    return workspace
+    return workspace, layout
 
 
 def run_tag_kg_builder(
@@ -43,8 +41,8 @@ def run_tag_kg_builder(
     _require_streamlit()
     svc_logger = logger or get_structured_logger("ui.services.tag_kg_builder")
     try:
-        workspace = _resolve_workspace(slug)
-        semantic_dir = ensure_within_and_resolve(workspace, workspace / "semantic")
+        workspace, layout = _resolve_workspace(slug)
+        semantic_dir = layout.semantic_dir
         tags_raw = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.json")
         if not tags_raw.exists():
             raise ConfigError("tags_raw.json mancante: genera prima i tag raw.")

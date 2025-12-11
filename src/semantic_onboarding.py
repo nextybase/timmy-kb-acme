@@ -21,12 +21,13 @@ from pipeline.logging_utils import get_structured_logger, log_workflow_summary, 
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import iter_safe_paths
 from pipeline.tracing import start_root_trace
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.api import convert_markdown  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import enrich_frontmatter  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
 from semantic.api import require_reviewed_vocab  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import write_summary_and_readme  # noqa: F401  # esposto per monkeypatch nei test CLI
-from semantic.api import get_paths, run_semantic_pipeline
+from semantic.api import run_semantic_pipeline
 from semantic.types import SemanticContextProtocol
 
 
@@ -58,6 +59,7 @@ def main() -> int:
     ctx: SemanticContextProtocol = ClientContext.load(
         slug=slug, interactive=not args.non_interactive, require_env=False, run_id=run_id
     )
+    layout = WorkspaceLayout.from_context(ctx)
 
     # Imposta flag UX nel contesto (contratto esplicito del semantic context)
     ctx.skip_preview = bool(args.no_preview)
@@ -94,7 +96,7 @@ def main() -> int:
             )
 
             # 3) Costruisci il Knowledge Graph dei tag (Tag KG Builder)
-            semantic_dir = Path(base_dir) / "semantic"
+            semantic_dir = layout.semantic_dir
             tags_raw_path = semantic_dir / "tags_raw.json"
             if tags_raw_path.exists():
                 with phase_scope(logger, stage="cli.tag_kg_builder", customer=slug):
@@ -117,8 +119,7 @@ def main() -> int:
     # Riepilogo artefatti (best-effort, non influenza l'exit code)
     summary_extra: dict[str, object] = {}
     try:
-        paths = get_paths(slug)
-        book_dir: Path = getattr(ctx, "md_dir", None) or paths["book"]
+        book_dir: Path = getattr(ctx, "md_dir", None) or layout.book_dir
         summary_path = book_dir / "SUMMARY.md"
         readme_path = book_dir / "README.md"
 
@@ -135,6 +136,7 @@ def main() -> int:
 
         summary_extra = {
             "book_dir": str(book_dir),
+            "base_dir": str(layout.base_dir),
             "markdown": len(content_mds),
             "frontmatter": len(touched),
             "summary_exists": summary_path.exists(),

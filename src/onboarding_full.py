@@ -20,18 +20,17 @@ import argparse
 import logging
 import sys
 import uuid
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
-from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME, OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.context import ClientContext
 from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import get_env_var  # env "puro"
 from pipeline.exceptions import ConfigError, PipelineError, PushError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.metrics import start_metrics_server_once
-from pipeline.path_utils import ensure_valid_slug, ensure_within, iter_safe_paths  # SSoT guardia STRONG
+from pipeline.path_utils import ensure_valid_slug, iter_safe_paths  # SSoT guardia STRONG
 from pipeline.tracing import start_root_trace
+from pipeline.workspace_layout import WorkspaceLayout
 
 # --- Adapter obbligatorio per i contenuti BOOK (README/SUMMARY) ------------------
 try:
@@ -168,15 +167,9 @@ def onboarding_full_main(
         return exit_code_for(exc if isinstance(exc, (ConfigError, PipelineError)) else PipelineError(str(exc)))
 
     # Preferisci i path dal contesto; fallback deterministico solo se assenti
-    ctx_base = getattr(context, "base_dir", None)
-    base_dir: Path = (
-        cast(Path, ctx_base) if ctx_base is not None else (Path(OUTPUT_DIR_NAME) / f"{REPO_NAME_PREFIX}{slug}")
-    )
-    log_dir = base_dir / LOGS_DIR_NAME
-    log_file = log_dir / LOG_FILE_NAME
-    ensure_within(base_dir, log_dir)
-    ensure_within(log_dir, log_file)
-    log_dir.mkdir(parents=True, exist_ok=True)
+    layout = WorkspaceLayout.from_context(context)
+    layout.logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = layout.log_file
 
     logger = get_structured_logger("onboarding_full", log_file=log_file, context=context, run_id=run_id)
     logger.info("cli.onboarding_full.started", extra={"slug": slug})

@@ -27,6 +27,7 @@ from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.settings import Settings
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.vision_ingest import compile_document_to_vision_yaml
 from system.self_check import run_system_self_check
 from ui.chrome import header, sidebar
@@ -105,6 +106,32 @@ def ui_allow_local_only_enabled() -> bool:
 
 LOGGER = get_structured_logger("ui.new_client")
 
+_LAYOUT_CACHE: dict[str, WorkspaceLayout] = {}
+
+
+def _layout_for_slug(slug: str) -> WorkspaceLayout | None:
+    key = (slug or "").strip().lower()
+    if not key:
+        return None
+    cached = _LAYOUT_CACHE.get(key)
+    if cached:
+        return cached
+    workspace_candidate = get_repo_root() / "output" / f"timmy-kb-{key}"
+    layout: WorkspaceLayout | None = None
+    if workspace_candidate.exists():
+        try:
+            layout = WorkspaceLayout.from_workspace(workspace=workspace_candidate, slug=key)
+        except Exception:
+            layout = None
+    if layout is None:
+        try:
+            layout = WorkspaceLayout.from_slug(slug=key, require_env=False)
+        except Exception:
+            layout = None
+    if layout:
+        _LAYOUT_CACHE[key] = layout
+    return layout
+
 
 # --------- helper ---------
 def _client_base(slug: str) -> Path:
@@ -117,6 +144,15 @@ def _client_base(slug: str) -> Path:
     base_parent = fallback_base.parent
 
     candidate: Path
+    layout = _layout_for_slug(slug)
+    if layout:
+        candidate = layout.base_dir
+        try:
+            candidate = cast(Path, ensure_within_and_resolve(base_parent, candidate))
+        except Exception:
+            candidate = layout.base_dir
+        return candidate
+
     try:
         candidate = cast(Path, workspace_root(slug))
         # Accettiamo il candidate solo se resta nel perimetro del fallback (copre override repo root).
@@ -127,21 +163,33 @@ def _client_base(slug: str) -> Path:
 
 
 def _config_dir_client(slug: str) -> Path:
+    layout = _layout_for_slug(slug)
+    if layout:
+        return layout.config_path.parent
     base = _client_base(slug)
     return cast(Path, ensure_within_and_resolve(base, base / "config"))
 
 
 def _semantic_dir_client(slug: str) -> Path:
+    layout = _layout_for_slug(slug)
+    if layout:
+        return layout.semantic_dir
     base = _client_base(slug)
     return cast(Path, ensure_within_and_resolve(base, base / "semantic"))
 
 
 def _client_pdf_path(slug: str) -> Path:
+    layout = _layout_for_slug(slug)
+    if layout:
+        return layout.config_path.parent / "VisionStatement.pdf"
     cfg_dir = _config_dir_client(slug)
     return cast(Path, ensure_within_and_resolve(cfg_dir, cfg_dir / "VisionStatement.pdf"))
 
 
 def _client_vision_yaml_path(slug: str) -> Path:
+    layout = _layout_for_slug(slug)
+    if layout:
+        return layout.config_path.parent / "visionstatement.yaml"
     cfg_dir = _config_dir_client(slug)
     return cast(Path, ensure_within_and_resolve(cfg_dir, cfg_dir / "visionstatement.yaml"))
 
@@ -266,9 +314,11 @@ def _log_diagnostics(slug: str, level: str, message: str, *, extra: Dict[str, An
     Scrive un evento nel log Diagnostica (WARNING-only by convention) e chiude l'handler
     per evitare lock su Windows. Usiamo sempre livelli >= warning quando invochiamo questa funzione.
     """
-    base = _client_base(slug)
-    (base / "logs").mkdir(parents=True, exist_ok=True)
-    logger = get_structured_logger("ui.diagnostics", log_file=(base / "logs" / "ui.log"))
+    layout = _layout_for_slug(slug)
+    base = layout.base_dir if layout else _client_base(slug)
+    logs_dir = layout.logs_dir if layout else (base / "logs")
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    logger = get_structured_logger("ui.diagnostics", log_file=(logs_dir / "ui.log"))
     log_method = getattr(logger, level, None)
     if callable(log_method):
         log_method(message, extra=extra)
