@@ -10,8 +10,10 @@ La Workspace Layout Resolution Policy è fail-fast: il resolver solleva
 anche quando la struttura fisica è presente."""
 
 import inspect
+import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
@@ -19,6 +21,14 @@ from pipeline.exceptions import WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, validate_slug
 
 __all__ = ["WorkspaceLayout", "get_workspace_layout"]
+
+
+def _to_path(value: Any, fallback: Path) -> Path:
+    if isinstance(value, Path):
+        return value
+    if isinstance(value, (str, os.PathLike)):
+        return Path(value)
+    return fallback
 
 
 @dataclass(frozen=True)
@@ -54,15 +64,13 @@ class WorkspaceLayout:
             raise WorkspaceNotFound("ClientContext privo di repo_root_dir/base_dir", slug=context.slug)
         root = Path(root).resolve()
 
-        raw_dir = getattr(context, "raw_dir", None) or (root / "raw")
-        book_dir = getattr(context, "md_dir", None) or (root / "book")
-        semantic_dir = getattr(context, "semantic_dir", None) or (root / "semantic")
+        raw_dir = _to_path(getattr(context, "raw_dir", None), root / "raw")
+        book_dir = _to_path(getattr(context, "md_dir", None), root / "book")
+        semantic_dir = _to_path(getattr(context, "semantic_dir", None), root / "semantic")
         log_dir_attr = getattr(context, "logs_dir", None) or getattr(context, "log_dir", None)
-        logs_dir = Path(log_dir_attr) if log_dir_attr is not None else root / LOGS_DIR_NAME
-        config_path_attr = getattr(context, "config_path", None)
-        config_path = config_path_attr or (root / "config" / "config.yaml")
-        mapping_path_attr = getattr(context, "mapping_path", None)
-        mapping_path = mapping_path_attr or (semantic_dir / "semantic_mapping.yaml")
+        logs_dir = _to_path(log_dir_attr, root / LOGS_DIR_NAME)
+        config_path = _to_path(getattr(context, "config_path", None), root / "config" / "config.yaml")
+        mapping_path = _to_path(getattr(context, "mapping_path", None), semantic_dir / "semantic_mapping.yaml")
         config_dir = config_path.parent
 
         raw_dir = ensure_within_and_resolve(root, raw_dir)
@@ -188,7 +196,7 @@ def _derive_child_path(base: Path | None, relative: str) -> Path | None:
     """Ritorna il path risolto di `relative` dentro `base`, se possibile."""
     if base is None:
         return None
-    return ensure_within_and_resolve(base, base / relative)
+    return cast(Path, ensure_within_and_resolve(base, base / relative))
 
 
 def _extract_env_from_context(context: ClientContext) -> str | None:

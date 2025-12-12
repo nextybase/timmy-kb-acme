@@ -367,18 +367,38 @@ def create_drive_structure_from_yaml(
     yaml_path: Union[str, PathLike[str]],
     client_folder_id: str,
     *,
+    existing_raw_id: Optional[str] = None,
+    existing_contrattualistica_id: Optional[str] = None,
     redact_logs: bool = False,
 ) -> Dict[str, str]:
-    """Crea la struttura Drive completa (raw + sottocartelle) usando un file YAML."""
-    structure = create_drive_minimal_structure(service, client_folder_id, redact_logs=redact_logs)
-    raw_id = structure.get("raw")
-    if not raw_id:
+    """Crea la struttura Drive completa (raw + sottocartelle) usando un file YAML.
+
+    Se `existing_raw_id` o `existing_contrattualistica_id` sono forniti, viene riutilizzata
+    quella cartella invece di crearla da zero.
+    """
+    structure: Dict[str, str] = {}
+    if existing_raw_id:
+        structure["raw"] = existing_raw_id
+    if existing_contrattualistica_id:
+        structure["contrattualistica"] = existing_contrattualistica_id
+
+    if not existing_raw_id or not existing_contrattualistica_id:
+        base_structure = create_drive_minimal_structure(
+            service,
+            client_folder_id,
+            redact_logs=redact_logs,
+        )
+        structure = {**base_structure, **structure}
+        existing_raw_id = structure.get("raw") or existing_raw_id
+        existing_contrattualistica_id = structure.get("contrattualistica") or existing_contrattualistica_id
+
+    if not existing_raw_id:
         raise DriveUploadError("Creazione cartella RAW fallita: ID non reperito.")
 
     raw_children = create_drive_raw_children_from_yaml(
         service,
         yaml_path,
-        raw_id,
+        existing_raw_id,
         redact_logs=redact_logs,
     )
 

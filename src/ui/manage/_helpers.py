@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar, cast
 
 from pipeline.workspace_layout import WorkspaceLayout
 from ui.clients_store import get_all as get_clients
@@ -14,7 +14,10 @@ T = TypeVar("T")
 
 def repo_root(manage_file: Path) -> Path:
     """Restituisce la root del repository partendo dal file della pagina manage."""
-    return manage_file.resolve().parents[3]
+    candidate = manage_file.resolve()
+    for _ in range(3):
+        candidate = candidate.parent
+    return candidate
 
 
 def clients_db_path(manage_file: Path) -> Path:
@@ -30,7 +33,7 @@ def workspace_root(slug: str, *, layout: WorkspaceLayout | None = None) -> Path:
     Questo wrapper rimane per non modificare le chiamate esistenti dalla pagina `manage`.
     """
     if layout is not None:
-        return layout.base_dir
+        return cast(Path, layout.base_dir)
     raw_dir = Path(resolve_raw_dir(slug))
     return raw_dir.parent
 

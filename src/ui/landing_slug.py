@@ -165,13 +165,13 @@ def _layout_missing_message(slug: str) -> str:
 
 
 def _workspace_dir_for(slug: str, *, layout: WorkspaceLayout | None = None) -> Path:
-    if layout is not None:
-        return layout.base_dir
-    raise ConfigError(
-        "Workspace layout non disponibile: assicurati di avere un layout valido o usa le API "
-        "di bootstrap in pipeline.workspace_bootstrap (bootstrap_client_workspace/migrate_or_repair_workspace).",
-        slug=slug,
-    )
+    if layout is None:
+        raise ConfigError(
+            "Workspace layout non disponibile: assicurati di avere un layout valido o usa le API "
+            "di bootstrap in pipeline.workspace_bootstrap (bootstrap_client_workspace/migrate_or_repair_workspace).",
+            slug=slug,
+        )
+    return cast(Path, layout.base_dir)
 
 
 def _request_shutdown(logger: Optional[logging.Logger]) -> None:

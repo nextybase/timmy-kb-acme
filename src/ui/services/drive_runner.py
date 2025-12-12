@@ -189,7 +189,7 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
     Ritorna: {'client_folder_id': ..., 'raw_id': ..., 'contrattualistica_id': ...}
     """
     _require_drive_for_raw_only()
-    if get_drive_service is None or create_drive_raw_children_from_yaml is None:
+    if get_drive_service is None or create_drive_structure_from_yaml is None:
         raise RuntimeError("Funzioni Drive non disponibili (RAW da YAML).")
     ctx = get_client_context(slug, interactive=False, require_env=require_env)
     layout = _require_layout_from_context(ctx)
@@ -200,22 +200,27 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
     client_folder_id = (cfg.get("drive_folder_id") or "").strip()
     raw_id = (cfg.get("drive_raw_folder_id") or "").strip()
     contr_id = (cfg.get("drive_contrattualistica_folder_id") or "").strip()
-    if not raw_id:
-        raise RuntimeError(
-            "drive_raw_folder_id mancante nel config.yaml. " "Esegui prima la fase di bootstrap Drive (pre-Vision)."
-        )
+    if not client_folder_id:
+        raise RuntimeError("drive_folder_id mancante nel config; esegui prima la fase di onboarding Drive.")
 
     yaml_path = ensure_within_and_resolve(layout.base_dir, layout.semantic_dir / "cartelle_raw.yaml")
     if not yaml_path.exists():
         raise RuntimeError(f"File mancante: {yaml_path}. Esegui Vision o genera lo YAML e riprova.")
 
-    raw_children_fn = create_drive_raw_children_from_yaml
-    raw_children_fn(
+    created_map = create_drive_structure_from_yaml(
         svc,
         yaml_path,
-        raw_id,
+        client_folder_id,
+        existing_raw_id=raw_id or None,
+        existing_contrattualistica_id=contr_id or None,
         redact_logs=bool(getattr(ctx, "redact_logs", False)),
     )
+    raw_id = created_map.get("raw") or raw_id
+    contr_id = created_map.get("contrattualistica") or contr_id
+
+    if not raw_id:
+        raise RuntimeError("Cartella 'raw' non creata su Drive; verifica i log.")
+
     if progress:
         progress(1, 1, "Struttura RAW su Drive creata/aggiornata")
 
@@ -577,6 +582,7 @@ def emit_readmes_for_raw(
     cats = _extract_categories_from_mapping(mapping or {})
 
     # Cartella cliente; NON crea la struttura raw se non richiesto esplicitamente
+    cfg = get_client_config(ctx) or {}
     parent_id = ctx.env.get("DRIVE_ID")
     if not parent_id:
         raise RuntimeError("DRIVE_ID non impostato.")
@@ -597,13 +603,17 @@ def emit_readmes_for_raw(
             svc,
             tmp_yaml,
             client_folder_id,
+            existing_raw_id=cfg.get("drive_raw_folder_id"),
+            existing_contrattualistica_id=cfg.get("drive_contrattualistica_folder_id"),
             redact_logs=bool(getattr(ctx, "redact_logs", False)),
         )
         raw_id = created_map.get("raw")
     else:
-        sub = _drive_list_folders(svc, client_folder_id)
-        name_to_id = {d["name"]: d["id"] for d in sub}
-        raw_id = name_to_id.get("raw")
+        raw_id = cfg.get("drive_raw_folder_id")
+        if not raw_id:
+            sub = _drive_list_folders(svc, client_folder_id)
+            name_to_id = {d["name"]: d["id"] for d in sub}
+            raw_id = name_to_id.get("raw")
 
     if not raw_id:
         raise RuntimeError("Cartella 'raw' non trovata/creata. Esegui 'Crea/aggiorna struttura Drive' e riprova.")

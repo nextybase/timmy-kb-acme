@@ -378,6 +378,8 @@ if slug:
     layout = _resolve_layout(slug)
     if layout is None:
         _render_missing_layout(slug)
+        st.stop()
+    layout = cast(WorkspaceLayout, layout)
 
     # Unica vista per Drive (Diff)
     if _render_drive_diff is not None:

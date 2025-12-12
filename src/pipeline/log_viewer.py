@@ -29,7 +29,7 @@ from __future__ import annotations
 import dataclasses
 import re
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
@@ -91,7 +91,7 @@ def get_global_logs_dir() -> Path:
     except ConfigError as exc:
         LOGGER.error("log_viewer.repo_root_missing", extra={"error": str(exc)})
         raise
-    return global_logs_dir(repo_root)
+    return cast(Path, global_logs_dir(repo_root))
 
 
 def _iter_log_files_from_dir(log_dir: Path) -> Iterable[LogFileInfo]:

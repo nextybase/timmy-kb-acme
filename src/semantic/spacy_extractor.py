@@ -51,7 +51,7 @@ def _resolve_markdown_path_from_raw(raw_path: Path, *, layout: WorkspaceLayout) 
     safe_raw = cast(Path, ensure_within_and_resolve(raw_root, raw_path.resolve()))
     rel = safe_raw.relative_to(raw_root)
     md_root = layout.book_dir
-    return md_root / rel.with_suffix(".md")
+    return cast(Path, md_root / rel.with_suffix(".md"))
 
 
 def _load_spacy(model_name: str) -> Any:

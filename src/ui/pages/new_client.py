@@ -142,23 +142,23 @@ def _require_layout(slug: str, layout: WorkspaceLayout | None = None) -> Workspa
 # --------- helper ---------
 def _config_dir_client(slug: str, layout: WorkspaceLayout | None = None) -> Path:
     layout = _require_layout(slug, layout)
-    return layout.config_path.parent
+    return cast(Path, layout.config_path.parent)
 
 
 def _semantic_dir_client(slug: str, layout: WorkspaceLayout | None = None) -> Path:
     layout = _require_layout(slug, layout)
-    return layout.semantic_dir
+    return cast(Path, layout.semantic_dir)
 
 
 def _client_pdf_path(slug: str, layout: WorkspaceLayout | None = None) -> Path:
     layout = _require_layout(slug, layout)
     cfg_dir = layout.config_path.parent
-    return layout.vision_pdf or (cfg_dir / "VisionStatement.pdf")
+    return cast(Path, layout.vision_pdf or (cfg_dir / "VisionStatement.pdf"))
 
 
 def _client_vision_yaml_path(slug: str, layout: WorkspaceLayout | None = None) -> Path:
     layout = _require_layout(slug, layout)
-    return layout.config_path.parent / "visionstatement.yaml"
+    return cast(Path, layout.config_path.parent / "visionstatement.yaml")
 
 
 def _has_drive_ids(slug: str) -> bool:

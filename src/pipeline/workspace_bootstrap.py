@@ -11,6 +11,7 @@ in fail-fast mode and never call these functions directly.
 
 import os
 from pathlib import Path
+from typing import cast
 
 from pipeline.constants import LOGS_DIR_NAME
 from pipeline.context import ClientContext
@@ -63,12 +64,15 @@ def bootstrap_client_workspace(context: ClientContext) -> WorkspaceLayout:
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    candidate = Path(__file__).resolve()
+    for _ in range(2):
+        candidate = candidate.parent
+    return candidate
 
 
 def _assert_within(base: Path, candidate: Path) -> Path:
     ensure_within(base, candidate)
-    return ensure_within_and_resolve(base, candidate)
+    return cast(Path, ensure_within_and_resolve(base, candidate))
 
 
 def _write_minimal_file(path: Path, content: str) -> None:
@@ -79,7 +83,7 @@ def _template_config_content() -> str:
     template = _project_root() / "config" / "config.yaml"
     if template.exists():
         safe_template = ensure_within_and_resolve(_project_root(), template)
-        return read_text_safe(safe_template.parent, safe_template, encoding="utf-8")
+        return cast(str, read_text_safe(safe_template.parent, safe_template, encoding="utf-8"))
     return "meta:\n  client_name: dummy\n"
 
 
