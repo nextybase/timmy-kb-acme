@@ -17,6 +17,11 @@
         "url_path": "configurazione"
       },
       {
+        "path": "src/ui/pages/prototimmy_chat.py",
+        "title": "ProtoTimmy Chat",
+        "url_path": "prototimmy-chat"
+      },
+      {
         "path": "src/ui/pages/tools_check.py",
         "title": "Tuning",
         "url_path": "check"

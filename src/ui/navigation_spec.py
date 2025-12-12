@@ -24,6 +24,7 @@ class PagePaths:
     SECRETS = "src/ui/pages/secrets_healthcheck.py"  # pragma: allowlist secret
     DIAGNOSTICS = "src/ui/pages/diagnostics.py"
     LOGS_PANEL = "src/ui/pages/logs_panel.py"
+    PROTOTIMMY_CHAT = "src/ui/pages/prototimmy_chat.py"
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
         (
             NavPage(PagePaths.ADMIN, "Admin", "admin"),
             NavPage(PagePaths.CONFIGURAZIONE, "Configurazione", "configurazione"),
+            NavPage(PagePaths.PROTOTIMMY_CHAT, "ProtoTimmy Chat", "prototimmy-chat"),
             NavPage(PagePaths.TUNING, "Tuning", "check", requires=("vision",)),
             NavPage(PagePaths.SECRETS, "Secrets Healthcheck", "secrets"),
             NavPage(PagePaths.LOGS_PANEL, "Log dashboard", None),
