@@ -5,6 +5,7 @@ import inspect
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar
 
+from pipeline.workspace_layout import WorkspaceLayout
 from ui.clients_store import get_all as get_clients
 from ui.utils.workspace import resolve_raw_dir
 
@@ -21,8 +22,15 @@ def clients_db_path(manage_file: Path) -> Path:
     return repo_root(manage_file) / "clients_db" / "clients.yaml"
 
 
-def workspace_root(slug: str) -> Path:
-    """Restituisce la radice workspace sicura per lo slug dato."""
+def workspace_root(slug: str, *, layout: WorkspaceLayout | None = None) -> Path:
+    """
+    Compat helper legacy: restituisce la root workspace.
+
+    In contesti moderni dove il layout è disponibile, preferire `layout.base_dir` direttamente.
+    Questo wrapper rimane per non modificare le chiamate esistenti dalla pagina `manage`.
+    """
+    if layout is not None:
+        return layout.base_dir
     raw_dir = Path(resolve_raw_dir(slug))
     return raw_dir.parent
 

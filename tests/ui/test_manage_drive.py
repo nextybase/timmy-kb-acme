@@ -8,8 +8,24 @@ from typing import Any, Dict, List
 import pytest
 
 from pipeline.drive.download_steps import DriveCandidate
+from pipeline.workspace_layout import WorkspaceLayout
 from ui.manage import drive
 from ui.services import drive_runner
+
+
+def _prepare_workspace(slug: str, workspace_root: Path) -> WorkspaceLayout:
+    book_dir = workspace_root / "book"
+    semantic_dir = workspace_root / "semantic"
+    config_dir = workspace_root / "config"
+    logs_dir = workspace_root / "logs"
+    raw_dir = workspace_root / "raw"
+    for path in (book_dir, semantic_dir, config_dir, logs_dir, raw_dir):
+        path.mkdir(parents=True, exist_ok=True)
+    (book_dir / "README.md").write_text("README", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("SUMMARY", encoding="utf-8")
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
+    (semantic_dir / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    return WorkspaceLayout.from_workspace(workspace_root, slug=slug)
 
 
 class _StreamlitStub:
@@ -193,7 +209,9 @@ def test_plan_raw_download_uses_discover_candidates(monkeypatch: pytest.MonkeyPa
         recorded_kwargs.update(kwargs)
         return candidates
 
-    ctx = SimpleNamespace(env={"DRIVE_ID": "root-id"})
+    ctx = SimpleNamespace(env={"DRIVE_ID": "root-id"}, slug="dummy")
+    layout = _prepare_workspace("dummy", workspace_dir)
+    monkeypatch.setattr(drive_runner.WorkspaceLayout, "from_context", lambda *_, **__: layout)
     monkeypatch.setattr(drive_runner, "get_client_context", lambda *_, **__: ctx)
     monkeypatch.setattr(drive_runner, "get_drive_service", lambda *_: object())
     monkeypatch.setattr(drive_runner, "create_drive_folder", lambda *_a, **_k: None)
@@ -204,7 +222,6 @@ def test_plan_raw_download_uses_discover_candidates(monkeypatch: pytest.MonkeyPa
         lambda *_a, **_k: [{"name": "raw", "id": "raw-id"}],
     )
     monkeypatch.setattr(drive_runner, "_drive_list_pdfs", lambda *_a, **_k: [])
-    monkeypatch.setattr(drive_runner, "_resolve_workspace", lambda *_a, **_k: workspace_dir)
     monkeypatch.setattr(drive_runner, "discover_candidates", fake_discover_candidates)
 
     conflicts, labels = drive_runner.plan_raw_download("dummy", require_env=False)

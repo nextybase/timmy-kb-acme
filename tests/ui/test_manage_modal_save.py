@@ -8,6 +8,8 @@ from typing import Any, Callable
 
 import pytest
 
+from pipeline.workspace_layout import WorkspaceLayout
+
 
 def _build_streamlit_stub(save_button_pressed: bool = True) -> Any:
     """Stub minimale di Streamlit sufficiente a importare ui.pages.manage e
@@ -89,11 +91,12 @@ def test_modal_save_uses_path_safety(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     # Stub: workspace_root → directory di test
     base_dir = tmp_path / "output" / "timmy-kb-dummy"
     (base_dir / "semantic").mkdir(parents=True)
+    layout = WorkspaceLayout.from_workspace(workspace=base_dir, slug="dummy")
 
     import ui.pages.manage as manage  # type: ignore
 
-    # Monkeypatch workspace root per evitare dipendenze da resolve_raw_dir
-    monkeypatch.setattr(manage, "_workspace_root", lambda slug: base_dir, raising=True)
+    # Monkeypatch layout helper per evitare dipendenze da resolve_raw_dir
+    monkeypatch.setattr("ui.utils.workspace.get_ui_workspace_layout", lambda slug, require_env=False: layout)
 
     # Tracciamo la chiamata a ensure_within_and_resolve
     called_args: list[tuple[Path, Path]] = []
@@ -122,13 +125,13 @@ def test_modal_save_uses_path_safety(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     caplog.set_level("INFO")
 
     # Eseguiamo il modal (simula click su "Salva")
-    manage._open_tags_editor_modal("dummy")
+    manage._open_tags_editor_modal("dummy", layout=layout)
 
-    # Asserzioni: ensure_within_and_resolve chiamato con base_dir e semantic/tags_reviewed.yaml
+    # Asserzioni: ensure_within_and_resolve chiamato con layout.base_dir e semantic/tags_reviewed.yaml
     assert called_args, "ensure_within_and_resolve non è stato chiamato"
     root_arg, candidate_arg = called_args[0]
-    assert root_arg == base_dir
-    assert candidate_arg == base_dir / "semantic" / "tags_reviewed.yaml"
+    assert root_arg == layout.base_dir
+    assert candidate_arg == layout.semantic_dir / "tags_reviewed.yaml"
 
     # E safe_write_text deve ricevere il path 'risolto'
     assert Path(saved["path"]) == candidate_arg

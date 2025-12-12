@@ -7,6 +7,24 @@ from typing import Any, Dict
 
 import pytest
 
+from pipeline.workspace_layout import WorkspaceLayout
+
+
+def _prepare_workspace(slug: str, workspace_root: Path) -> WorkspaceLayout:
+    """Crea workspace minimo necessario per la validazione di WorkspaceLayout."""
+    book_dir = workspace_root / "book"
+    semantic_dir = workspace_root / "semantic"
+    config_dir = workspace_root / "config"
+    logs_dir = workspace_root / "logs"
+    raw_dir = workspace_root / "raw"
+    for path in (book_dir, semantic_dir, config_dir, logs_dir, raw_dir):
+        path.mkdir(parents=True, exist_ok=True)
+    (book_dir / "README.md").write_text("README", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("SUMMARY", encoding="utf-8")
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
+    (semantic_dir / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    return WorkspaceLayout.from_workspace(workspace_root, slug=slug)
+
 
 def test_download_with_progress_accepts_optional_overwrite(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     import ui.services.drive_runner as dr
@@ -16,6 +34,7 @@ def test_download_with_progress_accepts_optional_overwrite(monkeypatch: pytest.M
     workspace_root.mkdir(parents=True, exist_ok=True)
     raw_dir = workspace_root / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
+    layout = _prepare_workspace(ctx.slug, workspace_root)
 
     monkeypatch.setattr(dr, "get_client_context", lambda *_a, **_k: ctx)
     monkeypatch.setattr(dr, "get_drive_service", lambda _ctx: object())
@@ -30,7 +49,7 @@ def test_download_with_progress_accepts_optional_overwrite(monkeypatch: pytest.M
     monkeypatch.setattr(dr, "snapshot_existing", lambda _c: set())
     monkeypatch.setattr(dr, "compute_created", lambda _c, _b: [])
     monkeypatch.setattr(dr, "emit_progress", lambda *_a, **_k: None)
-    monkeypatch.setattr(dr, "_resolve_workspace", lambda base_root, slug: workspace_root)
+    monkeypatch.setattr(dr.WorkspaceLayout, "from_context", lambda *_a, **_k: layout)
 
     captured: Dict[str, Any] = {}
 

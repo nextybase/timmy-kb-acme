@@ -9,14 +9,26 @@ from kg_builder import RawTag, TagKgInput, _load_raw_tags, call_openai_tag_kg_as
 from pipeline.exceptions import ConfigError
 
 
+def _create_minimal_workspace(tmp_path: Path) -> Path:
+    workspace = tmp_path / "workspace"
+    (workspace / "config").mkdir(parents=True, exist_ok=True)
+    (workspace / "config" / "config.yaml").write_text("{}", encoding="utf-8")
+    (workspace / "book").mkdir(parents=True, exist_ok=True)
+    (workspace / "book" / "README.md").write_text("# README", encoding="utf-8")
+    (workspace / "book" / "SUMMARY.md").write_text("# SUMMARY", encoding="utf-8")
+    (workspace / "semantic").mkdir(parents=True, exist_ok=True)
+    (workspace / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (workspace / "raw").mkdir(parents=True, exist_ok=True)
+    return workspace
+
+
 def _write_json(path: Path, payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 def test_load_raw_tags_handles_list_structure(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
+    workspace = _create_minimal_workspace(tmp_path)
     semantic = workspace / "semantic"
-    semantic.mkdir(parents=True)
     payload = {
         "namespace": "acme-labs",
         "tags": [
@@ -40,9 +52,8 @@ def test_load_raw_tags_handles_list_structure(tmp_path: Path) -> None:
 
 
 def test_load_raw_tags_handles_dict_structure(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
+    workspace = _create_minimal_workspace(tmp_path)
     semantic = workspace / "semantic"
-    semantic.mkdir(parents=True)
     payload = {
         "tags": {
             "raw/A": {

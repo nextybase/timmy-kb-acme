@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any, Iterator, Optional, Tuple, cast
+from typing import Any, Iterator, Optional, Tuple
 
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, tail_path
-from pipeline.path_utils import clear_iter_safe_pdfs_cache, ensure_within_and_resolve, iter_safe_pdfs, validate_slug
+from pipeline.path_utils import clear_iter_safe_pdfs_cache, iter_safe_pdfs, validate_slug
 from pipeline.workspace_layout import WorkspaceLayout
 from ui.utils.context_cache import get_client_context, invalidate_client_context
 
@@ -20,7 +21,6 @@ except Exception:  # pragma: no cover
 
 st: Any = _st  # st rimane Any; accessi protetti da guardie runtime
 _log = get_structured_logger("ui.workspace")
-_BASE_CACHE: dict[str, Path] = {}
 _LAYOUT_CACHE: dict[str, WorkspaceLayout] = {}
 _UI_RAW_CACHE_TTL = 3.0  # secondi, garantisce feedback rapido in UI
 
@@ -45,59 +45,51 @@ def _load_context_layout(slug: str) -> Optional[WorkspaceLayout]:
     return layout
 
 
-def _fallback_base_dir(slug: str) -> Path:
-    """Fallback: output/timmy-kb-<slug>, con guardie path-safe."""
-    root = Path("output")
-    # slug è già normalizzato/validato da resolve_raw_dir; qui non ripetiamo la normalizzazione
-    return cast(Path, ensure_within_and_resolve(root, root / f"timmy-kb-{slug}"))
-
-
-def resolve_raw_dir(slug: str) -> Path:
-    """
-    Restituisce il path assoluto di raw/ per lo slug dato applicando:
-    - normalizzazione e validazione slug (validate_slug)
-    - guardie di path-safety (ensure_within_and_resolve)
-    """
+def get_ui_workspace_layout(slug: str, *, require_env: bool = True) -> WorkspaceLayout:
+    """Helper compat per le UI: restituisce sempre il layout canonico per lo slug dato."""
     slug_value = (slug or "").strip().lower()
-    # Conforma lo slug alle policy di progetto (solleva InvalidSlug/ConfigError se non valido)
     validate_slug(slug_value)
 
-    if slug_value in _BASE_CACHE:
-        base_dir = _BASE_CACHE[slug_value]
-        layout = _LAYOUT_CACHE.get(slug_value)
-    else:
-        layout = _load_context_layout(slug_value)
-        base_dir = layout.base_dir if layout else _fallback_base_dir(slug_value)
-        _BASE_CACHE[slug_value] = base_dir
-    if layout:
-        return layout.raw_dir
-    return cast(Path, ensure_within_and_resolve(base_dir, Path(base_dir) / "raw"))
+    cached = _LAYOUT_CACHE.get(slug_value)
+    if cached:
+        return cached
+
+    layout = _load_context_layout(slug_value)
+    if layout is None:
+        layout = WorkspaceLayout.from_slug(slug=slug_value, require_env=require_env)
+    _LAYOUT_CACHE[slug_value] = layout
+    return layout
+
+
+def resolve_raw_dir(_slug: str) -> Path:
+    """
+    Compat helper legacy: non è più consentito ricavare manualmente il raw dir.
+    """
+    raise ConfigError(
+        "DEPRECATO: `resolve_raw_dir` è stato disabilitato. Risolvi il workspace via WorkspaceLayout "
+        "e, se serve creato o riparato, chiama pipeline.workspace_bootstrap.bootstrap_client_workspace, "
+        "bootstrap_dummy_workspace o migrate_or_repair_workspace.",
+    )
 
 
 def clear_base_cache(*, slug: str | None = None) -> None:
-    """Svuota la cache dei base_dir quando cambia il perimetro (es. REPO_ROOT_DIR)."""
-    if slug:
-        _BASE_CACHE.pop(slug.strip().lower(), None)
-    else:
-        _BASE_CACHE.clear()
-    clear_iter_safe_pdfs_cache()
-    invalidate_client_context(slug)
+    """Svuota la cache dei layout quando cambia il perimetro (es. REPO_ROOT_DIR)."""
     if slug:
         _LAYOUT_CACHE.pop(slug.strip().lower(), None)
-    elif slug is None:
+    else:
         _LAYOUT_CACHE.clear()
+    clear_iter_safe_pdfs_cache()
+    invalidate_client_context(slug)
 
 
-def workspace_root(slug: str) -> Path:
+def workspace_root(_slug: str) -> Path:
     """
-    Restituisce la radice del workspace per lo slug validato.
-    Invariante: sempre dentro al perimetro sicuro del cliente.
+    Compat helper legacy: non è più consentito derivare manualmente la root.
     """
-    layout = _load_context_layout(slug)
-    if layout:
-        return layout.base_dir
-    raw_dir = resolve_raw_dir(slug)
-    return raw_dir.parent
+    raise ConfigError(
+        "DEPRECATO: `workspace_root` è stato disabilitato. Risolvi il workspace tramite WorkspaceLayout "
+        "e lancia la logica di bootstrap/migrazione (`pipeline.workspace_bootstrap.*`).",
+    )
 
 
 def iter_pdfs_safe(root: Path, *, use_cache: bool = False, cache_ttl_s: float | None = None) -> Iterator[Path]:

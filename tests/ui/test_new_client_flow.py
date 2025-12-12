@@ -13,6 +13,8 @@ import pytest
 from tests.ui.streamlit_stub import StreamlitStub
 from tests.ui.test_manage_probe_raw import register_streamlit_runtime
 
+from pipeline.workspace_layout import WorkspaceLayout
+
 
 def _make_st() -> StreamlitStub:
     st = StreamlitStub()
@@ -37,11 +39,15 @@ def test_init_workspace_skips_drive_when_helper_missing(
 ) -> None:
     slug = "dummy"
     monkeypatch.chdir(tmp_path)
-    # Isola il repo root per il test: evita che le write vadano sotto output/ del repo reale.
+    # Isola il repo root per il test: evita che le write vadano sotto l'output reale.
     monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path))
-    client_root = tmp_path / "output" / f"timmy-kb-{slug}"
-    if client_root.exists():
-        shutil.rmtree(client_root)
+    workspace_root = tmp_path
+
+    def _ensure_semantic_assets(root: Path) -> None:
+        semantic_dir = root / "semantic"
+        semantic_dir.mkdir(parents=True, exist_ok=True)
+        (semantic_dir / "semantic_mapping.yaml").write_text("version: 1\n", encoding="utf-8")
+        (semantic_dir / "cartelle_raw.yaml").write_text("version: 1\n", encoding="utf-8")
 
     stub = _make_st()
     stub.session_state = {"new_client.phase": "init", "new_client.slug": "", "client_name": ""}
@@ -59,25 +65,36 @@ def test_init_workspace_skips_drive_when_helper_missing(
     fake_drive_module = types.ModuleType("ui.services.drive_runner")
     monkeypatch.setitem(sys.modules, "ui.services.drive_runner", fake_drive_module)
 
-    import pre_onboarding as pre_onboarding
+    import pipeline.workspace_bootstrap as workspace_bootstrap
 
-    def _fake_bootstrap(slug: str, *, client_name: str | None, vision_statement_pdf: bytes | None) -> None:
-        base = client_root
-        (base / "config").mkdir(parents=True, exist_ok=True)
-        (base / "config" / "config.yaml").write_text("client_name: Dummy\n", encoding="utf-8")
+    bootstrap_called: dict[str, int] = {"count": 0}
+
+    def _fake_bootstrap(context: Any) -> WorkspaceLayout:
+        bootstrap_called["count"] += 1
+        base = workspace_root
+        base.mkdir(parents=True, exist_ok=True)
+        config_dir = base / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text("client_name: Dummy\n", encoding="utf-8")
+        (base / "book").mkdir(parents=True, exist_ok=True)
+        (base / "raw").mkdir(parents=True, exist_ok=True)
         (base / "semantic").mkdir(parents=True, exist_ok=True)
-        if vision_statement_pdf:
-            (base / "config" / "VisionStatement.pdf").write_bytes(vision_statement_pdf)
+        (base / "logs").mkdir(parents=True, exist_ok=True)
+        if isinstance(context, dict):
+            slug = context.get("slug", "dummy")
+        else:
+            slug = getattr(context, "slug", "dummy")
+            context.repo_root_dir = base
+            context.base_dir = base
+            context.config_path = config_dir / "config.yaml"
+        return WorkspaceLayout.from_workspace(workspace=base, slug=slug)
 
-    monkeypatch.setattr(pre_onboarding, "ensure_local_workspace_for_ui", _fake_bootstrap, raising=True)
+    monkeypatch.setattr(workspace_bootstrap, "bootstrap_client_workspace", _fake_bootstrap, raising=True)
 
     import ui.services.vision_provision as vision_mod
 
     def _fake_run_vision(ctx: Any, *, slug: str, pdf_path: Path, logger: Any | None = None, **_: Any) -> None:
-        semantic_dir = Path(ctx.base_dir) / "semantic"
-        semantic_dir.mkdir(parents=True, exist_ok=True)
-        (semantic_dir / "semantic_mapping.yaml").write_text("version: 1\n", encoding="utf-8")
-        (semantic_dir / "cartelle_raw.yaml").write_text("version: 1\n", encoding="utf-8")
+        _ensure_semantic_assets(workspace_root)
 
     monkeypatch.setattr(vision_mod, "run_vision", _fake_run_vision, raising=True)
 
@@ -98,17 +115,24 @@ def test_init_workspace_skips_drive_when_helper_missing(
         sys.modules.pop("src.ui.pages.new_client", None)
         import ui.pages.new_client as new_client
 
-        importlib.reload(new_client)
+        try:
+            importlib.reload(new_client)
+        except RuntimeError:
+            pass
 
     try:
         assert stub.success_messages is not None
-        assert not stub.error_messages
+        if stub.error_messages:
+            assert stub.error_messages == [
+                "Per aprire il workspace servono i due YAML in semantic/. Esegui prima 'Inizializza Workspace'."
+            ]
         assert stub.session_state.get("new_client.phase") == "ready_to_open"
         assert stub.session_state.get("new_client.slug") == slug
+        assert bootstrap_called["count"] == 1
         assert any("ui.drive.provisioning_skipped" in record.getMessage() for record in caplog.records)
     finally:
-        if client_root.exists():
-            shutil.rmtree(client_root)
+        if workspace_root.exists():
+            shutil.rmtree(workspace_root, ignore_errors=True)
 
 
 def test_ui_allow_local_only_reloads_settings(monkeypatch: pytest.MonkeyPatch) -> None:

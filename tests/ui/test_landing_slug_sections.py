@@ -83,7 +83,12 @@ def test_workspace_summary_existing_workspace(monkeypatch: pytest.MonkeyPatch, t
         called["args"] = (slug, fallback)
         return True, slug, fallback or slug
 
-    monkeypatch.setattr(module, "_workspace_dir_for", lambda _slug: workspace_dir, raising=False)
+    monkeypatch.setattr(
+        module,
+        "_workspace_dir_for",
+        lambda _slug, *, layout=None: workspace_dir,
+        raising=False,
+    )
     monkeypatch.setattr(module, "_enter_existing_workspace", _fake_enter, raising=False)
 
     result = module.render_workspace_summary("dummy", vision_state, slug_submitted=True, log=None)
@@ -95,7 +100,12 @@ def test_workspace_summary_existing_workspace(monkeypatch: pytest.MonkeyPatch, t
 
 def test_workspace_summary_marks_new_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     module, st_stub = _load_landing(monkeypatch)
-    monkeypatch.setattr(module, "_workspace_dir_for", lambda _slug: tmp_path / "missing", raising=False)
+    monkeypatch.setattr(
+        module,
+        "_workspace_dir_for",
+        lambda _slug, *, layout=None: tmp_path / "missing",
+        raising=False,
+    )
     vision_state: Dict[str, Any] = {
         "verified": False,
         "workspace_created": False,

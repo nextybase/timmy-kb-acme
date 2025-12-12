@@ -18,6 +18,10 @@ import sys
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from pipeline.file_utils import safe_write_bytes
+from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.workspace_bootstrap import bootstrap_dummy_workspace
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -90,8 +94,7 @@ def run_smoke(verbose: bool = False) -> None:
 
     try:
         # Scenario A: workspace SENZA PDF
-        raw_a = workspace_root / f"timmy-kb-{slug_a}" / "raw"
-        raw_a.mkdir(parents=True, exist_ok=True)
+        layout_a = bootstrap_dummy_workspace(slug_a)
         _write_ui_state(slug_a)
         nav_without = _ci_dump_nav(env_base)
         if verbose:
@@ -101,9 +104,9 @@ def run_smoke(verbose: bool = False) -> None:
             raise RuntimeError("Semantica non dovrebbe essere visibile senza PDF in raw/")
 
         # Scenario B: workspace CON PDF
-        raw_b = workspace_root / f"timmy-kb-{slug_b}" / "raw"
-        raw_b.mkdir(parents=True, exist_ok=True)
-        (raw_b / "sample.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+        layout_b = bootstrap_dummy_workspace(slug_b)
+        pdf_path = ensure_within_and_resolve(layout_b.raw_dir, layout_b.raw_dir / "sample.pdf")
+        safe_write_bytes(pdf_path, b"%PDF-1.4\n%%EOF\n", atomic=True)
         _write_ui_state(slug_b)
         nav_with = _ci_dump_nav(env_base)
         if verbose:

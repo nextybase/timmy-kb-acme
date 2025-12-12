@@ -13,7 +13,7 @@ from pipeline.yaml_utils import clear_yaml_cache
 from semantic.api import build_tags_csv
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
 from ui.utils.context_cache import get_client_context
-from ui.utils.workspace import workspace_root
+from ui.utils.workspace import get_ui_workspace_layout
 
 if TYPE_CHECKING:  # pragma: no cover
     from pipeline.context import ClientContext
@@ -34,22 +34,23 @@ def _require_streamlit() -> None:
 
 
 def _resolve_paths(ctx: ClientContext, slug: str) -> tuple[Path, Path, Path]:
-    base_dir = getattr(ctx, "base_dir", None)
+    layout = get_ui_workspace_layout(slug, require_env=False)
+    base_dir = layout.base_dir
     if base_dir is None:
-        base_dir = workspace_root(slug)
-    else:
-        candidate = Path(base_dir)
-        base_dir = ensure_within_and_resolve(candidate.parent, candidate)
+        raise ConfigError(
+            "Layout workspace invalido: non riuscito a determinare base_dir dal layout.",
+            slug=slug,
+        )
 
-    raw_dir = getattr(ctx, "raw_dir", None) or (base_dir / "raw")
-    raw_dir = ensure_within_and_resolve(base_dir, Path(raw_dir))
-    raw_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = layout.raw_dir
+    semantic_dir = layout.semantic_dir
 
-    semantic_dir = getattr(ctx, "semantic_dir", None) or (base_dir / "semantic")
-    semantic_dir = ensure_within_and_resolve(base_dir, Path(semantic_dir))
-    semantic_dir.mkdir(parents=True, exist_ok=True)
+    raw_path = ensure_within_and_resolve(base_dir, Path(raw_dir))
+    raw_path.mkdir(parents=True, exist_ok=True)
+    semantic_path = ensure_within_and_resolve(base_dir, Path(semantic_dir))
+    semantic_path.mkdir(parents=True, exist_ok=True)
 
-    return base_dir, raw_dir, semantic_dir
+    return base_dir, raw_path, semantic_path
 
 
 def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:

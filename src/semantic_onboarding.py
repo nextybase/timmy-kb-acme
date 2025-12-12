@@ -31,6 +31,11 @@ from semantic.api import run_semantic_pipeline
 from semantic.types import SemanticContextProtocol
 
 
+def get_paths(slug: str) -> dict[str, Path]:
+    layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
+    return {"base": layout.base_dir, "book": layout.book_dir}
+
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Semantic Onboarding CLI")
     p.add_argument("--slug", required=True, help="Slug cliente (es. acme)")

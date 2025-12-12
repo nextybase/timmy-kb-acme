@@ -15,6 +15,7 @@ from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.settings import Settings
+from pipeline.workspace_layout import WorkspaceLayout
 
 logger = get_structured_logger("kg_builder")
 
@@ -221,9 +222,8 @@ def _prepare_input(namespace: str, semantic_dir: Path) -> TagKgInput:
 
 
 def _load_raw_tags(workspace_root: Path) -> TagKgInput:
-    workspace_root = workspace_root.resolve()
-    semantic_dir = ensure_within_and_resolve(workspace_root, workspace_root / "semantic")
-    return _prepare_input(workspace_root.name, semantic_dir)
+    layout = WorkspaceLayout.from_workspace(workspace_root)
+    return _prepare_input(layout.slug, layout.semantic_dir)
 
 
 def _resolve_kgraph_assistant_env(settings: Optional[Any] = None, assistant_env: Optional[str] = None) -> str:
@@ -312,7 +312,6 @@ def _save_outputs(semantic_dir: Path, kg: TagKnowledgeGraph) -> dict[str, str]:
     kg_json_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.json")
     kg_md_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.md")
 
-    semantic_dir.mkdir(parents=True, exist_ok=True)
     safe_write_text(
         kg_json_path,
         json.dumps(kg.to_dict(), ensure_ascii=False, indent=2),
@@ -353,9 +352,9 @@ def _save_outputs(semantic_dir: Path, kg: TagKnowledgeGraph) -> dict[str, str]:
 
 
 def build_kg_for_workspace(workspace_root: Path | str, namespace: str | None = None) -> TagKnowledgeGraph:
-    workspace_root = Path(workspace_root).resolve()
-    semantic_dir = ensure_within_and_resolve(workspace_root, workspace_root / "semantic")
-    namespace_resolved = namespace or workspace_root.name
+    layout = WorkspaceLayout.from_workspace(Path(workspace_root))
+    namespace_resolved = namespace or layout.slug
+    semantic_dir = layout.semantic_dir
 
     logger.info(
         "semantic.kg_builder.started",
@@ -368,12 +367,12 @@ def build_kg_for_workspace(workspace_root: Path | str, namespace: str | None = N
 
         kg = TagKnowledgeGraph.from_dict(raw_output)
         kg.namespace = namespace_resolved
-        outputs = _save_outputs(semantic_dir, kg)
+        outputs = _save_outputs(layout.semantic_dir, kg)
 
         logger.info(
             "semantic.kg_builder.completed",
             extra={
-                "workspace": str(workspace_root),
+                "workspace": str(layout.base_dir),
                 "namespace": namespace_resolved,
                 "kg_json": outputs["kg_json"],
                 "kg_md": outputs["kg_md"],

@@ -142,6 +142,24 @@ class ConfigError(PipelineError):
     pass
 
 
+class WorkspaceNotFound(ConfigError):
+    """Workspace slug-specifico non trovato o radice non risolubile."""
+
+    pass
+
+
+class WorkspaceLayoutInvalid(ConfigError):
+    """Layout presente ma privo di artefatti minimi obbligatori."""
+
+    pass
+
+
+class WorkspaceLayoutInconsistent(ConfigError):
+    """Layout presente ma con configurazioni/versioni/asset semantic incoerenti."""
+
+    pass
+
+
 class PathTraversalError(ConfigError):
     """Path traversal rilevato rispetto al perimetro consentito."""
 
@@ -218,6 +236,9 @@ class InvalidSlug(PipelineError):
 EXIT_CODES = {
     "PipelineError": 1,
     "ConfigError": 2,
+    "WorkspaceNotFound": 2,
+    "WorkspaceLayoutInvalid": 2,
+    "WorkspaceLayoutInconsistent": 2,
     "PreOnboardingValidationError": 3,
     "ConversionError": 10,
     "DriveDownloadError": 21,
@@ -250,6 +271,9 @@ __all__ = [
     "ForcePushError",
     "ConfigError",
     "PathTraversalError",
+    "WorkspaceNotFound",
+    "WorkspaceLayoutInvalid",
+    "WorkspaceLayoutInconsistent",
     "CleanupError",
     "PreviewError",
     "EnrichmentError",

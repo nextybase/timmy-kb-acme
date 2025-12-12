@@ -11,6 +11,8 @@ import pytest
 from tests.ui.streamlit_stub import StreamlitStub
 from tests.ui.test_manage_probe_raw import register_streamlit_runtime
 
+from pipeline.workspace_layout import WorkspaceLayout
+
 
 @contextmanager
 def _null_context() -> Iterator[Any]:
@@ -35,15 +37,23 @@ def test_mirror_repo_config_preserves_client_fields(tmp_path: Path, monkeypatch:
     template_root = tmp_path
     (template_root / "config").mkdir(parents=True, exist_ok=True)
     (template_root / "config" / "config.yaml").write_text("client_name: Template\nfoo: bar\n", encoding="utf-8")
-    client_cfg_dir = template_root / "output" / f"timmy-kb-{slug}" / "config"
+    workspace_root = template_root / "output" / f"timmy-kb-{slug}"
+    client_cfg_dir = workspace_root / "config"
     client_cfg_dir.mkdir(parents=True, exist_ok=True)
     (client_cfg_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
+    (workspace_root / "book").mkdir(parents=True, exist_ok=True)
+    (workspace_root / "book" / "README.md").write_text("# Book\n", encoding="utf-8")
+    (workspace_root / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (workspace_root / "raw").mkdir(parents=True, exist_ok=True)
+    (workspace_root / "semantic").mkdir(parents=True, exist_ok=True)
+    layout = WorkspaceLayout.from_workspace(workspace=workspace_root, slug=slug)
 
     monkeypatch.setattr(new_client, "get_repo_root", lambda: template_root)
+    monkeypatch.setattr(new_client, "_layout_for_slug", lambda _: None)
 
     original = (client_cfg_dir / "config.yaml").read_text(encoding="utf-8")
 
-    new_client._mirror_repo_config_into_client(slug, pdf_bytes=b"pdf")
+    new_client._mirror_repo_config_into_client(slug, layout, pdf_bytes=b"pdf")
 
     updated = (client_cfg_dir / "config.yaml").read_text(encoding="utf-8")
     assert "client_name: dummy" in updated
@@ -65,9 +75,16 @@ def test_mirror_repo_config_logs_failure(monkeypatch: pytest.MonkeyPatch, tmp_pa
     template_root = tmp_path
     (template_root / "config").mkdir(parents=True, exist_ok=True)
     (template_root / "config" / "config.yaml").write_text("client_name: Template\n", encoding="utf-8")
-    client_cfg_dir = template_root / "output" / f"timmy-kb-{slug}" / "config"
+    workspace_root = template_root / "output" / f"timmy-kb-{slug}"
+    client_cfg_dir = workspace_root / "config"
     client_cfg_dir.mkdir(parents=True, exist_ok=True)
     (client_cfg_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
+    (workspace_root / "book").mkdir(parents=True, exist_ok=True)
+    (workspace_root / "book" / "README.md").write_text("# Book\n", encoding="utf-8")
+    (workspace_root / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (workspace_root / "raw").mkdir(parents=True, exist_ok=True)
+    (workspace_root / "semantic").mkdir(parents=True, exist_ok=True)
+    layout = WorkspaceLayout.from_workspace(workspace=workspace_root, slug=slug)
 
     monkeypatch.setattr(new_client, "get_repo_root", lambda: template_root)
 
@@ -85,7 +102,7 @@ def test_mirror_repo_config_logs_failure(monkeypatch: pytest.MonkeyPatch, tmp_pa
     monkeypatch.setattr(
         new_client,
         "_log_diagnostics",
-        lambda slug, level, message, *, extra: diagnostics.append((slug, level, message, extra)),
+        lambda slug, level, message, *, extra, layout=None: diagnostics.append((slug, level, message, extra)),
         raising=False,
     )
 
@@ -94,7 +111,7 @@ def test_mirror_repo_config_logs_failure(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
     monkeypatch.setattr(new_client, "deep_merge_dict", _boom, raising=False)
 
-    new_client._mirror_repo_config_into_client(slug)
+    new_client._mirror_repo_config_into_client(slug, layout)
 
     assert logger_stub.records, "expected warning log on merge failure"
     msg, extra = logger_stub.records[0]

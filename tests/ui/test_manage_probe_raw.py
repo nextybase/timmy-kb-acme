@@ -11,6 +11,7 @@ import pytest
 from tests.ui.streamlit_stub import StreamlitStub
 
 import ui.utils.workspace
+from pipeline.workspace_layout import WorkspaceLayout
 
 
 def register_streamlit_runtime(monkeypatch: pytest.MonkeyPatch, st_stub: StreamlitStub) -> None:
@@ -68,7 +69,19 @@ def _load_manage_module(
     import ui.utils.workspace
 
     monkeypatch.setattr(ui.chrome, "render_chrome_then_require", lambda allow_without_slug: slug)
-    monkeypatch.setattr(ui.utils.workspace, "has_raw_pdfs", lambda _slug: has_raw_result)
+    base_dir = Path("output") / f"timmy-kb-{slug}"
+    layout = WorkspaceLayout.from_workspace(workspace=base_dir, slug=slug)
+    raw_result_path = Path(has_raw_result[1]) if has_raw_result[1] is not None else layout.raw_dir
+    monkeypatch.setattr(
+        ui.utils.workspace,
+        "has_raw_pdfs",
+        lambda _slug: (has_raw_result[0], raw_result_path),
+    )
+    monkeypatch.setattr(
+        ui.utils.workspace,
+        "get_ui_workspace_layout",
+        lambda _slug, require_env=False: layout,
+    )
 
     sys.modules.pop("ui.pages.manage", None)
     manage = importlib.import_module("ui.pages.manage")
@@ -111,13 +124,13 @@ def test_manage_tags_editor_syncs_db(tmp_path: Path, monkeypatch: pytest.MonkeyP
     base_dir = tmp_path / "timmy-kb-dummy"
     semantic_dir = base_dir / "semantic"
     semantic_dir.mkdir(parents=True)
+    (semantic_dir / "semantic_mapping.yaml").write_text("version: 1\n", encoding="utf-8")
+    (semantic_dir / "cartelle_raw.yaml").write_text("version: 1\n", encoding="utf-8")
     yaml_path = semantic_dir / "tags_reviewed.yaml"
     yaml_path.write_text("version: 2\nkeep_only_listed: true\ntags: []\n", encoding="utf-8")
     st_stub.session_state["tags_yaml_editor"] = yaml_path.read_text(encoding="utf-8")
 
     monkeypatch.setattr(manage_page, "st", st_stub)
-    monkeypatch.setattr(manage_page, "_workspace_root", lambda _slug: base_dir)
-
     called: dict[str, Path] = {}
 
     def _fake_import(path: str | Path, **_kwargs):
@@ -125,8 +138,9 @@ def test_manage_tags_editor_syncs_db(tmp_path: Path, monkeypatch: pytest.MonkeyP
         return {}
 
     monkeypatch.setattr(manage_page, "import_tags_yaml_to_db", _fake_import)
+    layout = WorkspaceLayout.from_workspace(workspace=base_dir, slug="dummy")
 
-    manage_page._open_tags_editor_modal("dummy")
+    manage_page._open_tags_editor_modal("dummy", layout=layout)
 
     assert called["path"] == yaml_path
     assert st_stub._rerun_called is True

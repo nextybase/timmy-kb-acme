@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional,
 
 from pipeline.config_utils import get_client_config
 from pipeline.drive.download_steps import compute_created, discover_candidates, emit_progress, snapshot_existing
+from pipeline.exceptions import WorkspaceLayoutInvalid
 from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.workspace_layout import WorkspaceLayout
 
 create_drive_folder: Callable[..., Any] | None
 create_drive_minimal_structure: Callable[..., Any] | None
@@ -49,7 +51,6 @@ from ..components.mapping_editor import write_raw_structure_yaml  # usato solo s
 from ..components.mapping_editor import load_semantic_mapping
 from ..utils import to_kebab  # SSoT normalizzazione + path-safety
 from ..utils.context_cache import get_client_context
-from ..utils.workspace import workspace_root
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext
@@ -67,6 +68,20 @@ def _get_logger(context: Optional[object] = None) -> Any:
 def _ui_ensure_dest(base_dir: Path, local_root: Path, rel_parts: Sequence[str], filename: str) -> Path:
     target = local_root.joinpath(*rel_parts, filename)
     return cast(Path, ensure_within_and_resolve(base_dir, target))
+
+
+def _require_layout_from_context(context: ClientContext) -> WorkspaceLayout:
+    """Ottiene il layout fail-fast per il ClientContext corrente."""
+    return WorkspaceLayout.from_context(context)
+
+
+def _assert_directory_exists(path: Path, slug: str, description: str) -> None:
+    if not path.exists() or not path.is_dir():
+        raise WorkspaceLayoutInvalid(
+            f"{description} mancante o non valida per il workspace {slug}",
+            slug=slug,
+            file_path=path,
+        )
 
 
 def _require_drive_utils_ui() -> None:
@@ -177,6 +192,7 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
     if get_drive_service is None or create_drive_raw_children_from_yaml is None:
         raise RuntimeError("Funzioni Drive non disponibili (RAW da YAML).")
     ctx = get_client_context(slug, interactive=False, require_env=require_env)
+    layout = _require_layout_from_context(ctx)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
@@ -189,8 +205,7 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
             "drive_raw_folder_id mancante nel config.yaml. " "Esegui prima la fase di bootstrap Drive (pre-Vision)."
         )
 
-    root_dir = _resolve_workspace(base_root, slug)
-    yaml_path = ensure_within_and_resolve(root_dir, Path(root_dir) / "semantic" / "cartelle_raw.yaml")
+    yaml_path = ensure_within_and_resolve(layout.base_dir, layout.semantic_dir / "cartelle_raw.yaml")
     if not yaml_path.exists():
         raise RuntimeError(f"File mancante: {yaml_path}. Esegui Vision o genera lo YAML e riprova.")
 
@@ -376,6 +391,7 @@ def plan_raw_download(
         )
 
     ctx = get_client_context(slug, interactive=False, require_env=require_env)
+    layout = _require_layout_from_context(ctx)
     service = cast(Callable[[ClientContext], Any], get_drive_service)(ctx)
     parent_id = (ctx.env or {}).get("DRIVE_ID")
     if not parent_id:
@@ -389,10 +405,9 @@ def plan_raw_download(
     if not raw_id:
         raise RuntimeError("Cartella 'raw' non trovata sotto la cartella cliente su Drive")
 
-    workspace_dir = _resolve_workspace(base_root, slug)
-    local_root = ensure_within_and_resolve(workspace_dir, workspace_dir / "raw")
-    local_root_path = Path(local_root)
-    local_root_path.mkdir(parents=True, exist_ok=True)
+    workspace_dir = layout.base_dir
+    local_root_path = layout.raw_dir
+    _assert_directory_exists(local_root_path, layout.slug, "raw directory")
 
     def _plan_safe_list_pdfs(service: Any, folder_id: str) -> Iterable[Dict[str, Any]]:
         for entry in _drive_list_pdfs(service, folder_id):
@@ -686,6 +701,7 @@ def download_raw_from_drive_with_progress(
 
     # Context & service
     ctx = get_client_context(slug, interactive=False, require_env=require_env)
+    layout = _require_layout_from_context(ctx)
     svc = cast(Callable[[ClientContext], Any], get_drive_service)(ctx)
     parent_id = (ctx.env or {}).get("DRIVE_ID")
     if not parent_id:
@@ -702,10 +718,10 @@ def download_raw_from_drive_with_progress(
         raise RuntimeError("Cartella 'raw' non trovata sotto la cartella cliente su Drive")
 
     # Local root (raw/)
-    workspace_dir = _resolve_workspace(base_root, slug)
-    local_root_dir = ensure_within_and_resolve(workspace_dir, workspace_dir / "raw")
-    local_root_path = Path(local_root_dir)
-    local_root_path.mkdir(parents=True, exist_ok=True)
+    workspace_dir = layout.base_dir
+    local_root_dir = layout.raw_dir
+    _assert_directory_exists(local_root_dir, layout.slug, "raw directory")
+    local_root_path = local_root_dir
 
     log = logger or _get_logger(ctx)
 
@@ -739,19 +755,3 @@ def download_raw_from_drive_with_progress(
     )
 
     return cast(list[Path], compute_created(candidates, before))
-
-
-def _resolve_workspace(base_root: Path | str, slug: str) -> Path:
-    """
-    Determina la radice locale del workspace rispettando eventuali override di base_root.
-    - Se base_root corrisponde al valore di default ('output'), sfrutta workspace_root per
-      ereditare eventuali configurazioni dal ClientContext.
-    - In caso di override (es. test/tempdir) applica la guardia di path-safety locale.
-    """
-    default_root = Path("output")
-    candidate_root = Path(base_root)
-    workspace_from_context: Path = workspace_root(slug)
-    if candidate_root == default_root:
-        return workspace_from_context
-    safe_override: Path = ensure_within_and_resolve(candidate_root, candidate_root / f"timmy-kb-{slug}")
-    return safe_override

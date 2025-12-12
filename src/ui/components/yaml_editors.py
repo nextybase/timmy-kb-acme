@@ -15,7 +15,9 @@ import yaml
 
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.workspace_layout import WorkspaceLayout
 from pipeline.yaml_utils import clear_yaml_cache
+from ui.utils.workspace import get_ui_workspace_layout
 
 try:
     import streamlit as st
@@ -27,7 +29,6 @@ from storage.tags_store import import_tags_yaml_to_db
 
 from ..const import DEFAULT_ENCODING
 from ..utils.streamlit_fragments import run_fragment
-from ..utils.workspace import workspace_root
 
 LOGGER = get_structured_logger("ui.components.yaml_editors")
 
@@ -46,23 +47,35 @@ CARTELLE_FILE = "cartelle_raw.yaml"
 TAGS_FILE = "tags_reviewed.yaml"
 
 
-def _workspace_root(slug: str) -> Path:
-    root = workspace_root(slug)
-    if not root.exists():
-        raise ConfigError(f"Workspace locale non trovato: {root}")
-    return root
+def _require_layout(slug: str) -> WorkspaceLayout:
+    slug_value = (slug or "").strip()
+    if not slug_value:
+        raise ConfigError("Slug mancante per gli editor YAML.")
+    try:
+        return get_ui_workspace_layout(slug_value, require_env=False)
+    except Exception as exc:
+        raise ConfigError(
+            "Impossibile risolvere il layout workspace: "
+            "usa pipeline.workspace_bootstrap per creare o riparare il workspace.",
+            slug=slug_value,
+        ) from exc
 
 
 def _semantic_path(slug: str, filename: str) -> Path:
-    workspace = _workspace_root(slug)
-    return cast(Path, ensure_within_and_resolve(workspace, workspace / SEMANTIC_DIR / filename))
+    layout = _require_layout(slug)
+    semantic_dir = layout.semantic_dir
+    return cast(
+        Path,
+        ensure_within_and_resolve(semantic_dir, semantic_dir / filename),
+    )
 
 
 def _read_yaml_text(slug: str, filename: str) -> str:
     path = _semantic_path(slug, filename)
     if not path.exists():
         raise ConfigError(f"File `{path}` non trovato. Genera gli artefatti Vision e riprova.")
-    return cast(str, read_text_safe(_workspace_root(slug), path, encoding=DEFAULT_ENCODING))
+    layout = _require_layout(slug)
+    return cast(str, read_text_safe(layout.base_dir, path, encoding=DEFAULT_ENCODING))
 
 
 def _write_yaml_text(slug: str, filename: str, content: str) -> None:

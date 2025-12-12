@@ -13,10 +13,11 @@ from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
+from pipeline.workspace_layout import WorkspaceLayout
 from pre_onboarding import ensure_local_workspace_for_ui
 from ui.config_store import get_vision_model
 from ui.utils.context_cache import get_client_context
-from ui.utils.workspace import workspace_root
+from ui.utils.workspace import get_ui_workspace_layout
 
 from .services import vision_provision as vision_services
 from .utils.branding import render_brand_header
@@ -148,8 +149,29 @@ def _reset_to_landing() -> None:
         pass
 
 
-def _workspace_dir_for(slug: str) -> Path:
-    return cast(Path, workspace_root(slug))
+def _resolve_layout(slug: str) -> WorkspaceLayout | None:
+    try:
+        return get_ui_workspace_layout(slug, require_env=False)
+    except Exception:
+        return None
+
+
+def _layout_missing_message(slug: str) -> str:
+    return (
+        f"Workspace '{slug}' non trovato o layout invalido. Usa pipeline.workspace_bootstrap "
+        "(bootstrap_client_workspace/migrate_or_repair_workspace/ bootstrap_dummy_workspace) per creare o riparare "
+        "il workspace prima di aprire la UI."
+    )
+
+
+def _workspace_dir_for(slug: str, *, layout: WorkspaceLayout | None = None) -> Path:
+    if layout is not None:
+        return layout.base_dir
+    raise ConfigError(
+        "Workspace layout non disponibile: assicurati di avere un layout valido o usa le API "
+        "di bootstrap in pipeline.workspace_bootstrap (bootstrap_client_workspace/migrate_or_repair_workspace).",
+        slug=slug,
+    )
 
 
 def _request_shutdown(logger: Optional[logging.Logger]) -> None:
@@ -337,7 +359,11 @@ def render_workspace_summary(
 ) -> tuple[bool, str, str]:
     if st is None:
         raise RuntimeError("Streamlit non disponibile per la landing UI.")
-    workspace_dir = _workspace_dir_for(slug)
+    layout = _resolve_layout(slug)
+    if layout is None:
+        _st_notify("error", _layout_missing_message(slug))
+        return False, slug, vision_state.get("client_name", "")
+    workspace_dir = _workspace_dir_for(slug, layout=layout)
     workspace_exists = workspace_dir.exists()
 
     if slug_submitted:

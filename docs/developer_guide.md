@@ -101,17 +101,30 @@ Nota cache: dopo le scritture il frontmatter viene riallineato nella cache LRU (
 ------
 
 ## Path-safety & IO sicuro
-- Deriva i path dal workspace cliente (mai costruire manualmente stringhe tipo `output/timmy-kb-<slug>`).
-- Prima di leggere/scrivere, **risolvi** e **valida** il path con gli helper della pipeline.
-- Usa writer atomici per evitare file parziali/corruzione.
+Tutti i percorsi workspace derivano da `WorkspaceLayout`. Parti dallo slug, risolvi il layout (`get_ui_workspace_layout` nelle UI oppure `WorkspaceLayout.from_context/...`) e usa direttamente `layout.raw_dir`, `layout.semantic_dir`, `layout.config_path`, `layout.tags_db`, `layout.vision_pdf`, ecc. Costruire `output/timmy-kb-<slug>` manualmente è deprecato e può introdurre drift o vulnerabilità di path.
 
- ```python
- from pipeline.path_utils import ensure_within_and_resolve
- from pipeline.file_utils import safe_write_text
+Prima di leggere o scrivere, risolvi il path con `pipeline.path_utils.ensure_within_and_resolve` e scrivi con writer atomici (`safe_write_text`, `safe_write_bytes`, ecc.).
 
- yaml_path = ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml")
- safe_write_text(yaml_path, content, encoding="utf-8", atomic=True, fsync=False)
- ```
+```python
+from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.file_utils import safe_write_text
+from ui.utils.workspace import get_ui_workspace_layout
+
+layout = get_ui_workspace_layout(slug, require_env=False)
+yaml_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "tags_reviewed.yaml")
+safe_write_text(yaml_path, content, encoding="utf-8", atomic=True, fsync=False)
+```
+
+### Golden path “slug → raw/semantic/tags”
+```python
+layout = get_ui_workspace_layout(slug, require_env=False)
+raw_dir = layout.raw_dir
+semantic_dir = layout.semantic_dir
+tags_db = layout.tags_db
+vision_pdf = layout.vision_pdf
+```
+
+È la sequenza consigliata per i nuovi moduli UI e servizi: risolvi il layout, usa i campi esposti, evita helper legacy (`resolve_raw_dir`, `workspace_root`) se il layout è già disponibile.
 
  ---
 
@@ -123,7 +136,29 @@ Il progetto utilizza WorkspaceLayout come Single Source of Truth (SSoT) per tutt
 - riduzione del rischio di drift e regressioni,
 - struttura prevedibile e uniforme dei workspace.
 
-WorkspaceLayout viene sempre costruito a partire dal `ClientContext`: lo slug viene validato, il workspace radice viene risolto e tutti i percorsi (`raw/`, `semantic/`, `book/`, `logs/`, `config/`, `mapping/`) sono derivati in modo deterministico. Ogni nuovo modulo che necessita di percorsi workspace deve passare da questo flusso.
+WorkspaceLayout viene sempre costruito a partire dal `ClientContext`: lo slug viene validato, il workspace radice viene risolto e tutti i percorsi (`raw/`, `semantic/`, `book/`, `logs/`, `config/`, `mapping/`) sono derivati in modo deterministico. `from_context`, `from_slug` e `from_workspace` applicano la Workspace Layout Resolution Policy fail-fast: in fase di runtime non viene mai creato nessun file o directory “per sicurezza”, e le eccezioni dedicate (`WorkspaceNotFound`, `WorkspaceLayoutInvalid`, `WorkspaceLayoutInconsistent`) vengono propagate ai caller affinché possano loggare l’errore e fermare il flow.
+
+### Modalità operative
+- **RUNTIME**: il resolver fallisce con una delle tre eccezioni se lo slug non esiste, il layout manca di asset minimi o presenta inconsistenze; non è richiesta alcuna riparazione implicita e il caller non deve mai creare directory.
+- **NEW_CLIENT_BOOTSTRAP / DUMMY_BOOTSTRAP**: i flussi `bootstrap_client_workspace` e `bootstrap_dummy_workspace` rilevano gli errori raccolti da WorkspaceLayout e si occupano di creare o rigenerare gli asset minimi, sfruttando la diagnostica per capire se un `WorkspaceLayoutInvalid` o `WorkspaceNotFound` indica un workspace inesistente o corrotto.
+    - `bootstrap_client_workspace(context: ClientContext)` (modulo `pipeline.workspace_bootstrap`) implementa oggi il happy path NEW_CLIENT: crea/completa `output/timmy-kb-<slug>` con config/book/raw/semantic/logs minimi e lascia la validazione finale a `WorkspaceLayout`; il CLI `pre_onboarding` delega il workspace bootstrap a questa API, mentre il runtime normale non la invoca direttamente.
+    - `migrate_or_repair_workspace(context: ClientContext)` (stesso modulo) è ora disponibile per flussi MIGRATION/MAINTENANCE che devono riparare asset minimi di un workspace esistente (config book raw semantic logs) prima di passare alle pipeline semantic/tag/drive più invasive.
+    - I compat lato UI (`workspace_root`, `resolve_raw_dir`) sono stati disabilitati e sollevano sempre errori CHIARI: la UI deve risolvere il layout tramite `WorkspaceLayout` o `get_ui_workspace_layout` e, quando serve creare o riparare, delegare esplicitamente a `pipeline.workspace_bootstrap.bootstrap_client_workspace`, `bootstrap_dummy_workspace` o `migrate_or_repair_workspace`.
+    - La pagina **Nuovo cliente** chiama esplicitamente `pipeline.workspace_bootstrap.bootstrap_client_workspace` per creare il workspace e mostra messaggi fail-fast se qualcosa non quadra; la pagina **Gestisci** offre un pulsante “Ripara workspace” che invoca `pipeline.workspace_bootstrap.migrate_or_repair_workspace` e ferma il runtime se il layout resta invalido. Il runtime UI non crea mai directory al di fuori di questi flussi autorizzati.
+- **MIGRATION_OR_MAINTENANCE**: `migrate_or_repair_workspace` è l'unico entrypoint autorizzato a interpretare `WorkspaceLayoutInconsistent`, aggiornare schema/mapping o riparare asset semantic avanzati; in runtime lo stesso errore blocca il flow e richiede intervento umano o automazione controllata.
+
+La risoluzione del workspace è dunque sempre fail-fast: i richiamanti ottengono i path solo se il layout è integralmente valido, mentre la creazione e la riparazione rimangono responsabilità dei flussi autorizzati.
+`bootstrap_dummy_workspace` dal modulo `pipeline.workspace_bootstrap` è ora disponibile per generare un workspace dummy minimale conforme agli asset richiesti da `WorkspaceLayout`; questo flusso è destinato a smoke/dev locali, non alla produzione.
+
+The bootstrap APIs exposed by `pipeline.workspace_bootstrap` are the single source of truth for creating or repairing layouts; all other code must keep relying on `WorkspaceLayout` in fail-fast mode.
+
+| Eccezione | Cause tipiche | Chi può riparare |
+|-----------|--------------|------------------|
+| `WorkspaceNotFound` | Slug non mappato o radice fisica assente | `bootstrap_client_workspace`, `bootstrap_dummy_workspace`, `migrate_or_repair_workspace` |
+| `WorkspaceLayoutInvalid` | Mancano `config/config.yaml`, `book/README.md`, `book/SUMMARY.md` o la directory `semantic/` | `bootstrap_client_workspace`, `bootstrap_dummy_workspace`, `migrate_or_repair_workspace` |
+| `WorkspaceLayoutInconsistent` | Layout presente ma con config/versione/mapping semantic incoerenti rispetto ai metadati | `migrate_or_repair_workspace` |
+
+Ogni nuovo modulo che necessita di percorsi workspace deve passare da questo flusso.
 
 ```
 slug -> ClientContext.load() -> WorkspaceLayout.from_context()
@@ -137,6 +172,8 @@ Esempio aggiornato:
 layout = WorkspaceLayout.from_context(context)
 semantic_dir = layout.semantic_dir
 log_file = layout.log_file
+tags_db = layout.tags_db
+vision_pdf = layout.vision_pdf
 ```
 
 Ogni componente deve evitare di ricostruire `raw_dir`, `semantic_dir` o `logs_dir` partendo da `base_dir / "..."` o `output/timmy-kb-<slug>`. L'uso di join manuali o concatenazioni di stringhe per ottenere i percorsi del workspace è deprecato e espone il codice a rischi di incoerenza e vulnerabilità sui path.

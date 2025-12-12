@@ -91,15 +91,25 @@ pip install -r requirements-optional.txt
 - Valida e risolvi i path prima dell'uso; scritture **atomiche**.
 - Mai seguire symlink non attesi in `raw/`/`book/`.
 
-La sicurezza dei path deve essere applicata al perimetro del workspace attraverso `WorkspaceLayout`. Qualsiasi operazione che costruisce o risolve percorsi all'interno del workspace deve passare da `WorkspaceLayout.from_context`, `WorkspaceLayout.from_slug` oppure `WorkspaceLayout.from_workspace`.
+La sicurezza dei path vive in `WorkspaceLayout`: preferisci `WorkspaceLayout.from_context` / `WorkspaceLayout.from_slug` / `WorkspaceLayout.from_workspace` oppure `ui.utils.workspace.get_ui_workspace_layout(slug, require_env=False)` nelle UI per ottenere i campi canonicali (`raw_dir`, `semantic_dir`, `tags_db`, `vision_pdf`, `config_path`, ecc.). I helper legacy `resolve_raw_dir` e `workspace_root` sono ora disabilitati: chi li invoca riceve un errore esplicito e deve passare per WorkspaceLayout o per `pipeline.workspace_bootstrap`.
 
-Esempio:
 ```python
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.file_utils import safe_write_text
+from ui.utils.workspace import get_ui_workspace_layout
 
-yaml_path = ensure_within_and_resolve(base_dir, base_dir / "semantic" / "tags_reviewed.yaml")
+layout = get_ui_workspace_layout(slug, require_env=False)
+yaml_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "tags_reviewed.yaml")
 safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True, fsync=False)
+```
+
+### Golden path workspace
+```python
+layout = get_ui_workspace_layout(slug, require_env=False)
+raw_dir = layout.raw_dir
+semantic_dir = layout.semantic_dir
+tags_db = layout.tags_db
+vision_pdf = layout.vision_pdf
 ```
 
 ---
@@ -123,7 +133,9 @@ raw_dir = ctx.base_dir / "raw"
 log_file = ctx.base_dir / "logs" / "log.txt"
 ```
 
-Qualsiasi nuovo modulo introdotto nel progetto deve usare `WorkspaceLayout` per risolvere il workspace. Non sono ammessi fallback manuali basati su concatenazioni di stringhe o `Path.join` sui percorsi del workspace.
+Qualsiasi nuovo modulo introdotto nel progetto deve usare `WorkspaceLayout` per risolvere il workspace. Non sono ammessi fallback manuali basati su concatenazioni di stringhe o `Path.join` sui percorsi del workspace. Gli helper `resolve_raw_dir` e `workspace_root` non sono più disponibili: ogni path deve venire da `WorkspaceLayout` e ogni creazione/riparazione dal trio `pipeline.workspace_bootstrap.*`.
+
+La risoluzione workspace è fail-fast: chi richiama `WorkspaceLayout.from_context`, `WorkspaceLayout.from_slug` o `WorkspaceLayout.from_workspace` in runtime deve aspettarsi `WorkspaceNotFound`, `WorkspaceLayoutInvalid` o `WorkspaceLayoutInconsistent` e non provare a creare o riparare il layout. Solo `bootstrap_client_workspace`, `bootstrap_dummy_workspace` e `migrate_or_repair_workspace` possono intervenire per rigenerare directory mancanti o sincronizzare asset semantic; i runtime devono limitarsi a loggare l’errore e restituirlo all’orchestratore.
 
 Per esempi operativi completi e per seguire il flusso slug → `ClientContext` → `WorkspaceLayout`, rimanda alla sezione “Workspace SSoT (WorkspaceLayout)” del Developer Guide.
 
@@ -131,6 +143,7 @@ Per esempi operativi completi e per seguire il flusso slug → `ClientContext` �
 
 ## 6) Error handling
 - Usa eccezioni **specifiche** del dominio quando presenti (es. `ConfigError`, `PreviewError`, `PushError`).
+- Per i problemi sui workspace utilizza `WorkspaceNotFound`, `WorkspaceLayoutInvalid` e `WorkspaceLayoutInconsistent`: i runtime in RUNTIME o in modalità standard devono lasciarli propagare, mentre `bootstrap_client_workspace`, `bootstrap_dummy_workspace` e `migrate_or_repair_workspace` sono gli unici flussi autorizzati a rilevare l’errore e intervenire per riparare o ricreare il workspace.
 - Non catturare eccezioni generiche senza rilanciarle/loggarle.
 - Nei moduli interni e vietato usare `sys.exit()`/`input()`; solo gli orchestratori CLI gestiscono il processo.
 - Mappa gli esiti in **exit codes** standard laddove previsto (0/2/30/40).

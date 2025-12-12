@@ -56,6 +56,7 @@ from pipeline.metrics import start_metrics_server_once
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_valid_slug, ensure_within, read_text_safe  # STRONG guard SSoT
 from pipeline.tracing import start_root_trace
+from pipeline.workspace_bootstrap import bootstrap_client_workspace
 from pipeline.workspace_layout import WorkspaceLayout
 
 create_drive_folder = None
@@ -298,6 +299,8 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
 
     cfg_path = context.config_path
 
+    bootstrap_client_workspace(context)
+
     cfg: Dict[str, Any] = {}
     try:
         cfg = get_client_config(context) or {}
@@ -324,16 +327,14 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     ensure_within(context.base_dir, context.md_dir)
     ensure_within(context.base_dir, cfg_path.parent)
 
+    cfg_dir = cfg_path.parent
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+
     with phase_scope(logger, stage="create_local_structure", customer=context.slug) as m:
-        context.base_dir.mkdir(parents=True, exist_ok=True)
-        context.raw_dir.mkdir(parents=True, exist_ok=True)
-        context.md_dir.mkdir(parents=True, exist_ok=True)
-        cfg_dir = cfg_path.parent
-        cfg_dir.mkdir(parents=True, exist_ok=True)
         # telemetria: numero directory top-level nella base cliente
         try:
             base = context.base_dir
-            count = sum(1 for p in (base.iterdir() if base else []) if p.is_dir())
+            count = sum(1 for p in (base.iterdir() if base else []) if p.is_dir()) if base else None
             m.set_artifacts(count)
         except Exception:
             m.set_artifacts(None)

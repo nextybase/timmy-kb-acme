@@ -154,42 +154,42 @@ Checklist minima per una pagina nuova:
 
 ### Flusso consigliato
 
-1. Deriva la radice workspace dal solo `slug` con `ui.utils.workspace.resolve_raw_dir` e ricava il parent.
-2. Usa `pipeline.path_utils.ensure_within_and_resolve` prima di leggere/scrivere.
-3. Leggi con `pipeline.path_utils.read_text_safe` e scrivi con `ui.utils.core.safe_write_text` (**atomico**).
+1. Risolvi `WorkspaceLayout` a partire dallo slug con `ui.utils.workspace.get_ui_workspace_layout(slug, require_env=False)` (o `WorkspaceLayout.from_<...>` nei contesti CLI).
+2. Usa i campi `layout.raw_dir`, `layout.semantic_dir`, `layout.tags_db` e `layout.vision_pdf` per qualsiasi accesso ai file.
+3. Valida tramite `pipeline.path_utils.ensure_within_and_resolve` e scrivi con helper atomici (`safe_write_text`, `safe_write_bytes`, ecc.).
 
-> Non assumere mai path costruiti con concatenazioni manuali: passa **sempre** dagli helper.
+> Gli helper legacy `resolve_raw_dir` e `workspace_root` seguono ancora la firma compatibile, ma non devono essere usati nei nuovi modules che già hanno il layout; preferisci sempre `layout.raw_dir`/`layout.base_dir`.
 
 ### Esempi pratici
 
-**Caricare/modificare** `semantic/tags_reviewed.yaml`:
+**Caricare/modificare** `semantic/tags_reviewed.yaml` con layout-first:
 
 ```python
-from pathlib import Path
-import yaml
-from ui.utils.workspace import resolve_raw_dir
+from ui.utils.workspace import get_ui_workspace_layout
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from ui.utils.core import safe_write_text
+import yaml
 
-def _workspace_root(slug: str) -> Path:
-    raw_dir = Path(resolve_raw_dir(slug))  # valida slug + path safety
-    return raw_dir.parent
+def _get_layout(slug: str):
+    return get_ui_workspace_layout(slug, require_env=False)
 
 def load_tags_yaml(slug: str) -> str:
-    base = _workspace_root(slug)
-    yaml_path = ensure_within_and_resolve(base, base / "semantic" / "tags_reviewed.yaml")
+    layout = _get_layout(slug)
+    yaml_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "tags_reviewed.yaml")
     try:
         return read_text_safe(yaml_path.parent, yaml_path, encoding="utf-8")
     except Exception:
-        return "version: 2\nkeep_only_listed: true\ntags: []\n"  # default sicuro
+        return "version: 2\nkeep_only_listed: true\ntags: []\n"
 
 def save_tags_yaml(slug: str, text: str) -> None:
-    yaml.safe_load(text)  # validazione prima di scrivere
-    base = _workspace_root(slug)
-    yaml_path = ensure_within_and_resolve(base, base / "semantic" / "tags_reviewed.yaml")
+    yaml.safe_load(text)
+    layout = _get_layout(slug)
+    yaml_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "tags_reviewed.yaml")
     yaml_path.parent.mkdir(parents=True, exist_ok=True)
     safe_write_text(yaml_path, text, encoding="utf-8", atomic=True)
 ```
+
+Per trovare il DB dei tag o il VisionStatement.pdf basta usare `layout.tags_db` o `layout.vision_pdf`, senza ricostruirli manualmente da `layout.semantic_dir` o `layout.config_path`.
 
 **Perche atomico?** Minimizza corruzioni/condizioni di gara: si scrive su un file temporaneo e poi si fa un rename.
 

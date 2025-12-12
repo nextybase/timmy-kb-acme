@@ -31,11 +31,12 @@ from ui.pages.registry import PagePaths
 from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard  # helper condiviso (con fallback)
 
+LOGGER = get_structured_logger("ui.semantics")
 try:
-    from ui.utils.workspace import has_raw_pdfs
+    from ui.utils.workspace import get_ui_workspace_layout, has_raw_pdfs
 except Exception:  # pragma: no cover
 
-    def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
+    def has_raw_pdfs(slug: Optional[str], *, layout: WorkspaceLayout | None = None) -> Tuple[bool, Optional[Path]]:
         return False, None
 
 
@@ -49,6 +50,14 @@ except Exception:  # pragma: no cover
 
 # SSoT: stati ammessi per la pagina Semantica (entry: include 'pronto')
 ALLOWED_STATES = SEMANTIC_ENTRY_STATES
+
+
+def _resolve_layout(slug: str) -> WorkspaceLayout | None:
+    try:
+        return get_ui_workspace_layout(slug, require_env=False)
+    except Exception as exc:
+        LOGGER.warning("ui.semantics.layout_resolution_failed", extra={"slug": slug, "error": str(exc)})
+        return None
 
 
 def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger, WorkspaceLayout]:
@@ -100,21 +109,23 @@ def _update_client_state(slug: str, target_state: str, logger: logging.Logger) -
         _reset_gating_cache(slug)
 
 
-def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[str, bool, Path | None]:
+def _require_semantic_gating(
+    slug: str, *, reuse_last: bool = False, layout: WorkspaceLayout | None = None
+) -> tuple[str, bool, Path | None]:
     """Verifica gating indipendente dal contesto Streamlit."""
     cache_key = (slug or "<none>").strip().lower()
     state = (get_state(slug) or "").strip().lower()
     if reuse_last and cache_key in _GATE_CACHE:
         cached_state, _, _ = _GATE_CACHE[cache_key]
         if cached_state in ALLOWED_STATES:
-            ready_now, raw_dir_now = has_raw_pdfs(slug)
+            ready_now, raw_dir_now = has_raw_pdfs(slug, layout=layout)
             if ready_now:
                 result = (cached_state, ready_now, raw_dir_now)
                 _GATE_CACHE[cache_key] = result
                 return result
             _GATE_CACHE.pop(cache_key, None)
             _raise_semantic_unavailable(slug, state, ready_now, raw_dir_now)
-    ready, raw_dir = has_raw_pdfs(slug)
+    ready, raw_dir = has_raw_pdfs(slug, layout=layout)
     if state not in ALLOWED_STATES or not ready:
         _raise_semantic_unavailable(slug, state, ready, raw_dir)
     result = (state, ready, raw_dir)
@@ -134,8 +145,8 @@ def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[st
     return result
 
 
-def _run_convert(slug: str) -> None:
-    _require_semantic_gating(slug, reuse_last=True)
+def _run_convert(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
+    _require_semantic_gating(slug, reuse_last=True, layout=layout)
     ctx, logger, _ = _ctx_logger_layout(slug)
     with status_guard(
         "Converto PDF in Markdown...",
@@ -162,8 +173,8 @@ def _get_canonical_vocab(
     return required
 
 
-def _run_enrich(slug: str) -> None:
-    _require_semantic_gating(slug, reuse_last=True)
+def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
+    _require_semantic_gating(slug, reuse_last=True, layout=layout)
     ctx, logger, layout = _ctx_logger_layout(slug)
     base_dir = layout.base_dir
     try:
@@ -189,8 +200,8 @@ def _run_enrich(slug: str) -> None:
     _update_client_state(slug, "arricchito", logger)
 
 
-def _run_summary(slug: str) -> None:
-    _require_semantic_gating(slug, reuse_last=True)
+def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
+    _require_semantic_gating(slug, reuse_last=True, layout=layout)
     ctx, logger, _ = _ctx_logger_layout(slug)
     with status_guard(
         "Genero SUMMARY.md e README.md...",
@@ -266,6 +277,7 @@ def main() -> None:
     """Entry point Streamlit per la pagina Semantica."""
 
     slug = cast(str, render_chrome_then_require())
+    layout = _resolve_layout(slug)
 
     try:  # pragma: no cover - dipende dall'ambiente Streamlit
         from streamlit.runtime.scriptrunner import get_script_run_ctx
@@ -278,7 +290,7 @@ def main() -> None:
 
     if has_ctx:
         try:
-            _client_state, _raw_ready, _ = _require_semantic_gating(slug)
+            _client_state, _raw_ready, _ = _require_semantic_gating(slug, layout=layout)
         except ConfigError as exc:
             st.info(SEMANTIC_GATING_MESSAGE)
             st.caption(str(exc))
@@ -288,8 +300,8 @@ def main() -> None:
                 raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from stop_exc
 
         try:
-            _, _, layout = _ctx_logger_layout(slug)
-            _book_dir = layout.book_dir
+            _, _, ctx_layout = _ctx_logger_layout(slug)
+            _book_dir = ctx_layout.book_dir
             _book_ready = is_book_ready(_book_dir)
         except Exception as exc:  # pragma: no cover - best effort
             try:
@@ -307,15 +319,15 @@ def main() -> None:
         cache_key = (slug or "<none>").strip().lower()
         _GATE_CACHE.pop(cache_key, None)
         _reset_gating_cache(slug)
-        has_raw_pdfs(slug)
+        has_raw_pdfs(slug, layout=layout)
         st.toast("Stato raw aggiornato.")
 
     client_state_ok = _client_state in SEMANTIC_ENTRY_STATES
 
     actions = {
-        "convert": lambda: _handle_semantic_action(_run_convert, slug),
-        "enrich": lambda: _handle_semantic_action(_run_enrich, slug),
-        "summary": lambda: _handle_semantic_action(_run_summary, slug),
+        "convert": lambda: _handle_semantic_action(lambda s: _run_convert(s, layout=layout), slug),
+        "enrich": lambda: _handle_semantic_action(lambda s: _run_enrich(s, layout=layout), slug),
+        "summary": lambda: _handle_semantic_action(lambda s: _run_summary(s, layout=layout), slug),
         "preview": _go_preview,
     }
 

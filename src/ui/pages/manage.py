@@ -6,8 +6,11 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Optional, cast
 
+from pipeline.exceptions import WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.workspace_bootstrap import migrate_or_repair_workspace
+from pipeline.workspace_layout import WorkspaceLayout
 from storage.tags_store import import_tags_yaml_to_db
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_all as get_clients
@@ -31,8 +34,9 @@ except (ImportError, AttributeError):  # pragma: no cover - fallback per stub di
 
 
 from ui.utils import set_slug
+from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard
-from ui.utils.workspace import count_pdfs_safe
+from ui.utils.workspace import count_pdfs_safe, get_ui_workspace_layout
 
 try:
     from ui.gating import reset_gating_cache as _reset_gating_cache
@@ -88,17 +92,78 @@ def _load_clients() -> list[dict[str, Any]]:
         return []
 
 
-def _workspace_root(slug: str) -> Path:
-    """Wrapper per compatibilita test: delega agli helper condivisi."""
-    root = manage_helpers.workspace_root(slug)
-    if isinstance(root, Path):
-        return root
-    return Path(root)
+def _resolve_layout(slug: str) -> WorkspaceLayout | None:
+    """Risoluzione cvb per il WorkspaceLayout (fraintende slug)."""
+    try:
+        return get_ui_workspace_layout(slug, require_env=False)
+    except Exception as exc:
+        LOGGER.warning("ui.manage.layout_resolution_failed", extra={"slug": slug, "error": str(exc)})
+        return None
 
 
 def _call_best_effort(fn: Callable[..., Any], **kwargs: Any) -> Any:
     """Compat per i test esistenti: delega alla versione in manage_helpers."""
     return manage_helpers.call_best_effort(fn, logger=LOGGER, **kwargs)
+
+
+def _repair_workspace(slug: str) -> None:
+    """Invoca migrate_or_repair_workspace quando il layout è rotto."""
+    try:
+        context = get_client_context(slug, require_env=False)
+    except Exception as exc:
+        st.error(f"Impossibile preparare il contesto di repair: {exc}")
+        LOGGER.warning("ui.manage.repair.context_failed", extra={"slug": slug, "error": str(exc)})
+        return
+
+    try:
+        with status_guard(
+            "Riparo la struttura workspace...",
+            expanded=True,
+            error_label="Errore durante la riparazione del workspace",
+        ):
+            migrate_or_repair_workspace(context)
+    except WorkspaceNotFound as exc:
+        st.error("Workspace non trovato: crea un nuovo cliente da /new oppure controlla lo slug.")
+        st.caption("Il flusso NEW CLIENT usa `pipeline.workspace_bootstrap.bootstrap_client_workspace`.")
+        LOGGER.warning("ui.manage.repair_not_found", extra={"slug": slug, "error": str(exc)})
+        return
+    except WorkspaceLayoutInvalid as exc:
+        st.error("Il layout manca di asset minimi: riesegui la riparazione di mantenimento.")
+        st.caption(
+            "Il repair usa `pipeline.workspace_bootstrap.migrate_or_repair_workspace` "
+            "per riscrivere config/book/raw/semantic/log."
+        )
+        LOGGER.warning("ui.manage.repair_invalid", extra={"slug": slug, "error": str(exc)})
+        return
+    except WorkspaceLayoutInconsistent as exc:
+        st.error("Il layout appare incoerente: verifica config e asset semantic prima di riparare.")
+        st.caption("Richiama `migrate_or_repair_workspace` dopo aver allineato i file richiesti.")
+        LOGGER.warning("ui.manage.repair_inconsistent", extra={"slug": slug, "error": str(exc)})
+        return
+    except Exception as exc:
+        st.error(f"Errore durante la riparazione del workspace: {exc}")
+        LOGGER.exception("ui.manage.repair_failed", extra={"slug": slug, "error": str(exc)})
+        return
+
+    st.success("Riparazione del workspace completata.")
+    _safe_rerun()
+
+
+def _render_missing_layout(slug: str) -> None:
+    """Messaggio e pulsante per layout assente o non risolvibile."""
+    st.error("Impossibile risolvere il layout workspace: il runtime UI è sempre fail-fast e non crea layout impliciti.")
+    st.caption(
+        "Usa /new per creare un nuovo cliente (bootstrap_client_workspace) o "
+        "il pulsante qui sotto per riparare (migrate_or_repair_workspace)."
+    )
+    if _column_button(
+        st,
+        "Ripara workspace (migrate_or_repair_workspace)",
+        type="primary",
+        width="stretch",
+    ):
+        _repair_workspace(slug)
+    st.stop()
 
 
 # Services (gestiscono cache e bridging verso i component)
@@ -204,8 +269,8 @@ def _handle_tags_raw_enable(
 # -----------------------------------------------------------
 # Modal editor per semantic/tags_reviewed.yaml
 # -----------------------------------------------------------
-def _open_tags_editor_modal(slug: str) -> None:
-    base_dir = _workspace_root(slug)
+def _open_tags_editor_modal(slug: str, layout: WorkspaceLayout) -> None:
+    base_dir = layout.base_dir
     tags_component.open_tags_editor_modal(
         slug,
         base_dir,
@@ -221,8 +286,8 @@ def _open_tags_editor_modal(slug: str) -> None:
     )
 
 
-def _open_tags_raw_modal(slug: str) -> None:
-    base_dir = _workspace_root(slug)
+def _open_tags_raw_modal(slug: str, layout: WorkspaceLayout) -> None:
+    base_dir = layout.base_dir
     tags_cfg = get_tags_env_config()
     tags_component.open_tags_raw_modal(
         slug,
@@ -310,6 +375,9 @@ def _render_status_block(
 
 if slug:
     # Da qui in poi: slug presente → viste operative
+    layout = _resolve_layout(slug)
+    if layout is None:
+        _render_missing_layout(slug)
 
     # Unica vista per Drive (Diff)
     if _render_drive_diff is not None:
@@ -325,9 +393,9 @@ if slug:
     client_state = (get_client_state(slug) or "").strip().lower()
     emit_btn_type = "primary" if client_state == "nuovo" else "secondary"
 
-    base_dir = _workspace_root(slug)
-    raw_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "raw"))
-    semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
+    base_dir = layout.base_dir
+    raw_dir = layout.raw_dir
+    semantic_dir = layout.semantic_dir
 
     pdf_count = count_pdfs_safe(raw_dir, use_cache=True)
     has_pdfs = pdf_count > 0
@@ -522,7 +590,7 @@ if slug:
                 backend = os.getenv("TAGS_NLP_BACKEND", "spacy").strip().lower() or "spacy"
                 backend_label = "SpaCy" if backend == "spacy" else backend.capitalize()
                 if tags_mode == "stub":
-                    _open_tags_raw_modal(slug)
+                    _open_tags_raw_modal(slug, layout=layout)
                 elif run_tags_fn is None:
                     LOGGER.error(
                         "ui.manage.tags.service_missing",
@@ -533,7 +601,7 @@ if slug:
                     try:
                         st.info(f"Esecuzione NLP ({backend_label}/euristica) in corso, attendi...")
                         run_tags_fn(slug)
-                        _open_tags_raw_modal(slug)
+                        _open_tags_raw_modal(slug, layout=layout)
                     except Exception as exc:  # pragma: no cover
                         LOGGER.exception(
                             "ui.manage.tags.run_failed",

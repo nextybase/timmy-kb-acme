@@ -72,7 +72,7 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
     ready_calls: list[bool] = []
     reset_flag = {"pending": False}
 
-    def _has_raw(slug: str):
+    def _has_raw(slug: str, *, layout=None):
         if not reset_flag["pending"] and ready_calls:
             raise AssertionError("has_raw_pdfs chiamato senza reset gating precedente")
         reset_flag["pending"] = False
@@ -153,7 +153,7 @@ def test_semantic_gating_helper_blocks_without_raw(monkeypatch):
     import ui.pages.semantics as sem
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (False, None))
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug, *, layout=None: (False, None))
 
     with pytest.raises(ConfigError, match="Semantica non disponibile"):
         sem._require_semantic_gating("dummy")
@@ -163,7 +163,7 @@ def test_run_actions_honor_headless_gating(monkeypatch):
     import ui.pages.semantics as sem
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "nuovo")
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (False, None))
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug, *, layout=None: (False, None))
 
     for runner in (sem._run_convert, sem._run_enrich, sem._run_summary):
         with pytest.raises(ConfigError, match="Semantica non disponibile"):
@@ -189,7 +189,7 @@ def test_gate_cache_reuses_result(monkeypatch):
 
     calls = {"count": 0}
 
-    def _has_raw(slug: str):
+    def _has_raw(slug: str, *, layout=None):
         calls["count"] += 1
         return True, Path("raw")
 
@@ -210,7 +210,7 @@ def test_gate_cache_rechecks_raw_if_removed(monkeypatch, tmp_path):
 
     states: list[tuple[bool, Path | None]] = [(True, tmp_path / "raw"), (False, None)]
 
-    def _has_raw(slug: str):
+    def _has_raw(slug: str, *, layout=None):
         return states.pop(0)
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
@@ -231,7 +231,7 @@ def test_gate_cache_updates_raw_path(monkeypatch, tmp_path):
         (True, tmp_path / "raw-v2"),
     ]
 
-    def _has_raw(slug: str):
+    def _has_raw(slug: str, *, layout=None):
         return responses.pop(0)
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
@@ -261,7 +261,7 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
 
     # gating helper
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug, *, layout=None: (True, tmp_path / "raw"))
 
     # ctx/logger minimi
     def _mk_ctx_and_logger(slug: str):
@@ -330,7 +330,7 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug, *, layout=None: (True, tmp_path / "raw"))
     monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {})
 
     sem._run_enrich("dummy-srl")
@@ -360,7 +360,7 @@ def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug, *, layout=None: (True, tmp_path / "raw"))
 
     # writer simulato
     monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)

@@ -16,7 +16,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
+from pipeline.path_utils import ensure_within_and_resolve, iter_safe_pdfs
+from pipeline.workspace_layout import WorkspaceLayout
 
 from .config import SemanticConfig
 from .lexicon import LexiconEntry, build_lexicon
@@ -28,27 +29,28 @@ LOGGER = get_structured_logger("semantic.spacy_extractor")
 # --------------------------------------------------------------------------------------
 
 
-def _read_markdown_text(md_path: Path) -> str:
+def _read_markdown_text(md_path: Path, *, layout: WorkspaceLayout) -> str:
     """
     Legge il contenuto di un file Markdown e lo restituisce come stringa.
     """
     md_path = md_path.expanduser().resolve()
     if not md_path.is_file():
         raise FileNotFoundError(f"Markdown non trovato: {md_path}")
-    safe_md = cast(Path, ensure_within_and_resolve(md_path.parent, md_path))
+    safe_md = cast(Path, ensure_within_and_resolve(layout.book_dir, md_path))
     with safe_md.open("r", encoding="utf-8") as handle:
         return handle.read()
 
 
-def _resolve_markdown_path_from_raw(raw_path: Path, *, workspace_root: Path) -> Path:
+def _resolve_markdown_path_from_raw(raw_path: Path, *, layout: WorkspaceLayout) -> Path:
     """
     Dato un path raw (PDF), calcola il path al corrispondente Markdown in book/.
 
     Convenzione: raw/<categoria>/file.pdf -> book/<categoria>/file.md
     """
-    raw_root = cast(Path, ensure_within(workspace_root, workspace_root / "raw"))
-    rel = raw_path.resolve().relative_to(raw_root)
-    md_root = cast(Path, ensure_within(workspace_root, workspace_root / "book"))
+    raw_root = layout.raw_dir
+    safe_raw = cast(Path, ensure_within_and_resolve(raw_root, raw_path.resolve()))
+    rel = safe_raw.relative_to(raw_root)
+    md_root = layout.book_dir
     return md_root / rel.with_suffix(".md")
 
 
@@ -184,8 +186,8 @@ def extract_spacy_tags(
     Ritorna un dict: relative_path -> {tags, entities, keyphrases, score, sources}
     """
     log = logger or LOGGER
-    raw_dir = Path(raw_dir).resolve()
-    ensure_within(cfg.base_dir, raw_dir)
+    layout = WorkspaceLayout.from_workspace(cfg.base_dir, enforce_integrity=True)
+    raw_dir = layout.raw_dir
     lexicon = build_lexicon(cfg.mapping)
     if not lexicon:
         return {}
@@ -200,16 +202,12 @@ def extract_spacy_tags(
     candidates: Dict[str, Dict[str, Any]] = {}
     for pdf_path in iter_safe_pdfs(raw_dir):
         try:
-            rel_path = pdf_path.relative_to(cfg.base_dir).as_posix()
+            rel_path = pdf_path.relative_to(raw_dir).as_posix()
         except Exception:
-            try:
-                rel_path = pdf_path.relative_to(raw_dir).as_posix()
-            except Exception:
-                continue
-
+            continue
         try:
-            md_path = _resolve_markdown_path_from_raw(pdf_path, workspace_root=cfg.base_dir)
-            text = _read_markdown_text(md_path)
+            md_path = _resolve_markdown_path_from_raw(pdf_path, layout=layout)
+            text = _read_markdown_text(md_path, layout=layout)
         except FileNotFoundError as exc:
             raise ConfigError(
                 f"Markdown non trovato per il documento {pdf_path.name}: esegui prima la conversione PDF→Markdown.",

@@ -3,6 +3,29 @@ from pathlib import Path
 
 import pytest
 
+from pipeline.workspace_layout import WorkspaceLayout
+
+
+def _prepare_workspace(slug: str, workspace_root: Path) -> WorkspaceLayout:
+    book_dir = workspace_root / "book"
+    semantic_dir = workspace_root / "semantic"
+    config_dir = workspace_root / "config"
+    logs_dir = workspace_root / "logs"
+    raw_dir = workspace_root / "raw"
+    for path in (book_dir, semantic_dir, config_dir, logs_dir, raw_dir):
+        path.mkdir(parents=True, exist_ok=True)
+    (book_dir / "README.md").write_text("README", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("SUMMARY", encoding="utf-8")
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
+    (semantic_dir / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    return WorkspaceLayout.from_workspace(workspace_root, slug=slug)
+
+
+def _patch_layout(monkeypatch, dr_module, slug: str, workspace_root: Path) -> WorkspaceLayout:
+    layout = _prepare_workspace(slug, workspace_root)
+    monkeypatch.setattr(dr_module.WorkspaceLayout, "from_context", lambda *_: layout)
+    return layout
+
 
 def test_download_with_progress_adapter(monkeypatch, tmp_path):
     import logging
@@ -81,9 +104,11 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
 
     # Pre-create doc1.pdf to simulate skip
     base_root = tmp_path / "out"
-    base_dir = base_root / "timmy-kb-dummy" / "raw" / "cat-a"
-    base_dir.mkdir(parents=True, exist_ok=True)
-    (base_dir / "doc1.pdf").write_bytes(b"x" * 10)
+    workspace_root = base_root / "timmy-kb-dummy"
+    _patch_layout(monkeypatch, dr, "dummy", workspace_root)
+    cat_dir = workspace_root / "raw" / "cat-a"
+    cat_dir.mkdir(parents=True, exist_ok=True)
+    (cat_dir / "doc1.pdf").write_bytes(b"x" * 10)
 
     # Collect progress callbacks
     progress_events = []
@@ -124,6 +149,7 @@ def test_download_with_root_level_pdfs(monkeypatch, tmp_path):
     monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
     monkeypatch.setattr(dr, "get_client_context", lambda *_args, **_kwargs: Ctx())
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
+    _patch_layout(monkeypatch, dr, "dummy", tmp_path / "timmy-kb-dummy")
     monkeypatch.setattr(dr, "_get_existing_client_folder_id", lambda service, parent_id, slug: "CFID")
 
     def _fake_folders(service, parent_id):
@@ -170,6 +196,7 @@ def test_plan_raw_download_requires_existing_folder(monkeypatch, tmp_path):
     monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
     monkeypatch.setattr(dr, "get_client_context", lambda *_args, **_kwargs: Ctx())
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
+    _patch_layout(monkeypatch, dr, "dummy", tmp_path / "timmy-kb-dummy")
 
     def _fake_list_folders(service, parent_id):
         if parent_id == "PARENT":
@@ -203,6 +230,7 @@ def test_plan_raw_download_errors_when_client_folder_missing(monkeypatch, tmp_pa
     monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
     monkeypatch.setattr(dr, "get_client_context", lambda *_args, **_kwargs: Ctx())
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
+    _patch_layout(monkeypatch, dr, "dummy", tmp_path / "timmy-kb-dummy")
     monkeypatch.setattr(dr, "_drive_list_folders", lambda service, parent_id: [])
     monkeypatch.setattr(dr, "_get_existing_client_folder_id", lambda service, parent_id, slug: None)
 

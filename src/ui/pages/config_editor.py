@@ -30,7 +30,7 @@ from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retrie
 from ui.manage import cleanup as cleanup_component
 from ui.utils import set_slug
 from ui.utils.context_cache import get_client_context
-from ui.utils.workspace import resolve_raw_dir
+from ui.utils.workspace import get_ui_workspace_layout, resolve_raw_dir
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext
@@ -283,6 +283,7 @@ def _render_runtime_retriever(slug: str, *, st_module: StreamlitLike | None = No
 # ---------- entrypoint pagina ----------
 def main() -> None:
     slug = render_chrome_then_require()
+    layout = get_ui_workspace_layout(slug, require_env=False)
     ctx, settings = _load_context_and_settings(slug)
     data = settings.as_dict()
 
@@ -317,7 +318,7 @@ def main() -> None:
 
     # Danger zone - Cleanup
     cleanup_client_name = cleanup_component.client_display_name(slug, get_clients)
-    cleanup_raw_folders = cleanup_component.list_raw_subfolders(slug, resolve_raw_dir)
+    cleanup_raw_folders = cleanup_component.list_raw_subfolders(slug, resolve_raw_dir, layout=layout)
     st.markdown("---")
     with st.expander("Danger zone · Cleanup cliente", expanded=False):
         st.markdown(f"**Cliente:** {cleanup_client_name}  \\\n**Google Drive:** `{slug}`")
