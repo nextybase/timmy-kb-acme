@@ -172,6 +172,23 @@ def _setup_codex_cli_run(
     streamlit_stub.button_returns["Esegui smoke test"] = False
 
 
+def test_codex_hitl_unlock_button(monkeypatch: pytest.MonkeyPatch, streamlit_stub: _StreamlitStub) -> None:
+    streamlit_stub.session_state[page._CODEX_HITL_KEY] = True
+    streamlit_stub.session_state[page._CODEX_PROMPT_KEY] = "Prompt corrente"
+    streamlit_stub.session_state[page._CODEX_OUTPUT_KEY] = "Output corrente"
+    streamlit_stub.button_returns["Valida output Codex"] = False
+    streamlit_stub.button_returns["Esegui Codex CLI (locale)"] = False
+    streamlit_stub.button_returns["Sblocca HITL (supervisore)"] = True
+    streamlit_stub.button_returns["Esegui smoke test"] = False
+    monkeypatch.setattr(page, "render_chrome_then_require", lambda **_: None)
+
+    page._render_codex_section()
+
+    assert not streamlit_stub.session_state.get(page._CODEX_HITL_KEY)
+    assert streamlit_stub.session_state[page._CODEX_PROMPT_KEY] == "Prompt corrente"
+    assert streamlit_stub.session_state[page._CODEX_OUTPUT_KEY] == "Output corrente"
+
+
 def test_codex_validation_success(monkeypatch: pytest.MonkeyPatch, streamlit_stub: _StreamlitStub) -> None:
     response_data = {
         "ok": True,
