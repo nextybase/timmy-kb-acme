@@ -237,7 +237,7 @@ def _execute_codex_cli(prompt: str) -> None:
 def _render_codex_section() -> None:
     st.subheader("Turno Codex (manuale)")
     prompt = _get_codex_prompt()
-    st.text_area("Prompt per Codex", prompt, value=prompt, disabled=True)
+    st.text_area("Prompt per Codex", value=prompt, disabled=True)
     output = st.text_area(
         "Incolla qui l'output di Codex CLI",
         key=_CODEX_OUTPUT_KEY,
