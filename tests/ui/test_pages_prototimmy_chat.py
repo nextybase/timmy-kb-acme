@@ -90,7 +90,7 @@ def test_smoke_button_triggers_check(monkeypatch: pytest.MonkeyPatch, streamlit_
     assert streamlit_stub.success_calls
 
 
-def test_invoke_model_transcript_filters_roles(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_invoke_prototimmy_json_filters_roles(monkeypatch: pytest.MonkeyPatch) -> None:
     history = [
         dict(page._SYSTEM_MESSAGE),
         {"role": "user", "content": "Ciao"},
@@ -100,15 +100,15 @@ def test_invoke_model_transcript_filters_roles(monkeypatch: pytest.MonkeyPatch) 
 
     captured: dict[str, list] = {"messages": []}
 
-    def fake_run_text_model(*, model: str, messages: Sequence[dict[str, object]], **kwargs: object) -> SimpleNamespace:
+    def fake_run_json_model(*, model: str, messages: Sequence[dict[str, object]], **kwargs: object) -> SimpleNamespace:
         captured["messages"] = list(messages)
-        return SimpleNamespace(text="ok\nmessage_for_ocp: delega")
+        return SimpleNamespace(text="ignored", data={"reply_to_user": "ok", "message_for_ocp": "delega"})
 
     monkeypatch.setattr(page, "_load_settings", lambda: SimpleNamespace())
     monkeypatch.setattr(page, "resolve_prototimmy_config", lambda *_: SimpleNamespace(model="m"))
-    monkeypatch.setattr(page, "run_text_model", fake_run_text_model)
+    monkeypatch.setattr(page, "run_json_model", fake_run_json_model)
 
-    response, ocp_request = page._invoke_model(history, "Secondo messaggio")
+    response, ocp_request = page._invoke_prototimmy_json(history, "Secondo messaggio")
 
     assert response.startswith("ok")
     assert ocp_request == "delega"

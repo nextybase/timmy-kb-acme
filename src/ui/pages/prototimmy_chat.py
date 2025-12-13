@@ -6,7 +6,7 @@ from typing import Iterable, Mapping, Sequence
 
 from ai.check import run_prototimmy_dummy_check
 from ai.config import resolve_ocp_executor_config, resolve_prototimmy_config
-from ai.responses import run_text_model
+from ai.responses import run_json_model, run_text_model
 from pipeline.settings import Settings
 from ui.chrome import render_chrome_then_require
 from ui.utils.repo_root import get_repo_root
@@ -20,6 +20,41 @@ _SYSTEM_MESSAGE = {
     "content": (
         "Sei ProtoTimmy, assistente di pianificazione tecnica e coordinamento. "
         "Rispondi in modo conciso, operativo e orientato al contesto del workspace."
+    ),
+}
+
+_PROTO_JSON_SYSTEM_MESSAGE = {
+    "role": "system",
+    "content": (
+        "Sei ProtoTimmy, assistente di pianificazione tecnica e coordinamento. "
+        "Rispondi SOLO in JSON con le chiavi reply_to_user e message_for_ocp. "
+        "Se il flusso richiede un intervento di OCP (keyword: OCP, ocp_executor, inoltra a OCP), "
+        "valorizza message_for_ocp con la richiesta secca; altrimenti mantienilo vuoto."
+    ),
+}
+
+_PROTO_JSON_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "ProtoTimmyOCPOuput",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "reply_to_user": {"type": "string"},
+                "message_for_ocp": {"type": "string"},
+            },
+            "required": ["reply_to_user", "message_for_ocp"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    },
+}
+
+_OCP_SYSTEM_MESSAGE = {
+    "role": "system",
+    "content": (
+        "Sei OCP_executor. Rispondi in modo tecnico, conciso e operativo. "
+        "Non simulare azioni e non generare testo narrativo."
     ),
 }
 
@@ -83,22 +118,13 @@ def _build_transcript(history: Sequence[Mapping[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def _extract_ocp_request(text: str) -> str | None:
-    for line in text.splitlines():
-        if "message_for_ocp" in line.lower():
-            parts = line.split(":", 1)
-            if len(parts) == 2:
-                return parts[1].strip()
-    return None
-
-
 def _call_ocp(message: str) -> str:
     settings = _load_settings()
     cfg = resolve_ocp_executor_config(settings)
     response = run_text_model(
         model=cfg.model,
         messages=(
-            dict(_SYSTEM_MESSAGE),
+            dict(_OCP_SYSTEM_MESSAGE),
             {"role": "user", "content": f"Rispondi con i dati richiesti: {message}"},
         ),
     )
@@ -110,24 +136,46 @@ def _render_ocp_response(text: str) -> None:
         st.write(text)
 
 
-def _invoke_model(history: Iterable[Mapping[str, str]], last_user_input: str) -> tuple[str | None, str | None]:
+def _invoke_prototimmy_json(
+    history: Iterable[Mapping[str, str]], last_user_input: str
+) -> tuple[str | None, str | None]:
     try:
         settings = _load_settings()
         cfg = resolve_prototimmy_config(settings)
         transcript = _build_transcript(list(history)[:-1])
         user_payload = f"{transcript}\nUTENTE: {last_user_input}" if transcript else f"UTENTE: {last_user_input}"
+        response = run_json_model(
+            model=cfg.model,
+            messages=(
+                dict(_PROTO_JSON_SYSTEM_MESSAGE),
+                {"role": "user", "content": user_payload},
+            ),
+            response_format=_PROTO_JSON_RESPONSE_FORMAT,
+        )
+        data = response.data
+        reply = str(data.get("reply_to_user", "")).strip()
+        ocp_request = str(data.get("message_for_ocp", "")).strip()
+        return (reply or None, ocp_request or "")
+    except Exception as exc:  # pragma: no cover - logging happens in downstream libs
+        st.error(f"ProtoTimmy non ha risposto: {exc}")
+        return None, ""
+
+
+def _invoke_prototimmy_text(prompt_text: str) -> str | None:
+    try:
+        settings = _load_settings()
+        cfg = resolve_prototimmy_config(settings)
         response = run_text_model(
             model=cfg.model,
             messages=(
                 dict(_SYSTEM_MESSAGE),
-                {"role": "user", "content": user_payload},
+                {"role": "user", "content": prompt_text},
             ),
         )
-        ocp_request = _extract_ocp_request(response.text)
-        return response.text, ocp_request
-    except Exception as exc:  # pragma: no cover - logging happens in downstream libs
+        return response.text
+    except Exception as exc:
         st.error(f"ProtoTimmy non ha risposto: {exc}")
-        return None, None
+        return None
 
 
 def _render_smoke_test() -> None:
@@ -155,9 +203,10 @@ def main() -> None:
     user_input = _collect_user_input()
     if user_input:
         history.append({"role": "user", "content": user_input})
-        reply, ocp_request = _invoke_model(history, user_input)
-        final_reply = reply
-        if reply and ocp_request:
+        reply, ocp_request = _invoke_prototimmy_json(history, user_input)
+        if reply:
+            history.append({"role": "assistant", "content": reply})
+        if ocp_request:
             try:
                 ocp_response = _call_ocp(ocp_request)
             except Exception:
@@ -165,10 +214,9 @@ def main() -> None:
             else:
                 _render_ocp_response(ocp_response)
                 summary_prompt = f"Questa è la risposta reale di OCP:\n{ocp_response}\nRiassumila per l'utente."
-                extended_history = history + [{"role": "user", "content": summary_prompt}]
-                final_reply, _ = _invoke_model(extended_history, summary_prompt)
-        if final_reply:
-            history.append({"role": "assistant", "content": final_reply})
+                summary = _invoke_prototimmy_text(summary_prompt)
+                if summary:
+                    history.append({"role": "assistant", "content": summary})
     _render_history(history)
     _render_smoke_test()
 
