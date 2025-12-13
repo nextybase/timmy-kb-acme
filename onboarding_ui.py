@@ -104,7 +104,7 @@ def _init_ui_logging() -> None:
     get_structured_logger("ui", log_file=log_file, propagate=True)
 
 
-LOGGER: logging.Logger = logging.getLogger("ui.preflight")
+LOGGER: logging.Logger = get_structured_logger("ui.preflight")
 
 
 def _lazy_bootstrap() -> logging.Logger:

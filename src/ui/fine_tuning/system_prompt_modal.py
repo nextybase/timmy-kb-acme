@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
+from pipeline.capabilities import get_openai_ctor
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.import_utils import import_from_candidates
@@ -52,11 +53,7 @@ def _get_client() -> Any:
         return factory()
     except ImportError:
         try:
-            openai_ctor = import_from_candidates(
-                ["openai:OpenAI"],
-                description="OpenAI",
-                logger=LOG,
-            )
+            openai_ctor = get_openai_ctor()
             return openai_ctor()
         except Exception as exc:  # pragma: no cover
             raise RuntimeError(f"Impossibile inizializzare il client OpenAI: {exc}") from exc

@@ -21,7 +21,6 @@ dedicati ai dettagli infrastrutturali come rotazione file, propagate ed endpoint
 
 from __future__ import annotations
 
-import importlib
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -30,6 +29,8 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlencode, urljoin
 
 import yaml
+
+from pipeline.capabilities import is_otel_available
 
 _OBS_CONFIG_ENV = "TIMMY_OBSERVABILITY_CONFIG"
 _DEFAULT_RELATIVE_CONFIG = ".timmykb/observability.yaml"
@@ -134,11 +135,7 @@ def get_observability_settings() -> ObservabilitySettings:
 def get_tracing_state() -> TracingState:
     settings = get_observability_settings()
     endpoint_present = bool(os.getenv("TIMMY_OTEL_ENDPOINT"))
-    try:
-        importlib.import_module("opentelemetry.sdk.trace")
-        otel_installed = True
-    except ImportError:
-        otel_installed = False
+    otel_installed = is_otel_available()
     return TracingState(
         enabled_in_prefs=settings.tracing_enabled,
         endpoint_present=endpoint_present,

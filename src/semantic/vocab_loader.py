@@ -11,15 +11,18 @@ from typing import Any, Dict, Iterable, Mapping, Sequence, Set, cast
 import pipeline.path_utils as ppath  # late-bound per testability
 from pipeline.constants import REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
 
 __all__ = ["load_reviewed_vocab", "load_tags_reviewed_db"]
 
 # Import lazy del loader reale; se assente, enrichment resta opzionale.
+LOGGER = get_structured_logger("semantic.vocab_loader")
+
 try:  # pragma: no cover - dipende dall'ambiente
     from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
 except Exception as exc:  # pragma: no cover
     _load_tags_reviewed = None
-    logging.getLogger(__name__).warning(
+    LOGGER.warning(
         "semantic.vocab_loader.stubbed",
         extra={"error": str(exc)},
     )
@@ -203,8 +206,7 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
     Se il modulo reale non è disponibile → {} (enrichment opzionale).
     """
     if _load_tags_reviewed is None:
-        logger = logging.getLogger("semantic.vocab_loader")
-        logger.warning(
+        LOGGER.warning(
             "semantic.vocab.loader_missing",
             extra={"event": "semantic.vocab.loader_missing", "file_path": str(db_path)},
         )

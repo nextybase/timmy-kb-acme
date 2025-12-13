@@ -17,11 +17,12 @@ sia dalla UI che dai CLI.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import List, Tuple
 
-logger = logging.getLogger(__name__)
+from pipeline.logging_utils import get_structured_logger
+
+logger = get_structured_logger("semantic.book_readiness")
 
 # Proviamo a riutilizzare le costanti di progetto, se esistono.
 try:

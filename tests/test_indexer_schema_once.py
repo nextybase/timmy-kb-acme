@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import List
 
@@ -82,18 +81,28 @@ def test_indexer_reduces_overhead_with_single_init(tmp_path: Path, monkeypatch: 
     logger = _NoopLogger()
     db_path = tmp_path / "kb2.sqlite"
 
-    def run(db_file: Path) -> float:
-        t0 = time.perf_counter()
+    import kb_db as kdb
+
+    calls: list[Path | None] = []
+    real_init = kdb.init_db
+
+    def _counting_init(pth: Path | None = None) -> None:
+        calls.append(pth)
+        return real_init(pth)
+
+    monkeypatch.setattr(kdb, "init_db", _counting_init, raising=True)
+    monkeypatch.setattr(embedding_service, "_init_kb_db", _counting_init, raising=True)
+
+    def run(db_file: Path) -> int:
+        before = len(calls)
         _ = sapi.index_markdown_to_db(
             ctx, logger, slug=ctx.slug, scope="book", embeddings_client=_EmbClient(), db_path=db_file
         )
-        return time.perf_counter() - t0
+        return len(calls) - before
 
-    def measure(db_file: Path) -> float:
-        return min(run(db_file) for _ in range(2))
+    single_init_count = run(db_path)
+    repeat_count = run(tmp_path / "kb_repeat_1.sqlite") + run(tmp_path / "kb_repeat_2.sqlite")
 
-    dt_single = measure(db_path)
-    dt_repeat = measure(tmp_path / "kb_repeat_1.sqlite") + measure(tmp_path / "kb_repeat_2.sqlite")
-
-    # Con un solo init il costo rimane significativamente inferiore rispetto a due init separati.
-    assert dt_single <= dt_repeat * 0.75
+    assert single_init_count == 1
+    assert repeat_count == 2
+    assert single_init_count < repeat_count

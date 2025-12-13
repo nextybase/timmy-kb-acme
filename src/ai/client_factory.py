@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Optional
 
+from pipeline.capabilities import get_openai_ctor
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
@@ -35,10 +36,7 @@ def make_openai_client():
     except KeyError as exc:
         raise ConfigError("Manca la API key. Imposta la variabile di ambiente OPENAI_API_KEY.") from exc
 
-    try:
-        from openai import OpenAI  # type: ignore
-    except ImportError as exc:  # pragma: no cover
-        raise ConfigError("OpenAI SDK non disponibile: installa il pacchetto 'openai'.") from exc
+    OpenAI = get_openai_ctor()
 
     default_headers: Dict[str, str] = {"OpenAI-Beta": "assistants=v2"}
     client_kwargs: Dict[str, object] = {
