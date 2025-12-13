@@ -6,6 +6,7 @@ from typing import Sequence
 
 import pytest
 
+from ai.codex_runner import StructuredResult
 from ui.pages import prototimmy_chat as page
 
 
@@ -70,6 +71,9 @@ class _StreamlitStub:
 
     def warning(self, message: str) -> None:
         self.warning_calls.append(message)
+
+    def code(self, value: object, language: str | None = None) -> None:
+        self.write_calls.append(str(value))
 
     def subheader(self, text: str) -> None:
         self.write_calls.append(text)
@@ -154,6 +158,20 @@ def _setup_codex_validation(
     monkeypatch.setattr(page, "run_json_model", fake_run_json_model)
 
 
+def _setup_codex_cli_run(
+    monkeypatch: pytest.MonkeyPatch,
+    streamlit_stub: _StreamlitStub,
+    result: StructuredResult,
+) -> None:
+    monkeypatch.setattr(page, "render_chrome_then_require", lambda **_: None)
+    monkeypatch.setattr(page, "_load_settings", lambda: SimpleNamespace())
+    monkeypatch.setattr(page, "resolve_ocp_executor_config", lambda *_: SimpleNamespace(model="ocp-model"))
+    monkeypatch.setattr(page, "run_codex_cli", lambda *args, **kwargs: result)
+    streamlit_stub.button_returns["Esegui Codex CLI (locale)"] = True
+    streamlit_stub.button_returns["Valida output Codex"] = False
+    streamlit_stub.button_returns["Esegui smoke test"] = False
+
+
 def test_codex_validation_success(monkeypatch: pytest.MonkeyPatch, streamlit_stub: _StreamlitStub) -> None:
     response_data = {
         "ok": True,
@@ -198,3 +216,37 @@ def test_codex_validation_triggers_hitl(monkeypatch: pytest.MonkeyPatch, streaml
 
     assert streamlit_stub.warning_calls
     assert streamlit_stub.session_state.get(page._CODEX_HITL_KEY)
+
+
+def test_codex_cli_button_success(monkeypatch: pytest.MonkeyPatch, streamlit_stub: _StreamlitStub) -> None:
+    result = StructuredResult(
+        ok=True,
+        exit_code=0,
+        stdout="output-ok",
+        stderr="",
+        duration_ms=10,
+        error=None,
+    )
+    _setup_codex_cli_run(monkeypatch, streamlit_stub, result)
+
+    page.main()
+
+    assert streamlit_stub.session_state[page._CODEX_OUTPUT_KEY] == "output-ok"
+    assert streamlit_stub.success_calls
+
+
+def test_codex_cli_button_failure(monkeypatch: pytest.MonkeyPatch, streamlit_stub: _StreamlitStub) -> None:
+    result = StructuredResult(
+        ok=False,
+        exit_code=2,
+        stdout="",
+        stderr="warn",
+        duration_ms=5,
+        error="boom",
+    )
+    _setup_codex_cli_run(monkeypatch, streamlit_stub, result)
+
+    page.main()
+
+    assert streamlit_stub.error_calls
+    assert any("exit 2" in msg for msg in streamlit_stub.error_calls)

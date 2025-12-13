@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Iterable, Mapping, Sequence
 
 from ai.check import run_prototimmy_dummy_check
+from ai.codex_runner import run_codex_cli
 from ai.config import resolve_ocp_executor_config, resolve_prototimmy_config
 from ai.responses import run_json_model, run_text_model
 from pipeline.settings import Settings
@@ -91,6 +92,8 @@ _CODEX_PROMPT_KEY = "codex_turn_prompt"
 _CODEX_OUTPUT_KEY = "codex_manual_output"
 _CODEX_HITL_KEY = "codex_hitl_required"
 _CODEX_HITL_CODE = "HITL_REQUIRED"
+_CODEX_CLI_CMD: list[str] = ["codex", "run"]
+_CODEX_CLI_TIMEOUT_S = 60
 
 
 def _load_settings() -> Settings:
@@ -211,6 +214,26 @@ def _validate_codex_output(output: str) -> None:
         st.error(f"Non è stato possibile validare l'output: {exc}")
 
 
+def _execute_codex_cli(prompt: str) -> None:
+    try:
+        result = run_codex_cli(
+            prompt,
+            cwd=get_repo_root(),
+            cmd=list(_CODEX_CLI_CMD),
+            timeout_s=_CODEX_CLI_TIMEOUT_S,
+        )
+        st.session_state[_CODEX_OUTPUT_KEY] = result.stdout or ""
+        if result.ok:
+            st.success(f"Codex CLI eseguita (exit {result.exit_code}).")
+        else:
+            error_msg = result.error or result.stderr or "errore sconosciuto"
+            st.error(f"Codex CLI fallita (exit {result.exit_code}): {error_msg}")
+        if result.stderr:
+            st.info(f"Codex stderr: {result.stderr}")
+    except Exception as exc:
+        st.error(f"Codex CLI fallita inaspettatamente: {exc}")
+
+
 def _render_codex_section() -> None:
     st.subheader("Turno Codex (manuale)")
     prompt = _get_codex_prompt()
@@ -226,6 +249,8 @@ def _render_codex_section() -> None:
         return
     if st.button("Valida output Codex"):
         _validate_codex_output(output)
+    if st.button("Esegui Codex CLI (locale)"):
+        _execute_codex_cli(prompt)
 
 
 def _invoke_prototimmy_json(
