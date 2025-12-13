@@ -246,6 +246,9 @@ def _render_codex_section() -> None:
     st.session_state[_CODEX_OUTPUT_KEY] = output
     if st.session_state.get(_CODEX_HITL_KEY):
         st.warning("HITL richiesto: non è possibile validare altri output.")
+        if st.button("Sblocca HITL (supervisore)"):
+            st.session_state[_CODEX_HITL_KEY] = False
+            st.success("HITL sbloccato; prosegui con il prossimo output.")
         return
     if st.button("Valida output Codex"):
         _validate_codex_output(output)
