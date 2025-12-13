@@ -17,9 +17,12 @@ class _StreamlitStub:
         self.error_calls: list[str] = []
         self.write_calls: list[str] = []
         self.chat_roles: list[str] = []
+        self.info_calls: list[str] = []
+        self.warning_calls: list[str] = []
+        self.button_returns: dict[str, bool] = {}
 
     def button(self, label: str, *args: object, **kwargs: object) -> bool:
-        return label == "Esegui smoke test"
+        return self.button_returns.get(label, label == "Esegui smoke test")
 
     def json(self, payload: dict[str, object]) -> None:
         self.json_payloads.append(payload)
@@ -51,10 +54,25 @@ class _StreamlitStub:
         return None
 
     def text_area(self, *args: object, **kwargs: object) -> str:
-        return ""
+        key = kwargs.get("key")
+        value = kwargs.get("value", "")
+        if key:
+            if key not in self.session_state:
+                self.session_state[key] = value or ""
+            return str(self.session_state[key])
+        return str(value)
 
     def caption(self, *args: object, **kwargs: object) -> None:
         return None
+
+    def info(self, message: str) -> None:
+        self.info_calls.append(message)
+
+    def warning(self, message: str) -> None:
+        self.warning_calls.append(message)
+
+    def subheader(self, text: str) -> None:
+        self.write_calls.append(text)
 
 
 @pytest.fixture()
@@ -116,3 +134,67 @@ def test_invoke_prototimmy_json_filters_roles(monkeypatch: pytest.MonkeyPatch) -
     assert captured["messages"][0]["role"] == "system"
     assert "UTENTE: Secondo messaggio" in captured["messages"][1]["content"]
     assert "PROTOTIMMY" in captured["messages"][1]["content"]
+
+
+def _setup_codex_validation(
+    monkeypatch: pytest.MonkeyPatch,
+    streamlit_stub: _StreamlitStub,
+    response_data: dict[str, object],
+) -> None:
+    monkeypatch.setattr(page, "render_chrome_then_require", lambda **_: None)
+    monkeypatch.setattr(page, "_load_settings", lambda: SimpleNamespace())
+    monkeypatch.setattr(page, "resolve_ocp_executor_config", lambda *_: SimpleNamespace(model="ocp-model"))
+    streamlit_stub.session_state[page._CODEX_OUTPUT_KEY] = "output"
+    streamlit_stub.session_state[page._CODEX_PROMPT_KEY] = "Prompt iniziale"
+    streamlit_stub.button_returns["Valida output Codex"] = True
+
+    def fake_run_json_model(*, model: str, messages: Sequence[dict[str, object]], **kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(data=response_data)
+
+    monkeypatch.setattr(page, "run_json_model", fake_run_json_model)
+
+
+def test_codex_validation_success(monkeypatch: pytest.MonkeyPatch, streamlit_stub: _StreamlitStub) -> None:
+    response_data = {
+        "ok": True,
+        "issues": [],
+        "next_prompt_for_codex": "Nuovo prompt",
+        "stop_code": "",
+    }
+    _setup_codex_validation(monkeypatch, streamlit_stub, response_data)
+
+    page.main()
+
+    assert streamlit_stub.success_calls
+    assert any("Next prompt" in msg for msg in streamlit_stub.info_calls)
+    assert streamlit_stub.session_state[page._CODEX_PROMPT_KEY] == "Nuovo prompt"
+
+
+def test_codex_validation_failure(monkeypatch: pytest.MonkeyPatch, streamlit_stub: _StreamlitStub) -> None:
+    response_data = {
+        "ok": False,
+        "issues": ["errore 1"],
+        "next_prompt_for_codex": "",
+        "stop_code": "",
+    }
+    _setup_codex_validation(monkeypatch, streamlit_stub, response_data)
+
+    page.main()
+
+    assert streamlit_stub.error_calls
+    assert any("errore 1" in msg for msg in streamlit_stub.error_calls)
+
+
+def test_codex_validation_triggers_hitl(monkeypatch: pytest.MonkeyPatch, streamlit_stub: _StreamlitStub) -> None:
+    response_data = {
+        "ok": True,
+        "issues": [],
+        "next_prompt_for_codex": "",
+        "stop_code": "HITL_REQUIRED",
+    }
+    _setup_codex_validation(monkeypatch, streamlit_stub, response_data)
+
+    page.main()
+
+    assert streamlit_stub.warning_calls
+    assert streamlit_stub.session_state.get(page._CODEX_HITL_KEY)

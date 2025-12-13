@@ -58,7 +58,39 @@ _OCP_SYSTEM_MESSAGE = {
     ),
 }
 
+_CODEX_VALIDATION_SYSTEM = {
+    "role": "system",
+    "content": (
+        "Sei OCP_executor. Valida l'output manuale di Codex CLI in formato JSON. "
+        "Rispondi SOLO con le chiavi ok, issues, next_prompt_for_codex e stop_code. "
+        "stop_code = 'HITL_REQUIRED' se è necessaria la supervisione umana."
+    ),
+}
+
+_CODEX_VALIDATION_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "CodexManualValidation",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "ok": {"type": "boolean"},
+                "issues": {"type": "array", "items": {"type": "string"}},
+                "next_prompt_for_codex": {"type": "string"},
+                "stop_code": {"type": "string"},
+            },
+            "required": ["ok", "issues", "next_prompt_for_codex", "stop_code"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    },
+}
+
 _TRANSCRIPT_MAX_LINES = 20
+_CODEX_PROMPT_KEY = "codex_turn_prompt"
+_CODEX_OUTPUT_KEY = "codex_manual_output"
+_CODEX_HITL_KEY = "codex_hitl_required"
+_CODEX_HITL_CODE = "HITL_REQUIRED"
 
 
 def _load_settings() -> Settings:
@@ -134,6 +166,66 @@ def _call_ocp(message: str) -> str:
 def _render_ocp_response(text: str) -> None:
     with st.expander("Risposta OCP", expanded=False):
         st.write(text)
+
+
+def _get_codex_prompt() -> str:
+    return st.session_state.setdefault(
+        _CODEX_PROMPT_KEY,
+        "Prompt fornito da OCP per la prossima esecuzione Codex CLI.",
+    )
+
+
+def _validate_codex_output(output: str) -> None:
+    if not output.strip():
+        st.error("Output Codex vuoto; incollare l'output CLI e riprovare.")
+        return
+    try:
+        settings = _load_settings()
+        cfg = resolve_ocp_executor_config(settings)
+        response = run_json_model(
+            model=cfg.model,
+            messages=(
+                dict(_CODEX_VALIDATION_SYSTEM),
+                {"role": "user", "content": output},
+            ),
+            response_format=_CODEX_VALIDATION_RESPONSE_FORMAT,
+        )
+        data = response.data
+        st.json(data)
+        ok = bool(data.get("ok"))
+        issues = [str(item) for item in data.get("issues") or []]
+        next_prompt = str(data.get("next_prompt_for_codex", "")).strip()
+        stop_code = str(data.get("stop_code", "")).strip()
+        if ok:
+            st.success("Output Codex valido.")
+        else:
+            details = "; ".join(issues) if issues else "problemi non specificati"
+            st.error(f"Output Codex non valido: {details}")
+        if next_prompt:
+            st.info(f"Next prompt per Codex: {next_prompt}")
+            st.session_state[_CODEX_PROMPT_KEY] = next_prompt
+        if stop_code == _CODEX_HITL_CODE:
+            st.warning("HITL richiesto: fermare la catena e attendere supervisione.")
+            st.session_state[_CODEX_HITL_KEY] = True
+    except Exception as exc:  # pragma: no cover - logging happens in downstream libs
+        st.error(f"Non è stato possibile validare l'output: {exc}")
+
+
+def _render_codex_section() -> None:
+    st.subheader("Turno Codex (manuale)")
+    prompt = _get_codex_prompt()
+    st.text_area("Prompt per Codex", prompt, value=prompt, disabled=True)
+    output = st.text_area(
+        "Incolla qui l'output di Codex CLI",
+        key=_CODEX_OUTPUT_KEY,
+        value=st.session_state.get(_CODEX_OUTPUT_KEY, ""),
+    )
+    st.session_state[_CODEX_OUTPUT_KEY] = output
+    if st.session_state.get(_CODEX_HITL_KEY):
+        st.warning("HITL richiesto: non è possibile validare altri output.")
+        return
+    if st.button("Valida output Codex"):
+        _validate_codex_output(output)
 
 
 def _invoke_prototimmy_json(
@@ -219,6 +311,7 @@ def main() -> None:
                     history.append({"role": "assistant", "content": summary})
     _render_history(history)
     _render_smoke_test()
+    _render_codex_section()
 
 
 if __name__ == "__main__":
