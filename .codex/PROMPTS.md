@@ -14,6 +14,8 @@
 ## Prompt Template Requirements
 - Templates below are the only structures permitted; every prompt must state its purpose, phase, allowed files, Active Rules memo, and expected outputs.
 - Operational prompts (1..N) exclusively produce diffs, touch files, and run intermediate QA (`pytest -q -k "not slow"`). Phase 0 prompts stay analytical and perform no edits, while prompt N+1 runs the full QA suite plus final narration.
+- Every prompt must be supplied as a single copyable block listing Role, Phase, Scope (allowed/prohibited files), Active Rules memo, Expected Outputs (diff + structured report + QA), Tests executed, Constraints, and Stop Rules to keep instructions unambiguous.
+- **If a prompt expects any file change, it must explicitly request a unified diff and a structured report in the “Expected Outputs” section.** Codex must not treat a change as “done” without those artifacts.
 
 ### Template: Prompt 0
 - Purpose: define the final goal of the Prompt Chain, the high-level plan, and instruct Codex to ingest the SSoT.
@@ -31,6 +33,8 @@
 - Mandatory sections: purpose statement, phase identifier, allowed/prohibited files, Active Rules memo (with path safety, micro-PR scope, intermediate QA requirements, Italian language reminder), expected outputs (diff + structured report + intermediate QA results), dependencies, and tests executed.
 - Action: apply a diff, document the behavior change in the report, run `pytest -q -k "not slow"` (or a justified substitute) and describe the result; mention whether additional linters/types were run.
 - Language: the entire response must be in Italian.
+- Push requirement: explicitly declare in the structured block whether a push to `main` is requested by the OCP; without that statement, Codex assumes no push occurs (pushes are reserved for Prompt N+1 or when OCP explicitly authorizes them).
+- **Diff requirement:** the structured block must always request and include a unified diff for files touched in this step.
 
 ### Template: Prompt N+1
 - Purpose: conclude the chain via final QA and a closing narrative.
@@ -42,7 +46,11 @@
 - Confirm compliance with the turn-based protocol inside each memo.
 
 ## Prompt Chain Operational Contract
-The Prompt Chain contract spells out dialogue practices between OCP and Codex, requiring idempotent micro-PRs that respect the SSoT (`docs/PromptChain_spec.md`) and the phase model above.
+The Prompt Chain operational contract spells out the dialogue model between the OCP and Codex and requires Codex to act idempotently, attentively, and aligned with the policies documented in `docs/runbook_codex.md`, `docs/codex_integrazione.md`, and `docs/PromptChain_spec.md`. Every prompt must be treated as an independent micro-PR with a fixed scope and no unauthorized creative deviations.
+- Always answer only one prompt at a time: after you reply, halt execution, wait for the next OCP prompt, and never invent additional prompts.
+- Do not design new architectures, refactors, or self-initiatives beyond the OCP's explicit requirements; stay within the provided scope.
+- Observe the "idempotent micro-PR" rule: keep changes minimal, mentally reversible, and free of import-time side effects.
+- Remember that `docs/PromptChain_spec.md` is the SSoT for the Prompt Chain and that `docs/runbook_codex.md`/`docs/codex_integrazione.md` describe the operational context.
 
 ## Startup Tasks
 - Read `docs/AGENTS_INDEX.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, and `docs/runbook_codex.md`.
@@ -66,13 +74,6 @@ Rules honored: path safety / atomicity / no import-time side effects
 Tests: <new/updated; e.g., pytest -k ...>
 QA: isort  black  ruff --fix  mypy  pytest
 Docs notes: <if you touch X, update Y/Z>
-
-## Prompt Chain Operational Contract
-The Prompt Chain operational contract spells out the dialogue model between the OCP and Codex and requires Codex to act idempotently, attentively, and aligned with the policies documented in `docs/runbook_codex.md`, `docs/codex_integrazione.md`, and `docs/PromptChain_spec.md`. Every prompt must be treated as an independent micro-PR with a fixed scope and no unauthorized creative deviations.
-- Always answer only one prompt at a time: after you reply, halt execution, wait for the next OCP prompt, and never invent additional prompts.
-- Do not design new architectures, refactors, or self-initiatives beyond the OCP's explicit requirements; stay within the provided scope.
-- Observe the "idempotent micro-PR" rule: keep changes minimal, mentally reversible, and free of import-time side effects.
-- Remember that `docs/PromptChain_spec.md` is the SSoT for the Prompt Chain and that `docs/runbook_codex.md`/`docs/codex_integrazione.md` describe the operational context.
 
 ## Active Rules for Operational Prompts
 - Active Rules: path safety ON, micro-PR discipline, zero side effects, documentation updates when functionality changes, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Language Policy for Italian conversations.
@@ -107,7 +108,7 @@ The Prompt Chain operational contract spells out the dialogue model between the 
 - Pushes happen only after QA completes (`pytest -q`, `pre-commit run --all-files`) and with explicit approval from the OCP or responsible human.
 - The closing Prompt Chain commit must state that the chain is sealed, summarize QA/tests, and notify the OCP of next steps or outstanding issues.
 
-## Turn-Based Prompt Chain (OCP?Codex Cycle)
+## Turn-Based Prompt Chain (OCP→Codex Cycle)
 - **SSoT:** refer to `docs/PromptChain_spec.md` for governance and the operational contract.
 - The OrchestratoreChainPrompt (OCP) issues numbered prompts (Prompt 0, 1, 2, ...); each stays within a fixed scope and corresponds to a micro-PR under the same Codex rules (HiTL, AGENT-first, QA, path safety, atomic I/O).
 - The OCP never edits the repository; it converts Timmy/ProtoTimmy's goals into formal prompts and drives Codex one step at a time. Codex must not anticipate future steps, generate additional prompts, or expand the defined scope.
@@ -118,14 +119,13 @@ The Prompt Chain operational contract spells out the dialogue model between the 
 - Propose a concise action plan (steps and order) before modifying files.
 - Apply the micro-PR model: single scope, minimal diff, idempotent, and clearly motivated.
 - QA checklist: path safety via SSoT utilities, scoped writes, atomic logging; keep the AGENTS matrix updated when touching `AGENTS.md`, refresh documentation if behavior changes, and honor area-specific overrides.
-## Language Policy
-- All conversational exchanges between Codex, the OCP, and the user must occur in Italian unless the prompt explicitly authorizes another language; technical files and documentation can remain in English when needed.
 
 ## Codex Smoke Chain - Diagnostic Test
 - **Goal:** verify that the Prompt Chain respects turn-taking, memo recognition, QA rules, escalation limits, the Italian Language Policy, and the Pre-Check validation without editing the repository.
 - **Structure:** S0: OCP issues a minimal prompt; Codex confirms that the Active Rules memo is recognized. S1: Codex describes how it would run the Pre-Check validation on a mock diff (no files created). S2: OCP simulates an operational prompt; Codex replies with a conceptual micro-PR description. S3: Codex articulates the intermediate QA (`pytest -q -k "not slow"`) it would run and explains how it would interpret outcomes (without executing anything). S4: Codex summarizes the escalation/retry plan, final QA (`pytest -q` + `pre-commit run --all-files`), and reconfirms Italian-language compliance.
 - **Rules:** no actual patches, no disk writes, no QA commands executed; perform the entire chain conceptually as a fast diagnostic after modifying Prompt Chain metadata.
-- **Use cases:** diagnose governance issues, validate Prompt Chain updates, and provide HiTL evidence that the OCP?Codex cycle, QA policies, Pre-Check validation, and Italian-language policy remain synchronized.
+- **Use cases:** diagnose governance issues, validate Prompt Chain updates, and provide HiTL evidence that the OCP→Codex cycle, QA policies, Pre-Check validation, and Italian-language policy remain synchronized.
+
 # Semantics & tags.db
 
 ## Startup tasks
