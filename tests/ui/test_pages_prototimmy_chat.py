@@ -63,6 +63,9 @@ class _StreamlitStub:
             return str(self.session_state[key])
         return str(value)
 
+    def rerun(self) -> None:
+        self.rerun_count = getattr(self, "rerun_count", 0) + 1
+
     def caption(self, *args: object, **kwargs: object) -> None:
         return None
 
@@ -267,3 +270,22 @@ def test_codex_cli_button_failure(monkeypatch: pytest.MonkeyPatch, streamlit_stu
 
     assert streamlit_stub.error_calls
     assert any("exit 2" in msg for msg in streamlit_stub.error_calls)
+
+
+def test_codex_cli_triggers_rerun(monkeypatch: pytest.MonkeyPatch, streamlit_stub: _StreamlitStub) -> None:
+    result = StructuredResult(
+        ok=True,
+        exit_code=0,
+        stdout="rerun-output",
+        stderr="",
+        duration_ms=5,
+        error=None,
+    )
+    _setup_codex_cli_run(monkeypatch, streamlit_stub, result)
+    streamlit_stub.button_returns["Esegui Codex CLI (locale)"] = True
+    streamlit_stub.button_returns["Valida output Codex"] = False
+
+    page._render_codex_section()
+
+    assert streamlit_stub.session_state[page._CODEX_OUTPUT_KEY] == "rerun-output"
+    assert not hasattr(streamlit_stub, "rerun_count")

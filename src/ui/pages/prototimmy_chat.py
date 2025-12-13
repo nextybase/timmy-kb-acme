@@ -238,12 +238,11 @@ def _render_codex_section() -> None:
     st.subheader("Turno Codex (manuale)")
     prompt = _get_codex_prompt()
     st.text_area("Prompt per Codex", value=prompt, disabled=True)
-    output = st.text_area(
+    st.session_state.setdefault(_CODEX_OUTPUT_KEY, "")
+    st.text_area(
         "Incolla qui l'output di Codex CLI",
         key=_CODEX_OUTPUT_KEY,
-        value=st.session_state.get(_CODEX_OUTPUT_KEY, ""),
     )
-    st.session_state[_CODEX_OUTPUT_KEY] = output
     if st.session_state.get(_CODEX_HITL_KEY):
         st.warning("HITL richiesto: non è possibile validare altri output.")
         if st.button("Sblocca HITL (supervisore)"):
@@ -251,7 +250,7 @@ def _render_codex_section() -> None:
             st.success("HITL sbloccato; prosegui con il prossimo output.")
         return
     if st.button("Valida output Codex"):
-        _validate_codex_output(output)
+        _validate_codex_output(st.session_state[_CODEX_OUTPUT_KEY])
     if st.button("Esegui Codex CLI (locale)"):
         _execute_codex_cli(prompt)
 
