@@ -6,10 +6,10 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from importlib import import_module
 from pathlib import Path
-from typing import Any, Dict, Optional, Protocol, Type, cast
+from typing import Any, Dict, Optional, Protocol, cast
 
+from pipeline.capabilities.vision import load_vision_bindings
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -52,64 +52,13 @@ class _PreparePromptYamlFunc(Protocol):
     def __call__(self, *, ctx: Any, slug: str, yaml_path: Path, model: str, logger: Any) -> str: ...
 
 
-def _load_semantic_bindings() -> tuple[
-    Type[Exception],
-    _ProvisionFromVisionFunc,
-    _PreparePromptFunc,
-    Optional[_ProvisionFromVisionYamlFunc],
-    Optional[_PreparePromptYamlFunc],
-]:
-    """Carica dinamicamente le binding da semantic.vision_provision."""
-    candidates = (
-        "src.semantic.vision_provision",
-        "semantic.vision_provision",
-    )
-    for module_name in candidates:
-        try:
-            module = import_module(module_name)
-        except ImportError:
-            continue
-        halt_error = getattr(module, "HaltError", None)
-        provision = getattr(module, "provision_from_vision", None)
-        prepare = getattr(module, "prepare_assistant_input", None)
-        provision_yaml = getattr(module, "provision_from_vision_yaml", None)
-        prepare_yaml = getattr(module, "prepare_assistant_input_from_yaml", None)
-        if isinstance(halt_error, type) and callable(provision) and callable(prepare):
-            return (
-                cast(Type[Exception], halt_error),
-                cast(_ProvisionFromVisionFunc, provision),
-                cast(_PreparePromptFunc, prepare),
-                cast(Optional[_ProvisionFromVisionYamlFunc], provision_yaml) if callable(provision_yaml) else None,
-                cast(Optional[_PreparePromptYamlFunc], prepare_yaml) if callable(prepare_yaml) else None,
-            )
-    from ...semantic.vision_provision import HaltError as fallback_error
-    from ...semantic.vision_provision import prepare_assistant_input as fallback_prepare
-    from ...semantic.vision_provision import provision_from_vision as fallback_provision
-    from ...semantic.vision_provision import provision_from_vision_yaml as fallback_provision_yaml
+VISION_BINDINGS = load_vision_bindings()
 
-    fallback_prepare_yaml: Optional[_PreparePromptYamlFunc]
-    try:
-        from ...semantic.vision_provision import prepare_assistant_input_from_yaml as fallback_prepare_yaml
-    except Exception:
-        fallback_prepare_yaml = None
-
-    return (
-        fallback_error,
-        fallback_provision,
-        fallback_prepare,
-        cast(Optional[_ProvisionFromVisionYamlFunc], fallback_provision_yaml),
-        cast(Optional[_PreparePromptYamlFunc], fallback_prepare_yaml) if callable(fallback_prepare_yaml) else None,
-    )
-
-
-HaltError: Type[Exception]
-_provision_from_vision: _ProvisionFromVisionFunc
-_prepare_prompt: _PreparePromptFunc
-_provision_from_vision_yaml: Optional[_ProvisionFromVisionYamlFunc]
-_prepare_prompt_yaml: Optional[_PreparePromptYamlFunc]
-HaltError, _provision_from_vision, _prepare_prompt, _provision_from_vision_yaml, _prepare_prompt_yaml = (
-    _load_semantic_bindings()
-)
+HaltError = VISION_BINDINGS.halt_error
+_provision_from_vision = VISION_BINDINGS.provision
+_prepare_prompt = VISION_BINDINGS.prepare
+_provision_from_vision_yaml = VISION_BINDINGS.provision_yaml
+_prepare_prompt_yaml = VISION_BINDINGS.prepare_yaml
 
 
 def _resolve_model(slug: str, model: Optional[str]) -> str:

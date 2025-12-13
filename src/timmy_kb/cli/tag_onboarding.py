@@ -61,6 +61,7 @@ from pipeline.path_utils import (  # STRONG guard SSoT
     open_for_read_bytes_selfguard,
 )
 from pipeline.tracing import start_root_trace
+from pipeline.types import TaggingPayload
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic import nlp_runner
 from semantic.tags_validator import validate_tags_reviewed as validate_tags_payload
@@ -521,13 +522,25 @@ def tag_onboarding_main(
 
     context = resources.context
 
-    raw_dir = resources.raw_dir
+    payload: TaggingPayload = {
+        "workspace_slug": slug,
+        "raw_dir": resources.raw_dir,
+        "semantic_dir": resources.semantic_dir,
+        "source": source,
+        "run_id": run_id,
+        "extra": {"proceed_after_csv": bool(proceed_after_csv)},
+    }
 
-    semantic_dir = resources.semantic_dir
+    raw_dir = payload["raw_dir"]
+
+    semantic_dir = payload["semantic_dir"]
 
     logger = resources.logger
 
-    logger.info("cli.tag_onboarding.started", extra={"slug": slug, "source": source})
+    logger.info(
+        "cli.tag_onboarding.started",
+        extra={"slug": payload["workspace_slug"], "source": payload["source"]},
+    )
 
     # Sorgente di PDF
 
@@ -565,9 +578,14 @@ def tag_onboarding_main(
     # Fase 2: stub in semantic/
 
     emit_stub_phase(semantic_dir, csv_path, logger, context=context)
+    proceed_after_csv_flag = bool(payload["extra"]["proceed_after_csv"]) if payload["extra"] else False
     logger.info(
         "cli.tag_onboarding.completed",
-        extra={"slug": slug, "source": source, "proceed_after_csv": bool(proceed_after_csv)},
+        extra={
+            "slug": payload["workspace_slug"],
+            "source": payload["source"],
+            "proceed_after_csv": proceed_after_csv_flag,
+        },
     )
 
 

@@ -58,6 +58,7 @@ from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_valid_slug, ensure_within, read_text_safe  # STRONG guard SSoT
 from pipeline.paths import get_repo_root
 from pipeline.tracing import start_root_trace
+from pipeline.types import WorkflowResult
 from pipeline.workspace_bootstrap import bootstrap_client_workspace as _pipeline_bootstrap_client_workspace
 from pipeline.workspace_layout import WorkspaceLayout
 
@@ -477,7 +478,7 @@ def _drive_phase(
     config_path: Path,
     client_name: str,
     require_env: bool,
-) -> None:
+) -> WorkflowResult:
     """Crea struttura remota minima su Drive, carica config e aggiorna il config locale."""
     _sync_env(context, require_env=require_env)
     logger.info(
@@ -562,6 +563,11 @@ def _drive_phase(
         "cli.pre_onboarding.config_updated_with_drive_ids",
         extra={"slug": context.slug, "updates_masked": mask_updates(updates)},
     )
+    return {
+        "ok": True,
+        "message": "cli.pre_onboarding.drive_phase_completed",
+        "details": {"slug": context.slug, "stage": "drive_phase"},
+    }
 
 
 # --------------------------------- ORCHESTRATORE SNELLITO ---------------------------------

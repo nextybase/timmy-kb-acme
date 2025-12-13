@@ -20,6 +20,13 @@ try:
 except Exception:
     yaml = None  # type: ignore
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SRC_ROOT = REPO_ROOT / "src"
+
+for candidate in (str(REPO_ROOT), str(SRC_ROOT)):
+    if candidate not in sys.path:
+        sys.path.insert(0, candidate)
+
 
 class _PayloadPaths(TypedDict):
     base: str
@@ -49,76 +56,41 @@ class _DummyPayload(TypedDict):
     health: Dict[str, Any]
 
 
+from pipeline.capabilities.dummy_kb import load_dummy_drive_helpers, load_dummy_helpers
+
 # ------------------------------------------------------------
 # Path bootstrap (repo root + src)
 # ------------------------------------------------------------
-def _add_paths() -> tuple[Path, Path]:
-    repo_root = Path(__file__).resolve().parents[2]  # <repo>/
-    src_dir = repo_root / "src"
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
-    return repo_root, src_dir
-
-
-REPO_ROOT, SRC_DIR = _add_paths()
-SRC_ROOT = SRC_DIR
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard  # noqa: E402
 from pipeline.vision_template import load_vision_template_sections  # noqa: E402
 
 try:
-    from .dummy.bootstrap import client_base as _client_base_helper  # type: ignore[misc]  # noqa: E402
-    from .dummy.bootstrap import pdf_path as _pdf_path_helper  # type: ignore[misc]  # noqa: E402
-    from .dummy.orchestrator import build_dummy_payload as _build_dummy_payload  # type: ignore[misc]  # noqa: E402
-    from .dummy.orchestrator import register_client as _register_client_helper  # type: ignore[misc]  # noqa: E402
-    from .dummy.orchestrator import (  # type: ignore[misc]  # noqa: E402
-        validate_dummy_structure as _validate_dummy_structure_helper,
-    )
-    from .dummy.semantic import ensure_book_skeleton as _ensure_book_skeleton  # type: ignore[misc]  # noqa: E402
-    from .dummy.semantic import ensure_local_readmes as _ensure_local_readmes  # type: ignore[misc]  # noqa: E402
-    from .dummy.semantic import ensure_minimal_tags_db as _ensure_minimal_tags_db
-    from .dummy.semantic import ensure_raw_pdfs as _ensure_raw_pdfs
-    from .dummy.semantic import load_mapping_categories as _load_mapping_categories
-    from .dummy.semantic import write_basic_semantic_yaml as _write_basic_semantic_yaml
-    from .dummy.vision import run_vision_with_timeout as _run_vision_with_timeout  # type: ignore[misc]  # noqa: E402
-except ImportError:
-    # Esecuzione diretta come script (__package__=None): garantisce sys.path e importa via prefisso src.tools.*
-    repo_root = Path(__file__).resolve().parents[2]
-    src_root = repo_root / "src"
-    for candidate in (repo_root, src_root):
-        if str(candidate) not in sys.path:
-            sys.path.insert(0, str(candidate))
-    from src.tools.dummy.bootstrap import client_base as _client_base_helper  # type: ignore[misc]  # noqa: E402
-    from src.tools.dummy.bootstrap import pdf_path as _pdf_path_helper  # type: ignore[misc]  # noqa: E402
-    from src.tools.dummy.orchestrator import (  # type: ignore[misc]  # noqa: E402
-        build_dummy_payload as _build_dummy_payload,
-    )
-    from src.tools.dummy.orchestrator import (  # type: ignore[misc]  # noqa: E402
-        register_client as _register_client_helper,
-    )
-    from src.tools.dummy.orchestrator import (  # type: ignore[misc]  # noqa: E402
-        validate_dummy_structure as _validate_dummy_structure_helper,
-    )
-    from src.tools.dummy.semantic import (  # type: ignore[misc]  # noqa: E402
-        ensure_book_skeleton as _ensure_book_skeleton,
-    )
-    from src.tools.dummy.semantic import (  # type: ignore[misc]  # noqa: E402
-        ensure_local_readmes as _ensure_local_readmes,
-    )
-    from src.tools.dummy.semantic import ensure_minimal_tags_db as _ensure_minimal_tags_db
-    from src.tools.dummy.semantic import ensure_raw_pdfs as _ensure_raw_pdfs
-    from src.tools.dummy.semantic import load_mapping_categories as _load_mapping_categories
-    from src.tools.dummy.semantic import write_basic_semantic_yaml as _write_basic_semantic_yaml
-    from src.tools.dummy.vision import (  # type: ignore[misc]  # noqa: E402
-        run_vision_with_timeout as _run_vision_with_timeout,
-    )
+    _dummy_helpers = load_dummy_helpers()
+except ImportError as exc:
+    raise SystemExit(f"Dummy KB helpers mancanti: {exc}") from exc
 
 try:
-    from pipeline.exceptions import ConfigError  # type: ignore
-except Exception:  # pragma: no cover
-    ConfigError = Exception  # type: ignore[assignment]
+    _drive_helpers = load_dummy_drive_helpers()
+except ImportError as exc:
+    raise SystemExit(f"Dummy KB drive helpers mancanti: {exc}") from exc
+
+_client_base_helper = _dummy_helpers.client_base
+_pdf_path_helper = _dummy_helpers.pdf_path
+_build_dummy_payload = _dummy_helpers.build_dummy_payload
+_register_client_helper = _dummy_helpers.register_client
+_validate_dummy_structure_helper = _dummy_helpers.validate_dummy_structure
+_ensure_book_skeleton = _dummy_helpers.ensure_book_skeleton
+_ensure_local_readmes = _dummy_helpers.ensure_local_readmes
+_ensure_minimal_tags_db = _dummy_helpers.ensure_minimal_tags_db
+_ensure_raw_pdfs = _dummy_helpers.ensure_raw_pdfs
+_load_mapping_categories = _dummy_helpers.load_mapping_categories
+_write_basic_semantic_yaml = _dummy_helpers.write_basic_semantic_yaml
+_run_vision_with_timeout = _dummy_helpers.run_vision_with_timeout
+
+_call_drive_build_from_mapping = _drive_helpers.call_drive_build_from_mapping
+_call_drive_emit_readmes = _drive_helpers.call_drive_emit_readmes
+_call_drive_min = _drive_helpers.call_drive_min
 
 
 def _normalize_relative_path(value: str, *, var_name: str) -> Path:
@@ -160,24 +132,6 @@ except Exception:
     build_drive_from_mapping = None
     emit_readmes_for_raw = None
 
-try:
-    from .dummy.drive import (  # type: ignore[misc]  # noqa: E402
-        call_drive_build_from_mapping as _call_drive_build_from_mapping,
-    )
-    from .dummy.drive import call_drive_emit_readmes as _call_drive_emit_readmes  # type: ignore[misc]  # noqa: E402
-    from .dummy.drive import call_drive_min as _call_drive_min  # type: ignore[misc]  # noqa: E402
-except ImportError:
-    if str(REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(REPO_ROOT))
-    if str(SRC_DIR) not in sys.path:
-        sys.path.insert(0, str(SRC_DIR))
-    from src.tools.dummy.drive import (  # type: ignore[misc]  # noqa: E402
-        call_drive_build_from_mapping as _call_drive_build_from_mapping,
-    )
-    from src.tools.dummy.drive import (  # type: ignore[misc]  # noqa: E402
-        call_drive_emit_readmes as _call_drive_emit_readmes,
-    )
-    from src.tools.dummy.drive import call_drive_min as _call_drive_min  # type: ignore[misc]  # noqa: E402
 try:
     from tools.clean_client_workspace import perform_cleanup as _perform_cleanup  # type: ignore
 except Exception:  # pragma: no cover - il cleanup completo può non essere disponibile in ambienti ridotti

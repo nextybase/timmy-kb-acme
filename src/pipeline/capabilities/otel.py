@@ -2,15 +2,17 @@
 from __future__ import annotations
 
 from importlib import import_module
-from typing import Optional, Tuple
+from typing import cast
+
+from pipeline.types import CapabilityAvailability
 
 
-def otel_availability_details() -> Tuple[bool, Optional[str]]:
+def otel_availability_details() -> CapabilityAvailability:
     try:
         import_module("opentelemetry.sdk.trace")
-        return True, None
+        return cast(CapabilityAvailability, (True, None))
     except ImportError as exc:
-        return False, str(exc)
+        return cast(CapabilityAvailability, (False, str(exc)))
 
 
 def is_otel_available() -> bool:
