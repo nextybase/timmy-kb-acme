@@ -109,8 +109,6 @@ def _collect_chunk_records(
     chunk_records: Sequence[ChunkRecord],
     logger: logging.Logger,
     slug: str,
-    *,
-    skipped_paths: Sequence[str] | None = None,
 ) -> _CollectedMarkdown:
     """Costruisce i payload a partire dai ChunkRecord forniti."""
 
@@ -472,19 +470,19 @@ def index_markdown_to_db(
             chunking="heading",
             base_dir=book_dir,
         )
-        generated_paths = {record["source_path"] for record in chunk_records}
-        skipped_paths = [str(path) for path in files if str(path) not in generated_paths]
-        for path in skipped_paths:
-            logger.info(
-                "semantic.index.skip_empty_file",
-                extra={"slug": slug, "file_path": path},
-            )
         collected = _collect_chunk_records(
             chunk_records,
             logger,
             slug,
-            skipped_paths=skipped_paths,
         )
+        used_paths = {rel for rel in collected.rel_paths}
+        for path in files:
+            rel_path = path.relative_to(book_dir).as_posix()
+            if rel_path not in used_paths:
+                logger.info(
+                    "semantic.index.skip_empty_file",
+                    extra={"slug": slug, "file_path": rel_path},
+                )
         logger.info(
             "semantic.index.collect.done",
             extra={

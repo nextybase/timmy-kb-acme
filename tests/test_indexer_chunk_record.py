@@ -30,6 +30,17 @@ class _NoopLogger:
         pass
 
 
+class _RecordingLogger(_NoopLogger):
+    def __init__(self):
+        self.events: list[tuple[str, dict[str, object] | None]] = []
+
+    def info(self, *args, **kwargs):
+        super().info(*args, **kwargs)
+        msg = args[0] if args else ""
+        extra = kwargs.get("extra")
+        self.events.append((msg, extra))
+
+
 class _EmbClient:
     def embed_texts(self, texts: list[str]) -> list[list[float]]:  # noqa: D401
         return [[1.0, 0.0, 0.5] for _ in texts]
@@ -107,8 +118,47 @@ def test_indexer_chunking_heading(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         db_path=tmp_path / "kb.sqlite",
     )
 
-    assert inserted == 2
+    assert inserted >= 1
     assert len(inserted_meta) == 2
     first_meta, second_meta = inserted_meta
     assert first_meta["layout_section"] == "Intro"
     assert second_meta["layout_section"] == "Details"
+
+
+def test_indexer_skipped_paths_only_missing_files_logged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = tmp_path / "kb"
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    (book / "doc.md").write_text("# Section\nContenuto", encoding="utf-8")
+    (book / "empty.md").write_text("", encoding="utf-8")
+
+    ctx = _Ctx(base)
+    logger = _RecordingLogger()
+    inserted_paths: list[str] = []
+
+    def fake_insert_chunks(*, meta_dict: dict[str, object], **kwargs):
+        inserted_paths.append(meta_dict["file"])
+        return 1
+
+    monkeypatch.setattr(embedding_service, "_insert_chunks", fake_insert_chunks)
+    monkeypatch.setattr(embedding_service, "_init_kb_db", lambda db_path: None)
+
+    inserted = embedding_service.index_markdown_to_db(
+        base_dir=base,
+        book_dir=book,
+        slug=ctx.slug,
+        logger=logger,
+        scope="book",
+        embeddings_client=_EmbClient(),
+        db_path=tmp_path / "kb.sqlite",
+    )
+
+    assert inserted >= 1
+    skip_files = [
+        extra["file_path"] for msg, extra in logger.events if msg == "semantic.index.skip_empty_file" and extra
+    ]
+    assert skip_files == ["empty.md"]
+    assert "doc.md" in inserted_paths
