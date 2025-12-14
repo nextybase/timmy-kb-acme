@@ -13,12 +13,14 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from kb_db import get_db_path as _get_db_path
 from kb_db import init_db as _init_kb_db
 from kb_db import insert_chunks as _insert_chunks
+from pipeline.content_utils import build_chunk_records_from_markdown_files
 from pipeline.embedding_utils import normalize_embeddings
 from pipeline.exceptions import ConfigError
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
 from pipeline.frontmatter_utils import read_frontmatter as _read_fm
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, iter_safe_paths, sorted_paths
+from pipeline.types import ChunkRecord
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
 
 __all__ = ["list_content_markdown", "index_markdown_to_db"]
@@ -100,6 +102,49 @@ def _collect_markdown_inputs(
         skipped_io=skipped_io,
         skipped_empty=skipped_empty,
         total_files=len(files),
+    )
+
+
+def _collect_chunk_records(
+    chunk_records: Sequence[ChunkRecord],
+    logger: logging.Logger,
+    slug: str,
+    *,
+    skipped_paths: Sequence[str] | None = None,
+) -> _CollectedMarkdown:
+    """Costruisce i payload a partire dai ChunkRecord forniti."""
+
+    contents: List[str] = []
+    rel_paths: List[str] = []
+    frontmatters: List[Dict[str, object]] = []
+    skipped_empty = 0
+
+    for record in chunk_records:
+        payload = (record.get("text") or "").strip()
+        if not payload:
+            skipped_empty += 1
+            logger.info(
+                "semantic.index.skip_empty_file",
+                extra={"slug": slug, "file_path": record["source_path"]},
+            )
+            continue
+        contents.append(payload)
+        rel_paths.append(record["source_path"])
+        meta = dict(record.get("metadata") or {})
+        meta.setdefault("chunk_index", record["chunk_index"])
+        meta.setdefault("created_at", record["created_at"])
+        meta.setdefault("chunk_id", record["id"])
+        meta.setdefault("source_path", record["source_path"])
+        meta.setdefault("slug", slug)
+        frontmatters.append(meta)
+
+    return _CollectedMarkdown(
+        contents=contents,
+        rel_paths=rel_paths,
+        frontmatters=frontmatters,
+        skipped_io=0,
+        skipped_empty=skipped_empty,
+        total_files=len(chunk_records),
     )
 
 
@@ -375,6 +420,7 @@ def index_markdown_to_db(
     scope: str,
     embeddings_client: _EmbeddingsClient,
     db_path: Optional[Path],
+    chunk_records: Sequence[ChunkRecord] | None = None,
 ) -> int:
     """Indicizza i Markdown presenti in `book_dir` nel DB con embeddings."""
     ensure_within(base_dir, book_dir)
@@ -382,37 +428,73 @@ def index_markdown_to_db(
 
     start_ts = time.perf_counter()
 
-    files = list_content_markdown(book_dir)
-    if not files:
-        with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as phase:
-            logger.info("semantic.index.no_files", extra={"slug": slug, "book_dir": str(book_dir)})
-            try:
-                phase.set_artifacts(0)
-            except Exception:
-                phase.set_artifacts(None)
-        duration_ms = int((time.perf_counter() - start_ts) * 1000)
+    collected: _CollectedMarkdown
+    if chunk_records is not None:
+        total_files = len(chunk_records)
+        collected = _collect_chunk_records(chunk_records, logger, slug)
         logger.info(
-            "semantic.index.done",
-            extra={"slug": slug, "ms": duration_ms, "artifacts": {"inserted": 0, "files": 0}},
+            "semantic.index.collect.start",
+            extra={"slug": slug, "files": total_files},
         )
-        return 0
-
-    total_files = len(files)
-    logger.info(
-        "semantic.index.collect.start",
-        extra={"slug": slug, "files": total_files},
-    )
-    collected = _collect_markdown_inputs(book_dir, files, logger, slug)
-    logger.info(
-        "semantic.index.collect.done",
-        extra={
-            "slug": slug,
-            "files": total_files,
-            "usable": len(collected.contents),
-            "skipped_io": collected.skipped_io,
-            "skipped_no_text": collected.skipped_empty,
-        },
-    )
+        logger.info(
+            "semantic.index.collect.done",
+            extra={
+                "slug": slug,
+                "files": total_files,
+                "usable": len(collected.contents),
+                "skipped_io": collected.skipped_io,
+                "skipped_no_text": collected.skipped_empty,
+            },
+        )
+    else:
+        files = list_content_markdown(book_dir)
+        if not files:
+            with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as phase:
+                logger.info("semantic.index.no_files", extra={"slug": slug, "book_dir": str(book_dir)})
+                try:
+                    phase.set_artifacts(0)
+                except Exception:
+                    phase.set_artifacts(None)
+            duration_ms = int((time.perf_counter() - start_ts) * 1000)
+            logger.info(
+                "semantic.index.done",
+                extra={"slug": slug, "ms": duration_ms, "artifacts": {"inserted": 0, "files": 0}},
+            )
+            return 0
+        total_files = len(files)
+        logger.info(
+            "semantic.index.collect.start",
+            extra={"slug": slug, "files": total_files},
+        )
+        chunk_records = build_chunk_records_from_markdown_files(
+            slug,
+            files,
+            chunking="heading",
+            base_dir=book_dir,
+        )
+        generated_paths = {record["source_path"] for record in chunk_records}
+        skipped_paths = [str(path) for path in files if str(path) not in generated_paths]
+        for path in skipped_paths:
+            logger.info(
+                "semantic.index.skip_empty_file",
+                extra={"slug": slug, "file_path": path},
+            )
+        collected = _collect_chunk_records(
+            chunk_records,
+            logger,
+            slug,
+            skipped_paths=skipped_paths,
+        )
+        logger.info(
+            "semantic.index.collect.done",
+            extra={
+                "slug": slug,
+                "files": total_files,
+                "usable": len(collected.contents),
+                "skipped_io": collected.skipped_io,
+                "skipped_no_text": collected.skipped_empty,
+            },
+        )
 
     if not collected.contents:
         with phase_scope(logger, stage="index_markdown_to_db", customer=slug) as phase:

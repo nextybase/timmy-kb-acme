@@ -2,12 +2,13 @@
 # src/pipeline/content_utils.py
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Protocol, TypeAlias, cast
+from typing import Any, Iterable, Literal, Mapping, Protocol, TypeAlias, cast
 from urllib.parse import quote
 
 from pipeline import ontology
@@ -16,8 +17,10 @@ from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
 from pipeline.frontmatter_utils import read_frontmatter
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_paths  # SSoT path-safety forte
+from pipeline.path_utils import iter_safe_paths  # SSoT path-safety forte
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
 from pipeline.tracing import start_decision_span
+from pipeline.types import ChunkRecord
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig, load_semantic_config
 from semantic.types import ClientContextProtocol as _ClientCtx  # SSoT dei contratti
@@ -28,6 +31,7 @@ __all__ = [
     "generate_summary_markdown",
     "convert_files_to_structured_markdown",
     "log_frontmatter_cache_stats",
+    "build_chunk_records_from_markdown_files",
 ]
 
 
@@ -794,3 +798,100 @@ def convert_files_to_structured_markdown(
         logger,
         slug=slug,
     )
+
+
+def build_chunk_records_from_markdown_files(
+    slug: str,
+    md_paths: list[Path | str],
+    *,
+    created_at: str | None = None,
+    chunking: Literal["file", "heading"] = "file",
+    base_dir: Path | str | None = None,
+) -> list[ChunkRecord]:
+    """Costruisce ChunkRecord v0: un file markdown ► un chunk (indice 0)."""
+
+    timestamp = created_at or datetime.now(timezone.utc).isoformat()
+    records: list[ChunkRecord] = []
+    base_path = Path(base_dir) if base_dir is not None else None
+    resolved_base = base_path.resolve() if base_path is not None else None
+    for raw_path in md_paths:
+        path = raw_path if isinstance(raw_path, Path) else Path(raw_path)
+        try:
+            file_meta, body = read_frontmatter(path.parent, path, encoding="utf-8", use_cache=True)
+            text = (body or "").lstrip("\ufeff")
+        except Exception:
+            file_meta = {}
+            text = read_text_safe(path.parent, path, encoding="utf-8")
+        source_path = _format_source_path(path, resolved_base)
+
+        if chunking == "heading":
+            segments = _segment_markdown_by_heading(text)
+            if not segments:
+                segments = [(None, text)]
+        elif chunking == "file":
+            segments = [(None, text)]
+        else:
+            raise PipelineError(f"chunking mode '{chunking}' non supportato")
+
+        for chunk_index, (layout_section, chunk_text) in enumerate(segments):
+            payload = chunk_text.strip()
+            if not payload:
+                continue
+            key = f"{slug}:{source_path}:{chunk_index}:{layout_section or ''}:{payload}"
+            chunk_id = hashlib.sha256(key.encode("utf-8")).hexdigest()
+            metadata: dict[str, object] = dict(file_meta or {})
+            if layout_section:
+                metadata["layout_section"] = layout_section
+            records.append(
+                ChunkRecord(
+                    id=chunk_id,
+                    slug=slug,
+                    source_path=source_path,
+                    text=payload,
+                    chunk_index=chunk_index,
+                    created_at=timestamp,
+                    metadata=metadata,
+                )
+            )
+    return records
+
+
+def _format_source_path(path: Path, base: Path | None) -> str:
+    if base is None:
+        return str(path)
+    try:
+        return path.resolve().relative_to(base).as_posix()
+    except Exception:
+        return str(path)
+
+
+_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
+
+
+def _segment_markdown_by_heading(text: str) -> list[tuple[str | None, str]]:
+    """Divide un markdown in chunk iniziando da ogni heading (#/##)."""
+
+    lines = text.splitlines()
+    chunks: list[tuple[str | None, str]] = []
+    current_heading: str | None = None
+    current_lines: list[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+        match = _HEADING_PATTERN.match(stripped)
+        if match:
+            if current_lines:
+                chunk_text = "\n".join(current_lines).strip()
+                if chunk_text:
+                    chunks.append((current_heading, chunk_text))
+            current_heading = match.group(2).strip()
+            current_lines = [line]
+            continue
+        current_lines.append(line)
+
+    if current_lines:
+        chunk_text = "\n".join(current_lines).strip()
+        if chunk_text:
+            chunks.append((current_heading, chunk_text))
+
+    return chunks

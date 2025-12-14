@@ -24,6 +24,7 @@ from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, validate_slug
+from pipeline.types import ChunkRecord
 from semantic import embedding_service
 from semantic.auto_tagger import extract_semantic_candidates as _extract_candidates
 from semantic.auto_tagger import render_tags_csv as _render_tags_csv
@@ -516,6 +517,7 @@ def index_markdown_to_db(
     scope: str = "book",
     embeddings_client: _EmbeddingsClient,
     db_path: Path | None = None,
+    chunk_records: Sequence[ChunkRecord] | None = None,
 ) -> int:
     """Indice i Markdown presenti in book/ nel DB, delegando al servizio dedicato."""
     paths = get_paths(slug)
@@ -533,5 +535,6 @@ def index_markdown_to_db(
             scope=scope,
             embeddings_client=embeddings_client,
             db_path=effective_db_path,
+            chunk_records=chunk_records,
         ),
     )

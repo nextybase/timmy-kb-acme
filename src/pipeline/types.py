@@ -29,3 +29,15 @@ class TaggingPayload(TypedDict):
     source: str
     run_id: Optional[str]
     extra: dict[str, object] | None
+
+
+class ChunkRecord(TypedDict):
+    """Contratto SSoT per descrivere un chunk di knowledge base."""
+
+    id: str
+    slug: str
+    source_path: str
+    text: str
+    chunk_index: int
+    created_at: str
+    metadata: dict[str, object]
