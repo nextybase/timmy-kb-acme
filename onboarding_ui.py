@@ -14,4 +14,7 @@ try:
 except ImportError:  # pragma: no cover
     st = None
 
+if __name__ == "__main__":
+    _impl.main()
+
 sys.modules[__name__] = _impl
