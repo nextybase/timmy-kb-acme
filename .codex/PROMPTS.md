@@ -148,6 +148,7 @@ Before returning OK, verify:
 - no extra text
 - no policy violations
 - deterministic rules followed
+- no BOM, no U+FFFD, no control characters introduced
 
 [RETURN]
 Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
