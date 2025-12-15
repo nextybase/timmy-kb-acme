@@ -250,9 +250,9 @@ def _resolve_model_for_vision(
 
 
 def resolve_vision_config(ctx: Any, *, override_model: Optional[str] = None) -> AssistantConfig:
-    """Agente `vision`: non decide il 'cosa', orchestrazione conversazionale.
+    """Micro-agente `vision`: non decide il 'cosa', produce risposte a contratto.
 
-    - Tipo: Agente multi-turn con contesto esteso.
+    - Tipo: Micro-agente stateless con input/output definiti.
     - fallback model-from-assistant: SÌ.
     - Usa KB: SÌ.
     """
@@ -376,9 +376,9 @@ def resolve_kgraph_config(settings: Any, assistant_env_override: Optional[str] =
 
 
 def resolve_prototimmy_config(settings: Any) -> AssistantConfig:
-    """Agente `prototimmy`: non decide il 'cosa', guida conversazioni.
+    """Governor `prototimmy` (fuori tassonomia): non decide il 'cosa', dialoga con l'utente.
 
-    - Tipo: Agente testuale con istruzioni utente.
+    - Tipo: Governor/router che coordina istruzioni.
     - fallback model-from-assistant: NO.
     - Usa KB: SÌ.
     """
@@ -393,7 +393,7 @@ def resolve_prototimmy_config(settings: Any) -> AssistantConfig:
 
 
 def resolve_planner_config(settings: Any) -> AssistantConfig:
-    """Micro-agente `planner_assistant`: non decide il 'cosa', crea piani su input.
+    """Micro-agente `planner_assistant`: non decide il 'cosa', trasforma input in piani.
 
     - Tipo: Micro-agente deterministico.
     - fallback model-from-assistant: NO.
@@ -410,9 +410,9 @@ def resolve_planner_config(settings: Any) -> AssistantConfig:
 
 
 def resolve_ocp_executor_config(settings: Any) -> AssistantConfig:
-    """Agente `ocp_executor`: non decide il 'cosa', esegue task operativi.
+    """Agente d'ambito `ocp_executor`: non decide il 'cosa', coordina task Senior.
 
-    - Tipo: Agente tecnico dedicato.
+    - Tipo: Agente tecnico per orchestrazione e review.
     - fallback model-from-assistant: NO.
     - Usa KB: SÌ.
     """
@@ -427,9 +427,9 @@ def resolve_ocp_executor_config(settings: Any) -> AssistantConfig:
 
 
 def resolve_audit_assistant_config(settings: Any) -> AssistantConfig:
-    """Agente `ai.audit_assistant`: non decide il 'cosa', non usa KB, nessun fallback.
+    """Micro-agente `ai.audit_assistant`: non decide il 'cosa', verifica regole.
 
-    - Tipo: agente deterministico con contesto limitato e zero persistenza.
+    - Tipo: Micro-agente deterministico, no KB, zero persistenza.
     - Autorizzato fallback model-from-assistant? NO.
     - Usa KB? NO.
     - Non introduce stato persistente né determina il contenuto.
