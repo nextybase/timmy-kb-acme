@@ -75,10 +75,10 @@ Tests: <new/updated; e.g., pytest -k ...>
 QA: isort  black  ruff --fix  mypy  pytest
 Docs notes: <if you touch X, update Y/Z>
 
-## Work Order Envelope (Agent ? Micro-agent)
-WORK ORDER ENVELOPE (Agent ? Micro-agent)
+## Work Order Envelope (Agent → Micro-agent)
+WORK ORDER ENVELOPE (Agent → Micro-agent)
 Version: 1.0
-Rule: Micro-agent must NOT decide ?what?. It only executes ?how? under a strict contract.
+Rule: Micro-agent must NOT decide “what”. It only executes “how” under a strict contract.
 
 [IDENTITY]
 - task_id: <UUID-or-timestamp>
@@ -93,7 +93,7 @@ One sentence, operational. No ambiguity.
 - objective: "<do X from input Y to produce output Z>"
 
 [INPUTS]
-Provide only what?s necessary. No hidden context.
+Provide only what’s necessary. No hidden context.
 - input_payload: <JSON or bullet list, explicit>
 - context_minimal: <strictly necessary background, max 5 lines>
 - assumptions_allowed: none
@@ -130,7 +130,7 @@ B) Suffix Contract (for deterministic gates)
 - on_violation: return CONTRACT_ERROR
 
 [DETERMINISTIC RULES]
-List the exact steps. No free-form ?think?.
+List the exact steps. No free-form “think”.
 1) <step>
 2) <step>
 3) <step>

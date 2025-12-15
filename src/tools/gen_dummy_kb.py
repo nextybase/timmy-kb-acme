@@ -179,7 +179,7 @@ except Exception:
         raise RuntimeError("safe_write_bytes unavailable: install pipeline.file_utils dependency")  # pragma: no cover
 
 
-# Compat: test_gen_dummy_kb_import_safety si aspetta che gli attributi pubblici siano None finch� non si esegue il tool.
+# Compat: test_gen_dummy_kb_import_safety si aspetta che gli attributi pubblici siano None finché non si esegue il tool.
 safe_write_text = None  # type: ignore
 safe_write_bytes = None  # type: ignore
 _fin_import_csv = None  # type: ignore

@@ -231,7 +231,7 @@ def preload_iter_safe_pdfs_cache(
     """
     Pre-carica la cache dei PDF sicuri per `root`, restituendo lo snapshot.
 
-    Se `root` non �� valido viene effettuata solo l'invalidazione.
+    Se `root` non è valido viene effettuata solo l'invalidazione.
     """
     _ensure_raw_cache_defaults_loaded()
     try:

@@ -118,7 +118,7 @@ def main() -> int:
     except Exception as e:
         msg = str(e).lower()
         if "github" in msg or "git push" in msg or "personal access token" in msg:
-            print(f"âš ï¸  GitHub disabilitato nello smoke: {e}")
+            print(f"⚠️ GitHub disabilitato nello smoke: {e}")
         else:
             raise
 
@@ -138,7 +138,7 @@ def main() -> int:
     if log_candidates:
         print(f"      OK: log creato â†’ {log_candidates[0]}")
     else:
-        print("      âš ï¸ Nessun *.log trovato in logs/ (non bloccante per lo smoke).")
+        print("      ⚠️ Nessun *.log trovato in logs/ (non bloccante per lo smoke).")
 
     print("\nâœ… Smoke test completato con successo.")
     print(f"   Workspace: {base_dir}")
@@ -149,8 +149,8 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except AssertionError as e:
-        print(f"\nâŒ Smoke test fallito: {e}", file=sys.stderr)
+        print(f"\n❌ Smoke test fallito: {e}", file=sys.stderr)
         raise SystemExit(1)
     except Exception as e:
-        print(f"\nâŒ Errore inaspettato: {e}", file=sys.stderr)
+        print(f"\n❌ Errore inaspettato: {e}", file=sys.stderr)
         raise SystemExit(2)

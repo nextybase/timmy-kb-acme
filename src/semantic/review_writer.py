@@ -51,7 +51,7 @@ try:
 
     yaml_module = _yaml
 except Exception:  # pragma: no cover
-    yaml_module = None  # degradazione controllata: il chiamante pu? gestire l'assenza
+    yaml_module = None  # degradazione controllata: il chiamante può gestire l'assenza
 
 
 def _now_utc_iso() -> str:
