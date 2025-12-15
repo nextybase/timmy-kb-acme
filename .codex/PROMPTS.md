@@ -75,6 +75,82 @@ Tests: <new/updated; e.g., pytest -k ...>
 QA: isort  black  ruff --fix  mypy  pytest
 Docs notes: <if you touch X, update Y/Z>
 
+## Work Order Envelope (Agent ? Micro-agent)
+WORK ORDER ENVELOPE (Agent ? Micro-agent)
+Version: 1.0
+Rule: Micro-agent must NOT decide ?what?. It only executes ?how? under a strict contract.
+
+[IDENTITY]
+- task_id: <UUID-or-timestamp>
+- issued_by: <Agent name, e.g., OCP | Planner | Audit>
+- target_micro_agent: <Vision | Planner | KGraph | Audit | ...>
+- mode: deterministic
+- tools_allowed: <none | KB | kgraph | ...>
+- persistence: none
+
+[OBJECTIVE]
+One sentence, operational. No ambiguity.
+- objective: "<do X from input Y to produce output Z>"
+
+[INPUTS]
+Provide only what?s necessary. No hidden context.
+- input_payload: <JSON or bullet list, explicit>
+- context_minimal: <strictly necessary background, max 5 lines>
+- assumptions_allowed: none
+- if_missing_data: return NEED_INPUT with missing_fields
+
+[CONSTRAINTS]
+Hard rules. If conflict occurs, STOP and return CONTRACT_ERROR.
+- must_not:
+  - invent facts
+  - reinterpret objective
+  - add extra sections/text
+  - change schema/format
+- must:
+  - follow output_contract exactly
+  - be concise
+  - be reversible / no side effects
+
+[OUTPUT CONTRACT]
+Choose ONE of these and fill it.
+
+A) JSON Schema Contract
+- output_format: JSON only
+- schema: |
+  { ... JSON Schema ... }
+- required_keys: [ ... ]
+- forbidden_keys: [ ... ]
+- validation: must parse as JSON, must validate schema
+- on_violation: return CONTRACT_ERROR
+
+B) Suffix Contract (for deterministic gates)
+- output_format: text
+- must_end_with: "<PLANNER_OK|OCP_OK|...>"
+- forbidden_content: ["apologies", "extra commentary", "markdown headings", ...]
+- on_violation: return CONTRACT_ERROR
+
+[DETERMINISTIC RULES]
+List the exact steps. No free-form ?think?.
+1) <step>
+2) <step>
+3) <step>
+
+[FAIL-FAST BEHAVIOR]
+Return exactly ONE of the following statuses (no extra prose):
+- NEED_INPUT: { missing_fields: [...], question: "..." }
+- CONTRACT_ERROR: { reason: "...", violated_rule: "..." }
+- OK: <the output following contract>
+
+[SELF-CHECK]
+Before returning OK, verify:
+- contract respected
+- no extra text
+- no policy violations
+- deterministic rules followed
+
+[RETURN]
+Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
+
 ## Active Rules for Operational Prompts
 - Active Rules: path safety ON, micro-PR discipline, zero side effects, documentation updates when functionality changes, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Language Policy for Italian conversations.
 - After Prompt 0/1, OCP issues one prompt at a time, Codex responds with diff/report/QA, OCP evaluates, and only then emits the next prompt; never stack multiple OCP prompts without a Codex reply.
