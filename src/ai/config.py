@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Mapping, Optional, Tuple, TypedDict, cast
 
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
@@ -12,6 +12,55 @@ from .client_factory import make_openai_client
 from .types import AssistantConfig
 
 LOGGER = get_structured_logger("ai.config")
+
+
+class VisionCfg(TypedDict, total=False):
+    assistant_id_env: str
+    model: str
+    use_kb: bool
+    strict_output: bool
+
+
+class AssistantSectionCfg(TypedDict, total=False):
+    model: str
+    assistant_id_env: str
+    use_kb: bool
+    strict_output: bool
+
+
+class AiCfgRoot(TypedDict, total=False):
+    vision: VisionCfg
+    ai: Mapping[str, AssistantSectionCfg]
+
+
+def _vision_section(payload: Mapping[str, Any]) -> Optional[VisionCfg]:
+    candidate = payload.get("vision")
+    if isinstance(candidate, Mapping):
+        return cast(VisionCfg, candidate)
+    return None
+
+
+def _ai_section(payload: Mapping[str, Any], name: str) -> Optional[AssistantSectionCfg]:
+    ai_payload = payload.get("ai")
+    if isinstance(ai_payload, Mapping):
+        candidate = ai_payload.get(name)
+        if isinstance(candidate, Mapping):
+            return cast(AssistantSectionCfg, candidate)
+    return None
+
+
+def _as_mapping(source: Any) -> Mapping[str, Any]:
+    if isinstance(source, Mapping):
+        return source
+    as_dict = getattr(source, "as_dict", None)
+    if callable(as_dict):
+        try:
+            data = as_dict()
+            if isinstance(data, Mapping):
+                return data
+        except Exception:
+            pass
+    return {}
 
 
 def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
@@ -53,24 +102,14 @@ def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
     return current
 
 
-def _extract_context_settings(ctx: Any) -> Tuple[Optional[Settings], Mapping[str, Any]]:
+def _extract_context_settings(ctx: Any) -> Tuple[Optional[Settings], AiCfgRoot]:
     raw = getattr(ctx, "settings", None)
+    mapping = _as_mapping(raw)
     if isinstance(raw, Settings):
-        try:
-            return raw, raw.as_dict()
-        except Exception:
-            return raw, {}
-    if isinstance(raw, Mapping):
-        return None, raw
-    as_dict = getattr(raw, "as_dict", None)
-    if callable(as_dict):
-        try:
-            data = as_dict()
-            if isinstance(data, Mapping):
-                return None, data
-        except Exception:
-            pass
-    return None, {}
+        return raw, cast(AiCfgRoot, mapping)
+    if mapping:
+        return None, cast(AiCfgRoot, mapping)
+    return None, cast(AiCfgRoot, {})
 
 
 def _optional_env(name: str) -> Optional[str]:
@@ -90,8 +129,8 @@ def _resolve_assistant_env(
         candidate = getattr(settings_obj, "vision_assistant_env", None)
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
-    vision_cfg = settings_payload.get("vision")
-    if isinstance(vision_cfg, Mapping):
+    vision_cfg = _vision_section(settings_payload)
+    if vision_cfg:
         candidate = vision_cfg.get("assistant_id_env")
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
@@ -106,8 +145,8 @@ def _resolve_model_from_settings(settings_obj: Optional[Settings], settings_payl
                 return candidate.strip()
         except Exception:
             pass
-    vision_cfg = settings_payload.get("vision")
-    if isinstance(vision_cfg, Mapping):
+    vision_cfg = _vision_section(settings_payload)
+    if vision_cfg:
         candidate = vision_cfg.get("model")
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
@@ -148,8 +187,8 @@ def _resolve_vision_use_kb(
         except Exception:
             pass
 
-    vision_cfg = settings_payload.get("vision")
-    if isinstance(vision_cfg, Mapping):
+    vision_cfg = _vision_section(settings_payload)
+    if vision_cfg:
         raw = vision_cfg.get("use_kb")
         if isinstance(raw, bool):
             return raw
@@ -168,8 +207,8 @@ def _resolve_vision_strict_output(
         except Exception:
             pass
 
-    vision_cfg = settings_payload.get("vision")
-    if isinstance(vision_cfg, Mapping):
+    vision_cfg = _vision_section(settings_payload)
+    if vision_cfg:
         raw = vision_cfg.get("strict_output")
         if isinstance(raw, bool):
             return raw
@@ -184,27 +223,42 @@ def _resolve_vision_strict_output(
     return True
 
 
+def _resolve_env_name_for_vision(settings_obj: Optional[Settings], settings_payload: Mapping[str, Any]) -> str:
+    return _resolve_assistant_env(settings_obj, settings_payload, default_env="OBNEXT_ASSISTANT_ID")
+
+
+def _resolve_model_for_vision(
+    override_model: Optional[str],
+    settings_obj: Optional[Settings],
+    settings_payload: Mapping[str, Any],
+    assistant_id: str,
+) -> str:
+    resolved_model = (override_model or "").strip()
+    if resolved_model:
+        return resolved_model
+    resolved_model = _resolve_model_from_settings(settings_obj, settings_payload)
+    if resolved_model:
+        return resolved_model
+    client = make_openai_client()
+    resolved_model = _resolve_model_from_assistant(client, assistant_id)
+    if resolved_model:
+        return resolved_model
+    raise ConfigError(
+        "Modello Vision non configurato: imposta vision.model nel config o assegna un modello all'assistant "
+        f"{assistant_id}."
+    )
+
+
 def resolve_vision_config(ctx: Any, *, override_model: Optional[str] = None) -> AssistantConfig:
     settings_obj, settings_payload = _extract_context_settings(ctx)
     base_dir = getattr(ctx, "base_dir", None)
 
-    assistant_env = _resolve_assistant_env(settings_obj, settings_payload, default_env="OBNEXT_ASSISTANT_ID")
+    assistant_env = _resolve_env_name_for_vision(settings_obj, settings_payload)
     assistant_id = _optional_env(assistant_env) or _optional_env("ASSISTANT_ID")
     if not assistant_id:
         raise ConfigError(f"Assistant ID non configurato: imposta {assistant_env} (o ASSISTANT_ID) nell'ambiente.")
 
-    resolved_model = (override_model or "").strip()
-    if not resolved_model:
-        resolved_model = _resolve_model_from_settings(settings_obj, settings_payload)
-    if not resolved_model:
-        client = make_openai_client()
-        resolved_model = _resolve_model_from_assistant(client, assistant_id)
-    if not resolved_model:
-        raise ConfigError(
-            "Modello Vision non configurato: imposta vision.model nel config o assegna un modello all'assistant "
-            f"{assistant_id}."
-        )
-
+    resolved_model = _resolve_model_for_vision(override_model, settings_obj, settings_payload, assistant_id)
     use_kb = _resolve_vision_use_kb(settings_obj, settings_payload)
     strict_output = _resolve_vision_strict_output(settings_obj, settings_payload, base_dir)
 
@@ -217,10 +271,24 @@ def resolve_vision_config(ctx: Any, *, override_model: Optional[str] = None) -> 
     )
 
 
+def _ai_section_name_from_path(path: str) -> Optional[str]:
+    parts = path.split(".")
+    if len(parts) >= 2 and parts[0] == "ai":
+        return parts[1]
+    return None
+
+
 def _resolve_assistant_env_generic(settings: Any, path: str, default_env: str) -> str:
     candidate = _get_from_settings(settings, path)
     if isinstance(candidate, str) and candidate.strip():
         return candidate.strip()
+    section_name = _ai_section_name_from_path(path)
+    if section_name:
+        section_cfg = _ai_section(_as_mapping(settings), section_name)
+        if section_cfg:
+            candidate = section_cfg.get("assistant_id_env")
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
     return default_env
 
 
@@ -325,4 +393,26 @@ def resolve_ocp_executor_config(settings: Any) -> AssistantConfig:
         default_env="OCP_EXECUTOR_ASSISTANT_ID",
         use_kb_path="ai.ocp_executor.use_kb",
         default_use_kb=True,
+    )
+
+
+def resolve_audit_assistant_config(settings: Any) -> AssistantConfig:
+    """Agente `ai.audit_assistant`: non decide il 'cosa', no KB, no fallback.
+
+    - Ruolo: Agente con contesto limitato (audit).
+    - Fallback model-from-assistant: NO.
+    - Use KB: NO.
+    - Non introduce stato persistente né determina il contenuto.
+    """
+    assistant_env = _resolve_assistant_env_generic(
+        settings, "ai.audit_assistant.assistant_id_env", "AUDIT_ASSISTANT_ID"
+    )
+    assistant_id = _resolve_assistant_id(assistant_env)
+    model = _resolve_model(settings, "ai.audit_assistant.model")
+    return AssistantConfig(
+        model=model,
+        assistant_id=assistant_id,
+        assistant_env=assistant_env,
+        use_kb=False,
+        strict_output=None,
     )

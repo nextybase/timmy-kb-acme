@@ -36,6 +36,10 @@ ai:
     model: gpt-4.1
     assistant_id_env: OCP_EXECUTOR_ASSISTANT_ID
     use_kb: true
+  audit_assistant:
+    assistant_id_env: AUDIT_ASSISTANT_ID
+    model: gpt-4.1
+    use_kb: false
   kgraph:
     engine: assistants
     model: gpt-4.1
