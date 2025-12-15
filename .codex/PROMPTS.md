@@ -78,7 +78,7 @@ Docs notes: <if you touch X, update Y/Z>
 ## Work Order Envelope (Agent → Micro-agent)
 WORK ORDER ENVELOPE (Agent → Micro-agent)
 Version: 1.0
-Rule: Micro-agent must NOT decide “what”. It only executes “how” under a strict contract.
+Rule: Micro-agent must NOT decide "what". It only executes "how" under a strict contract.
 
 [IDENTITY]
 - task_id: <UUID-or-timestamp>
@@ -130,7 +130,7 @@ B) Suffix Contract (for deterministic gates)
 - on_violation: return CONTRACT_ERROR
 
 [DETERMINISTIC RULES]
-List the exact steps. No free-form “think”.
+List the exact steps. No free-form "think".
 1) <step>
 2) <step>
 3) <step>
