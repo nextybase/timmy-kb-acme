@@ -397,11 +397,11 @@ def resolve_ocp_executor_config(settings: Any) -> AssistantConfig:
 
 
 def resolve_audit_assistant_config(settings: Any) -> AssistantConfig:
-    """Agente `ai.audit_assistant`: non decide il 'cosa', no KB, no fallback.
+    """Agente `ai.audit_assistant`: non decide il 'cosa', non usa KB, nessun fallback.
 
-    - Ruolo: Agente con contesto limitato (audit).
-    - Fallback model-from-assistant: NO.
-    - Use KB: NO.
+    - Tipo: agente deterministico con contesto limitato e zero persistenza.
+    - Autorizzato fallback model-from-assistant? NO.
+    - Usa KB? NO.
     - Non introduce stato persistente né determina il contenuto.
     """
     assistant_env = _resolve_assistant_env_generic(

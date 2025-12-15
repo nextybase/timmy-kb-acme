@@ -39,6 +39,7 @@ ai:
   audit_assistant:
     assistant_id_env: AUDIT_ASSISTANT_ID
     model: gpt-4.1
+    # disable KB lookup for audit assistant
     use_kb: false
   kgraph:
     engine: assistants
