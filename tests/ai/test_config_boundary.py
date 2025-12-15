@@ -102,32 +102,68 @@ def test_assistant_env_precedence_settings(monkeypatch):
     assert result == "settings-env"
 
 
+def test_vision_assistant_env_payload_over_default():
+    payload = {"vision": {"assistant_id_env": "PAYLOAD_ENV"}}
+    env_name = config._resolve_assistant_env(None, payload, default_env="DEFAULT_ENV")
+    assert env_name == "PAYLOAD_ENV"
+
+
+def test_ai_section_assistant_env_payload_precedence():
+    settings = {"ai": {"prototimmy": {"assistant_id_env": "PROTO_PAYLOAD_ENV"}}}
+    env_name = config._resolve_assistant_env_generic(
+        settings,
+        "ai.prototimmy.assistant_id_env",
+        "DEFAULT_ENV",
+    )
+    assert env_name == "PROTO_PAYLOAD_ENV"
+
+
 @pytest.mark.parametrize(
-    "resolver, env_name",
+    "resolver, env_name, resolver_call",
     (
-        (config.resolve_vision_config, "OBNEXT_ASSISTANT_ID"),
-        (lambda ctx: config.resolve_prototimmy_config(ctx.settings), "PROTOTIMMY_ID"),
-        (lambda ctx: config.resolve_planner_config(ctx.settings), "PLANNER_ASSISTANT_ID"),
-        (lambda ctx: config.resolve_ocp_executor_config(ctx.settings), "OCP_EXECUTOR_ASSISTANT_ID"),
-        (config.resolve_kgraph_config, "KGRAPH_ASSISTANT_ID"),
+        (config.resolve_vision_config, "OBNEXT_ASSISTANT_ID", lambda ctx: config.resolve_vision_config(ctx)),
+        (
+            config.resolve_prototimmy_config,
+            "PROTOTIMMY_ID",
+            lambda ctx: config.resolve_prototimmy_config(ctx.settings),
+        ),
+        (
+            config.resolve_planner_config,
+            "PLANNER_ASSISTANT_ID",
+            lambda ctx: config.resolve_planner_config(ctx.settings),
+        ),
+        (
+            config.resolve_ocp_executor_config,
+            "OCP_EXECUTOR_ASSISTANT_ID",
+            lambda ctx: config.resolve_ocp_executor_config(ctx.settings),
+        ),
+        (config.resolve_kgraph_config, "KGRAPH_ASSISTANT_ID", lambda ctx: config.resolve_kgraph_config(ctx)),
+        (
+            config.resolve_audit_assistant_config,
+            "AUDIT_ASSISTANT_ID",
+            lambda ctx: config.resolve_audit_assistant_config(ctx.settings),
+        ),
     ),
 )
-def test_resolvers_missing_env_raise(monkeypatch, resolver, env_name):
+def test_resolvers_missing_env_raise(monkeypatch, resolver, env_name, resolver_call):
     ctx = _DummyCtx(settings={})
     fake_env = _fake_env_factory({})
     monkeypatch.setattr("ai.config.get_env_var", fake_env)
-    if env_name in {"PROTOTIMMY_ID", "PLANNER_ASSISTANT_ID", "OCP_EXECUTOR_ASSISTANT_ID"}:
+    if env_name in {
+        "PROTOTIMMY_ID",
+        "PLANNER_ASSISTANT_ID",
+        "OCP_EXECUTOR_ASSISTANT_ID",
+        "AUDIT_ASSISTANT_ID",
+    }:
         section = {
             "PROTOTIMMY_ID": "prototimmy",
             "PLANNER_ASSISTANT_ID": "planner_assistant",
             "OCP_EXECUTOR_ASSISTANT_ID": "ocp_executor",
+            "AUDIT_ASSISTANT_ID": "audit_assistant",
         }[env_name]
         ctx.settings = {"ai": {section: {"model": "dummy-model", "assistant_id_env": env_name}}}
     with pytest.raises(ConfigError) as exc:
-        if resolver in (config.resolve_vision_config, config.resolve_kgraph_config):
-            resolver(ctx)
-        else:
-            resolver(ctx)
+        resolver_call(ctx)
     assert env_name in str(exc.value)
 
 
