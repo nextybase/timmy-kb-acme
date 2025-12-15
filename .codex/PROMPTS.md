@@ -79,6 +79,7 @@ Docs notes: <if you touch X, update Y/Z>
 WORK ORDER ENVELOPE (Agent → Micro-agent)
 Version: 1.0
 Rule: Micro-agent must NOT decide "what". It only executes "how" under a strict contract.
+Use ASCII quotes (" ") in contracts and templates unless non-ASCII characters are semantically required.
 
 [IDENTITY]
 - task_id: <UUID-or-timestamp>
