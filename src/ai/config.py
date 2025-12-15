@@ -250,6 +250,12 @@ def _resolve_model_for_vision(
 
 
 def resolve_vision_config(ctx: Any, *, override_model: Optional[str] = None) -> AssistantConfig:
+    """Agente `vision`: non decide il 'cosa', orchestrazione conversazionale.
+
+    - Tipo: Agente multi-turn con contesto esteso.
+    - fallback model-from-assistant: SÌ.
+    - Usa KB: SÌ.
+    """
     settings_obj, settings_payload = _extract_context_settings(ctx)
     base_dir = getattr(ctx, "base_dir", None)
 
@@ -342,6 +348,12 @@ def _build_assistant_config(
 
 
 def resolve_kgraph_config(settings: Any, assistant_env_override: Optional[str] = None) -> AssistantConfig:
+    """Micro-agente `kgraph`: non decide il 'cosa', espone il knowledge graph.
+
+    - Tipo: Micro-agente deterministico.
+    - fallback model-from-assistant: SÌ.
+    - Usa KB: NO.
+    """
     assistant_env = assistant_env_override or _resolve_assistant_env_generic(
         settings, "ai.kgraph.assistant_id_env", "KGRAPH_ASSISTANT_ID"
     )
@@ -364,6 +376,12 @@ def resolve_kgraph_config(settings: Any, assistant_env_override: Optional[str] =
 
 
 def resolve_prototimmy_config(settings: Any) -> AssistantConfig:
+    """Agente `prototimmy`: non decide il 'cosa', guida conversazioni.
+
+    - Tipo: Agente testuale con istruzioni utente.
+    - fallback model-from-assistant: NO.
+    - Usa KB: SÌ.
+    """
     return _build_assistant_config(
         settings=settings,
         model_path="ai.prototimmy.model",
@@ -375,6 +393,12 @@ def resolve_prototimmy_config(settings: Any) -> AssistantConfig:
 
 
 def resolve_planner_config(settings: Any) -> AssistantConfig:
+    """Micro-agente `planner_assistant`: non decide il 'cosa', crea piani su input.
+
+    - Tipo: Micro-agente deterministico.
+    - fallback model-from-assistant: NO.
+    - Usa KB: SÌ.
+    """
     return _build_assistant_config(
         settings=settings,
         model_path="ai.planner_assistant.model",
@@ -386,6 +410,12 @@ def resolve_planner_config(settings: Any) -> AssistantConfig:
 
 
 def resolve_ocp_executor_config(settings: Any) -> AssistantConfig:
+    """Agente `ocp_executor`: non decide il 'cosa', esegue task operativi.
+
+    - Tipo: Agente tecnico dedicato.
+    - fallback model-from-assistant: NO.
+    - Usa KB: SÌ.
+    """
     return _build_assistant_config(
         settings=settings,
         model_path="ai.ocp_executor.model",
