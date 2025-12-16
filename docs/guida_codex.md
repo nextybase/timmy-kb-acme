@@ -155,6 +155,25 @@ Un flusso “sano” e ripetibile può essere:
 
 ---
 
+## 4.5 Encoding / Mojibake Guard
+
+La catena attiva per proteggere `docs/` e `README.md` da mojibake si basa su tre livelli di controllo:
+
+- **`tools/fix_mojibake.py`** gestisce le sostituzioni note (dash, virgolette, accenti, ecc.), prova prima la decodifica UTF-8 e poi CP1252 e normalizza solo quando il testo cambia davvero. Qualsiasi nuova sequenza segnalata dai test va aggiunta qui e documentata.
+- **`tests/encoding/test_docs_encoding.py`** è il test locale che esegue `apply_replacements` in dry-run, controlla `docs/**/*.md` + `README.md` e fallisce con un messaggio leggibile nel momento in cui lo script propone una modifica: l’intento è intercettare il mojibake prima del commit/PR (attivazione manuale con `pytest tests/encoding/test_docs_encoding.py`).
+- **Job CI “Docs UTF-8/accents normalization check”** (`.github/workflows/ci.yaml`) rilancia lo stesso script e fallisce se `git diff` segnala cambiamenti; così la seconda linea di difesa entra in funzione anche se il test locale viene saltato.
+
+**Cosa NON fa la guardia:** non è un controllo esaustivo, riceve solo i pattern presenti in `REPLACEMENTS`, quindi mojibake nuovi resta un falso negativo e va segnalato ufficialmente. Non c’è un hook pre-commit automatico; la regola è applicare il test prima del commit e affidarsi al job CI come fallback.
+
+**Istruzioni operative quando il test fallisce:**
+
+- Prendi nota dei file e dei simboli nel messaggio di errore; esegui `tools/fix_mojibake.py --apply` e ripeti `pytest tests/encoding/test_docs_encoding.py` finché non ritorna verde.
+- Se lo script modifica contenuti già corretti (falso positivo), verifica se la sostituzione è neutra (ossia `fixed == text`); in quel caso è accettabile o va resa idempotente aggiornando `tools/fix_mojibake.py`.
+- Se trovi un mojibake reale non coperto, aggiungi la sequenza a `REPLACEMENTS` e documenta la modifica affinché la catena la segua in futuro.
+
+**Nota di debito documentale:** `scripts/dev/forbid_utf8_files.py` non esiste nella codebase attuale e non fa parte della catena di enforcement descritta sopra; la sua presenza è considerata un debito documentale e non una guardia attiva.
+
+
 ## 5. Scenario: usare Codex in autonomia, in pratica
 
 ### 5.1 Chat: esplorazione e pianificazione

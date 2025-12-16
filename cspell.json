@@ -63,9 +63,10 @@
     "auditare",
     "hardcodare",
     "evagrin",
-    "façade",
+    "faÇõade",
     "facade",
-    "testabilità",
+    "testabilitÇÿ",
+    "testabilita",
     "triggerano",
     "stubbate",
     "linkando",
@@ -100,6 +101,7 @@
     "clampato",
     "mennella",
     "modularizzazione",
+    "rigenerabilitÇÿ",
     "rigenerabilità",
     "rilanciabili",
     "explainability",
@@ -109,7 +111,8 @@
     "autocorrections",
     "unrequired",
     "typecheckers",
-    "typechecks"
+    "typechecks",
+    "mojibake"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",
