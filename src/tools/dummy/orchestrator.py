@@ -3,16 +3,18 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Callable, Dict, Optional
 
 from pipeline.file_utils import safe_write_bytes
 from pipeline.path_utils import ensure_within_and_resolve
 from semantic.vision_ingest import compile_document_to_vision_yaml
 
-from .bootstrap import build_generic_vision_template_pdf
+from .bootstrap import build_generic_vision_template_pdf, ensure_golden_dummy_pdf
 from .drive import call_drive_build_from_mapping, call_drive_emit_readmes, call_drive_min
 from .semantic import (
     ensure_book_skeleton,
@@ -25,6 +27,42 @@ from .semantic import (
     write_minimal_tags_raw,
 )
 from .vision import run_vision_with_timeout
+
+
+class HardCheckError(Exception):
+    def __init__(self, message: str, health: Dict[str, Any]):
+        super().__init__(message)
+        self.health = health
+
+
+def _hardcheck_health(name: str, message: str, latency_ms: int | None = None) -> Dict[str, Any]:
+    details: dict[str, Any] = {"ok": False, "details": message}
+    if latency_ms is not None:
+        details["latency_ms"] = latency_ms
+    return {
+        "status": "failed",
+        "mode": "deep",
+        "errors": [message],
+        "checks": [name],
+        "external_checks": {name: details},
+    }
+
+
+def _record_external_check(
+    health: Dict[str, Any],
+    name: str,
+    ok: bool,
+    details: str,
+    latency_ms: int | None,
+) -> None:
+    checks = health.setdefault("checks", [])
+    if name not in checks:
+        checks.append(name)
+    external = health.setdefault("external_checks", {})
+    entry: dict[str, Any] = {"ok": ok, "details": details}
+    if latency_ms is not None:
+        entry["latency_ms"] = latency_ms
+    external[name] = entry
 
 
 def register_client(
@@ -120,6 +158,7 @@ def build_dummy_payload(
     enable_drive: bool,
     enable_vision: bool,
     records_hint: Optional[str],
+    deep_testing: bool = False,
     logger: logging.Logger,
     repo_root: Path,
     ensure_local_workspace_for_ui: Callable[..., Any],
@@ -196,6 +235,21 @@ def build_dummy_payload(
                 extra={"slug": slug, "file_path": str(pdf_path_resolved)},
             )
             raise
+    if deep_testing:
+        if not enable_vision:
+            msg = "Deep testing requires Vision enabled (secrets/permessi non pronti)"
+            logger.error(
+                "tools.gen_dummy_kb.vision_hardcheck.disabled",
+                extra={"slug": slug, "reason": "vision disabled"},
+            )
+            raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg))
+        if not enable_drive:
+            msg = "Deep testing requires Drive enabled (secrets/permessi non pronti)"
+            logger.error(
+                "tools.gen_dummy_kb.drive_hardcheck.disabled",
+                extra={"slug": slug, "reason": "drive disabled"},
+            )
+            raise HardCheckError(msg, _hardcheck_health("drive_hardcheck", msg))
     yaml_target = ensure_within_and_resolve(base_dir, base_dir / "config" / "visionstatement.yaml")
     try:
         compile_document_to_vision_yaml(pdf_path_resolved, yaml_target)
@@ -230,6 +284,7 @@ def build_dummy_payload(
     fallback_info: Optional[Dict[str, Any]] = None
     vision_completed = False
     vision_status = "error"
+    hard_check_results: dict[str, tuple[bool, str, int | None]] = {}
 
     def _apply_semantic_fallback(reason_tag: str) -> None:
         nonlocal fallback_info, categories_for_readmes
@@ -243,6 +298,7 @@ def build_dummy_payload(
         )
 
     if enable_vision:
+        start = perf_counter()
         success, vision_meta = run_vision_with_timeout_fn(
             base_dir=base_dir,
             slug=slug,
@@ -251,10 +307,37 @@ def build_dummy_payload(
             logger=logger,
             run_vision=run_vision,
         )
+        latency_ms = int((perf_counter() - start) * 1000)
+        if deep_testing and not success:
+            reason = vision_meta or {}
+            message = str(reason.get("error") or "Vision run failed")
+            sentinel = str(reason.get("file_path") or "")
+            details = message
+            if sentinel:
+                details = f"{details} | sentinel={sentinel}"
+            err_msg = f"Vision hard check failed; verifica secrets/permessi: {details}"
+            logger.error(
+                "tools.gen_dummy_kb.vision_hardcheck.failed",
+                extra={"slug": slug, "error": message, "sentinel": sentinel or None},
+            )
+            raise HardCheckError(err_msg, _hardcheck_health("vision_hardcheck", err_msg, latency_ms))
         if success:
             vision_completed = True
             vision_status = "ok"
             categories_for_readmes = load_mapping_categories_fn(base_dir)
+            if deep_testing:
+                if not categories_for_readmes:
+                    err_msg = "Vision hard check fallito: nessuna categoria disponibile dopo Vision"
+                    logger.error(
+                        "tools.gen_dummy_kb.vision_hardcheck.failed",
+                        extra={"slug": slug, "error": err_msg},
+                    )
+                    raise HardCheckError(err_msg, _hardcheck_health("vision_hardcheck", err_msg, latency_ms))
+                hard_check_results["vision_hardcheck"] = (
+                    True,
+                    "Vision hard check succeeded",
+                    latency_ms,
+                )
         else:
             reason = vision_meta or {}
             message = str(reason.get("error") or "")
@@ -322,6 +405,7 @@ def build_dummy_payload(
         validate_dummy_structure_fn(base_dir, logger)
 
     if enable_drive:
+        drive_start = perf_counter()
         try:
             drive_min_info = call_drive_min_fn(
                 slug,
@@ -344,10 +428,26 @@ def build_dummy_payload(
                 emit_readmes_for_raw,
             )
         except Exception as exc:
+            latency_ms = int((perf_counter() - drive_start) * 1000)
+            if deep_testing:
+                msg = f"Drive hard check fallito; verifica secrets/permessi/drive ({exc})"
+                logger.error(
+                    "tools.gen_dummy_kb.drive_hardcheck.failed",
+                    extra={"slug": slug, "error": str(exc)},
+                )
+                raise HardCheckError(msg, _hardcheck_health("drive_hardcheck", msg, latency_ms)) from exc
             logger.warning(
                 "tools.gen_dummy_kb.drive_provisioning_failed",
                 extra={"error": str(exc), "slug": slug},
             )
+        else:
+            latency_ms = int((perf_counter() - drive_start) * 1000)
+            if deep_testing:
+                hard_check_results["drive_hardcheck"] = (
+                    True,
+                    "Drive hard check succeeded",
+                    latency_ms,
+                )
 
     fallback_used = bool(fallback_info)
 
@@ -372,6 +472,30 @@ def build_dummy_payload(
         "summary_exists": (base_dir / "book" / "SUMMARY.md").exists(),
         "readmes_count": len(local_readmes),
     }
+    health.setdefault("status", "ok")
+    health.setdefault("errors", [])
+    health.setdefault("checks", [])
+    health.setdefault("external_checks", {})
+    if deep_testing:
+        try:
+            golden_path = ensure_golden_dummy_pdf(base_dir)
+            with open_for_read_bytes_selfguard(golden_path) as handle:
+                golden_bytes = handle.read()
+            health.setdefault("checks", []).append("golden_pdf")
+            health["golden_pdf"] = {
+                "path": str(golden_path),
+                "sha256": hashlib.sha256(golden_bytes).hexdigest(),
+                "bytes": len(golden_bytes),
+            }
+        except Exception as exc:
+            health["status"] = "failed"
+            health.setdefault("errors", []).append(f"Golden PDF generation failed: {exc}")
+            logger.error("tools.gen_dummy_kb.golden_pdf.failed", extra={"slug": slug, "error": str(exc)})
+            raise RuntimeError(f"Golden PDF generation failed: {exc}") from exc
+    health["mode"] = "deep" if deep_testing else "smoke"
+    if deep_testing and hard_check_results:
+        for name, (ok, details, latency) in hard_check_results.items():
+            _record_external_check(health, name, ok, details, latency)
 
     return {
         "slug": slug,

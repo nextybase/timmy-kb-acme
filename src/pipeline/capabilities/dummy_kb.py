@@ -43,6 +43,10 @@ class DriveBindings:
     call_drive_min: Callable[..., Any]
 
 
+_orchestrator_module: ModuleType | None = None
+HardCheckError: type[Exception] | None = None
+
+
 def load_dummy_helpers(prefixes: Sequence[str] | None = None) -> DummyHelpers:
     if prefixes is None:
         prefixes = DEFAULT_DUMMY_PREFIXES
@@ -52,6 +56,9 @@ def load_dummy_helpers(prefixes: Sequence[str] | None = None) -> DummyHelpers:
     semantic = _import_dummy_module("semantic", prefixes)
     vision = _import_dummy_module("vision", prefixes)
 
+    global _orchestrator_module, HardCheckError
+    _orchestrator_module = orchestrator
+    HardCheckError = getattr(orchestrator, "HardCheckError", None)
     return DummyHelpers(
         client_base=getattr(bootstrap, "client_base"),
         pdf_path=getattr(bootstrap, "pdf_path"),

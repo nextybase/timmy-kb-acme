@@ -31,6 +31,67 @@ def pdf_path(slug: str, repo_root: Path, get_env_var: Callable[[str, str | None]
     return client_base(slug, repo_root, get_env_var) / "config" / "VisionStatement.pdf"
 
 
+GOLDEN_FILENAME = "golden_dummy.pdf"
+
+
+def _build_golden_dummy_bytes() -> bytes:
+    stream_text = b"BT /F1 12 Tf 72 120 Td (Dummy Golden PDF) Tj ET"
+    stream_length = len(stream_text)
+    objects: list[tuple[int, bytes]] = [
+        (1, b"<< /Type /Catalog /Pages 2 0 R >>"),
+        (2, b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+        (
+            3,
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R "
+            b"/Resources << /Font << /F1 5 0 R >> >> >>",
+        ),
+        (
+            4,
+            b"<< /Length %d >>\nstream\n" % stream_length + stream_text + b"\nendstream",
+        ),
+        (5, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+    ]
+    buf = bytearray()
+    buf.extend(b"%PDF-1.4\n")
+    offsets: dict[int, int] = {}
+    for number, body in objects:
+        offsets[number] = len(buf)
+        buf.extend(f"{number} 0 obj\n".encode("ascii"))
+        buf.extend(body)
+        buf.extend(b"\nendobj\n")
+    xref_offset = len(buf)
+    buf.extend(b"xref\n")
+    buf.extend(f"0 {len(objects) + 1}\n".encode("ascii"))
+    buf.extend(b"0000000000 65535 f \n")
+    for number in range(1, len(objects) + 1):
+        buf.extend(f"{offsets[number]:010d} 00000 n \n".encode("ascii"))
+    buf.extend(b"trailer\n")
+    buf.extend(f"<< /Size {len(objects) + 1} /Root 1 0 R >>\n".encode("ascii"))
+    buf.extend(b"startxref\n")
+    buf.extend(f"{xref_offset}\n".encode("ascii"))
+    buf.extend(b"%%EOF\n")
+    return bytes(buf)
+
+
+GOLDEN_DUMMY_BYTES = _build_golden_dummy_bytes()
+
+
+def ensure_golden_dummy_pdf(workspace: Path) -> Path:
+    raw_dir = workspace / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    target = raw_dir / GOLDEN_FILENAME
+    try:
+        safe_write_bytes(target, GOLDEN_DUMMY_BYTES, atomic=True)
+    except Exception:
+        if target.exists():
+            try:
+                target.unlink()
+            except Exception:
+                pass
+        raise
+    return target
+
+
 def build_generic_vision_template_pdf(load_sections: Callable[[], Iterable[dict] | None]) -> bytes:
     """
     Genera un VisionStatement.pdf generico con testo esplicativo per Vision, Mission,

@@ -180,6 +180,15 @@ def _on_dummy_kb() -> None:
             value=False,
             help="Crea semantic_mapping.yaml e cartelle_raw.yaml senza chiamare Vision",
         )
+        deep_testing = st.checkbox(
+            "Attiva testing profondo",
+            value=False,
+            help="Esegue Dummy KB con Vision/Drive reali (usa il flag --deep-testing).",
+        )
+        st.caption(
+            "Il deep testing usa Vision/Drive reali e può fallire se i secrets/permessi non sono pronti. "
+            "Verifica la pagina Secrets Healthcheck prima di attivarlo."
+        )
         cleanup = st.button("Cancella dummy (locale + Drive)", type="secondary")
         proceed = st.button("Prosegui", type="primary")
         if cleanup:
@@ -190,6 +199,8 @@ def _on_dummy_kb() -> None:
                 cmd.append("--no-drive")
             if no_vision:
                 cmd.append("--no-vision")
+            if deep_testing:
+                cmd.append("--deep-testing")
             _run_and_render(cmd)
 
     dialog_builder = getattr(st, "dialog", None)

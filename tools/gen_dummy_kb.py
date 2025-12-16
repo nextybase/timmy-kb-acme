@@ -69,6 +69,7 @@ def build_payload(
     enable_vision: bool,
     records_hint: str | None,
     logger: logging.Logger,
+    deep_testing: bool = False,
 ) -> dict[str, Any]:  # pragma: no cover - delega pura
     _sync_shim_to_impl()
     return _build_payload_impl(
@@ -78,6 +79,7 @@ def build_payload(
         enable_vision=enable_vision,
         records_hint=records_hint,
         logger=logger,
+        deep_testing=deep_testing,
     )
 
 

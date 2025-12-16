@@ -230,6 +230,7 @@ def test_main_triggers_cleanup_before_build(monkeypatch: pytest.MonkeyPatch, tmp
         enable_vision: bool,
         records_hint: str | None,
         logger: logging.Logger,
+        deep_testing: bool = False,
     ) -> dict[str, Any]:
         calls.append("build")
         return {"slug": slug, "client_name": client_name}

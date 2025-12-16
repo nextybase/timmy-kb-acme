@@ -56,7 +56,7 @@ class _DummyPayload(TypedDict):
     health: Dict[str, Any]
 
 
-from pipeline.capabilities.dummy_kb import load_dummy_drive_helpers, load_dummy_helpers
+from pipeline.capabilities import dummy_kb as dummy_kb_capabilities
 
 # ------------------------------------------------------------
 # Path bootstrap (repo root + src)
@@ -66,12 +66,14 @@ from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_s
 from pipeline.vision_template import load_vision_template_sections  # noqa: E402
 
 try:
-    _dummy_helpers = load_dummy_helpers()
+    _dummy_helpers = dummy_kb_capabilities.load_dummy_helpers()
 except ImportError as exc:
     raise SystemExit(f"Dummy KB helpers mancanti: {exc}") from exc
 
+HardCheckError = getattr(dummy_kb_capabilities, "HardCheckError", None)
+
 try:
-    _drive_helpers = load_dummy_drive_helpers()
+    _drive_helpers = dummy_kb_capabilities.load_dummy_drive_helpers()
 except ImportError as exc:
     raise SystemExit(f"Dummy KB drive helpers mancanti: {exc}") from exc
 
@@ -304,6 +306,11 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default=None,
         help="(Legacy) Numero di record finanza da generare (non più utilizzato).",
     )
+    ap.add_argument(
+        "--deep-testing",
+        action="store_true",
+        help="Attiva la modalità deep testing (modo log only).",
+    )
     return ap.parse_args(argv)
 
 
@@ -314,6 +321,7 @@ def build_payload(
     enable_drive: bool,
     enable_vision: bool,
     records_hint: Optional[str],
+    deep_testing: bool = False,
     logger: logging.Logger,
 ) -> _DummyPayload:
     return _build_dummy_payload(
@@ -322,6 +330,7 @@ def build_payload(
         enable_drive=enable_drive,
         enable_vision=enable_vision,
         records_hint=records_hint,
+        deep_testing=deep_testing,
         logger=logger,
         repo_root=REPO_ROOT,
         ensure_local_workspace_for_ui=ensure_local_workspace_for_ui,
@@ -401,8 +410,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             os.environ["CLIENTS_DB_DIR"] = str(db_dir_override)
             os.environ["CLIENTS_DB_FILE"] = str(db_file_override)
 
+        mode_label = "deep" if args.deep_testing else "smoke"
         logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
         logger.setLevel(logging.INFO)
+        logger.info("tools.gen_dummy_kb.mode", extra={"mode": mode_label})
 
         _purge_previous_state(slug, client_name, logger)
 
@@ -414,10 +425,23 @@ def main(argv: Optional[list[str]] = None) -> int:
                 enable_vision=enable_vision,
                 records_hint=records_hint,
                 logger=logger,
+                deep_testing=args.deep_testing,
             )
             emit_structure(payload)
             return 0
         except Exception as exc:
+            if HardCheckError is not None and isinstance(exc, HardCheckError):
+                logger.error(
+                    "tools.gen_dummy_kb.hardcheck.failed",
+                    extra={"slug": slug, "error": str(exc)},
+                )
+                payload = {
+                    "slug": slug,
+                    "client_name": client_name,
+                    "health": exc.health,
+                }
+                emit_structure(payload)
+                return 1
             logger.error(
                 "tools.gen_dummy_kb.run_failed",
                 extra={"slug": slug, "error": str(exc)},
