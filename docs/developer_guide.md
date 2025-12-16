@@ -356,6 +356,56 @@ logger.info("debug.raw_output", extra={"sample": text[:500]})
 - Struttura minima generata: `config/config.yaml`, `semantic/{semantic_mapping.yaml,cartelle_raw.yaml,tags.db}`, `book/{README.md,SUMMARY.md}`, almeno un PDF valido in `raw/`.
 - Rigenerazione sicura: la CLI esegue il cleanup locale prima di ogni run; per reset manuale usare `tools.clean_client_workspace.perform_cleanup` o cancellare `output/timmy-kb-<slug>`/override `--base-dir`.
 
+#### Deep testing contract (operational)
+- `smoke` è il percorso cablato descritto sopra; `deep` è la stessa pipeline con Vision e Drive attivi, senza fallback e con fresh secrets.
+- Il flag CLI `--deep-testing` (anche la checkbox "Attiva testing profondo" nella UI) imposta `health.mode="deep"` nel payload finale e attiva hard check Vision/Drive.
+- Se Vision/Drive falliscono, la run termina con `health.status="failed"`, `errors` descrive che "secrets/permessi non pronti" e viene emesso un evento `HardCheckError` visibile nella UI/dai logs.
+- In deep vengono aggiunti `health.checks`, `health.external_checks`, e la sezione `golden_pdf` (path/sha256/bytes del PDF deterministico generato). Questi campi **non** devono apparire in smoke.
+- Il messaggio vicino alla checkbox ricorda di consultare la pagina Secrets Healthcheck: una failure deep è un indicatore di permessi mancanti, non un bug della pipeline.
+
+Esempio - smoke OK:
+```json
+{
+  "mode": "smoke",
+  "status": "ok",
+  "vision_status": "ok",
+  "readmes_count": 3,
+  "errors": []
+}
+```
+
+Esempio - deep FAILED:
+```json
+{
+  "mode": "deep",
+  "status": "failed",
+  "errors": [
+    "Vision hard check failed; verifica secrets/permessi: ...",
+    "Drive hard check fallito; verifica secrets/permessi/drive (...)"
+  ],
+  "checks": [
+    "vision_hardcheck",
+    "drive_hardcheck",
+    "golden_pdf"
+  ],
+  "external_checks": {
+    "vision_hardcheck": {
+      "ok": false,
+      "details": "Vision run failed | sentinel=..."
+    },
+    "drive_hardcheck": {
+      "ok": false,
+      "details": "Drive exception: ..."
+    }
+  },
+  "golden_pdf": {
+    "path": ".../raw/golden_dummy.pdf",
+    "sha256": "abc123",
+    "bytes": 1234
+  }
+}
+```
+
 ---
 
 ## Pattern da evitare

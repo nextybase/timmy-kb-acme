@@ -85,20 +85,83 @@ La decisione si articola in sei punti:
 
 ---
 
-# 3. Motivazioni (Rationale)
+# 3. Contratto deep testing
 
-### 3.1 Integrità del sistema
+La modalità deep testing descrive lo stesso flusso controllato della Dummy KB smoke, ma con vincoli operativi più stringenti:
+
+- **Smoke** è l'esecuzione cablata: genera un workspace fittizio, valida la struttura e produce l’health report senza Vision/Drive reali quando disabilitati.
+- **Deep** è la stessa pipeline con Vision e Drive attivi, senza fallback: ogni chiamata reale viene osservata, i controlli falliscono duramente (health.status="failed") e viene chiesto all’utente di riprovare solo quando i secrets/permessi sono adeguati.
+- In deep non si ignora mai un errore Vision o Drive; una failure viene trasformata in `HardCheckError` e il payload health espone `errors`, `checks` ed `external_checks` con messaggi che collegano direttamente all’esito della Secrets Healthcheck UI.
+- Il flag CLI `--deep-testing` (e la checkbox "Attiva testing profondo") attivano questa modalità e scrivono `health.mode="deep"` nel payload finale, insieme a un’entry `golden_pdf` con path, sha256 e dimensione (solo in deep).
+
+### Schema health (deep vs smoke)
+
+| Campo | Descrizione | Presente in |
+| --- | --- | --- |
+| `mode` | `"smoke"` o `"deep"` | sempre |
+| `status` | `"ok"` o `"failed"` | sempre |
+| `errors` | liste di messaggi diagnostici | sempre |
+| `checks` | elenco di controlli eseguiti (es. `"vision_hardcheck"`) | deep |
+| `external_checks` | mappa `{check: {ok, details, latency_ms?}}` | deep |
+| `golden_pdf` | `{path, sha256, bytes}` per il PDF generato | deep |
+
+```json
+{
+  "mode": "smoke",
+  "status": "ok",
+  "vision_status": "ok",
+  "readmes_count": 3,
+  "errors": []
+}
+```
+
+```json
+{
+  "mode": "deep",
+  "status": "failed",
+  "errors": [
+    "Vision hard check failed; verifica secrets/permessi: ...",
+    "Drive hard check fallito; verifica secrets/permessi/drive (...)"
+  ],
+  "checks": [
+    "vision_hardcheck",
+    "drive_hardcheck",
+    "golden_pdf"
+  ],
+  "external_checks": {
+    "vision_hardcheck": {
+      "ok": false,
+      "details": "Vision run failed | sentinel=..."
+    },
+    "drive_hardcheck": {
+      "ok": false,
+      "details": "Drive exception: ..."
+    }
+  },
+  "golden_pdf": {
+    "path": ".../raw/golden_dummy.pdf",
+    "sha256": "abc123",
+    "bytes": 1234
+  }
+}
+```
+
+Deep testing funge da segnale diagnostico: se fallisce, il messaggio riporta che i secrets/permessi non sono pronti e rimanda alla pagina Secrets Healthcheck. La modalità è "contract only": non introduce stati side effect e può essere ripetuta all’infinito.
+
+# 4. Motivazioni (Rationale)
+
+### 4.1 Integrità del sistema
 La pipeline Timmy KB è composta da numerosi componenti interdipendenti (Vision, YAML, semantic mapping, tags DB, Drive, registry).
 La Dummy KB offre un contesto controllato per verificare l’intero flusso in pochi secondi.
 
-### 3.2 Early Detection delle regressioni
+### 4.2 Early Detection delle regressioni
 La rigenerazione della Dummy KB intercetta rapidamente:
 - errori introdotti da refactor,
 - incompatibilità di configurazione,
 - anomalie nel parsing YAML,
 - comportamenti imprevisti della Vision pipeline.
 
-### 3.3 Cliente reale ma isolato
+### 4.3 Cliente reale ma isolato
 La dummy viene registrata nel registry UI come cliente vero, rendendo testabili tutte le pagine:
 - pannelli semantici,
 - mapping,
@@ -106,11 +169,11 @@ La dummy viene registrata nel registry UI come cliente vero, rendendo testabili 
 - tagging,
 - gestione dei PDF.
 
-### 3.4 Semplicità di integrazione
+### 4.4 Semplicità di integrazione
 La UI possiede già un pulsante per generarla; l’estensione è naturale.
 Il tool è già completo: necessita solo di modularizzazione, validazione e registrazione.
 
-### 3.5 Rispetto del metodo NeXT
+### 4.5 Rispetto del metodo NeXT
 Questa scelta è coerente con:
 - modello probabilistico (controllo continuo di anomalie),
 - approccio Human-in-the-Loop (l’utente vede subito problemi),
@@ -119,7 +182,7 @@ Questa scelta è coerente con:
 
 ---
 
-# 4. Conseguenze
+# 5. Conseguenze
 
 ### Positive
 - Maggiore affidabilità e prevedibilità del sistema.
@@ -135,7 +198,7 @@ Questa scelta è coerente con:
 
 ---
 
-# 5. Stato finale
+# 6. Stato finale
 
 Il refactor viene implementato nei seguenti file:
 
@@ -164,7 +227,7 @@ Il refactor viene implementato nei seguenti file:
 
 ---
 
-# 6. Riferimenti
+# 7. Riferimenti
 
 - Strumento CLI originale:
 [`src/tools/gen_dummy_kb.py`](../../src/tools/gen_dummy_kb.py)
