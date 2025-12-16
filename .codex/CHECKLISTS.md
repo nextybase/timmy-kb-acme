@@ -8,6 +8,8 @@
 - Respect the turn-based OCP ? Codex model defined in `docs/PromptChain_spec.md`: process prompts in order, cite the specification as the SSoT, and never skip or reorder prompts.
 - Document final QA in the closing prompt: `pytest -q` plus `pre-commit run --all-files`.
 - Prompt Chain checklist: confirm Phase 0 stayed analytical/read-only with no diff/QA, each prompt 1..N produced a diff, included the Active Rules memo, executed (or justified) `pytest -q -k "not slow"`, and responded in Italian; Prompt N+1 must run `pytest -q` + `pre-commit run --all-files` and finish with an Italian one-line closing summary.
+- Evidence Gate reminder: se manca memo/diff/report/QA non si avanza con Prompt 1..N; il prossimo prompt rimane bloccato finché l’evidenza non ritorna completa.
+- Skeptic Gate reminder: dopo ogni risposta operativa Codex l’OCP valuta rischi/limiti e decide se proseguire; Codex può annotare problemi ma non autorizza il passaggio.
 - Codex answers must be in Italian for every Prompt Chain turn; documentation and templates remain English.
 
 ### Senior Reviewer Checklist
@@ -20,6 +22,7 @@
 ## Security & I/O
 - Validate every path via `ensure_within*`; avoid ad hoc writes.
 - Write atomically and define rollback procedures for failures.
+- Tooling/QA note: modifiche a file di tooling o configurazione devono essere autorizzate esplicitamente nel prompt che le richiede; la sola necessità di far passare la QA non basta per toccare `cspell.json`, `.pre-commit-config.yaml`, etc.
 
 
 ## Pre-commit Policies

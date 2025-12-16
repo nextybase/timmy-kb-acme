@@ -11,6 +11,7 @@
 - Codex executes exactly one action per prompt: apply a micro-PR, provide a diff/report, and declare QA outcomes before pausing.
 - After Codex responds, OCP evaluates and issues the next prompt (or the closing prompt): no batching, no unsolicited follow-ups, no prompt skipping.
 - Every prompt turn must reference this protocol so that all participants remain aligned and the chain remains reproducible.
+- **Evidence Gate:** Prompt 1..N non avanza finché la risposta di Codex non include il memo Active Rules, il diff unificato, il report strutturato e la QA richiesta; l’OCP interrompe la catena senza questi artefatti.
 
 ## 3. Verification & Progression Rules
 - **Evidence required per step:** each prompt response constitutes progression only when Codex delivers a unified diff, a structured report describing the change and QA results, and, when asked, the intermediate QA output (`pytest -q -k "not slow"` or other tests detailed in the prompt). Those artifacts alone prove that Codex performed the requested work.
@@ -30,6 +31,7 @@ The Prompt Chain unfolds in three clearly delimited phases that map to numbered 
 - Purpose: implement scoped changes defined by the OCP while honoring path safety, template structure, and the Active Rules memo.
 - Each prompt must emit a unified diff, a structured report, and at least `pytest -q -k "not slow"` (or a justified alternative) before moving forward.
 - Codex must apply changes only to the files declared in the prompt, document assumptions, and run targeted tests when requested.
+- Dopo ogni risposta operativa Codex, lo **Skeptic Gate** viene attivato da l’OCP: il gate è un atto di governance, non un task operativo di Codex. OCP valuta rischi e limiti, annota osservazioni e decide se emettere il prompt successivo; Codex può indicare problemi ma non può autorizzare autonomamente il passaggio di fase.
 
 ### 4.3 Prompt N+1 – Final QA and chain closure
 - Purpose: verify the entire change set with the full QA stack (`pre-commit run --all-files`, `pytest -q`), summarize the chain, and emit a one-line closing commit message in Italian (unless explicitly instructed otherwise).

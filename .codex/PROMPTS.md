@@ -5,6 +5,7 @@
 - OCP issues prompt numbers in order; after Codex replies, the cycle pauses until the next OCP instruction (no autopilot beyond the current prompt).
 - Prompts 0/0a..0x remain analytical/read-only, prompts 1..N are operational micro-PRs, and prompt N+1 finalizes the chain with full QA.
 - The Onboarding Task Codex sets this protocol before any edits can happen, so its acknowledgement is mandatory in Prompt 0.
+- **Evidence Gate reminder:** nessun prompt 1..N avanza se l’ultima risposta di Codex manca di memo Active Rules, diff, report o QA; l’OCP trattiene il prompt successivo finché l’evidenza non è completa.
 
 ## Language Policy for Codex
 - All codified documents and templates stay in English to preserve the SSoT grammar.
@@ -16,6 +17,7 @@
 - Operational prompts (1..N) exclusively produce diffs, touch files, and run intermediate QA (`pytest -q -k "not slow"`). Phase 0 prompts stay analytical and perform no edits, while prompt N+1 runs the full QA suite plus final narration.
 - Every prompt must be supplied as a single copyable block listing Role, Phase, Scope (allowed/prohibited files), Active Rules memo, Expected Outputs (diff + structured report + QA), Tests executed, Constraints, and Stop Rules to keep instructions unambiguous.
 - **If a prompt expects any file change, it must explicitly request a unified diff and a structured report in the “Expected Outputs” section.** Codex must not treat a change as “done” without those artifacts.
+- **Tooling change reminder:** modifiche a file di configurazione o tooling (es. `cspell.json`) devono essere esplicitamente autorizzate dall’OCP nel prompt corrente oppure posticipate a un prompt dedicato; non sono implicite nel solo superamento della QA.
 
 ### Template: Prompt 0
 - Purpose: define the final goal of the Prompt Chain, the high-level plan, and instruct Codex to ingest the SSoT.
@@ -32,6 +34,7 @@
 - Purpose: deliver operational micro-PRs that implement the scoped changes declared by the OCP.
 - Mandatory sections: purpose statement, phase identifier, allowed/prohibited files, Active Rules memo (with path safety, micro-PR scope, intermediate QA requirements, Italian language reminder), expected outputs (diff + structured report + intermediate QA results), dependencies, and tests executed.
 - Action: apply a diff, document the behavior change in the report, run `pytest -q -k "not slow"` (or a justified substitute) and describe the result; mention whether additional linters/types were run.
+- **Skeptic Gate reminder:** dopo la risposta operativa Codex l’OCP esercita lo Skeptic Gate, valuta rischi/limiti e decide se avanzare; Codex può menzionare problemi ma non autorizza il passaggio.
 - Language: the entire response must be in Italian.
 - Push requirement: explicitly declare in the structured block whether a push to `main` is requested by the OCP; without that statement, Codex assumes no push occurs (pushes are reserved for Prompt N+1 or when OCP explicitly authorizes them).
 - **Diff requirement:** the structured block must always request and include a unified diff for files touched in this step.
