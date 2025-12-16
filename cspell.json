@@ -112,7 +112,8 @@
     "unrequired",
     "typecheckers",
     "typechecks",
-    "mojibake"
+    "mojibake",
+    "ritararlo"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

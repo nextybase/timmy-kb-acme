@@ -11,6 +11,7 @@
 - Codex executes exactly one action per prompt: apply a micro-PR, provide a diff/report, and declare QA outcomes before pausing.
 - After Codex responds, OCP evaluates and issues the next prompt (or the closing prompt): no batching, no unsolicited follow-ups, no prompt skipping.
 - Every prompt turn must reference this protocol so that all participants remain aligned and the chain remains reproducible.
+- **Skeptic Gate (MUST):** dopo ogni output operativo di Codex (Prompt 1..N e Prompt N+1) l’OCP conduce lo Skeptic Gate come atto decisionale; la catena avanza solo con Decision=PASS, PASS WITH CONDITIONS impone vincoli, BLOCK blocca la fase successiva.
 - **Evidence Gate:** Prompt 1..N non avanza finché la risposta di Codex non include il memo Active Rules, il diff unificato, il report strutturato e la QA richiesta; l’OCP interrompe la catena senza questi artefatti.
 
 ## 3. Verification & Progression Rules
@@ -31,6 +32,7 @@ The Prompt Chain unfolds in three clearly delimited phases that map to numbered 
 - Purpose: implement scoped changes defined by the OCP while honoring path safety, template structure, and the Active Rules memo.
 - Each prompt must emit a unified diff, a structured report, and at least `pytest -q -k "not slow"` (or a justified alternative) before moving forward.
 - Codex must apply changes only to the files declared in the prompt, document assumptions, and run targeted tests when requested.
+- **Skeptic Gate template (MUST):** Evidence check (memo/diff/report/QA presenti?) [YES/NO]; Scope check (file autorizzati?) [YES/NO]; Risk check (nuovi rischi/edge cases?) [OK/NOTED/BLOCK]; Decision: PASS / PASS WITH CONDITIONS / BLOCK.
 - Dopo ogni risposta operativa Codex, lo **Skeptic Gate** viene attivato da l’OCP: il gate è un atto di governance, non un task operativo di Codex. OCP valuta rischi e limiti, annota osservazioni e decide se emettere il prompt successivo; Codex può indicare problemi ma non può autorizzare autonomamente il passaggio di fase.
 
 ### 4.3 Prompt N+1 – Final QA and chain closure
@@ -89,6 +91,7 @@ The Prompt Chain unfolds in three clearly delimited phases that map to numbered 
 - Run the static pre-check described in `.codex/PROMPTS.md` before generating a patch; failing pre-checks halt QA and require corrective action.
 - Handle retries cleanly, document them in each report, and stop to ask the OCP if the same issue persists after two autocorrections.
 - All conversational exchanges with OCP and Planner must stay Italian.
+- **Trial window:** lo Skeptic Gate è MUST per le prossime due Prompt Chain complete; dopo il secondo ciclo l’OCP guida una retrospettiva obbligatoria per decidere se mantenerlo o ritararlo.
 
 ### 9.3 Prompt format
 - Every prompt declares purpose, allowed/prohibited files, expected outputs (diff, report, QA), and explicit prohibitions as defined in `.codex/PROMPTS.md`.
