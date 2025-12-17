@@ -12,3 +12,20 @@
 ## Docs
 <!-- Elenca qui i file di documentazione aggiornati oppure scrivi `n/a` solo se non sono necessari update. -->
 Docs:
+Branch protection & required checks: vedi docs/security.md (confermare CI/Secret Scan verdi prima del merge).
+
+## QA eseguita e risultati
+- [ ] `pre-commit run --all-files`
+- [ ] `pytest -q`
+- [ ] `pytest -q -k "not slow"`
+
+## Skeptic Gate
+- Evidence (link/log/diff):
+- Scope (cosa NON è stato toccato):
+- Rischi residui:
+- Decisione: PASS / PASS WITH CONDITIONS / BLOCK
+
+## Note HiTL
+- Reviewer:
+- Domande aperte:
+- Cosa verificare prima del merge:

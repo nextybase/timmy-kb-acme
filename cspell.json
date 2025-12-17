@@ -112,7 +112,8 @@
     "typechecks",
     "mojibake",
     "ritararlo",
-    "misassignment"
+    "misassignment",
+    "mergeato"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",
