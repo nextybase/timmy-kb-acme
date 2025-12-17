@@ -20,6 +20,23 @@
 - **Skeptic Gate MUST:** l’OCP documenta subito dopo ogni risposta operativa Codex che ha condotto il gate obbligatorio (Evidence/Scope/Risk/Decision) e solo Decision=PASS abilita il prompt successivo. PASS WITH CONDITIONS impone vincoli da rispettare e BLOCK ferma la catena.
 - **Tooling change reminder:** modifiche a file di configurazione o tooling (es. `cspell.json`) devono essere esplicitamente autorizzate dall’OCP nel prompt corrente oppure posticipate a un prompt dedicato; non sono implicite nel solo superamento della QA.
 
+## Canonical Prompt Header
+- Ogni prompt deve iniziare con un blocco header canonico che precede qualsiasi contenuto operativo:
+
+```
+ROLE: Codex
+PHASE: <numero/fase>
+SCOPE: <file consentiti | file proibiti>
+ACTIVE RULES MEMO: <richiamo obbligatorio>
+EXPECTED OUTPUTS: <diff + report + QA richiesti>
+TESTS: <comandi previsti>
+CONSTRAINTS: <vincoli imposti>
+STOP RULE: <fermo dopo la risposta>
+```
+
+- Il campo `ROLE` deve esplicitamente contenere la voce `Codex`; qualunque prompt che omette tale riga o la sostituisce con `ROLE: OCP` è formalmente incompleto e deve essere corretto prima che OCP emetta il prompt successivo. Il template consente di evidenziare automaticamente, tramite regex o controllo manuale, i prompt che mancano del `ROLE` obbligatorio o che assegnano impropriamente autorità ad altri attori.
+- Questo header garantisce che Codex non si trovi a eseguire istruzioni nate per OCP: la sintassi obbligatoria dei blocchi consente allo Skeptic Gate di validare già la forma del prompt prima di valutare contenuti tecnici e rischi. Nessun prompt può avanzare senza il blocco completo e la conferma del `ROLE: Codex`.
+
 ### Template: Prompt 0
 - Purpose: define the final goal of the Prompt Chain, the high-level plan, and instruct Codex to ingest the SSoT.
 - Required actions: load `docs/coding_rule.md`, `docs/developer_guide.md`, `docs/PromptChain_spec.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, `.codex/WORKFLOWS.md`, `.codex/CHECKLISTS.md`, and `.codex/PROMPTS.md`, then confirm comprehension.

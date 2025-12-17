@@ -50,7 +50,23 @@ The Prompt Chain unfolds in three clearly delimited phases that map to numbered 
 - Operational prompts (Phase 1..N) are the only ones authorized to generate diffs, touch files, and execute the intermediate QA mentioned above; Phase 0 prompts remain analytical, and Prompt N+1 focuses on final QA plus narrative closure.
 - Every prompt must embed the Active Rules memo at the start of the response to remind all stakeholders of path safety, micro-PR scope, QA requirements, and the language policy.
 
-## 7. Protocol Violations (do not do)
+  ### 6.1 Canonical Prompt Header
+  - Il template canonico richiede che ogni prompt inizi con il blocco:
+
+```
+ROLE: Codex
+PHASE: ...
+SCOPE: ...
+ACTIVE RULES MEMO: ...
+EXPECTED OUTPUTS: ...
+TESTS: ...
+CONSTRAINTS: ...
+STOP RULE: ...
+```
+
+    La riga `ROLE: Codex` deve precedere qualunque dettaglio operativo: senza di essa l’OCP considera il prompt incompleto e lo Skeptic Gate non autorizzerà l’avanzamento. Il template blocca il passaggio quando manca il `ROLE` o viene sostituito con un valore diverso, impedendo che prompt copiati da OCP o da altre fonti assumano impropriamente il ruolo di Codex. Evidence Gate e Skeptic Gate sono incaricati di verificare che il blocco sia presente prima di giudicare contenuti, limiti e rischi.
+
+  ## 7. Protocol Violations (do not do)
 - Breaking the Planner→OCP→Codex→OCP→Planner turn order or issuing multiple actions per prompt.
 - Executing edits/QA during Phase 0 or skipping Phase N+1 altogether.
 - Responding in any language other than Italian when not explicitly allowed.

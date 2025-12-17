@@ -45,6 +45,9 @@ ai:
     engine: assistants
     model: gpt-4.1
     assistant_id_env: KGRAPH_ASSISTANT_ID
+rosetta:
+  enabled: false
+  provider: openai
 pipeline:
   retriever:
     auto_by_budget: false

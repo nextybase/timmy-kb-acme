@@ -8,31 +8,37 @@ from pathlib import Path
 from typing import Optional
 
 from pipeline.config_utils import get_client_config
-from pipeline.exceptions import ConfigError
-from pipeline.logging_utils import mask_partial, phase_scope, tail_path
-from pipeline.path_utils import iter_safe_pdfs
+from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
+from pipeline.ingest.provider import build_ingest_provider
+from pipeline.logging_utils import get_structured_logger
 from semantic.api import copy_local_pdfs_to_raw
 from semantic.types import ClientContextProtocol
 
-try:
-    from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
-except Exception:  # pragma: no cover
-    download_drive_pdfs_to_local = None
-    get_drive_service = None
+
+def _normalize_provider(cfg: dict[str, str | bool], source: str) -> str:
+    provider = cfg.get("ingest_provider")
+    if provider in {"drive", "local"}:
+        return provider
+    if source in {"drive", "local"}:
+        return source
+    skip_drive = bool(cfg.get("skip_drive"))
+    return "local" if skip_drive else "drive"
 
 
-def _require_drive_utils() -> None:
-    missing: list[str] = []
-    if not callable(get_drive_service):
-        missing.append("get_drive_service")
-    if not callable(download_drive_pdfs_to_local):
-        missing.append("download_drive_pdfs_to_local")
-    if missing:
-        raise ConfigError(
-            "Sorgente Drive selezionata ma dipendenze non installate. "
-            f"Funzioni mancanti: {', '.join(missing)}.\n"
-            "Installa gli extra: pip install .[drive]",
-        )
+def _resolve_provider(
+    context: ClientContextProtocol,
+    logger: logging.Logger,
+    *,
+    source: str,
+):
+    try:
+        cfg = get_client_config(context) or {}
+    except AttributeError:
+        cfg = {}
+    provider_key = _normalize_provider(cfg, source)
+    logger_extra = getattr(logger, "extra", None)
+    ingest_logger = get_structured_logger("tag_onboarding.ingest", **dict(logger_extra or {}))
+    return build_ingest_provider(provider_key), provider_key, ingest_logger
 
 
 def download_from_drive(
@@ -41,34 +47,13 @@ def download_from_drive(
     *,
     raw_dir: Path,
     non_interactive: bool,
-) -> None:
-    """Scarica i PDF da Drive nella cartella RAW usando le stesse guardie dell'orchestratore."""
-    cfg = get_client_config(context) or {}
-    drive_raw_folder_id = cfg.get("drive_raw_folder_id")
-    if not drive_raw_folder_id:
-        raise ConfigError("drive_raw_folder_id mancante in config.yaml.")
-
-    _require_drive_utils()
-    service = get_drive_service(context)
-
-    with phase_scope(logger, stage="drive_download", customer=context.slug) as phase:
-        download_drive_pdfs_to_local(  # type: ignore[call-arg]
-            service=service,
-            remote_root_folder_id=drive_raw_folder_id,
-            local_root_dir=raw_dir,
-            progress=not non_interactive,
-            context=context,
-            redact_logs=getattr(context, "redact_logs", False),
-        )
-        try:
-            pdfs = list(iter_safe_pdfs(raw_dir))
-            phase.set_artifacts(len(pdfs))
-        except Exception:
-            phase.set_artifacts(None)
-
-    logger.info(
-        "cli.tag_onboarding.drive_download_completed",
-        extra={"folder_id": mask_partial(drive_raw_folder_id)},
+) -> int:
+    provider, *_ = _resolve_provider(context, logger, source="drive")
+    return provider.ingest_raw(
+        context=context,
+        raw_dir=raw_dir,
+        logger=logger,
+        non_interactive=non_interactive,
     )
 
 
@@ -79,34 +64,22 @@ def copy_from_local(
     local_path: Optional[str],
     non_interactive: bool,
     context: ClientContextProtocol,
-) -> None:
-    """Copia i PDF da una sorgente locale in raw/ evitando duplicazioni."""
-    if not local_path:
-        local_path = str(raw_dir)
-        logger.info(
-            "tag_onboarding_raw.using_raw_as_source",
-            extra={"raw": str(raw_dir), "slug": context.slug},
-        )
-
-    src_dir = Path(local_path).expanduser().resolve()
-    if src_dir == raw_dir.expanduser().resolve():
-        logger.info(
-            "cli.tag_onboarding.source_matches_raw",
-            extra={"raw": str(raw_dir)},
-        )
-        return
-
-    with phase_scope(logger, stage="local_copy", customer=context.slug) as phase:
-        copied = copy_local_pdfs_to_raw(src_dir, raw_dir, logger)
-        try:
-            phase.set_artifacts(int(copied))
-        except Exception:
-            phase.set_artifacts(None)
-
-    logger.info(
-        "cli.tag_onboarding.local_copy_completed",
-        extra={"count": copied, "raw_tail": tail_path(raw_dir)},
+) -> int:
+    provider, *_ = _resolve_provider(context, logger, source="local")
+    local_dir = Path(local_path).expanduser().resolve() if local_path else None
+    return provider.ingest_raw(
+        context=context,
+        raw_dir=raw_dir,
+        logger=logger,
+        non_interactive=non_interactive,
+        local_path=local_dir,
     )
 
 
-__all__ = ["download_from_drive", "copy_from_local"]
+__all__ = [
+    "copy_local_pdfs_to_raw",
+    "download_drive_pdfs_to_local",
+    "get_drive_service",
+    "download_from_drive",
+    "copy_from_local",
+]

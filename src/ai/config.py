@@ -284,7 +284,11 @@ def _ai_section_name_from_path(path: str) -> Optional[str]:
     return None
 
 
-def _resolve_assistant_env_generic(settings: Any, path: str, default_env: str) -> str:
+def _resolve_assistant_env_name(settings: Any, path: str, default_env: str) -> str:
+    """
+    Restituisce il nome della variabile d'ambiente usata per l'assistant specificato.
+    Priorità: settings.get / ai.section.assistant_id_env / default.
+    """
     candidate = _get_from_settings(settings, path)
     if isinstance(candidate, str) and candidate.strip():
         return candidate.strip()
@@ -296,6 +300,9 @@ def _resolve_assistant_env_generic(settings: Any, path: str, default_env: str) -
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
     return default_env
+
+
+_resolve_assistant_env_generic = _resolve_assistant_env_name
 
 
 def _resolve_assistant_id(env_name: str) -> str:
@@ -333,7 +340,7 @@ def _build_assistant_config(
     default_strict_output: Optional[bool] = None,
     model_default: Optional[str] = None,
 ) -> AssistantConfig:
-    assistant_env = _resolve_assistant_env_generic(settings, assistant_env_path, default_env)
+    assistant_env = _resolve_assistant_env_name(settings, assistant_env_path, default_env)
     model = _resolve_model(settings, model_path, default=model_default)
     assistant_id = _resolve_assistant_id(assistant_env)
     use_kb = _resolve_bool(settings, use_kb_path, default_use_kb) if use_kb_path else None
@@ -354,7 +361,7 @@ def resolve_kgraph_config(settings: Any, assistant_env_override: Optional[str] =
     - fallback model-from-assistant: SÌ.
     - Usa KB: NO.
     """
-    assistant_env = assistant_env_override or _resolve_assistant_env_generic(
+    assistant_env = assistant_env_override or _resolve_assistant_env_name(
         settings, "ai.kgraph.assistant_id_env", "KGRAPH_ASSISTANT_ID"
     )
     assistant_id = _optional_env(assistant_env)
@@ -434,9 +441,7 @@ def resolve_audit_assistant_config(settings: Any) -> AssistantConfig:
     - Usa KB? NO.
     - Non introduce stato persistente né determina il contenuto.
     """
-    assistant_env = _resolve_assistant_env_generic(
-        settings, "ai.audit_assistant.assistant_id_env", "AUDIT_ASSISTANT_ID"
-    )
+    assistant_env = _resolve_assistant_env_name(settings, "ai.audit_assistant.assistant_id_env", "AUDIT_ASSISTANT_ID")
     assistant_id = _resolve_assistant_id(assistant_env)
     model = _resolve_model(settings, "ai.audit_assistant.model")
     return AssistantConfig(

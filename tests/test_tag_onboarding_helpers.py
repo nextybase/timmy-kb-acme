@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import tag_onboarding_raw as raw_ingest
+from pipeline.ingest import provider as ingest_provider
 from tag_onboarding import _should_proceed  # type: ignore
 from tag_onboarding_raw import copy_from_local, download_from_drive
 
@@ -60,6 +61,12 @@ def test_download_from_drive_invokes_download(tmp_path: Path, monkeypatch) -> No
     ctx = type("Ctx", (), {"slug": "x"})()
 
     monkeypatch.setattr(raw_ingest, "get_client_config", lambda _c: {"drive_raw_folder_id": "fid123"}, raising=True)
+    monkeypatch.setattr(
+        ingest_provider,
+        "get_client_config",
+        lambda _c: {"drive_raw_folder_id": "fid123"},
+        raising=True,
+    )
     monkeypatch.setattr(raw_ingest, "get_drive_service", lambda _c: object(), raising=True)
 
     called = {"ok": False}
@@ -72,5 +79,17 @@ def test_download_from_drive_invokes_download(tmp_path: Path, monkeypatch) -> No
         called["ok"] = True
 
     monkeypatch.setattr(raw_ingest, "download_drive_pdfs_to_local", _fake_download, raising=True)
+    monkeypatch.setattr(
+        ingest_provider,
+        "get_drive_service",
+        lambda _c: object(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        ingest_provider,
+        "download_drive_pdfs_to_local",
+        _fake_download,
+        raising=False,
+    )
     download_from_drive(ctx, _NoopLogger(), raw_dir=raw, non_interactive=True)
     assert called["ok"] is True

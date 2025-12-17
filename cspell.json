@@ -65,7 +65,6 @@
     "evagrin",
     "faÇõade",
     "facade",
-    "testabilitÇÿ",
     "testabilita",
     "triggerano",
     "stubbate",
@@ -101,7 +100,6 @@
     "clampato",
     "mennella",
     "modularizzazione",
-    "rigenerabilitÇÿ",
     "rigenerabilità",
     "rilanciabili",
     "explainability",
@@ -113,7 +111,8 @@
     "typecheckers",
     "typechecks",
     "mojibake",
-    "ritararlo"
+    "ritararlo",
+    "misassignment"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

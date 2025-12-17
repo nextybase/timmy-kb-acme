@@ -2,13 +2,15 @@
 # src/ui/pages/prototimmy_chat.py
 from __future__ import annotations
 
-from typing import Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from ai.check import run_prototimmy_dummy_check
 from ai.codex_runner import run_codex_cli
 from ai.config import resolve_ocp_executor_config, resolve_prototimmy_config
 from ai.responses import run_json_model, run_text_model
+from pipeline.logging_utils import get_structured_logger
 from pipeline.settings import Settings
+from rosetta import get_rosetta_client
 from ui.chrome import render_chrome_then_require
 from ui.utils.repo_root import get_repo_root
 from ui.utils.stubs import get_streamlit
@@ -94,6 +96,8 @@ _CODEX_HITL_KEY = "codex_hitl_required"
 _CODEX_HITL_CODE = "HITL_REQUIRED"
 _CODEX_CLI_CMD: list[str] = ["codex", "run"]
 _CODEX_CLI_TIMEOUT_S = 60
+
+ROSETTA_HOOK_LOGGER = get_structured_logger("prototimmy.rosetta_hook")
 
 
 def _load_settings() -> Settings:
@@ -258,8 +262,9 @@ def _render_codex_section() -> None:
 def _invoke_prototimmy_json(
     history: Iterable[Mapping[str, str]], last_user_input: str
 ) -> tuple[str | None, str | None]:
+    settings = _load_settings()
+    _maybe_consult_rosetta(settings, user_input=last_user_input)
     try:
-        settings = _load_settings()
         cfg = resolve_prototimmy_config(settings)
         transcript = _build_transcript(list(history)[:-1])
         user_payload = f"{transcript}\nUTENTE: {last_user_input}" if transcript else f"UTENTE: {last_user_input}"
@@ -295,6 +300,70 @@ def _invoke_prototimmy_text(prompt_text: str) -> str | None:
     except Exception as exc:
         st.error(f"ProtoTimmy non ha risposto: {exc}")
         return None
+
+
+def _maybe_consult_rosetta(settings: Settings, *, user_input: str, run_id: Optional[str] = None) -> None:
+    slug = getattr(settings, "client_name", None) or "prototimmy"
+    try:
+        client = get_rosetta_client(settings=settings, slug=slug)
+    except Exception as exc:  # pragma: no cover - best effort logging
+        _log_rosetta_attempt(slug=slug, run_id=run_id, enabled=False, reason="rosetta.load_failure")
+        _log_rosetta_error({"slug": slug, "run_id": run_id}, exc, reason="rosetta.load_failure")
+        return
+    if not client:
+        _log_rosetta_attempt(slug=slug, run_id=run_id, enabled=False, reason="rosetta.disabled")
+        return
+    try:
+        assertions = [{"source": "prototimmy_chat", "text": user_input[:200]}]
+        client.check_coherence(assertions=assertions, run_id=run_id)
+        client.explain(assertion_id="prototimmy.placeholder", run_id=run_id)
+        _log_rosetta_attempt(
+            slug=slug,
+            run_id=run_id,
+            enabled=True,
+            reason="rosetta.enabled",
+            status="consulted",
+        )
+    except Exception as exc:
+        _log_rosetta_attempt(
+            slug=slug,
+            run_id=run_id,
+            enabled=False,
+            reason="rosetta.call_failure",
+            status="failed",
+        )
+        _log_rosetta_error({"slug": slug, "run_id": run_id}, exc, reason="rosetta.call_failure")
+
+
+def _log_rosetta_error(base_extra: dict[str, Any], exc: Exception, *, reason: str) -> None:
+    error_extra = dict(base_extra)
+    error_extra["event"] = "prototimmy.rosetta_consult_error"
+    error_extra["enabled"] = False
+    error_extra["reason"] = reason
+    error_extra["error_type"] = type(exc).__name__
+    error_extra["error_message"] = str(exc)
+    ROSETTA_HOOK_LOGGER.error(error_extra["event"], extra=error_extra)
+
+
+def _log_rosetta_attempt(
+    *,
+    slug: str,
+    run_id: Optional[str],
+    enabled: bool,
+    reason: str,
+    status: Optional[str] = None,
+) -> None:
+    extra: dict[str, Any] = {
+        "event": "prototimmy.rosetta_consult_attempt",
+        "slug": slug,
+        "enabled": enabled,
+        "reason": reason,
+    }
+    if run_id:
+        extra["run_id"] = run_id
+    if status:
+        extra["status"] = status
+    ROSETTA_HOOK_LOGGER.info(extra["event"], extra=extra)
 
 
 def _render_smoke_test() -> None:

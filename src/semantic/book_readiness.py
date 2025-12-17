@@ -27,9 +27,13 @@ logger = get_structured_logger("semantic.book_readiness")
 # Proviamo a riutilizzare le costanti di progetto, se esistono.
 try:
     from semantic.constants import README_MD_NAME, SUMMARY_MD_NAME
-except Exception:  # pragma: no cover - fallback di sicurezza
+except Exception as exc:  # pragma: no cover - fallback di sicurezza
     README_MD_NAME = "README.md"
     SUMMARY_MD_NAME = "SUMMARY.md"
+    logger.warning(
+        "semantic.book_readiness.constants_fallback",
+        extra={"error": str(exc)},
+    )
 
 
 def _iter_markdown_files(book_dir: Path) -> List[Path]:

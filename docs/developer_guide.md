@@ -467,3 +467,22 @@ log.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
 ## Contributi
 - PR piccole, commit atomici, messaggi chiari (imperativo al presente).
 - Ogni modifica di comportamento va coperta da test.
+
+## Guardie operative v0.x
+
+### Drive optional / local-first ingestion
+- On Windows and in the CLI flows, source PDFs live under `output/<slug>/raw` (the standard workspace) and the ingest logic reads them through `WorkspaceLayout`/`ensure_within` to keep paths safe.
+- The configuration key `ingest_provider` (with the legacy `skip_drive` fallback) selects `drive` or `local`; no override means Drive remains the default behavior, while `ingest_provider: local` or `skip_drive: true` enable the local-first flow without touching the user experience.
+- In local-first mode just copy the PDFs under `output/<slug>/raw` or pass `--local-path` to the `tag_onboarding_raw` CLI so no Drive credentials are required.
+
+### Rosetta predisposta
+- The flag `rosetta.enabled` (default `false` in `config/config.yaml`) keeps the guard disabled; the provider stays `openai` and the implementation is the stub `OpenAIRosettaClient` used in v0.x.
+- To exercise Rosetta for internal experiments set `rosetta.enabled: true` in the client config; the hook will log `prototimmy.rosetta_consult_attempt`/`prototimmy.rosetta_consult_error` but does not alter the UX.
+- Rosetta reuses the same `run_id`/`slug` as ProtoTimmy and only logs counters such as `assertions_count`, `metadata_summary`, or `candidate_fields_count`, never raw payloads.
+
+### Logging provenance-ready
+- Structured logs always include keys like `event`, `slug`, `run_id`, `status`, `artifact_id`, `assertion_id`, `trace_id`, `step_id` (if available) and counters such as `assertions_count` or `metadata_fields_count`.
+- Missing attributes are omitted, and raw assertions/candidates are never logged; only summaries and counts are allowed.
+- Both guards share `get_structured_logger` and surface errors through events such as `prototimmy.rosetta_consult_error` or `ingest_provider.*` for easier diagnosis.
+
+_Note_: `tests/test_config_defaults.py` verifies that Rosetta stays disabled by default and that `drive` remains the implicit ingest provider when the client does not define `ingest_provider`.

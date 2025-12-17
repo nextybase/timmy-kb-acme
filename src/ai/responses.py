@@ -109,12 +109,13 @@ def run_json_model(
     messages: List[Dict[str, str]],
     response_format: Optional[Dict[str, Any]] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    client: Any = None,
 ) -> ResponseJson:
     """
     Esegue una chiamata Responses con output JSON e valida il parsing.
     `messages` segue il formato chat role/content e viene convertito in input_text.
     """
-    client = make_openai_client()
+    client = client or make_openai_client()
     input_payload = _to_input_blocks(messages)
     rf_payload = response_format or {"type": "json_object"}
     normalized_metadata = _normalize_metadata(metadata)
@@ -173,34 +174,35 @@ def run_json_model(
 
     text = _extract_output_text(resp)
 
-    def _default_parse(payload: str) -> Dict[str, Any]:
-        def _strip_fences(candidate: str) -> str:
-            stripped = candidate.strip()
-            if stripped.startswith("```") and stripped.count("```") >= 2:
-                parts = stripped.split("```")
-                stripped = parts[1] if len(parts) > 1 else stripped
-            if stripped.lower().startswith("json"):
-                stripped = stripped[4:].lstrip()
-            return stripped.strip()
-
-        try:
-            return json.loads(payload)
-        except json.JSONDecodeError:
-            if "```" in payload:
-                for chunk in payload.split("```"):
-                    chunk = _strip_fences(chunk)
-                    if not chunk:
-                        continue
-                    try:
-                        return json.loads(chunk)
-                    except Exception:
-                        continue
-            raise
-
     try:
-        data = _default_parse(text)
+        data = _parse_json_payload(text)
     except Exception as exc:
         LOGGER.error("ai.responses.invalid_json", extra={"error": str(exc), "sample": text[:500]})
         raise ConfigError(f"Risposta modello non JSON valido: {exc}") from exc
 
     return ResponseJson(model=model, data=data, raw_text=text, raw=resp)
+
+
+def _parse_json_payload(payload: str) -> Dict[str, Any]:
+    def _strip_fences(candidate: str) -> str:
+        stripped = candidate.strip()
+        if stripped.startswith("```") and stripped.count("```") >= 2:
+            parts = stripped.split("```")
+            stripped = parts[1] if len(parts) > 1 else stripped
+        if stripped.lower().startswith("json"):
+            stripped = stripped[4:].lstrip()
+        return stripped.strip()
+
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        if "```" in payload:
+            for chunk in payload.split("```"):
+                chunk = _strip_fences(chunk)
+                if not chunk:
+                    continue
+                try:
+                    return json.loads(chunk)
+                except Exception:
+                    continue
+        raise

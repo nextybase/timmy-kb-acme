@@ -23,6 +23,7 @@ L’idea di base:
 3. **Prompt operativi (3..N) – Phase 1..N**
    - Ogni prompt ha uno scope ristretto: una modifica singola, un refactor piccolo, un fix mirato.
    - I prompt operativi iniziano con il memo Active Rules (path safety, micro-PR, zero side effects, QA intermedia `pytest -q -k "not slow"`, lingua italiana) definito in `.codex/PROMPTS.md`.
+   - Prima di qualsiasi altra sezione, ogni prompt — anche quelli di Phase 0 o di finalizzazione — deve presentare il blocco canonico (`ROLE: Codex`, `PHASE`, `SCOPE`, `ACTIVE RULES MEMO`, `EXPECTED OUTPUTS`, `TESTS`, `CONSTRAINTS`, `STOP RULE`): il `ROLE` deve essere il primo elemento e indicare espressamente `Codex`, così da evitare confusione di ruolo.
    - In ciascuno step Codex prepara la patch, applica il pre-check statico (no I/O raw/import privati/path hardcoded/patch non atomiche), esegue QA intermedia, e fornisce diff/report/risultato in italiano.
 
 4. **Prompt finale di QA (Prompt N+1)**
