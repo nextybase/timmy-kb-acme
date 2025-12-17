@@ -8,8 +8,9 @@ from typing import Any, List, Optional
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
 
-from .config import resolve_ocp_executor_config, resolve_planner_config, resolve_prototimmy_config
+from .assistant_registry import resolve_ocp_executor_config, resolve_planner_config, resolve_prototimmy_config
 from .responses import run_text_model
+from .types import AssistantConfig
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,28 @@ def _ocp_prompt(planner_text: str) -> str:
     )
 
 
+def _build_prototimmy_invocation(
+    cfg: AssistantConfig,
+    *,
+    component: str,
+    operation: str,
+    step: str | None = None,
+    request_tag: str | None = None,
+) -> dict[str, Any]:
+    invocation: dict[str, Any] = {
+        "component": component,
+        "operation": operation,
+        "assistant_id": cfg.assistant_id,
+        "strict_output": cfg.strict_output,
+        "use_kb": cfg.use_kb,
+    }
+    if step:
+        invocation["step"] = step
+    if request_tag:
+        invocation["request_tag"] = request_tag
+    return invocation
+
+
 def run_prototimmy_ping(*, base_dir: Optional[str] = None) -> ProtoTimmyStepResult:
     settings = _load_settings(base_dir)
     cfg = resolve_prototimmy_config(settings)
@@ -70,6 +93,12 @@ def run_prototimmy_ping(*, base_dir: Optional[str] = None) -> ProtoTimmyStepResu
     resp = run_text_model(
         model=cfg.model,
         messages=[{"role": "user", "content": prompt}],
+        invocation=_build_prototimmy_invocation(
+            cfg,
+            component="prototimmy",
+            operation="prototimmy.ping",
+            request_tag="prototimmy_ping",
+        ),
     )
     text = resp.text.strip()
     if text.lower() != "pong":
@@ -94,6 +123,13 @@ def run_prototimmy_chain(
         proto_resp = run_text_model(
             model=proto_cfg.model,
             messages=[{"role": "user", "content": proto_prompt}],
+            invocation=_build_prototimmy_invocation(
+                proto_cfg,
+                component="prototimmy",
+                operation="prototimmy.chain.prototimmy",
+                step="prototimmy",
+                request_tag="prototimmy_chain_proto",
+            ),
         )
         proto_out = proto_resp.text.strip()
         steps.append(
@@ -112,6 +148,13 @@ def run_prototimmy_chain(
         planner_resp = run_text_model(
             model=planner_cfg.model,
             messages=[{"role": "user", "content": planner_prompt}],
+            invocation=_build_prototimmy_invocation(
+                planner_cfg,
+                component="prototimmy",
+                operation="prototimmy.chain.planner",
+                step="planner",
+                request_tag="prototimmy_chain_planner",
+            ),
         )
         planner_out = planner_resp.text.strip()
         steps.append(
@@ -130,6 +173,13 @@ def run_prototimmy_chain(
         ocp_resp = run_text_model(
             model=ocp_cfg.model,
             messages=[{"role": "user", "content": ocp_prompt}],
+            invocation=_build_prototimmy_invocation(
+                ocp_cfg,
+                component="prototimmy",
+                operation="prototimmy.chain.ocp_executor",
+                step="ocp_executor",
+                request_tag="prototimmy_chain_ocp",
+            ),
         )
         ocp_out = ocp_resp.text.strip()
         steps.append(

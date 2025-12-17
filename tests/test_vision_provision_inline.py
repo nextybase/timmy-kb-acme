@@ -12,6 +12,9 @@ yaml = pytest.importorskip("yaml")
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF")
 
 import semantic.vision_provision as S
+from ai import resolve_vision_config
+from ai.config import resolve_vision_retention_days
+from ai.types import AssistantConfig
 from pipeline.exceptions import ConfigError
 
 
@@ -46,6 +49,14 @@ class _NoopLogger:
     def warning(self, *a, **k): ...
     def error(self, *a, **k): ...
     def exception(self, *a, **k): ...
+
+
+def _vision_config_for(ctx: DummyCtx) -> AssistantConfig:
+    return resolve_vision_config(ctx, override_model="test-model")
+
+
+def _vision_retention_for(ctx: DummyCtx) -> int:
+    return resolve_vision_retention_days(ctx)
 
 
 # ---- Fixtures --------------------------------------------------------------
@@ -210,7 +221,16 @@ def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
 
     ctx = DummyCtx(base_dir=tmp_workspace)
     pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
-    result = S.provision_from_vision(ctx, _NoopLogger(), slug="dummy", pdf_path=pdf_path, model="test-model")
+    config = _vision_config_for(ctx)
+    retention_days = _vision_retention_for(ctx)
+    result = S.provision_from_vision_with_config(
+        ctx=ctx,
+        logger=_NoopLogger(),
+        slug="dummy",
+        pdf_path=pdf_path,
+        config=config,
+        retention_days=retention_days,
+    )
 
     # File creati
     mapping = Path(result["mapping"])
@@ -238,13 +258,16 @@ def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
     monkeypatch.setenv("ASSISTANT_ID", "asst_dummy")
 
     ctx = DummyCtx(base_dir=tmp_workspace)
+    config = _vision_config_for(ctx)
+    retention_days = _vision_retention_for(ctx)
     with pytest.raises(ConfigError):
-        S.provision_from_vision(
-            ctx,
-            _NoopLogger(),
+        S.provision_from_vision_with_config(
+            ctx=ctx,
+            logger=_NoopLogger(),
             slug="dummy",
             pdf_path=tmp_workspace / "config" / "VisionStatement.pdf",
-            model="test-model",
+            config=config,
+            retention_days=retention_days,
         )
 
 
@@ -287,13 +310,16 @@ def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: mismatched)
     monkeypatch.setenv("ASSISTANT_ID", "asst_dummy")
     ctx = DummyCtx(base_dir=tmp_workspace)
+    config = _vision_config_for(ctx)
+    retention_days = _vision_retention_for(ctx)
     with pytest.raises(ConfigError):
-        S.provision_from_vision(
-            ctx,
-            _NoopLogger(),
+        S.provision_from_vision_with_config(
+            ctx=ctx,
+            logger=_NoopLogger(),
             slug="dummy",
             pdf_path=tmp_workspace / "config" / "VisionStatement.pdf",
-            model="test-model",
+            config=config,
+            retention_days=retention_days,
         )
 
 
@@ -336,11 +362,14 @@ def test_missing_system_folders_raises(monkeypatch, tmp_workspace: Path):
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: out)
     monkeypatch.setenv("ASSISTANT_ID", "asst_dummy")
     ctx = DummyCtx(base_dir=tmp_workspace)
+    config = _vision_config_for(ctx)
+    retention_days = _vision_retention_for(ctx)
     with pytest.raises((ConfigError, ValueError)):
-        S.provision_from_vision(
-            ctx,
-            _NoopLogger(),
+        S.provision_from_vision_with_config(
+            ctx=ctx,
+            logger=_NoopLogger(),
             slug="dummy",
             pdf_path=tmp_workspace / "config" / "VisionStatement.pdf",
-            model="test-model",
+            config=config,
+            retention_days=retention_days,
         )

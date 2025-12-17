@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from ai.types import AssistantConfig
 from pipeline.exceptions import ConfigError
+from semantic.vision_provision import provision_from_vision_with_config
 
 
 class _NoopLogger:
@@ -31,6 +33,16 @@ def _make_symlink(src: Path, dst: Path) -> None:
         pytest.skip(f"symlink not supported on this platform: {e}")
 
 
+def _dummy_config() -> AssistantConfig:
+    return AssistantConfig(
+        model="test-model",
+        assistant_id="asst",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
+
+
 def test_pdf_path_outside_base_dir_is_rejected_with_slug_and_file(tmp_path: Path):
     base = tmp_path / "kb"
     (base / "config").mkdir(parents=True, exist_ok=True)
@@ -39,11 +51,16 @@ def test_pdf_path_outside_base_dir_is_rejected_with_slug_and_file(tmp_path: Path
     outside_pdf = tmp_path / "outside.pdf"
     outside_pdf.write_bytes(b"%PDF-1.4\n%\n")
 
-    from semantic.vision_provision import provision_from_vision as prov
-
     ctx = _Ctx(base)
     with pytest.raises(ConfigError) as ei:
-        prov(ctx, _NoopLogger(), slug="dummy", pdf_path=outside_pdf, model="test-model")
+        provision_from_vision_with_config(
+            ctx,
+            _NoopLogger(),
+            slug="dummy",
+            pdf_path=outside_pdf,
+            config=_dummy_config(),
+            retention_days=0,
+        )
     err = ei.value
     # Deve includere slug e file_path
     assert getattr(err, "slug", None) == "dummy"
@@ -62,11 +79,16 @@ def test_symlink_traversal_is_rejected(tmp_path: Path):
     link = cfg_dir / "VisionStatement-link.pdf"
     _make_symlink(outside_pdf, link)
 
-    from semantic.vision_provision import provision_from_vision as prov
-
     ctx = _Ctx(base)
     with pytest.raises(ConfigError) as ei:
-        prov(ctx, _NoopLogger(), slug="dummy", pdf_path=link)
+        provision_from_vision_with_config(
+            ctx,
+            _NoopLogger(),
+            slug="dummy",
+            pdf_path=link,
+            config=_dummy_config(),
+            retention_days=0,
+        )
     err = ei.value
     assert getattr(err, "slug", None) == "dummy"
     # Il file_path dell'errore riporta il candidato (il symlink), non il target risolto

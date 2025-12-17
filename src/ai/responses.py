@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
@@ -11,6 +11,50 @@ from .client_factory import make_openai_client
 from .types import ResponseJson, ResponseText
 
 LOGGER = get_structured_logger("ai.responses")
+
+_INVOCATION_KEYS: Sequence[str] = (
+    "component",
+    "operation",
+    "step",
+    "assistant_id",
+    "request_tag",
+    "strict_output",
+    "use_kb",
+    "retention_days",
+    "phase",
+    "trace_id",
+)
+
+
+def _build_invocation_extra(
+    *,
+    invocation: Mapping[str, Any] | None,
+    model: str,
+    messages: int,
+    response_format: Optional[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    extra: dict[str, Any] = {
+        "event": "ai.invocation",
+        "model": model,
+        "messages": messages,
+        "provider": "openai.responses",
+    }
+    if response_format:
+        extra["response_format_type"] = response_format.get("type")
+        schema_payload = response_format.get("json_schema")
+        if isinstance(schema_payload, Mapping):
+            name = schema_payload.get("name")
+            if isinstance(name, str):
+                extra["response_format_schema"] = name
+            schema = schema_payload.get("schema")
+            if isinstance(schema, Mapping):
+                extra["response_format_keys"] = sorted(schema.keys())
+    if invocation:
+        for key in _INVOCATION_KEYS:
+            value = invocation.get(key)
+            if value is not None:
+                extra[key] = value
+    return extra
 
 
 def _extract_output_text(response: Any) -> str:
@@ -72,6 +116,7 @@ def run_text_model(
     *,
     metadata: Optional[Mapping[str, Any]] = None,
     client: Any = None,
+    invocation: Optional[Mapping[str, Any]] = None,
 ) -> ResponseText:
     """
     Esegue una chiamata Responses testuale (senza response_format).
@@ -84,6 +129,15 @@ def run_text_model(
     LOGGER.info(
         "ai.responses.text",
         extra={"model": model, "metadata": _mask_metadata(metadata), "messages": len(msg_list)},
+    )
+    LOGGER.info(
+        "ai.invocation",
+        extra=_build_invocation_extra(
+            invocation=invocation,
+            model=model,
+            messages=len(msg_list),
+            response_format=None,
+        ),
     )
 
     try:
@@ -110,6 +164,7 @@ def run_json_model(
     response_format: Optional[Dict[str, Any]] = None,
     metadata: Optional[Dict[str, Any]] = None,
     client: Any = None,
+    invocation: Optional[Mapping[str, Any]] = None,
 ) -> ResponseJson:
     """
     Esegue una chiamata Responses con output JSON e valida il parsing.
@@ -128,6 +183,15 @@ def run_json_model(
             "messages": len(messages),
             "response_format_keys": sorted(rf_payload.keys()),
         },
+    )
+    LOGGER.info(
+        "ai.invocation",
+        extra=_build_invocation_extra(
+            invocation=invocation,
+            model=model,
+            messages=len(messages),
+            response_format=rf_payload,
+        ),
     )
 
     try:

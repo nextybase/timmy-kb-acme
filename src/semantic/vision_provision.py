@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
 import yaml
 
-from ai import resolve_vision_config, run_json_model
+from ai import AssistantConfig, run_json_model
 from pipeline import ontology
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
@@ -24,7 +24,6 @@ from pipeline.file_utils import safe_append_text, safe_write_text
 from pipeline.import_utils import import_from_candidates
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from pipeline.settings import Settings
 from pipeline.vision_template import load_vision_template_sections
 from semantic.pdf_utils import PdfExtractError, extract_text_from_pdf
 from semantic.validation import validate_context_slug
@@ -169,121 +168,6 @@ def _validate_against_template(found: Mapping[str, str]) -> None:
             )
 
 
-# Giorni di retention per snapshot/log (solo pulizia best-effort)
-_SNAPSHOT_RETENTION_DAYS_DEFAULT = 30
-
-
-def _extract_context_settings(ctx: Any) -> tuple[Optional[Settings], Dict[str, Any]]:
-    raw = getattr(ctx, "settings", None)
-    if isinstance(raw, Settings):
-        try:
-            return raw, raw.as_dict()
-        except Exception:
-            return raw, {}
-    if isinstance(raw, Mapping):
-        try:
-            return None, dict(raw)
-        except Exception:
-            return None, {}
-    as_dict = getattr(raw, "as_dict", None)
-    if callable(as_dict):
-        try:
-            data = as_dict()
-            if isinstance(data, Mapping):
-                return None, dict(data)
-        except Exception:
-            pass
-    return None, {}
-
-
-def _resolve_assistant_env(ctx: Any) -> str:
-    settings_obj, settings_payload = _extract_context_settings(ctx)
-    default_env = "OBNEXT_ASSISTANT_ID"
-    if isinstance(settings_obj, Settings):
-        candidate = settings_obj.vision_assistant_env
-        return candidate.strip() if isinstance(candidate, str) and candidate.strip() else default_env
-    vision_cfg = settings_payload.get("vision")
-    if isinstance(vision_cfg, Mapping):
-        candidate = str(vision_cfg.get("assistant_id_env") or "").strip()
-        if candidate:
-            return str(candidate)
-    return default_env
-
-
-def _resolve_model_from_settings(ctx: Any) -> str:
-    settings_obj, settings_payload = _extract_context_settings(ctx)
-    if isinstance(settings_obj, Settings):
-        try:
-            candidate = settings_obj.vision_model
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-        except Exception:
-            pass
-    vision_cfg = settings_payload.get("vision")
-    if isinstance(vision_cfg, Mapping):
-        candidate = vision_cfg.get("model")
-        if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
-    candidate = settings_payload.get("vision_model")
-    if isinstance(candidate, str) and candidate.strip():
-        return candidate.strip()
-    return ""
-
-
-def _resolve_model_from_assistant(client: Any, assistant_id: str) -> str:
-    assistants = getattr(client, "assistants", None)
-    if assistants is None:
-        beta = getattr(client, "beta", None)
-        assistants = getattr(beta, "assistants", None)
-    if not assistants:
-        return ""
-    try:
-        assistant = assistants.retrieve(assistant_id)
-    except Exception as exc:  # pragma: no cover - retriever opzionale
-        LOGGER.warning(_evt("assistant_model.error"), extra={"assistant_id": assistant_id, "error": str(exc)})
-        return ""
-    model = getattr(assistant, "model", None)
-    return model.strip() if isinstance(model, str) else ""
-
-
-def _resolve_snapshot_retention_days(ctx: Any) -> int:
-    settings_obj, settings_payload = _extract_context_settings(ctx)
-    slug = getattr(ctx, "slug", None)
-    fallback = _SNAPSHOT_RETENTION_DAYS_DEFAULT
-
-    def _warn_and_default(reason: str, value: Any) -> int:
-        try:
-            LOGGER.warning(
-                _evt("retention.warning"),
-                extra={"slug": slug, "reason": reason, "value": value},
-            )
-        except Exception:
-            pass
-        return fallback
-
-    value: Optional[int] = None
-    if isinstance(settings_obj, Settings):
-        try:
-            value = int(settings_obj.vision_snapshot_retention_days)
-        except (TypeError, ValueError):
-            return _warn_and_default("invalid_type", getattr(settings_obj, "vision_snapshot_retention_days", None))
-    else:
-        vision_cfg = settings_payload.get("vision")
-        if isinstance(vision_cfg, Mapping):
-            raw_value = vision_cfg.get("snapshot_retention_days")
-            if raw_value is not None:
-                try:
-                    value = int(raw_value)
-                except (TypeError, ValueError):
-                    return _warn_and_default("invalid_type", raw_value)
-
-    if value is None:
-        return fallback
-    if value <= 0:
-        return _warn_and_default("non_positive", value)
-    return value
-
-
 def _optional_env(name: str) -> Optional[str]:
     try:
         value = get_env_var(name)
@@ -294,58 +178,13 @@ def _optional_env(name: str) -> Optional[str]:
     return cast(Optional[str], value)
 
 
-def _resolve_vision_use_kb(ctx: Any) -> bool:
+def _coerce_flag(value: Optional[bool], default: bool) -> bool:
     """
-    Risolve il flag use_kb con precedenza a ENV, poi Settings, poi payload dict.
-    Default finale: True (allineato allo health-check).
+    Coerces an optional boolean flag with a guaranteed default.
     """
-    env_value = _optional_env("VISION_USE_KB")
-    if env_value is not None:
-        normalized = env_value.strip().lower()
-        return normalized not in {"0", "false", "no", "off"}
-
-    settings_obj, settings_payload = _extract_context_settings(ctx)
-    if isinstance(settings_obj, Settings):
-        try:
-            return bool(settings_obj.vision_settings.use_kb)
-        except Exception:
-            pass
-
-    vision_cfg = settings_payload.get("vision")
-    if isinstance(vision_cfg, Mapping):
-        raw = vision_cfg.get("use_kb")
-        if isinstance(raw, bool):
-            return raw
-
-    return True
-
-
-def _resolve_vision_strict_output(ctx: Any) -> bool:
-    """
-    Risolve il flag strict_output: Settings -> payload dict -> default True.
-    """
-    settings_obj, settings_payload = _extract_context_settings(ctx)
-    if isinstance(settings_obj, Settings):
-        try:
-            return bool(settings_obj.vision_settings.strict_output)
-        except Exception:
-            pass
-
-    vision_cfg = settings_payload.get("vision")
-    if isinstance(vision_cfg, Mapping):
-        raw = vision_cfg.get("strict_output")
-        if isinstance(raw, bool):
-            return raw
-
-    base_dir = getattr(ctx, "base_dir", None)
-    if base_dir:
-        try:
-            fallback_settings = Settings.load(Path(base_dir))
-            return bool(fallback_settings.vision_settings.strict_output)
-        except Exception:
-            pass
-
-    return True
+    if value is None:
+        return default
+    return bool(value)
 
 
 # =========================
@@ -601,6 +440,7 @@ class _VisionPrepared:
     strict_output: bool
     client: Any
     paths: _Paths
+    retention_days: int
 
 
 def _resolve_paths(ctx_base_dir: str) -> _Paths:
@@ -708,6 +548,8 @@ def _call_assistant_json(
     strict_output: bool = True,
     run_instructions: Optional[str] = None,
     use_kb: bool = True,
+    slug: Optional[str] = None,
+    retention_days: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Instrada l'esecuzione Vision verso Responses."""
     use_structured = _determine_structured_output(client, assistant_id, strict_output)
@@ -725,6 +567,18 @@ def _call_assistant_json(
             },
         )
 
+    invocation: dict[str, Any] = {
+        "component": "vision",
+        "operation": "vision.provision",
+        "assistant_id": assistant_id,
+        "strict_output": strict_output,
+        "use_kb": use_kb,
+    }
+    if retention_days is not None:
+        invocation["retention_days"] = retention_days
+    if slug:
+        invocation["request_tag"] = slug
+
     return _call_responses_json(
         client=client,
         assistant_id=assistant_id,
@@ -734,6 +588,7 @@ def _call_assistant_json(
         use_kb=use_kb,
         use_structured=use_structured,
         response_format=response_format,
+        invocation=invocation,
     )
 
 
@@ -795,18 +650,7 @@ def _lint_vision_payload(data: Dict[str, Any]) -> List[str]:
 # =========================
 # API principale
 # =========================
-def prepare_assistant_input(
-    ctx: Any,
-    slug: str,
-    pdf_path: Path,
-    model: str,
-    logger: "logging.Logger",
-) -> str:
-    """
-    Costruisce il messaggio utente completo da inoltrare all'Assistant.
-    Nessun side-effect: legge lo YAML generato da Vision ingest e compone il prompt.
-    """
-    _ = model  # placeholder per eventuali personalizzazioni future
+def _ensure_vision_yaml_and_prompt_from_pdf(ctx: Any, slug: str, pdf_path: Path, logger: "logging.Logger") -> str:
     base_dir = getattr(ctx, "base_dir", None)
     if not base_dir:
         raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
@@ -840,8 +684,9 @@ def _prepare_payload(
     pdf_path: Path,
     *,
     prepared_prompt: Optional[str],
-    model: Optional[str],
+    config: AssistantConfig,
     logger: "logging.Logger",
+    retention_days: int,
 ) -> _VisionPrepared:
     base_dir = getattr(ctx, "base_dir", None)
     if not base_dir:
@@ -860,50 +705,84 @@ def _prepare_payload(
 
     client = make_openai_client()
 
-    cfg = resolve_vision_config(ctx, override_model=model)
+    use_kb_flag = _coerce_flag(config.use_kb, True)
+    strict_output_flag = _coerce_flag(config.strict_output, True)
 
     display_name = getattr(ctx, "client_name", None) or slug
     prompt_text = (
         prepared_prompt
         if prepared_prompt is not None
-        else prepare_assistant_input(ctx=ctx, slug=slug, pdf_path=Path(safe_pdf), model=model or "", logger=logger)
+        else prepare_assistant_input_with_config(
+            ctx=ctx,
+            slug=slug,
+            pdf_path=Path(safe_pdf),
+            config=config,
+            logger=logger,
+        )
     )
 
     # Le instructions includono lo schema VisionOutput completo, in modo da guidare
     # il modello verso un output JSON strutturato e validabile.
-    run_instructions = _build_run_instructions(use_kb=bool(cfg.use_kb))
+    run_instructions = _build_run_instructions(use_kb=use_kb_flag)
 
     return _VisionPrepared(
         slug=slug,
         display_name=display_name,
         safe_pdf=Path(safe_pdf),
         prompt_text=prompt_text,
-        model=cfg.model,
-        assistant_id=cfg.assistant_id,
+        model=config.model,
+        assistant_id=config.assistant_id,
         run_instructions=run_instructions,
-        use_kb=bool(cfg.use_kb),
-        strict_output=bool(cfg.strict_output),
+        use_kb=use_kb_flag,
+        strict_output=strict_output_flag,
         client=client,
         paths=paths,
+        retention_days=retention_days,
     )
 
 
-def prepare_assistant_input_from_yaml(
+def _build_prompt_from_yaml_path(
     ctx: Any,
     slug: str,
     yaml_path: Path,
-    model: str,
     logger: "logging.Logger",
 ) -> str:
-    """
-    Variante YAML-first per costruire il prompt Vision partendo da visionstatement.yaml.
-    """
-    _ = model  # placeholder per eventuali personalizzazioni future
     base_dir = getattr(ctx, "base_dir", None)
     if not base_dir:
         raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
     snapshot = _load_vision_yaml_text(Path(base_dir), yaml_path, slug=slug)
     return _build_prompt_from_snapshot(snapshot, slug=slug, ctx=ctx, logger=logger)
+
+
+def prepare_assistant_input_with_config(
+    ctx: Any,
+    slug: str,
+    pdf_path: Path,
+    *,
+    config: AssistantConfig,
+    logger: "logging.Logger",
+) -> str:
+    """
+    Variante che accetta una configurazione Assembly risolta in anticipo.
+    """
+    _ = config  # kept for symmetry; prompt generation does not depend on model.
+    return _ensure_vision_yaml_and_prompt_from_pdf(ctx=ctx, slug=slug, pdf_path=pdf_path, logger=logger)
+
+
+def prepare_assistant_input_from_yaml_with_config(
+    ctx: Any,
+    slug: str,
+    yaml_path: Path,
+    *,
+    config: AssistantConfig,
+    logger: "logging.Logger",
+) -> str:
+    """
+    Variante YAML-first che usa la configurazione risolta dal registry prima di
+    costruire il prompt.
+    """
+    _ = config
+    return _build_prompt_from_yaml_path(ctx=ctx, slug=slug, yaml_path=yaml_path, logger=logger)
 
 
 def _prepare_payload_from_yaml(
@@ -912,8 +791,9 @@ def _prepare_payload_from_yaml(
     yaml_path: Path,
     *,
     prepared_prompt: Optional[str],
-    model: Optional[str],
+    config: AssistantConfig,
     logger: "logging.Logger",
+    retention_days: int,
 ) -> _VisionPrepared:
     base_dir = getattr(ctx, "base_dir", None)
     if not base_dir:
@@ -933,7 +813,6 @@ def _prepare_payload_from_yaml(
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
     client = make_openai_client()
-    cfg = resolve_vision_config(ctx, override_model=model)
     snapshot = _load_vision_yaml_text(Path(base_dir), Path(safe_yaml), slug=slug)
 
     display_name = getattr(ctx, "client_name", None) or slug
@@ -943,20 +822,23 @@ def _prepare_payload_from_yaml(
         else _build_prompt_from_snapshot(snapshot, slug=slug, ctx=ctx, logger=logger)
     )
 
-    run_instructions = _build_run_instructions(use_kb=bool(cfg.use_kb))
+    use_kb_flag = _coerce_flag(config.use_kb, True)
+    strict_output_flag = _coerce_flag(config.strict_output, True)
+    run_instructions = _build_run_instructions(use_kb=use_kb_flag)
 
     return _VisionPrepared(
         slug=slug,
         display_name=display_name,
         safe_pdf=Path(safe_yaml),
         prompt_text=prompt_text,
-        model=cfg.model,
-        assistant_id=cfg.assistant_id,
+        model=config.model,
+        assistant_id=config.assistant_id,
         run_instructions=run_instructions,
-        use_kb=bool(cfg.use_kb),
-        strict_output=bool(cfg.strict_output),
+        use_kb=use_kb_flag,
+        strict_output=strict_output_flag,
         client=client,
         paths=paths,
+        retention_days=retention_days,
     )
 
 
@@ -969,6 +851,8 @@ def _invoke_assistant(prepared: _VisionPrepared) -> Dict[str, Any]:
         strict_output=prepared.strict_output,
         run_instructions=prepared.run_instructions,
         use_kb=prepared.use_kb,
+        slug=prepared.slug,
+        retention_days=prepared.retention_days,
     )
 
 
@@ -1046,23 +930,21 @@ def _persist_outputs(
     }
 
 
-def provision_from_vision(
+def provision_from_vision_with_config(
     ctx: Any,
     logger: "logging.Logger",
     *,
     slug: str,
     pdf_path: Path,
-    model: str,
+    config: AssistantConfig,
+    retention_days: int,
     prepared_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Onboarding Vision (flusso **semplificato e bloccante**).
-
-    Richiede il modello Vision risolto a monte dall'orchestratore.
+    Esegue Vision usando una configurazione Assistant già risolta dall'orchestratore.
     """
     ensure_dotenv_loaded()
 
-    resolved_model = (model or "").strip() or _resolve_model_from_settings(ctx)
     base_dir = getattr(ctx, "base_dir", None)
     if not base_dir:
         raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
@@ -1071,92 +953,57 @@ def provision_from_vision(
     except ConfigError as exc:
         raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
 
-    yaml_candidate = Path(safe_pdf).with_name("visionstatement.yaml")
-    if not yaml_candidate.exists():
-        if prepared_prompt is not None:
-            payload = {
-                "version": 1,
-                "metadata": {
-                    "source_pdf_path": str(safe_pdf),
-                    "source_pdf_sha256": sha256_path(safe_pdf),
-                },
-                "content": {
-                    "pages": [prepared_prompt],
-                    "full_text": prepared_prompt,
-                },
-            }
-        else:
-            placeholder = (
-                "Vision\nVision content\n"
-                "Mission\nMission content\n"
-                "Framework Etico\nFramework content\n"
-                "Goal\nGoal content\n"
-                "Contesto Operativo\nContesto content\n"
-            )
-            payload = {
-                "version": 1,
-                "metadata": {
-                    "source_pdf_path": str(safe_pdf),
-                    "source_pdf_sha256": sha256_path(safe_pdf),
-                },
-                "content": {
-                    "pages": [placeholder],
-                    "full_text": placeholder,
-                },
-            }
-        try:
-            safe_write_text(
-                yaml_candidate,
-                yaml.safe_dump(payload, allow_unicode=True, sort_keys=False),
-                encoding="utf-8",
-                atomic=True,
-            )
-        except Exception as exc:
-            raise ConfigError(
-                "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
-                slug=slug,
-                file_path=str(yaml_candidate),
-            ) from exc
-
-    return provision_from_vision_yaml(
-        ctx,
-        logger,
-        slug=slug,
-        yaml_path=yaml_candidate,
-        model=resolved_model,
-        prepared_prompt=prepared_prompt,
-    )
-
-
-def provision_from_vision_yaml(
-    ctx: Any,
-    logger: "logging.Logger",
-    *,
-    slug: str,
-    yaml_path: Path,
-    model: str,
-    prepared_prompt: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Variante YAML-first di Vision: legge visionstatement.yaml e avvia la pipeline.
-    """
-    ensure_dotenv_loaded()
-
-    resolved_model = (model or "").strip() or _resolve_model_from_settings(ctx)
-    prepared = _prepare_payload_from_yaml(
+    prepared = _prepare_payload(
         ctx,
         slug,
-        yaml_path,
+        Path(safe_pdf),
         prepared_prompt=prepared_prompt,
-        model=resolved_model,
+        config=config,
         logger=logger,
+        retention_days=retention_days,
     )
 
     response = _invoke_assistant(prepared)
     if response.get("status") == "halt":
         raise HaltError(response.get("message_ui", "Vision insufficiente"), response.get("missing", {}))
 
-    retention_days = _resolve_snapshot_retention_days(ctx)
+    return _persist_outputs(
+        prepared,
+        response,
+        logger,
+        retention_days=retention_days,
+    )
+
+
+def provision_from_vision_yaml_with_config(
+    ctx: Any,
+    logger: "logging.Logger",
+    *,
+    slug: str,
+    yaml_path: Path,
+    config: AssistantConfig,
+    retention_days: int,
+    prepared_prompt: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Variante YAML-first di Vision che prende la configurazione già risolta.
+    """
+    ensure_dotenv_loaded()
+
+    prepared = _prepare_payload_from_yaml(
+        ctx,
+        slug,
+        yaml_path,
+        prepared_prompt=prepared_prompt,
+        config=config,
+        logger=logger,
+        retention_days=retention_days,
+    )
+
+    response = _invoke_assistant(prepared)
+    if response.get("status") == "halt":
+        raise HaltError(response.get("message_ui", "Vision insufficiente"), response.get("missing", {}))
+
     return _persist_outputs(
         prepared,
         response,
@@ -1206,6 +1053,7 @@ def _call_responses_json(
     use_kb: bool,
     use_structured: bool,
     response_format: Optional[Dict[str, Any]],
+    invocation: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     LOGGER.debug(
         _evt("response_format_payload"),
@@ -1240,6 +1088,7 @@ def _call_responses_json(
             messages=messages,
             response_format=response_format,
             metadata=metadata,
+            invocation=invocation,
         )
     except ConfigError:
         raise

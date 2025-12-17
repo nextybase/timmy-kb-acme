@@ -63,10 +63,10 @@ def test_ui_gating_hash_file_and_block_then_force(
             }
         }
 
-    monkeypatch.setattr(VP, "_provision_from_vision", _stub)
+    monkeypatch.setattr(VP, "_provision_from_vision_with_config", _stub)
 
     try:
-        res = VP.provision_from_vision(
+        res = VP.provision_from_vision_with_config(
             ctx,
             logger,
             slug=slug,
@@ -86,7 +86,7 @@ def test_ui_gating_hash_file_and_block_then_force(
         assert upd is not None and getattr(upd, "file_path", "").endswith(".vision_hash")
 
         with pytest.raises(ConfigError) as ei:
-            VP.provision_from_vision(
+            VP.provision_from_vision_with_config(
                 ctx,
                 logger,
                 slug=slug,
@@ -98,7 +98,7 @@ def test_ui_gating_hash_file_and_block_then_force(
         assert getattr(err, "slug", None) == slug
         assert Path(getattr(err, "file_path", "")) == hash_path
 
-        res2 = VP.provision_from_vision(
+        res2 = VP.provision_from_vision_with_config(
             ctx,
             logger,
             slug=slug,

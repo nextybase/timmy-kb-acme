@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
 
 # Bootstrap identico alla UI: aggiungi SRC al sys.path
 ROOT = Path(__file__).resolve().parents[2]
@@ -13,10 +12,12 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from ai import resolve_vision_config
+from ai.config import resolve_vision_retention_days
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from semantic.vision_provision import HaltError, provision_from_vision
+from semantic.vision_provision import HaltError, provision_from_vision_with_config
 
 
 def main() -> int:
@@ -37,10 +38,17 @@ def main() -> int:
         log.error("vision_yaml.pdf_not_found", extra={"slug": args.slug, "file_path": str(pdf_path)})
         return 1
 
-    model = _resolve_model(ctx)
-
     try:
-        result = provision_from_vision(ctx, logger=log, slug=args.slug, pdf_path=pdf_path, model=model)
+        config = resolve_vision_config(ctx)
+        retention_days = resolve_vision_retention_days(ctx)
+        result = provision_from_vision_with_config(
+            ctx,
+            logger=log,
+            slug=args.slug,
+            pdf_path=pdf_path,
+            config=config,
+            retention_days=retention_days,
+        )
         log.info("vision_yaml_generated", extra={"slug": args.slug, **result})
         return 0
     except HaltError as err:
@@ -58,19 +66,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-def _resolve_model(ctx: Any) -> str:
-    """Determina il modello Vision da usare (default assistente)."""
-    try:
-        settings = getattr(ctx, "settings", None)
-        candidate = getattr(settings, "vision_model", None)
-        if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
-        if isinstance(settings, dict):
-            candidate = settings.get("vision_model")
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-    except Exception:
-        pass
-    return "assistants"

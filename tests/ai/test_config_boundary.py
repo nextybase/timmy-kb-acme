@@ -4,7 +4,7 @@ from typing import Callable
 
 import pytest
 
-from ai import config
+from ai import assistant_registry, config
 from pipeline.exceptions import ConfigError
 
 
@@ -35,7 +35,7 @@ def test_resolve_vision_config_prefers_env(monkeypatch):
             return "env-vision"
         raise KeyError(name)
 
-    monkeypatch.setattr("ai.config.get_env_var", fake_env)
+    monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
     result = config.resolve_vision_config(ctx)
     assert result.assistant_id == "env-vision"
     assert result.model == "config-model"
@@ -43,7 +43,7 @@ def test_resolve_vision_config_prefers_env(monkeypatch):
 
 def test_resolve_prototimmy_config_missing_assistant_id_raises(monkeypatch):
     settings = {"ai": {"prototimmy": {"model": "proto-model"}}}
-    monkeypatch.setattr("ai.config.get_env_var", _missing_env)
+    monkeypatch.setattr("pipeline.env_utils.get_env_var", _missing_env)
     with pytest.raises(ConfigError) as exc:
         config.resolve_prototimmy_config(settings)
     assert "PROTOTIMMY_ID" in str(exc.value)
@@ -64,7 +64,8 @@ def test_resolve_kgraph_config_falls_back_to_assistant_model(monkeypatch):
     class _DummyClient:
         assistants = _DummyAssistants()
 
-    monkeypatch.setattr("ai.config.get_env_var", fake_env)
+    monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
+    monkeypatch.setattr(assistant_registry, "make_openai_client", lambda: _DummyClient())
     monkeypatch.setattr("ai.config.make_openai_client", lambda: _DummyClient())
 
     result = config.resolve_kgraph_config(settings)
@@ -84,7 +85,8 @@ def test_resolve_vision_config_fallbacks_to_assistant_model(monkeypatch):
     class _DummyClient:
         assistants = _DummyAssistants()
 
-    monkeypatch.setattr("ai.config.get_env_var", fake_env)
+    monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
+    monkeypatch.setattr(assistant_registry, "make_openai_client", lambda: _DummyClient())
     monkeypatch.setattr("ai.config.make_openai_client", lambda: _DummyClient())
 
     result = config.resolve_vision_config(ctx)
@@ -148,7 +150,7 @@ def test_ai_section_assistant_env_payload_precedence():
 def test_resolvers_missing_env_raise(monkeypatch, resolver, env_name, resolver_call):
     ctx = _DummyCtx(settings={})
     fake_env = _fake_env_factory({})
-    monkeypatch.setattr("ai.config.get_env_var", fake_env)
+    monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
     if env_name in {
         "PROTOTIMMY_ID",
         "PLANNER_ASSISTANT_ID",
@@ -178,7 +180,7 @@ def test_resolvers_missing_env_raise(monkeypatch, resolver, env_name, resolver_c
 def test_non_assistant_resolvers_require_model(monkeypatch, resolver, model_path, env_name):
     settings = {"ai": {model_path.split(".")[1]: {"model": "", "assistant_id_env": env_name}}}
     fake_env = _fake_env_factory({env_name: f"{env_name.lower()}-assistant"})
-    monkeypatch.setattr("ai.config.get_env_var", fake_env)
+    monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
     with pytest.raises(ConfigError) as exc:
         resolver(settings)
     assert model_path in str(exc.value)
@@ -186,7 +188,7 @@ def test_non_assistant_resolvers_require_model(monkeypatch, resolver, model_path
 
 def test_resolve_audit_assistant_success(monkeypatch):
     fake_env = _fake_env_factory({"AUDIT_ASSISTANT_ID": "audit-assistant"})
-    monkeypatch.setattr("ai.config.get_env_var", fake_env)
+    monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
     result = config.resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": "audit-model"}}})
     assert result.assistant_id == "audit-assistant"
     assert result.model == "audit-model"
@@ -194,7 +196,7 @@ def test_resolve_audit_assistant_success(monkeypatch):
 
 
 def test_resolve_audit_assistant_missing_env(monkeypatch):
-    monkeypatch.setattr("ai.config.get_env_var", _missing_env)
+    monkeypatch.setattr("pipeline.env_utils.get_env_var", _missing_env)
     with pytest.raises(ConfigError) as exc:
         config.resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": "audit-model"}}})
     assert "AUDIT_ASSISTANT_ID" in str(exc.value)
@@ -202,7 +204,7 @@ def test_resolve_audit_assistant_missing_env(monkeypatch):
 
 def test_resolve_audit_assistant_missing_model(monkeypatch):
     fake_env = _fake_env_factory({"AUDIT_ASSISTANT_ID": "audit-assistant"})
-    monkeypatch.setattr("ai.config.get_env_var", fake_env)
+    monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
     with pytest.raises(ConfigError) as exc:
         config.resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": ""}}})
     assert "ai.audit_assistant.model" in str(exc.value)

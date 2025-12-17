@@ -9,16 +9,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol, cast
 
+from ai import AssistantConfig, resolve_vision_config
+from ai.config import resolve_vision_retention_days
 from pipeline.capabilities.vision import load_vision_bindings
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from ui.config_store import get_vision_model
 from ui.imports import get_streamlit
 
 
-class _ProvisionFromVisionFunc(Protocol):
+class _ProvisionFromVisionWithConfigFunc(Protocol):
     def __call__(
         self,
         *,
@@ -26,12 +27,13 @@ class _ProvisionFromVisionFunc(Protocol):
         logger: logging.Logger,
         slug: str,
         pdf_path: Path,
-        model: str,
+        config: AssistantConfig,
+        retention_days: int,
         prepared_prompt: Optional[str] = None,
     ) -> Dict[str, Any]: ...
 
 
-class _ProvisionFromVisionYamlFunc(Protocol):
+class _ProvisionFromVisionYamlWithConfigFunc(Protocol):
     def __call__(
         self,
         *,
@@ -39,7 +41,8 @@ class _ProvisionFromVisionYamlFunc(Protocol):
         logger: logging.Logger,
         slug: str,
         yaml_path: Path,
-        model: str,
+        config: AssistantConfig,
+        retention_days: int,
         prepared_prompt: Optional[str] = None,
     ) -> Dict[str, Any]: ...
 
@@ -55,17 +58,10 @@ class _PreparePromptYamlFunc(Protocol):
 VISION_BINDINGS = load_vision_bindings()
 
 HaltError = VISION_BINDINGS.halt_error
-_provision_from_vision = VISION_BINDINGS.provision
-_prepare_prompt = VISION_BINDINGS.prepare
-_provision_from_vision_yaml = VISION_BINDINGS.provision_yaml
-_prepare_prompt_yaml = VISION_BINDINGS.prepare_yaml
-
-
-def _resolve_model(slug: str, model: Optional[str]) -> str:
-    resolved = (model or get_vision_model()).strip()
-    if not resolved:
-        raise ConfigError("Modello Vision non configurato o vuoto.", slug=slug)
-    return resolved
+_provision_from_vision_with_config = VISION_BINDINGS.provision_with_config
+_prepare_prompt = VISION_BINDINGS.prepare_with_config
+_provision_from_vision_yaml_with_config = VISION_BINDINGS.provision_yaml_with_config
+_prepare_prompt_yaml = VISION_BINDINGS.prepare_yaml_with_config
 
 
 @dataclass(frozen=True)
@@ -195,7 +191,7 @@ def _ensure_structured_output_and_prompt(ctx: Any, *, slug: str) -> None:
 # -----------------------------
 # API principale (bridge UI)
 # -----------------------------
-def provision_from_vision(
+def provision_from_vision_with_config(
     ctx: Any,
     logger: logging.Logger,
     *,
@@ -254,27 +250,32 @@ def provision_from_vision(
             file_path=str(_hash_sentinel(base_dir)),
         )
 
-    resolved_model = _resolve_model(slug, model)
+    resolved_config = resolve_vision_config(ctx, override_model=model)
+    retention_days = resolve_vision_retention_days(ctx)
 
     # Esecuzione reale (delegata al layer semantic)
     try:
-        provision_from_semantic_module = getattr(_provision_from_vision, "__module__", "").endswith("vision_provision")
-        if _provision_from_vision_yaml is not None and provision_from_semantic_module:
-            result = _provision_from_vision_yaml(
+        provision_from_semantic_module = getattr(_provision_from_vision_with_config, "__module__", "").endswith(
+            "vision_provision"
+        )
+        if _provision_from_vision_yaml_with_config is not None and provision_from_semantic_module:
+            result = _provision_from_vision_yaml_with_config(
                 ctx=ctx,
                 logger=logger,
                 slug=slug,
                 yaml_path=yaml_path,
-                model=resolved_model,
+                config=resolved_config,
+                retention_days=retention_days,
                 prepared_prompt=prepared_prompt,
             )
         else:
-            result = _provision_from_vision(
+            result = _provision_from_vision_with_config(
                 ctx=ctx,
                 logger=logger,
                 slug=slug,
                 pdf_path=safe_pdf,
-                model=resolved_model,
+                config=resolved_config,
+                retention_days=retention_days,
                 prepared_prompt=prepared_prompt,
             )
     except HaltError:
@@ -282,7 +283,7 @@ def provision_from_vision(
         raise
 
     # Aggiorna sentinel JSON (con log utile ai test)
-    _save_hash(base_dir, digest=digest, model=resolved_model)
+    _save_hash(base_dir, digest=digest, model=resolved_config.model)
     logger.info("ui.vision.update_hash", extra={"slug": slug, "file_path": str(_hash_sentinel(base_dir))})
 
     # Ritorno coerente con la firma documentata
@@ -334,13 +335,13 @@ def run_vision(
             st.subheader("Anteprima prompt inviato all’Assistant")
             st.caption("Verifica il testo generato. Premi **Prosegui** per continuare.")
             if prepared_prompt is None:
-                preferred_model = model or get_vision_model()
+                preferred_config = resolve_vision_config(ctx, override_model=model)
                 if _prepare_prompt_yaml is not None and safe_yaml is not None:
                     prepared_prompt = _prepare_prompt_yaml(
                         ctx=ctx,
                         slug=slug,
                         yaml_path=safe_yaml,
-                        model=preferred_model,
+                        config=preferred_config,
                         logger=eff_logger,
                     )
                 else:
@@ -349,7 +350,7 @@ def run_vision(
                         slug=slug,
                         pdf_path=safe_pdf,
                         # stessa sorgente del default usato in esecuzione
-                        model=preferred_model,
+                        config=preferred_config,
                         logger=eff_logger,
                     )
             st.text_area("Prompt", value=prepared_prompt, height=420, disabled=True)
@@ -357,7 +358,7 @@ def run_vision(
             if not proceed:
                 st.stop()
 
-    return provision_from_vision(
+    return provision_from_vision_with_config(
         ctx=ctx,
         logger=eff_logger,
         slug=slug,

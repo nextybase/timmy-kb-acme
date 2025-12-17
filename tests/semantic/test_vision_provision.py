@@ -9,11 +9,15 @@ from typing import Any, Dict
 
 import pytest
 
+import ai
+
 yaml = pytest.importorskip("yaml")
 
 
 import semantic.vision_provision as vp
-from ai.types import ResponseJson
+from ai import resolve_vision_config
+from ai.config import resolve_vision_retention_days
+from ai.types import AssistantConfig, ResponseJson
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
 from semantic.vision_provision import (
@@ -22,7 +26,6 @@ from semantic.vision_provision import (
     SectionStatus,
     _parse_required_sections,
     analyze_vision_sections,
-    provision_from_vision,
 )
 
 pytestmark = pytest.mark.regression_light
@@ -183,7 +186,16 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **k: _ok_payload(slug))
 
     # run
-    res = provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
+    config = resolve_vision_config(ctx, override_model="test-model")
+    retention_days = resolve_vision_retention_days(ctx)
+    res = vp.provision_from_vision_with_config(
+        ctx,
+        logger=logging.getLogger("test"),
+        slug=slug,
+        pdf_path=pdf,
+        config=config,
+        retention_days=retention_days,
+    )
 
     # assert file paths
     mapping = Path(res["mapping"])
@@ -231,7 +243,16 @@ def test_provision_ignores_engine_in_settings(tmp_path: Path, monkeypatch: pytes
 
     monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
 
-    provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
+    config = resolve_vision_config(ctx, override_model="test-model")
+    retention_days = resolve_vision_retention_days(ctx)
+    vp.provision_from_vision_with_config(
+        ctx=ctx,
+        logger=logging.getLogger("test"),
+        slug=slug,
+        pdf_path=pdf,
+        config=config,
+        retention_days=retention_days,
+    )
 
     assert "engine" not in captured
 
@@ -259,7 +280,16 @@ def test_provision_retention_fallback_on_zero(tmp_path: Path, monkeypatch: pytes
 
     monkeypatch.setattr(vp, "_persist_outputs", _fake_persist)
 
-    provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
+    config = resolve_vision_config(ctx, override_model="test-model")
+    retention_days = resolve_vision_retention_days(ctx)
+    vp.provision_from_vision_with_config(
+        ctx=ctx,
+        logger=logging.getLogger("test"),
+        slug=slug,
+        pdf_path=pdf,
+        config=config,
+        retention_days=retention_days,
+    )
 
     assert captured.get("retention_days") == 30
 
@@ -274,8 +304,17 @@ def test_provision_halt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **k: _halt_payload(slug))
 
+    config = resolve_vision_config(ctx, override_model="test-model")
+    retention_days = resolve_vision_retention_days(ctx)
     with pytest.raises(HaltError) as exc:
-        provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
+        vp.provision_from_vision_with_config(
+            ctx=ctx,
+            logger=logging.getLogger("test"),
+            slug=slug,
+            pdf_path=pdf,
+            config=config,
+            retention_days=retention_days,
+        )
     assert "Integra Mission" in str(exc.value)
 
     # Nessun YAML deve essere scritto
@@ -306,12 +345,15 @@ def test_provision_with_prepared_prompt_skips_pdf_read(tmp_path: Path, monkeypat
 
     prepared_prompt = "Prompt precompilato per il Vision Statement."
 
-    res = provision_from_vision(
-        ctx,
+    config = resolve_vision_config(ctx, override_model="test-model")
+    retention_days = resolve_vision_retention_days(ctx)
+    res = vp.provision_from_vision_with_config(
+        ctx=ctx,
         logger=logging.getLogger("test"),
         slug=slug,
         pdf_path=pdf,
-        model="test-model",
+        config=config,
+        retention_days=retention_days,
         prepared_prompt=prepared_prompt,
     )
 
@@ -345,7 +387,16 @@ def test_provision_uses_assistant_fallback_env(tmp_path: Path, monkeypatch: pyte
 
     monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
 
-    res = provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
+    config = resolve_vision_config(ctx, override_model="test-model")
+    retention_days = resolve_vision_retention_days(ctx)
+    res = vp.provision_from_vision_with_config(
+        ctx=ctx,
+        logger=logging.getLogger("test"),
+        slug=slug,
+        pdf_path=pdf,
+        config=config,
+        retention_days=retention_days,
+    )
 
     assert Path(res["mapping"]).exists()
     assert Path(res["cartelle_raw"]).exists()
@@ -353,7 +404,6 @@ def test_provision_uses_assistant_fallback_env(tmp_path: Path, monkeypatch: pyte
 
 
 def test_provision_missing_assistant_id_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    slug = "dummy-srl"
     ctx = _Ctx(tmp_path)
     pdf = tmp_path / "vision.pdf"
     pdf.write_bytes(b"%PDF-FAKE%")
@@ -361,48 +411,87 @@ def test_provision_missing_assistant_id_errors(tmp_path: Path, monkeypatch: pyte
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
     monkeypatch.delenv("ASSISTANT_ID", raising=False)
 
-    def _fail_extract(*_args: object, **_kwargs: object) -> None:  # pragma: no cover - should not be called
-        raise AssertionError("_extract_pdf_text non dovrebbe essere invocato quando manca l'Assistant ID.")
-
-    monkeypatch.setattr(vp, "_extract_pdf_text", _fail_extract)
-    monkeypatch.setattr(
-        vp,
-        "_call_assistant_json",
-        lambda **_k: pytest.fail("_call_assistant_json non dovrebbe essere raggiunto."),
-    )
-
     with pytest.raises(ConfigError) as excinfo:
-        provision_from_vision(ctx, logger=logging.getLogger("test"), slug=slug, pdf_path=pdf, model="test-model")
+        resolve_vision_config(ctx, override_model="test-model")
 
     assert "Assistant ID" in str(excinfo.value)
 
 
-def test_resolve_vision_use_kb_prefers_env(monkeypatch: pytest.MonkeyPatch):
-    ctx = _Ctx(Path("dummy"))
-    ctx.settings = _make_settings(True)
-    monkeypatch.setenv("VISION_USE_KB", "0")
-    assert vp._resolve_vision_use_kb(ctx) is False
+def test_provision_with_config_skips_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "config-only"
+    ctx = _Ctx(tmp_path)
+    pdf = tmp_path / "vision.pdf"
+    pdf.write_bytes(b"%PDF-FAKE%")
+
+    monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
+    monkeypatch.delenv("ASSISTANT_ID", raising=False)
+
+    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+
+    captured: Dict[str, object] = {}
+
+    def _fake_call(**kwargs: object) -> dict[str, object]:
+        captured["assistant_id"] = kwargs.get("assistant_id")
+        return _ok_payload(slug)
+
+    monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
+
+    config = AssistantConfig(
+        model="test-model",
+        assistant_id="config-asst",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
+
+    res = vp.provision_from_vision_with_config(
+        ctx,
+        logger=logging.getLogger("test"),
+        slug=slug,
+        pdf_path=pdf,
+        config=config,
+        retention_days=0,
+    )
+
+    assert Path(res["mapping"]).exists()
+    assert Path(res["cartelle_raw"]).exists()
+    assert captured.get("assistant_id") == "config-asst"
 
 
-def test_resolve_vision_use_kb_from_settings_obj(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("VISION_USE_KB", raising=False)
-    ctx = _Ctx(Path("dummy"))
-    ctx.settings = _make_settings(False)
-    assert vp._resolve_vision_use_kb(ctx) is False
+def test_semantic_with_config_does_not_reresolve_policy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "config-only"
+    ctx = _Ctx(tmp_path)
+    pdf = tmp_path / "vision.pdf"
+    pdf.write_bytes(b"%PDF-FAKE%")
 
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "config-asst")
+    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+    monkeypatch.setattr(vp, "_call_assistant_json", lambda **_: _ok_payload(slug))
 
-def test_resolve_vision_use_kb_from_dict(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("VISION_USE_KB", raising=False)
-    ctx = _Ctx(Path("dummy"))
-    ctx.settings = {"vision": {"use_kb": False}}
-    assert vp._resolve_vision_use_kb(ctx) is False
+    monkeypatch.setattr(ai, "resolve_vision_config", lambda *a, **k: pytest.fail("Semantic should not resolve config"))
+    monkeypatch.setattr(
+        "ai.config.resolve_vision_retention_days", lambda *a, **k: pytest.fail("Semantic should not resolve retention")
+    )
 
+    config = AssistantConfig(
+        model="test-model",
+        assistant_id="config-asst",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
 
-def test_resolve_vision_use_kb_defaults_true(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("VISION_USE_KB", raising=False)
-    ctx = _Ctx(Path("dummy"))
-    ctx.settings = {}
-    assert vp._resolve_vision_use_kb(ctx) is True
+    res = vp.provision_from_vision_with_config(
+        ctx,
+        logger=logging.getLogger("test"),
+        slug=slug,
+        pdf_path=pdf,
+        config=config,
+        retention_days=0,
+    )
+
+    assert Path(res["mapping"]).exists()
+    assert Path(res["cartelle_raw"]).exists()
 
 
 def test_analyze_sections_happy_path():
@@ -456,28 +545,42 @@ def test_prepare_payload_sets_instructions_by_use_kb(tmp_path: Path, monkeypatch
     ctx.settings["vision"]["model"] = "gpt-4o-mini"
 
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
-    monkeypatch.delenv("VISION_USE_KB", raising=False)
 
+    config_true = AssistantConfig(
+        model="gpt-4o-mini",
+        assistant_id="asst_dummy",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
     prepared_true = vp._prepare_payload(
         ctx,
         slug,
         pdf,
         prepared_prompt="prompt",
-        model=None,
+        config=config_true,
         logger=logging.getLogger("test"),
+        retention_days=0,
     )
     assert prepared_true.use_kb is True
     assert "File Search" in prepared_true.run_instructions
     assert "output finale deve SEMPRE" in prepared_true.run_instructions
 
-    monkeypatch.setenv("VISION_USE_KB", "false")
+    config_false = AssistantConfig(
+        model="gpt-4o-mini",
+        assistant_id="asst_dummy",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=False,
+        strict_output=True,
+    )
     prepared_false = vp._prepare_payload(
         ctx,
         slug,
         pdf,
         prepared_prompt="prompt",
-        model=None,
+        config=config_false,
         logger=logging.getLogger("test"),
+        retention_days=0,
     )
     assert prepared_false.use_kb is False
     assert "IGNORARE File Search" in prepared_false.run_instructions
@@ -508,6 +611,7 @@ def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_pat
         strict_output=True,
         client=object(),
         paths=paths,
+        retention_days=0,
     )
 
     vp._invoke_assistant(prepared)

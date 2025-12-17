@@ -9,10 +9,11 @@ from typing import Any, Dict, Optional
 import yaml
 
 from ai import resolve_vision_config
+from ai.config import resolve_vision_retention_days
 from pipeline.env_utils import ensure_dotenv_loaded
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from semantic.vision_provision import debug_analyze_vision_sections_from_yaml, provision_from_vision
+from semantic.vision_provision import debug_analyze_vision_sections_from_yaml, provision_from_vision_with_config
 from tools.dummy.bootstrap import ensure_dummy_vision_pdf
 
 LOGGER = logging.getLogger("ai.check.vision")
@@ -72,12 +73,14 @@ def run_vision_dummy_check(
         },
     )
 
-    result = provision_from_vision(
+    retention_days = resolve_vision_retention_days(ctx)
+    result = provision_from_vision_with_config(
         ctx=ctx,
         logger=LOGGER,
         slug=workspace_slug,
         pdf_path=pdf_path,
-        model=resolved.model,
+        config=resolved,
+        retention_days=retention_days,
         prepared_prompt=None,
     )
 

@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 from pipeline.exceptions import ConfigError
 
-from .config import resolve_kgraph_config
+from .assistant_registry import resolve_kgraph_config
 from .responses import run_json_model
 
 
@@ -39,6 +39,12 @@ def invoke_kgraph_messages(
             messages=messages,
             response_format=None,
             metadata=metadata,
+            invocation={
+                "component": "kgraph",
+                "operation": "kgraph.invoke",
+                "assistant_id": cfg.assistant_id,
+                "request_tag": "kgraph.invoke",
+            },
         )
     except ConfigError:
         raise

@@ -26,10 +26,10 @@ class _PreparePromptYamlFunc(Callable[..., str]):
 @dataclass(frozen=True)
 class VisionBindings:
     halt_error: Type[Exception]
-    provision: _ProvisionFromVisionFunc
-    prepare: _PreparePromptFunc
-    provision_yaml: Optional[_ProvisionFromVisionYamlFunc]
-    prepare_yaml: Optional[_PreparePromptYamlFunc]
+    provision_with_config: _ProvisionFromVisionFunc
+    prepare_with_config: _PreparePromptFunc
+    provision_yaml_with_config: Optional[_ProvisionFromVisionYamlFunc]
+    prepare_yaml_with_config: Optional[_PreparePromptYamlFunc]
     diagnostics: Tuple[str, ...] = tuple()
 
 
@@ -63,7 +63,7 @@ def iter_available_vision_providers(
 def load_vision_bindings(
     candidates: Sequence[str] | None = None,
 ) -> VisionBindings:
-    """Carica le binding Vision da semantic con fallback il modulo root."""
+    """Carica le binding Vision da semantic con fallback sul modulo canonico."""
 
     diagnostics: list[str] = []
 
@@ -75,38 +75,35 @@ def load_vision_bindings(
             continue
 
         halt_error = getattr(module, "HaltError", None)
-        provision = getattr(module, "provision_from_vision", None)
-        prepare = getattr(module, "prepare_assistant_input", None)
-        provision_yaml = getattr(module, "provision_from_vision_yaml", None)
-        prepare_yaml = getattr(module, "prepare_assistant_input_from_yaml", None)
+        provision = getattr(module, "provision_from_vision_with_config", None)
+        prepare = getattr(module, "prepare_assistant_input_with_config", None)
+        provision_yaml = getattr(module, "provision_from_vision_yaml_with_config", None)
+        prepare_yaml = getattr(module, "prepare_assistant_input_from_yaml_with_config", None)
 
         if isinstance(halt_error, type) and callable(provision) and callable(prepare):
             return VisionBindings(
                 halt_error=halt_error,
-                provision=provision,
-                prepare=prepare,
-                provision_yaml=provision_yaml if callable(provision_yaml) else None,
-                prepare_yaml=prepare_yaml if callable(prepare_yaml) else None,
+                provision_with_config=provision,
+                prepare_with_config=prepare,
+                provision_yaml_with_config=provision_yaml if callable(provision_yaml) else None,
+                prepare_yaml_with_config=prepare_yaml if callable(prepare_yaml) else None,
                 diagnostics=tuple(diagnostics),
             )
 
         diagnostics.append(f"Modulo {module_name} incompleto")
 
-    from semantic.vision_provision import HaltError as fallback_error
-    from semantic.vision_provision import prepare_assistant_input as fallback_prepare
-    from semantic.vision_provision import provision_from_vision as fallback_provision
-    from semantic.vision_provision import provision_from_vision_yaml as fallback_provision_yaml
-
-    try:
-        from semantic.vision_provision import prepare_assistant_input_from_yaml as fallback_prepare_yaml
-    except Exception:
-        fallback_prepare_yaml = None
+    fallback_module = import_module("semantic.vision_provision")
+    halt_error = getattr(fallback_module, "HaltError")
+    provision = getattr(fallback_module, "provision_from_vision_with_config")
+    prepare = getattr(fallback_module, "prepare_assistant_input_with_config")
+    provision_yaml = getattr(fallback_module, "provision_from_vision_yaml_with_config", None)
+    prepare_yaml = getattr(fallback_module, "prepare_assistant_input_from_yaml_with_config", None)
 
     return VisionBindings(
-        halt_error=fallback_error,
-        provision=fallback_provision,
-        prepare=fallback_prepare,
-        provision_yaml=fallback_provision_yaml if callable(fallback_provision_yaml) else None,
-        prepare_yaml=fallback_prepare_yaml if callable(fallback_prepare_yaml) else None,
+        halt_error=halt_error,
+        provision_with_config=provision,
+        prepare_with_config=prepare,
+        provision_yaml_with_config=provision_yaml if callable(provision_yaml) else None,
+        prepare_yaml_with_config=prepare_yaml if callable(prepare_yaml) else None,
         diagnostics=tuple(diagnostics),
     )

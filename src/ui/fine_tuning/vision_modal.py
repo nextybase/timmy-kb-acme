@@ -9,7 +9,7 @@ from pipeline.file_utils import safe_write_bytes
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from ui.config_store import get_vision_model
-from ui.services.vision_provision import provision_from_vision
+from ui.services.vision_provision import provision_from_vision_with_config
 from ui.utils.context_cache import get_client_context
 from ui.utils.stubs import get_streamlit
 
@@ -144,7 +144,7 @@ def open_vision_modal(slug: str = "dummy") -> None:
                 result_payload: dict[str, object] | None = None
                 with st.spinner("Eseguo Vision..."):
                     try:
-                        result_payload = provision_from_vision(
+                        result_payload = provision_from_vision_with_config(
                             ctx,
                             logger=LOG,
                             slug=slug,
@@ -156,14 +156,14 @@ def open_vision_modal(slug: str = "dummy") -> None:
                         if not _is_gate_error(err):
                             st.session_state[_SS_LAST_RESULT] = {"error": str(err)}
                             raise
-                        result_payload = provision_from_vision(
-                            ctx,
-                            logger=LOG,
-                            slug=slug,
-                            pdf_path=pdf_path,
-                            model=get_vision_model(),
-                            prepared_prompt=prompt,
-                        )
+                            result_payload = provision_from_vision_with_config(
+                                ctx,
+                                logger=LOG,
+                                slug=slug,
+                                pdf_path=pdf_path,
+                                model=get_vision_model(),
+                                prepared_prompt=prompt,
+                            )
                 st.session_state[_SS_LAST_RESULT] = result_payload
                 st.success("Vision completata correttamente.")
                 _clear_state()

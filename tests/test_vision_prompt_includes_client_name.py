@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 
 import semantic.vision_provision as S
+from ai import resolve_vision_config
+from ai.config import resolve_vision_retention_days
 
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF")
 
@@ -129,12 +131,15 @@ def test_prompt_contains_client_name(monkeypatch, tmp_ws: Path):
     # Non patchiamo _extract_pdf_text: il fixture ha generato un PDF valido con le 6 sezioni
     monkeypatch.setattr(S, "_call_assistant_json", _fake_call)
 
-    S.provision_from_vision(
+    config = resolve_vision_config(ctx, override_model="test-model")
+    retention_days = resolve_vision_retention_days(ctx)
+    S.provision_from_vision_with_config(
         ctx,
         S.logging.getLogger("noop"),
         slug=slug,
         pdf_path=tmp_ws / "config" / "VisionStatement.pdf",
-        model="test-model",
+        config=config,
+        retention_days=retention_days,
     )
 
     # Verifica che il client_name sia stato incluso nel prompt inviato all'assistente

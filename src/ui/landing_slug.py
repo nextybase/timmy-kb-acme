@@ -421,7 +421,7 @@ def render_workspace_summary(
                 base_dir = Path(ctx.base_dir)
                 vision_state["base_dir"] = str(base_dir)
                 pdf_path = ensure_within_and_resolve(base_dir, base_dir / "config" / "VisionStatement.pdf")
-                result = vision_services.provision_from_vision(
+                result = vision_services.provision_from_vision_with_config(
                     ctx,
                     log or get_structured_logger("ui.vision_provision"),
                     slug=slug,

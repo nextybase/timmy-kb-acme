@@ -8,6 +8,7 @@ from ai.check import run_prototimmy_dummy_check
 from ai.codex_runner import run_codex_cli
 from ai.config import resolve_ocp_executor_config, resolve_prototimmy_config
 from ai.responses import run_json_model, run_text_model
+from ai.types import AssistantConfig
 from pipeline.logging_utils import get_structured_logger
 from pipeline.settings import Settings
 from rosetta import get_rosetta_client
@@ -100,6 +101,28 @@ _CODEX_CLI_TIMEOUT_S = 60
 ROSETTA_HOOK_LOGGER = get_structured_logger("prototimmy.rosetta_hook")
 
 
+def _build_chat_invocation(
+    cfg: AssistantConfig,
+    *,
+    component: str,
+    operation: str,
+    step: str | None = None,
+    request_tag: str | None = None,
+) -> dict[str, Any]:
+    invocation: dict[str, Any] = {
+        "component": component,
+        "operation": operation,
+        "assistant_id": cfg.assistant_id,
+        "strict_output": cfg.strict_output,
+        "use_kb": cfg.use_kb,
+    }
+    if step:
+        invocation["step"] = step
+    if request_tag:
+        invocation["request_tag"] = request_tag
+    return invocation
+
+
 def _load_settings() -> Settings:
     return Settings.load(get_repo_root())
 
@@ -166,6 +189,13 @@ def _call_ocp(message: str) -> str:
             dict(_OCP_SYSTEM_MESSAGE),
             {"role": "user", "content": f"Rispondi con i dati richiesti: {message}"},
         ),
+        invocation=_build_chat_invocation(
+            cfg,
+            component="prototimmy.chat",
+            operation="prototimmy.chat.ocp",
+            step="ocp",
+            request_tag="prototimmy_chat_ocp",
+        ),
     )
     return response.text
 
@@ -196,6 +226,12 @@ def _validate_codex_output(output: str) -> None:
                 {"role": "user", "content": output},
             ),
             response_format=_CODEX_VALIDATION_RESPONSE_FORMAT,
+            invocation=_build_chat_invocation(
+                cfg,
+                component="prototimmy.chat",
+                operation="prototimmy.chat.codex_validation",
+                request_tag="prototimmy_chat_codex_validation",
+            ),
         )
         data = response.data
         st.json(data)
@@ -275,6 +311,12 @@ def _invoke_prototimmy_json(
                 {"role": "user", "content": user_payload},
             ),
             response_format=_PROTO_JSON_RESPONSE_FORMAT,
+            invocation=_build_chat_invocation(
+                cfg,
+                component="prototimmy.chat",
+                operation="prototimmy.chat.json",
+                request_tag="prototimmy_chat_json",
+            ),
         )
         data = response.data
         reply = str(data.get("reply_to_user", "")).strip()
@@ -294,6 +336,12 @@ def _invoke_prototimmy_text(prompt_text: str) -> str | None:
             messages=(
                 dict(_SYSTEM_MESSAGE),
                 {"role": "user", "content": prompt_text},
+            ),
+            invocation=_build_chat_invocation(
+                cfg,
+                component="prototimmy.chat",
+                operation="prototimmy.chat.text",
+                request_tag="prototimmy_chat_text",
             ),
         )
         return response.text

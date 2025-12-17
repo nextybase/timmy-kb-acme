@@ -87,7 +87,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     def _fake_provision(ctx, log, *, slug, pdf_path, model):
         return {"yaml_paths": {"mapping": str(mapping), "cartelle_raw": str(cartelle)}}
 
-    monkeypatch.setattr(landing.vision_services, "provision_from_vision", _fake_provision, raising=True)
+    monkeypatch.setattr(landing.vision_services, "provision_from_vision_with_config", _fake_provision, raising=True)
 
     # Esegue il rendering
     try:
