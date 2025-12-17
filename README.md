@@ -1,6 +1,6 @@
 # Timmy KB - README (v1.0 Beta)
 
-Pipeline per generare una Knowledge Base Markdown pronta per l'uso AI a partire dai PDF del cliente, con arricchimento semantico, anteprima locale (HonKit) e push opzionale su GitHub.
+Pipeline per generare una Knowledge Base Markdown pronta per l'uso AI a partire dai PDF del cliente, con arricchimento semantico e anteprima locale (HonKit).
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
