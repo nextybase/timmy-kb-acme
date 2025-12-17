@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
+from ai.assistant_registry import resolve_ocp_executor_config, resolve_prototimmy_config
 from ai.check import run_prototimmy_dummy_check
 from ai.codex_runner import run_codex_cli
-from ai.config import resolve_ocp_executor_config, resolve_prototimmy_config
 from ai.responses import run_json_model, run_text_model
 from ai.types import AssistantConfig
 from pipeline.logging_utils import get_structured_logger

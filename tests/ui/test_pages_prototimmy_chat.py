@@ -7,6 +7,7 @@ from typing import Sequence
 import pytest
 
 from ai.codex_runner import StructuredResult
+from ai.types import AssistantConfig
 from ui.pages import prototimmy_chat as page
 
 
@@ -130,7 +131,14 @@ def test_invoke_prototimmy_json_filters_roles(monkeypatch: pytest.MonkeyPatch) -
         return SimpleNamespace(text="ignored", data={"reply_to_user": "ok", "message_for_ocp": "delega"})
 
     monkeypatch.setattr(page, "_load_settings", lambda: SimpleNamespace())
-    monkeypatch.setattr(page, "resolve_prototimmy_config", lambda *_: SimpleNamespace(model="m"))
+    cfg = AssistantConfig(
+        model="test-model",
+        assistant_id="proto-assistant",
+        assistant_env="PROTOTIMMY_ID",
+        use_kb=True,
+        strict_output=True,
+    )
+    monkeypatch.setattr(page, "resolve_prototimmy_config", lambda *_: cfg)
     monkeypatch.setattr(page, "run_json_model", fake_run_json_model)
 
     response, ocp_request = page._invoke_prototimmy_json(history, "Secondo messaggio")
@@ -150,7 +158,14 @@ def _setup_codex_validation(
 ) -> None:
     monkeypatch.setattr(page, "render_chrome_then_require", lambda **_: None)
     monkeypatch.setattr(page, "_load_settings", lambda: SimpleNamespace())
-    monkeypatch.setattr(page, "resolve_ocp_executor_config", lambda *_: SimpleNamespace(model="ocp-model"))
+    ocp_cfg = AssistantConfig(
+        model="ocp-model",
+        assistant_id="ocp-assistant",
+        assistant_env="OCP_EXECUTOR_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
+    monkeypatch.setattr(page, "resolve_ocp_executor_config", lambda *_: ocp_cfg)
     streamlit_stub.session_state[page._CODEX_OUTPUT_KEY] = "output"
     streamlit_stub.session_state[page._CODEX_PROMPT_KEY] = "Prompt iniziale"
     streamlit_stub.button_returns["Valida output Codex"] = True
@@ -159,6 +174,7 @@ def _setup_codex_validation(
         return SimpleNamespace(data=response_data)
 
     monkeypatch.setattr(page, "run_json_model", fake_run_json_model)
+    monkeypatch.setattr("ai.responses.run_json_model", fake_run_json_model)
 
 
 def _setup_codex_cli_run(

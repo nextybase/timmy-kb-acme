@@ -5,7 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai.config import ConfigError, resolve_vision_config
+from ai.config import resolve_vision_config
+from pipeline.exceptions import ConfigError
 
 
 class DummySettings(SimpleNamespace):

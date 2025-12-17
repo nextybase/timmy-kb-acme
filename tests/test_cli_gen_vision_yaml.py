@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-# Il CLI che vogliamo testare
 import tools.gen_vision_yaml as cli
+from ai import AssistantConfig
 from pipeline.exceptions import ConfigError
 from semantic.vision_provision import HaltError
 
@@ -21,12 +21,33 @@ def _make_pdf(tmp_path: Path, name: str = "vision.pdf") -> Path:
     return p
 
 
+def _stub_assistant_config() -> AssistantConfig:
+    return AssistantConfig(
+        model="vision-model",
+        assistant_id="vision-assistant",
+        assistant_env="VISION_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
+
+
+def _patch_cli_resolution(
+    monkeypatch: pytest.MonkeyPatch, *, config: AssistantConfig | None = None, retention_days: int = 7
+) -> AssistantConfig:
+    if config is None:
+        config = _stub_assistant_config()
+    monkeypatch.setattr(cli, "resolve_vision_config", lambda ctx: config)
+    monkeypatch.setattr(cli, "resolve_vision_retention_days", lambda ctx: retention_days)
+    return config
+
+
 def test_cli_success_returns_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
     """
     Caso OK: provision_from_vision restituisce i path degli YAML → exit code 0.
     """
     monkeypatch.chdir(tmp_path)
     pdf = _make_pdf(tmp_path)
+    _patch_cli_resolution(monkeypatch)
 
     def _fake_provision(ctx, logger, *, slug: str, pdf_path: Path, **kwargs):
         # Non scriviamo davvero file: al CLI basta il dict di ritorno
@@ -35,7 +56,7 @@ def test_cli_success_returns_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
             "cartelle_raw": str(tmp_path / "cartelle_raw.yaml"),
         }
 
-    monkeypatch.setattr(cli, "provision_from_vision", _fake_provision)
+    monkeypatch.setattr(cli, "provision_from_vision_with_config", _fake_provision)
 
     argv_bak = sys.argv[:]
     try:
@@ -60,11 +81,12 @@ def test_cli_halt_returns_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
     """
     monkeypatch.chdir(tmp_path)
     pdf = _make_pdf(tmp_path)
+    _patch_cli_resolution(monkeypatch)
 
     def _raise_halt(ctx, logger, *, slug: str, pdf_path: Path, **kwargs):
         raise HaltError("Integra Mission e Framework etico e riprova.", {"sections": ["Mission", "Framework etico"]})
 
-    monkeypatch.setattr(cli, "provision_from_vision", _raise_halt)
+    monkeypatch.setattr(cli, "provision_from_vision_with_config", _raise_halt)
 
     argv_bak = sys.argv[:]
     try:
@@ -91,11 +113,12 @@ def test_cli_config_error_returns_one(tmp_path: Path, monkeypatch: pytest.Monkey
     """
     monkeypatch.chdir(tmp_path)
     pdf = _make_pdf(tmp_path)
+    _patch_cli_resolution(monkeypatch)
 
     def _raise_cfg(ctx, logger, *, slug: str, pdf_path: Path, **kwargs):
         raise ConfigError("Assistant ID non configurato")
 
-    monkeypatch.setattr(cli, "provision_from_vision", _raise_cfg)
+    monkeypatch.setattr(cli, "provision_from_vision_with_config", _raise_cfg)
 
     argv_bak = sys.argv[:]
     try:
@@ -123,6 +146,7 @@ def test_cli_missing_pdf_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyP
     """
     monkeypatch.chdir(tmp_path)
     missing = tmp_path / "missing.pdf"
+    _patch_cli_resolution(monkeypatch)
 
     # Anche se patchiamo provision, NON deve essere chiamato quando il file manca
     called = {"value": False}
@@ -131,7 +155,7 @@ def test_cli_missing_pdf_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyP
         called["value"] = True
         return {}
 
-    monkeypatch.setattr(cli, "provision_from_vision", _should_not_be_called)
+    monkeypatch.setattr(cli, "provision_from_vision_with_config", _should_not_be_called)
 
     argv_bak = sys.argv[:]
     try:

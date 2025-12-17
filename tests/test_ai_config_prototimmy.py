@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from ai.config import _get_from_settings, resolve_prototimmy_config
+from ai.assistant_registry import _get_from_settings, resolve_prototimmy_config
 from pipeline.exceptions import ConfigError
 
 

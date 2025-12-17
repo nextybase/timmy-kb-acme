@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+from importlib import import_module as real_import
 from types import SimpleNamespace
 
 from pipeline.capabilities.vision import iter_available_vision_providers, load_vision_bindings
@@ -14,22 +15,25 @@ def test_load_vision_bindings_uses_candidate(monkeypatch):
         if name == "custom.module":
             return SimpleNamespace(
                 HaltError=ValueError,
-                provision_from_vision=lambda **kwargs: {"mapping": "ok"},
-                prepare_assistant_input=lambda **kwargs: "prompt",
-                provision_from_vision_yaml=None,
-                prepare_assistant_input_from_yaml=None,
+                provision_from_vision_with_config=lambda **kwargs: {"mapping": "ok"},
+                prepare_assistant_input_with_config=lambda **kwargs: "prompt",
+                provision_from_vision_yaml_with_config=None,
+                prepare_assistant_input_from_yaml_with_config=None,
             )
         raise ImportError("missing")
 
     monkeypatch.setattr("pipeline.capabilities.vision.import_module", fake_import)
     bindings = load_vision_bindings(candidates=("custom.module",))
     assert bindings.halt_error is ValueError
-    assert bindings.prepare() == "prompt"
+    assert bindings.prepare_with_config() == "prompt"
+    assert bindings.provision_with_config() == {"mapping": "ok"}
     assert calls == ["custom.module"]
 
 
 def test_load_vision_bindings_fallback(monkeypatch):
     def always_fail(name: str):
+        if name == "semantic.vision_provision":
+            return real_import(name)
         raise ImportError("nope")
 
     monkeypatch.setattr("pipeline.capabilities.vision.import_module", always_fail)

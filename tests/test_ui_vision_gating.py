@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from ai import AssistantConfig
 from pipeline.exceptions import ConfigError
 
 
@@ -64,6 +65,15 @@ def test_ui_gating_hash_file_and_block_then_force(
         }
 
     monkeypatch.setattr(VP, "_provision_from_vision_with_config", _stub)
+    config = AssistantConfig(
+        model="test-model",
+        assistant_id="test-assistant",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
+    monkeypatch.setattr(VP, "resolve_vision_config", lambda ctx, *, override_model=None: config)
+    monkeypatch.setattr(VP, "resolve_vision_retention_days", lambda ctx: 7)
 
     try:
         res = VP.provision_from_vision_with_config(

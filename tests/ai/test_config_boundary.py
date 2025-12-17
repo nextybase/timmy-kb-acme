@@ -5,6 +5,13 @@ from typing import Callable
 import pytest
 
 from ai import assistant_registry, config
+from ai.assistant_registry import (
+    resolve_audit_assistant_config,
+    resolve_kgraph_config,
+    resolve_ocp_executor_config,
+    resolve_planner_config,
+    resolve_prototimmy_config,
+)
 from pipeline.exceptions import ConfigError
 
 
@@ -45,7 +52,7 @@ def test_resolve_prototimmy_config_missing_assistant_id_raises(monkeypatch):
     settings = {"ai": {"prototimmy": {"model": "proto-model"}}}
     monkeypatch.setattr("pipeline.env_utils.get_env_var", _missing_env)
     with pytest.raises(ConfigError) as exc:
-        config.resolve_prototimmy_config(settings)
+        resolve_prototimmy_config(settings)
     assert "PROTOTIMMY_ID" in str(exc.value)
 
 
@@ -68,7 +75,7 @@ def test_resolve_kgraph_config_falls_back_to_assistant_model(monkeypatch):
     monkeypatch.setattr(assistant_registry, "make_openai_client", lambda: _DummyClient())
     monkeypatch.setattr("ai.config.make_openai_client", lambda: _DummyClient())
 
-    result = config.resolve_kgraph_config(settings)
+    result = resolve_kgraph_config(settings)
     assert result.assistant_id == "kgraph-assistant"
     assert result.model == "assistant-model"
 
@@ -125,25 +132,25 @@ def test_ai_section_assistant_env_payload_precedence():
     (
         (config.resolve_vision_config, "OBNEXT_ASSISTANT_ID", lambda ctx: config.resolve_vision_config(ctx)),
         (
-            config.resolve_prototimmy_config,
+            resolve_prototimmy_config,
             "PROTOTIMMY_ID",
-            lambda ctx: config.resolve_prototimmy_config(ctx.settings),
+            lambda ctx: resolve_prototimmy_config(ctx.settings),
         ),
         (
-            config.resolve_planner_config,
+            resolve_planner_config,
             "PLANNER_ASSISTANT_ID",
-            lambda ctx: config.resolve_planner_config(ctx.settings),
+            lambda ctx: resolve_planner_config(ctx.settings),
         ),
         (
-            config.resolve_ocp_executor_config,
+            resolve_ocp_executor_config,
             "OCP_EXECUTOR_ASSISTANT_ID",
-            lambda ctx: config.resolve_ocp_executor_config(ctx.settings),
+            lambda ctx: resolve_ocp_executor_config(ctx.settings),
         ),
-        (config.resolve_kgraph_config, "KGRAPH_ASSISTANT_ID", lambda ctx: config.resolve_kgraph_config(ctx)),
+        (resolve_kgraph_config, "KGRAPH_ASSISTANT_ID", lambda ctx: resolve_kgraph_config(ctx)),
         (
-            config.resolve_audit_assistant_config,
+            resolve_audit_assistant_config,
             "AUDIT_ASSISTANT_ID",
-            lambda ctx: config.resolve_audit_assistant_config(ctx.settings),
+            lambda ctx: resolve_audit_assistant_config(ctx.settings),
         ),
     ),
 )
@@ -172,9 +179,9 @@ def test_resolvers_missing_env_raise(monkeypatch, resolver, env_name, resolver_c
 @pytest.mark.parametrize(
     "resolver, model_path, env_name",
     (
-        (config.resolve_prototimmy_config, "ai.prototimmy.model", "PROTOTIMMY_ID"),
-        (config.resolve_planner_config, "ai.planner_assistant.model", "PLANNER_ASSISTANT_ID"),
-        (config.resolve_ocp_executor_config, "ai.ocp_executor.model", "OCP_EXECUTOR_ASSISTANT_ID"),
+        (resolve_prototimmy_config, "ai.prototimmy.model", "PROTOTIMMY_ID"),
+        (resolve_planner_config, "ai.planner_assistant.model", "PLANNER_ASSISTANT_ID"),
+        (resolve_ocp_executor_config, "ai.ocp_executor.model", "OCP_EXECUTOR_ASSISTANT_ID"),
     ),
 )
 def test_non_assistant_resolvers_require_model(monkeypatch, resolver, model_path, env_name):
@@ -189,7 +196,7 @@ def test_non_assistant_resolvers_require_model(monkeypatch, resolver, model_path
 def test_resolve_audit_assistant_success(monkeypatch):
     fake_env = _fake_env_factory({"AUDIT_ASSISTANT_ID": "audit-assistant"})
     monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
-    result = config.resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": "audit-model"}}})
+    result = resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": "audit-model"}}})
     assert result.assistant_id == "audit-assistant"
     assert result.model == "audit-model"
     assert result.use_kb is False
@@ -198,7 +205,7 @@ def test_resolve_audit_assistant_success(monkeypatch):
 def test_resolve_audit_assistant_missing_env(monkeypatch):
     monkeypatch.setattr("pipeline.env_utils.get_env_var", _missing_env)
     with pytest.raises(ConfigError) as exc:
-        config.resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": "audit-model"}}})
+        resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": "audit-model"}}})
     assert "AUDIT_ASSISTANT_ID" in str(exc.value)
 
 
@@ -206,5 +213,5 @@ def test_resolve_audit_assistant_missing_model(monkeypatch):
     fake_env = _fake_env_factory({"AUDIT_ASSISTANT_ID": "audit-assistant"})
     monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
     with pytest.raises(ConfigError) as exc:
-        config.resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": ""}}})
+        resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": ""}}})
     assert "ai.audit_assistant.model" in str(exc.value)
