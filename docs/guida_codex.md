@@ -43,7 +43,7 @@ Usa la Prompt Chain come **modalità predefinita** quando:
 - vuoi interventi incrementali, controllati, con QA integrata;
 - stai lavorando su task che coinvolgono più file o più servizi.
 
-In pratica: quando il lavoro **non è banale**, la Prompt Chain è il modo migliore per usare Codex in modo sicuro, tracciabile e coerente.
+In pratica: quando il lavoro **non è banale**, la Prompt Chain è il modo migliore per usare Codex in modo sicuro, tracciabile e coerente. Al termine di ogni Prompt Chain esegui il Closure Protocol e il Skeptic Gate descritti in `.codex/CLOSURE_AND_SKEPTIC.md` in modo da chiudere ufficialmente il ciclo di lavoro.
 
 ---
 

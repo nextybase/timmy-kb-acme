@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import os
+from functools import lru_cache
 from typing import Any, Mapping, Optional, Tuple, TypedDict, cast
 
 import pipeline.env_utils as env_utils
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.settings import Settings
 
@@ -75,11 +78,22 @@ def _extract_context_settings(ctx: Any) -> Tuple[Optional[Settings], AiCfgRoot]:
 
 
 def _optional_env(name: str) -> Optional[str]:
+    raw_env_value = os.environ.get(name)
+    if raw_env_value is not None and not str(raw_env_value).strip():
+        LOGGER.warning(
+            "ai.vision_config.env_var_empty",
+            extra={"env": name},
+        )
+        return None
     try:
         value = env_utils.get_env_var(name)
     except KeyError:
         return None
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning(
+            "ai.vision_config.env_var_read_failed",
+            extra={"env": name, "error": str(exc), "exc_type": type(exc).__name__},
+        )
         return None
     return value.strip() if isinstance(value, str) else None
 
@@ -147,6 +161,24 @@ def _resolve_vision_use_kb(
     return resolution.resolve_boolean_flag(env_flag, settings_flag, payload_flag, default=True)
 
 
+@lru_cache(maxsize=16)
+def _load_settings_cached(base_dir: Optional[str]) -> Optional[Settings]:
+    if not base_dir:
+        return None
+    try:
+        return Settings.load(base_dir)
+    except Exception as exc:
+        LOGGER.warning(
+            "ai.vision_config.settings_load_failed",
+            extra={
+                "base_dir": base_dir,
+                "error": str(exc),
+                "exc_type": type(exc).__name__,
+            },
+        )
+        return None
+
+
 def _resolve_vision_strict_output(
     settings_obj: Optional[Settings],
     settings_payload: Mapping[str, Any],
@@ -168,11 +200,9 @@ def _resolve_vision_strict_output(
 
     fallback_flag: Optional[bool] = None
     if base_dir:
-        try:
-            fallback_settings = Settings.load(base_dir)
+        fallback_settings = _load_settings_cached(str(base_dir))
+        if fallback_settings is not None:
             fallback_flag = bool(fallback_settings.vision_settings.strict_output)
-        except Exception:
-            fallback_flag = None
 
     default_value = fallback_flag if fallback_flag is not None else True
     return resolution.resolve_boolean_flag(None, settings_flag, payload_flag, default=default_value)
@@ -193,22 +223,53 @@ def _resolve_model_for_vision(
 ) -> str:
     override_candidate = (override_model or "").strip()
     if override_candidate:
+        LOGGER.info(
+            "ai.vision_config.model_resolved",
+            extra={"source": "override", "model": override_candidate},
+        )
         return override_candidate
     settings_candidate = _resolve_model_from_settings(settings_obj, settings_payload)
     if settings_candidate:
+        LOGGER.info(
+            "ai.vision_config.model_resolved",
+            extra={"source": "settings", "model": settings_candidate},
+        )
         return settings_candidate
-    client = make_openai_client()
+    try:
+        client = make_openai_client()
+    except ConfigError as exc:
+        raise ConfigError(
+            "Vision model lookup failed during client creation: " + str(exc),
+            code="vision.client.config.invalid",
+            component="vision_config",
+        ) from exc
     assistant_candidate = _resolve_model_from_assistant(client, assistant_id)
-    return resolution.resolve_model_precedence(
-        override_candidate,
-        settings_candidate,
-        "",
-        assistant_candidate,
-        error_message=(
-            "Modello Vision non configurato: imposta vision.model nel config o assegna un modello all'assistant "
-            f"{assistant_id}."
-        ),
-    )
+    if assistant_candidate:
+        LOGGER.info(
+            "ai.vision_config.model_resolved",
+            extra={
+                "source": "assistant",
+                "assistant_id": assistant_id,
+                "model": assistant_candidate,
+            },
+        )
+    try:
+        return resolution.resolve_model_precedence(
+            override_candidate,
+            settings_candidate,
+            "",
+            assistant_candidate,
+            error_message=(
+                "Modello Vision non configurato: imposta vision.model nel config o assegna un modello all'assistant "
+                f"{assistant_id}."
+            ),
+        )
+    except ConfigError as exc:
+        raise ConfigError(
+            str(exc),
+            code="vision.model.missing",
+            component="vision_config",
+        ) from exc
 
 
 def resolve_vision_config(ctx: Any, *, override_model: Optional[str] = None) -> AssistantConfig:

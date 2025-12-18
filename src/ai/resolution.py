@@ -51,7 +51,11 @@ def resolve_assistant_id(
     fallback = _normalize_string(fallback_value)
     if fallback:
         return fallback
-    raise ConfigError(f"Assistant ID mancante: imposta {primary_env_name} (o {fallback_env_name}) nell'ambiente.")
+    raise ConfigError(
+        f"Assistant ID mancante: imposta {primary_env_name} (o {fallback_env_name}) nell'ambiente.",
+        code="assistant.id.missing",
+        component="resolution",
+    )
 
 
 def resolve_model_precedence(
@@ -75,7 +79,11 @@ def resolve_model_precedence(
         normalized = _normalize_string(candidate)
         if normalized:
             return normalized
-    raise ConfigError(error_message)
+    raise ConfigError(
+        error_message,
+        code="assistant.model.missing",
+        component="resolution",
+    )
 
 
 def resolve_boolean_flag(

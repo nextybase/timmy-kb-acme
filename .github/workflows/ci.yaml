@@ -83,6 +83,11 @@ jobs:
             git --no-pager diff -- docs README.md | sed -n '1,200p';
             exit 1;
           fi
+      - name: Skeptic Gate
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python tools/ci/skeptic_gate.py
       - name: Black (check)
         run: black --check src tests
       - name: Ruff (check)

@@ -47,6 +47,9 @@ class PipelineError(Exception):
         file_path: Optional[str | Path] = None,
         drive_id: Optional[str] = None,
         run_id: Optional[str] = None,
+        code: Optional[str] = None,
+        component: Optional[str] = None,
+        hint: Optional[str] = None,
         **_: Any,
     ) -> None:
         super().__init__(message or "")
@@ -54,6 +57,9 @@ class PipelineError(Exception):
         self.file_path: Optional[str | Path] = file_path
         self.drive_id: Optional[str] = drive_id
         self.run_id: Optional[str] = run_id
+        self.code: Optional[str] = code
+        self.component: Optional[str] = component
+        self.hint: Optional[str] = hint
 
     @staticmethod
     def _safe_file_repr(fp: str | Path) -> str:

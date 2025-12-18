@@ -37,6 +37,7 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](deve
 - Before any work, the Codex agent loads the three SSoT documents (`docs/AGENTS_INDEX.md`, the relevant `AGENTS.md`, and `~/.codex/AGENTS.md`) and uses `.codex/PROMPTS.md` as the API.
 - The recommended entry point is the Onboarding Task Codex; it inflicts a plan-first, micro-PR, QA-compliant workflow and insists on updating the documentation and AGENTS matrix when touched.
 - Codex flows must remain consistent with the policies in this runbook and the AGENTS matrix.
+- Poiché il workstream finisce solo con un Prompt Closure, ogni Prompt Chain viene chiusa solo dopo il **Closure Protocol** (`.codex/CLOSURE_AND_SKEPTIC.md`), che lega Prompt N+1 (Codex) e Skeptic Gate N+1′ (OCP).
 
 ### Codex integration
 - `.codex/PROMPTS.md` defines the operational API for Codex.

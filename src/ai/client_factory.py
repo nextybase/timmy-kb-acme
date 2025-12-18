@@ -34,7 +34,11 @@ def make_openai_client():
     try:
         api_key = get_env_var("OPENAI_API_KEY", required=True)
     except KeyError as exc:
-        raise ConfigError("Manca la API key. Imposta la variabile di ambiente OPENAI_API_KEY.") from exc
+        raise ConfigError(
+            "Manca la API key. Imposta la variabile di ambiente OPENAI_API_KEY.",
+            code="openai.client.config.invalid",
+            component="client_factory",
+        ) from exc
 
     OpenAI = get_openai_ctor()
 
@@ -64,7 +68,9 @@ def make_openai_client():
         return OpenAI(**client_kwargs)  # type: ignore[arg-type]
     except TypeError as exc:
         raise ConfigError(
-            "La versione del pacchetto 'openai' è troppo vecchia per questi parametri. Aggiorna a openai>=2.0."
+            "La versione del pacchetto 'openai' è troppo vecchia per questi parametri. Aggiorna a openai>=2.0.",
+            code="openai.client.config.invalid",
+            component="client_factory",
         ) from exc
 
 

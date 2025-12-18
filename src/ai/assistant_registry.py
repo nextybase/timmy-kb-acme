@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import os
 from typing import Any, Mapping, Optional
 
 import pipeline.env_utils as env_utils
@@ -15,31 +16,62 @@ LOGGER = get_structured_logger("ai.assistant_registry")
 
 
 def _optional_env(name: str) -> Optional[str]:
+    raw_env_value = os.environ.get(name)
+    if raw_env_value is not None and not str(raw_env_value).strip():
+        LOGGER.warning(
+            "ai.assistant_registry.env_var_empty",
+            extra={"env": name, "primary_env": name},
+        )
+        return None
     try:
         value = env_utils.get_env_var(name)
     except KeyError:
         return None
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning(
+            "ai.assistant_registry.env_var_read_failed",
+            extra={"env": name, "error": str(exc), "exc_type": type(exc).__name__},
+        )
         return None
     return value.strip() if isinstance(value, str) else None
 
 
-def _resolve_model_from_assistant(client: Any, assistant_id: str) -> str:
+def _resolve_model_from_assistant(client: Any, assistant_id: str) -> Optional[str]:
     assistants = getattr(client, "assistants", None)
     if assistants is None:
         beta = getattr(client, "beta", None)
         assistants = getattr(beta, "assistants", None)
     if not assistants:
-        return ""
+        LOGGER.warning(
+            "ai.assistant_registry.assistant_model_lookup_failed",
+            extra={"assistant_id": assistant_id, "reason": "no_assistants_collection"},
+        )
+        return None
     try:
         assistant = assistants.retrieve(assistant_id)
     except Exception as exc:  # pragma: no cover - best-effort
         LOGGER.warning(
             "ai.assistant_registry.assistant_model.error", extra={"assistant_id": assistant_id, "error": str(exc)}
         )
-        return ""
+        LOGGER.warning(
+            "ai.assistant_registry.assistant_model_lookup_failed",
+            extra={
+                "assistant_id": assistant_id,
+                "reason": type(exc).__name__,
+                "error": str(exc),
+            },
+        )
+        return None
     model = getattr(assistant, "model", None)
-    return model.strip() if isinstance(model, str) else ""
+    if isinstance(model, str):
+        value = model.strip()
+        if value:
+            LOGGER.info(
+                "ai.assistant_registry.assistant_model_resolved",
+                extra={"assistant_id": assistant_id, "model": value},
+            )
+            return value
+    return None
 
 
 def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
@@ -87,14 +119,39 @@ def _resolve_assistant_env_name(settings: Any, path: str, default_env: str) -> s
             candidate = section_cfg.get("assistant_id_env")
             if isinstance(candidate, str):
                 payload_value = candidate
+            elif candidate is not None:
+                LOGGER.warning(
+                    "ai.assistant_registry.payload_env_invalid",
+                    extra={
+                        "path": f"ai.{section_name}.assistant_id_env",
+                        "type": type(candidate).__name__,
+                    },
+                )
     settings_candidate = settings_value if isinstance(settings_value, str) else None
     return resolve_assistant_env(settings_candidate, payload_value, default_env)
 
 
 def _resolve_assistant_id(env_name: str, *, primary_env_name: str, fallback_env_name: str) -> str:
     primary_value = _optional_env(env_name)
+    if primary_value is not None and not primary_value.strip():
+        LOGGER.warning(
+            "ai.assistant_registry.env_var_empty",
+            extra={"env": env_name, "primary_env": primary_env_name},
+        )
+        primary_value = None
     fallback_value = _optional_env(fallback_env_name)
-    return resolve_assistant_id(primary_value, fallback_value, primary_env_name, fallback_env_name=fallback_env_name)
+    if fallback_value is not None and not fallback_value.strip():
+        LOGGER.warning(
+            "ai.assistant_registry.env_var_empty",
+            extra={"env": fallback_env_name, "primary_env": fallback_env_name},
+        )
+        fallback_value = None
+    return resolve_assistant_id(
+        primary_value,
+        fallback_value,
+        primary_env_name,
+        fallback_env_name=fallback_env_name,
+    )
 
 
 def _resolve_model(settings: Any, path: str, *, default: Optional[str] = None) -> str:
@@ -103,7 +160,11 @@ def _resolve_model(settings: Any, path: str, *, default: Optional[str] = None) -
         return candidate.strip()
     if default and default.strip():
         return default.strip()
-    raise ConfigError(f"Modello non configurato per {path}.")
+    raise ConfigError(
+        f"Modello non configurato per {path}.",
+        code="assistant.model.missing",
+        component="assistant_registry",
+    )
 
 
 def _resolve_bool(settings: Any, path: str, default: Optional[bool]) -> Optional[bool]:
@@ -157,16 +218,22 @@ def resolve_kgraph_config(settings: Any, assistant_env_override: Optional[str] =
     )
     assistant_id = _optional_env(assistant_env)
     if not assistant_id:
-        raise ConfigError(f"Assistant ID mancante: imposta {assistant_env} (o ASSISTANT_ID) nell'ambiente.")
+        raise ConfigError(
+            f"Assistant ID mancante: imposta {assistant_env} (o ASSISTANT_ID) nell'ambiente.",
+            code="assistant.id.missing",
+            component="assistant_registry",
+        )
     raw_model = _get_from_settings(settings, "ai.kgraph.model")
     model = raw_model.strip() if isinstance(raw_model, str) else ""
     if not model:
         client = make_openai_client()
-        model = _resolve_model_from_assistant(client, assistant_id)
+        model = _resolve_model_from_assistant(client, assistant_id) or ""
     if not model:
         raise ConfigError(
             "Modello KGraph non configurato: imposta ai.kgraph.model o assegna un modello all'assistant "
-            f"{assistant_id}."
+            f"{assistant_id}.",
+            code="assistant.kgraph.model.missing",
+            component="assistant_registry",
         )
     return AssistantConfig(model=model, assistant_id=assistant_id, assistant_env=assistant_env)
 
