@@ -63,8 +63,8 @@ def _check_output_writable(base_dir: Path) -> CheckItem:
 def _check_semantic_ingest(base_dir: Path) -> List[CheckItem]:
     items: List[CheckItem] = []
     doc_ingest = base_dir / "src" / "semantic" / "document_ingest.py"
-    vision_ingest = base_dir / "src" / "semantic" / "vision_ingest.py"
-    for path, name in ((doc_ingest, "document_ingest"), (vision_ingest, "vision_ingest")):
+    semantic_core = base_dir / "src" / "semantic" / "core.py"
+    for path, name in ((doc_ingest, "document_ingest"), (semantic_core, "semantic_core")):
         exists = path.is_file()
         items.append(
             CheckItem(

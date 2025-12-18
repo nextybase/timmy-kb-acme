@@ -10,9 +10,10 @@ from typing import Any, Optional, cast
 import pytest
 from tests.conftest import build_vocab_db
 
-import semantic.semantic_extractor as se
+import semantic.core as se
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
-from semantic.semantic_extractor import _list_markdown_files, extract_semantic_concepts
+from pipeline.logging_utils import get_structured_logger
+from semantic.core import _list_markdown_files, extract_semantic_concepts
 
 
 @dataclass
@@ -36,14 +37,20 @@ def test__list_markdown_files_happy_path(tmp_path: Path) -> None:
     (md / "c.txt").write_text("X", encoding="utf-8")
 
     ctx = DummyCtx(base_dir=base, md_dir=md)
-    files = _list_markdown_files(cast(Any, ctx))
+    files = _list_markdown_files(
+        cast(Any, ctx),
+        get_structured_logger("tests.semantic_extractor.list_md", context=ctx),
+    )
     assert [p.name for p in files] == ["a.md", "b.md"]
 
 
 def test__list_markdown_files_missing_fields_raises() -> None:
     # Missing md_dir/base_dir -> PipelineError
     with pytest.raises(PipelineError):
-        _ = _list_markdown_files(cast(Any, DummyCtx(base_dir=None, md_dir=None)))
+        _ = _list_markdown_files(
+            cast(Any, DummyCtx(base_dir=None, md_dir=None)),
+            get_structured_logger("tests.semantic_extractor.list_md", context=DummyCtx()),
+        )
 
 
 def test__list_markdown_files_unsafe_path_raises(tmp_path: Path) -> None:
@@ -53,7 +60,13 @@ def test__list_markdown_files_unsafe_path_raises(tmp_path: Path) -> None:
     md_outside = tmp_path / "outside"
     md_outside.mkdir()
     with pytest.raises(PipelineError):
-        _ = _list_markdown_files(cast(Any, DummyCtx(base_dir=base, md_dir=md_outside)))
+        _ = _list_markdown_files(
+            cast(Any, DummyCtx(base_dir=base, md_dir=md_outside)),
+            get_structured_logger(
+                "tests.semantic_extractor.list_md",
+                context=DummyCtx(base_dir=base, md_dir=md_outside),
+            ),
+        )
 
 
 def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
@@ -62,7 +75,13 @@ def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
     base.mkdir()
     # md does not exist
     with pytest.raises(InputDirectoryMissing):
-        _ = _list_markdown_files(cast(Any, DummyCtx(base_dir=base, md_dir=md)))
+        _ = _list_markdown_files(
+            cast(Any, DummyCtx(base_dir=base, md_dir=md)),
+            get_structured_logger(
+                "tests.semantic_extractor.list_md",
+                context=DummyCtx(base_dir=base, md_dir=md),
+            ),
+        )
 
 
 def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:

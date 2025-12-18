@@ -435,7 +435,6 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
     paths = resolve_context_paths(context, slug, paths_provider=_get_paths)
     base_dir = paths.base_dir
     md_dir = paths.md_dir
-    shim = paths
     summary_func = _gen_summary
     readme_func = _gen_readme
     validate_func = _validate_md
@@ -443,7 +442,7 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
     errors: List[str] = []
     with phase_scope(logger, stage="write_summary_and_readme", customer=slug) as scope:
         try:
-            summary_func(shim)
+            summary_func(paths)
             logger.info(
                 "semantic.summary.written",
                 extra={"slug": slug, "file_path": str(md_dir / "SUMMARY.md")},
@@ -457,7 +456,7 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
             errors.append(f"summary: {exc}")
 
         try:
-            readme_func(shim)
+            readme_func(paths)
             logger.info(
                 "semantic.readme.written",
                 extra={"slug": slug, "file_path": str(md_dir / "README.md")},
@@ -479,7 +478,7 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
         if errors:
             raise ConversionError("; ".join(errors), slug=slug, file_path=md_dir)
 
-        validate_func(shim)
+        validate_func(paths)
         logger.info("semantic.book.validated", extra={"slug": slug, "book_dir": str(md_dir)})
         _persist_layout_proposal(base_dir, logger, slug=slug)
         scope.set_artifacts(2)
@@ -489,11 +488,6 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
         "semantic.summary_readme.done",
         extra={"slug": slug, "ms": ms, "artifacts": {"summary": True, "readme": True}},
     )
-
-
-# ---------------------------------------------------------------------------
-# Helper condivisi con i test esistenti
-# ---------------------------------------------------------------------------
 
 
 def _build_inverse_index(vocab: Dict[str, Dict[str, Sequence[str]]]) -> Dict[str, Set[str]]:

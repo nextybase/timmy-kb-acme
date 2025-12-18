@@ -48,7 +48,6 @@ def convert_markdown(
     ensure_within(base_dir, md_dir)
 
     md_dir.mkdir(parents=True, exist_ok=True)
-    shim = paths
 
     discovery = discover_raw_inputs(raw_dir, logger, slug)
     safe_pdfs = list(discovery.safe_pdfs)
@@ -64,11 +63,11 @@ def convert_markdown(
                 "Rimuovi i symlink o sposta i PDF reali dentro 'raw/' e riprova."
             ),
             slug=slug,
-            file_path=shim.raw_dir,
+            file_path=paths.raw_dir,
         )
 
     result = _run_markdown_conversion(
-        shim,
+        paths,
         md_dir,
         logger,
         safe_pdfs=safe_pdfs,
@@ -80,7 +79,7 @@ def convert_markdown(
         raise ConfigError(
             "Nessun PDF valido trovato in raw/ e nessun contenuto markdown preesistente.",
             slug=slug,
-            file_path=shim.raw_dir,
+            file_path=paths.raw_dir,
         )
 
     return result
@@ -96,10 +95,6 @@ def discover_raw_inputs(raw_dir: Path, logger: logging.Logger, slug: str) -> Raw
     safe, discarded = _collect_safe_pdfs(raw_dir, logger, slug)
     return RawDiscovery(safe_pdfs=tuple(safe), discarded_unsafe=discarded)
 
-
-# ---------------------------------------------------------------------------
-# Helpers migrati da semantic/api.py
-# ---------------------------------------------------------------------------
 
 _SUPPORTED_SAFE_PDFS: "WeakKeyDictionary[Any, bool]" = WeakKeyDictionary()
 
@@ -232,7 +227,7 @@ def _log_conversion_success(
 
 
 def _run_markdown_conversion(
-    shim: ContextPaths,
+    paths: ContextPaths,
     md_dir: Path,
     logger: logging.Logger,
     *,
@@ -241,7 +236,7 @@ def _run_markdown_conversion(
     start_ts: float,
 ) -> List[Path]:
 
-    slug = shim.slug
+    slug = paths.slug
     if safe_pdfs:
         safe_list = list(safe_pdfs)
     else:
@@ -250,19 +245,19 @@ def _run_markdown_conversion(
     if not safe_list and not any(md_dir.glob("*.md")):
         logger.info(
             "semantic.convert.no_files",
-            extra={"slug": slug, "raw_dir": str(shim.raw_dir), "book_dir": str(md_dir)},
+            extra={"slug": slug, "raw_dir": str(paths.raw_dir), "book_dir": str(md_dir)},
         )
         raise ConfigError(
             "Nessun PDF valido trovato in raw/ e nessun contenuto markdown preesistente.",
             slug=slug,
-            file_path=shim.raw_dir,
+            file_path=paths.raw_dir,
         )
 
     with phase_scope(logger, stage="convert_markdown", customer=slug) as scope:
         call_convert = _call_convert_md
 
         if safe_list:
-            call_convert(_convert_md, shim, md_dir, safe_pdfs=safe_list)
+            call_convert(_convert_md, paths, md_dir, safe_pdfs=safe_list)
             content_mds = cast(List[Path], list_content_markdown(md_dir))
         else:
             content_mds = cast(List[Path], list_content_markdown(md_dir))
@@ -270,12 +265,12 @@ def _run_markdown_conversion(
             if not user_content:
                 logger.info(
                     "semantic.convert.no_files",
-                    extra={"slug": slug, "raw_dir": str(shim.raw_dir), "book_dir": str(md_dir)},
+                    extra={"slug": slug, "raw_dir": str(paths.raw_dir), "book_dir": str(md_dir)},
                 )
                 raise ConfigError(
                     "Nessun PDF valido trovato in raw/ e nessun contenuto markdown preesistente.",
                     slug=slug,
-                    file_path=shim.raw_dir,
+                    file_path=paths.raw_dir,
                 )
 
         try:
@@ -307,7 +302,7 @@ def _run_markdown_conversion(
                     "Rimuovi i symlink o sposta i PDF reali dentro 'raw/' e riprova."
                 ),
                 slug=slug,
-                file_path=shim.raw_dir,
+                file_path=paths.raw_dir,
             )
 
         if content_mds:
@@ -321,4 +316,4 @@ def _run_markdown_conversion(
             )
             return content_mds
 
-        raise ConfigError(f"Nessun PDF trovato in RAW locale: {shim.raw_dir}", slug=slug, file_path=shim.raw_dir)
+        raise ConfigError(f"Nessun PDF trovato in RAW locale: {paths.raw_dir}", slug=slug, file_path=paths.raw_dir)

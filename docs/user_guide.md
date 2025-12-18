@@ -46,15 +46,15 @@ Esegui gli step in sequenza.
 
 ```bash
 # 1) Setup locale (+ Drive opzionale)
-py src/pre_onboarding.py --slug acme --name "Cliente ACME"
+python -m timmy_kb.cli.pre_onboarding --slug acme --name "Cliente ACME"
 
 # 2) Tagging semantico (default: Drive)
-py src/tag_onboarding.py --slug acme --proceed
+python -m timmy_kb.cli.tag_onboarding --slug acme --proceed
 
 # 3) Costruzione Knowledge Graph dei tag
 py src/kg_build.py --slug acme
 
-> Nota: `semantic_onboarding.py` invoca internamente `build_kg_for_workspace`,
+> Nota: `timmy_kb.cli.semantic_onboarding` invoca internamente `build_kg_for_workspace`,
 > quindi l'intero flusso semantic costruisce automaticamente il Tag KG prima di
 > generare README/SUMMARY. La CLI `kg_build.py` serve per ricostruire o isolare
 > questo step quando necessario.
@@ -83,9 +83,9 @@ write_summary_and_readme(ctx, log, slug=slug)
 PY
 ```
 
-> **Nota**: `semantic_onboarding.py` e `semantic_headless.py` falliscono con `ConfigError` quando `semantic/tags.db` e mancante o vuoto; rigenera il vocabolario eseguendo `py src/tag_onboarding.py --slug <slug> --proceed`.
+> **Nota**: `python -m timmy_kb.cli.semantic_onboarding` e `python -m timmy_kb.cli.semantic_headless` falliscono con `ConfigError` quando `semantic/tags.db` e mancante o vuoto; rigenera il vocabolario eseguendo `python -m timmy_kb.cli.tag_onboarding --slug <slug> --proceed`.
 
-(Puoi continuare a usare `py src/semantic_onboarding.py` come orchestratore
+(Puoi continuare a usare `python -m timmy_kb.cli.semantic_onboarding` come orchestratore
 della sequenza se preferisci una CLI dedicata.)
 
 Per l'indicizzazione nel DB semantico puoi delegare a

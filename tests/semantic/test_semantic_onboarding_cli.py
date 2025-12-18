@@ -2,19 +2,14 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
-
-SRC = Path(__file__).resolve().parents[2] / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
 
 import pytest
 from tests.support.contexts import TestClientCtx
 
 import semantic.api as sapi
-import semantic_onboarding as cli
 from pipeline.exceptions import ConfigError, exit_code_for
+from timmy_kb.cli import semantic_onboarding as cli
 
 
 def _ctx(base_dir: Path) -> TestClientCtx:

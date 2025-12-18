@@ -340,10 +340,10 @@ References: [docs/adr/README.md](adr/README.md).
 streamlit run onboarding_ui.py
 
 # CLI orchestrators
-py src/pre_onboarding.py --slug <slug> --name "<Cliente>" --non-interactive
-py src/tag_onboarding.py --slug <slug> --non-interactive --proceed
-py src/tag_onboarding.py --slug <slug> --nlp --nlp-workers 6 --nlp-batch-size 8
-py src/semantic_onboarding.py --slug <slug> --non-interactive
+python -m timmy_kb.cli.pre_onboarding --slug <slug> --name "<Cliente>" --non-interactive
+python -m timmy_kb.cli.tag_onboarding --slug <slug> --non-interactive --proceed
+python -m timmy_kb.cli.tag_onboarding --slug <slug> --nlp --nlp-workers 6 --nlp-batch-size 8
+python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive
 py src/onboarding_full.py --slug <slug> --non-interactive
 
 # QA

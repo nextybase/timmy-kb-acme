@@ -14,7 +14,7 @@ from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
 from pipeline.workspace_layout import WorkspaceLayout
-from pre_onboarding import ensure_local_workspace_for_ui
+from timmy_kb.cli.pre_onboarding import ensure_local_workspace_for_ui
 from ui.config_store import get_vision_model
 from ui.utils.context_cache import get_client_context
 from ui.utils.workspace import get_ui_workspace_layout

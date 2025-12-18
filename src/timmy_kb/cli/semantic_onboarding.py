@@ -9,26 +9,13 @@ import os
 import sys
 import uuid
 from pathlib import Path
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 _SRC_ROOT = Path(__file__).resolve().parents[2]
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 _T = TypeVar("_T")
-
-
-def _apply_cli_override(name: str, fallback: Callable[[], _T]) -> Callable[[], _T]:
-    shim = sys.modules.get("semantic_onboarding")
-    if shim is None or shim is sys.modules.get(__name__):
-        return fallback
-    override = getattr(shim, name, None)
-    local = getattr(sys.modules.get(__name__), name, None)
-    if override is None or override is fallback:
-        return fallback
-    if override is local:
-        return fallback
-    return override
 
 
 from kg_builder import build_kg_for_workspace
@@ -62,7 +49,7 @@ def _default_parse_args() -> argparse.Namespace:
 
 
 def _parse_args() -> argparse.Namespace:
-    return _apply_cli_override("_parse_args", _default_parse_args)()
+    return _default_parse_args()
 
 
 def main() -> int:

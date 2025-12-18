@@ -59,6 +59,7 @@ from .drive.client import get_drive_service, get_file_metadata, list_drive_files
 
 # -------------------------------------- Download -----------------------------------
 from .drive.download import download_drive_pdfs_to_local
+from .drive.download_steps import DriveCandidate, compute_created, discover_candidates, emit_progress, snapshot_existing
 
 # --------------------------- Creazione/albero/upload/local --------------------------
 from .drive.upload import (
@@ -93,4 +94,9 @@ __all__: list[str] = [
     "create_local_base_structure",
     # download
     "download_drive_pdfs_to_local",
+    "DriveCandidate",
+    "compute_created",
+    "discover_candidates",
+    "emit_progress",
+    "snapshot_existing",
 ]

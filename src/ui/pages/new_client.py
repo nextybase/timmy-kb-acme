@@ -23,7 +23,7 @@ from pipeline.settings import Settings
 from pipeline.workspace_bootstrap import bootstrap_client_workspace
 from pipeline.workspace_layout import WorkspaceLayout
 from pipeline.yaml_utils import yaml_read
-from semantic.vision_ingest import compile_document_to_vision_yaml
+from semantic.core import compile_document_to_vision_yaml
 from system.self_check import run_system_self_check
 from ui.chrome import header, sidebar
 from ui.clients_store import ClientEntry, set_state, upsert_client

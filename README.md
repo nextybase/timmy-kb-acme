@@ -33,9 +33,9 @@ La UI guida l'onboarding end-to-end. Per flussi completi e screenshot consulta l
 
 ### CLI automatizzata
 ```bash
-py src/pre_onboarding.py --slug acme --name "Cliente ACME" --non-interactive
-py src/tag_onboarding.py --slug acme --non-interactive --proceed
-py src/semantic_onboarding.py --slug acme --non-interactive
+python -m timmy_kb.cli.pre_onboarding --slug acme --name "Cliente ACME" --non-interactive
+python -m timmy_kb.cli.tag_onboarding --slug acme --non-interactive --proceed
+python -m timmy_kb.cli.semantic_onboarding --slug acme --non-interactive
 py src/onboarding_full.py --slug acme --non-interactive
 ```
 Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user_guide.md).

@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 import logging
-import sys
 from types import SimpleNamespace
 
 import pytest
+
+from timmy_kb.cli import tag_onboarding as tag
+from timmy_kb.cli import tag_onboarding_raw as raw_mod
 
 
 def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_path, monkeypatch):
@@ -12,8 +14,6 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
     il ramo source=="drive" deve sollevare ConfigError con istruzioni chiare,
     non TypeError da chiamata su None.
     """
-    import tag_onboarding as tag
-
     # Isola la root del workspace cliente
     client_root = tmp_path / "timmy-kb-dummy"
     (client_root / "config").mkdir(parents=True, exist_ok=True)
@@ -73,19 +73,10 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
     )
 
     # Simula funzioni mancanti dal modulo opzionale (sia modulo flat che namespaced)
-    raw_mod = sys.modules.get("tag_onboarding_raw")
-    if raw_mod is None:
-        import tag_onboarding_raw as raw_mod  # type: ignore  # pragma: no cover
     monkeypatch.setattr(raw_mod, "get_drive_service", None, raising=False)
     monkeypatch.setattr(raw_mod, "download_drive_pdfs_to_local", None, raising=False)
-    assert getattr(raw_mod, "get_drive_service") is None  # sanity: modulo flat patchato
+    assert getattr(raw_mod, "get_drive_service") is None
     assert getattr(raw_mod, "download_drive_pdfs_to_local") is None
-    package_raw_mod = sys.modules.get("tag_onboarding_raw")
-    if package_raw_mod is not None:
-        monkeypatch.setattr(package_raw_mod, "get_drive_service", None, raising=False)
-        monkeypatch.setattr(package_raw_mod, "download_drive_pdfs_to_local", None, raising=False)
-        assert getattr(package_raw_mod, "get_drive_service") is None
-        assert getattr(package_raw_mod, "download_drive_pdfs_to_local") is None
 
     with pytest.raises(tag.ConfigError) as exc:
         tag.tag_onboarding_main(

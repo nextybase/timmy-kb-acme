@@ -24,10 +24,14 @@ def test_tag_onboarding_cli_missing_env_returns_configerror_code(tmp_path: Path)
     env.pop("DRIVE_ID", None)
 
     repo_root = Path(__file__).resolve().parents[1]
+    src_path = str(repo_root / "src")
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = src_path if not existing_pythonpath else f"{src_path}{os.pathsep}{existing_pythonpath}"
     proc = subprocess.run(
         [
             PY,
-            str(repo_root / "src" / "tag_onboarding.py"),
+            "-m",
+            "timmy_kb.cli.tag_onboarding",
             "--slug",
             slug,
             "--non-interactive",

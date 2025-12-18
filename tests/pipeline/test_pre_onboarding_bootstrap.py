@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-import pre_onboarding
 from pipeline.context import ClientContext
+from timmy_kb.cli import pre_onboarding
 
 
 @pytest.fixture

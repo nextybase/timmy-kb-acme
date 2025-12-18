@@ -2,11 +2,10 @@
 # tests/test_semantic_extractor_punct_matching.py
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Optional
 
-from semantic.semantic_extractor import extract_semantic_concepts
+from semantic.core import extract_semantic_concepts
 
 
 class Ctx:
@@ -42,12 +41,12 @@ def test_extractor_matches_punctuated_keywords(tmp_path: Path, monkeypatch) -> N
             "data+": ["data+", "data plus"],
         }
 
-    import semantic.semantic_extractor as se
+    import semantic.core as se
 
     monkeypatch.setattr(se, "load_semantic_mapping", fake_load_mapping)
 
     ctx = Ctx(base, md)
-    out = extract_semantic_concepts(ctx, logging.getLogger("t"))
+    out = extract_semantic_concepts(ctx)
     assert "c++" in out and any(m["file"] == "cxx.md" for m in out["c++"])
     assert "ml/ops" in out and any(m["file"] == "mlops.md" for m in out["ml/ops"])
     assert "data+" in out and any(m["file"] == "data_plus.md" for m in out["data+"])

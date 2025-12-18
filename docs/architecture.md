@@ -12,10 +12,10 @@ flowchart LR
     end
 
     subgraph Orchestrators
-      PRE[pre_onboarding.py]
-      TAG[tag_onboarding.py]
+      PRE[timmy_kb.cli.pre_onboarding]
+      TAG[timmy_kb.cli.tag_onboarding]
       KG[kg_build.py (Tag KG Builder)]
-      SEMCLI[semantic_onboarding.py (wrapper dei service semantic.*)]
+      SEMCLI[timmy_kb.cli.semantic_onboarding (wrapper dei service semantic.*)]
       FULL[onboarding_full.py]
 VISIONCLI[src/tools/gen_vision_yaml.py]
     end
@@ -170,7 +170,7 @@ Note operative
 - Le fasi convert/enrich/summary condividono l'orchestratore `_run_build_workflow` e loggano `semantic.book.frontmatter` con il numero di file arricchiti (UI/CLI allineate).
 - La conversione fallisce se dopo il run esistono solo README/SUMMARY (nessun contenuto .md generato): assicurarsi che `raw/` contenga PDF validi.
 - La generazione del mapping Vision usa `semantic/vision_provision.py` (con interfaccia UI in `ui/services/vision_provision.py`): salva uno snapshot testuale (`semantic/vision_statement.txt`) accanto allo YAML e chiama sempre il modello definito in `config/config.yaml`, letto via `get_vision_model()`.
-- Entry point CLI aggiuntivi (`ingest.py`, `retriever.py`, `semantic_headless.py`, `kb_db.py`) orchestrano step stand-alone riusando gli helper di pipeline e semantic.
+- Entry point CLI aggiuntivi (`ingest.py`, `retriever.py`, `timmy_kb.cli.semantic_headless`, `kb_db.py`) orchestrano step stand-alone riusando gli helper di pipeline e semantic.
 - Lo stato di tagging e di UI condiviso vive in `storage/tags_store.py` (JSON atomico) e `clients_db/ui_state.json`; restano nel perimetro `output/timmy-kb-<slug>` come SSoT locale.
 - L'indicizzazione su SQLite esclude `README.md` e `SUMMARY.md` e scarta eventuali embedding vuoti per singolo file (log "Embedding vuoti scartati").
 - Indicizzazione parziale: su mismatch tra `contents` ed `embeddings` si indicizza sul minimo comune; vengono emessi `semantic.index.mismatched_embeddings`, `semantic.index.embedding_pruned` e un solo `semantic.index.skips` con chiavi `{skipped_io, skipped_no_text, vectors_empty}`.

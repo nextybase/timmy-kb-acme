@@ -45,8 +45,7 @@ def main() -> int:
 
     import importlib
     from typing import Any, Dict
-
-    pre_onboarding = importlib.import_module("pre_onboarding")
+    from timmy_kb.cli import pre_onboarding
     onboarding_full = importlib.import_module("onboarding_full")
     finance_api = importlib.import_module("finance.api")
     pipeline_context = importlib.import_module("pipeline.context")

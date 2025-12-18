@@ -85,17 +85,22 @@ def test_tag_onboarding_cli_scan_raw_and_nlp_respect_context(tmp_path: Path):
 
     _write_stub_nlp(stub_root)
 
+    repo_root = Path(__file__).resolve().parents[1]
+
     env = dict(os.environ)
     env["REPO_ROOT_DIR"] = str(client_dir)
     existing_path = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = str(stub_root) if not existing_path else f"{stub_root}{os.pathsep}{existing_path}"
-
-    repo_root = Path(__file__).resolve().parents[1]
+    src_path = str(repo_root / "src")
+    path_elements = [str(stub_root), src_path]
+    if existing_path:
+        path_elements.append(existing_path)
+    env["PYTHONPATH"] = os.pathsep.join(path_elements)
 
     _run(
         [
             PY,
-            "src/tag_onboarding.py",
+            "-m",
+            "timmy_kb.cli.tag_onboarding",
             "--slug",
             slug,
             "--scan-raw",
@@ -108,7 +113,8 @@ def test_tag_onboarding_cli_scan_raw_and_nlp_respect_context(tmp_path: Path):
     _run(
         [
             PY,
-            "src/tag_onboarding.py",
+            "-m",
+            "timmy_kb.cli.tag_onboarding",
             "--slug",
             slug,
             "--nlp",

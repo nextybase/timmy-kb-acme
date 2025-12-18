@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, Optional
 
 from pipeline.file_utils import safe_write_bytes
 from pipeline.path_utils import ensure_within_and_resolve
-from semantic.vision_ingest import compile_document_to_vision_yaml
+from semantic.core import compile_document_to_vision_yaml
 
 from .bootstrap import build_generic_vision_template_pdf, ensure_golden_dummy_pdf
 from .drive import call_drive_build_from_mapping, call_drive_emit_readmes, call_drive_min

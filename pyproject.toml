@@ -75,7 +75,7 @@ ignore = ["E203", "ANN201", "ANN202", "ANN204", "B009", "B010", "B023", "B033", 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S603", "S404", "B017", "S101", "ANN001", "ANN002", "ANN003", "B008"]
 "src/tools/*" = ["S110"]
-"src/tag_onboarding.py" = ["E501", "S608"]
+"src/timmy_kb/cli/tag_onboarding.py" = ["E501", "S608"]
 "src/pipeline/drive/upload.py" = ["S110"]
 "src/pipeline/file_utils.py" = ["S110"]
 "src/pipeline/path_utils.py" = ["S110"]

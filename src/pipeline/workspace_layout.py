@@ -292,9 +292,9 @@ def _is_running_under_dummy_builder() -> bool:
 def _is_running_under_bootstrap_flow() -> bool:
     """Rileva se WorkspaceLayout viene invocato da un orchestratore di bootstrap."""
     bootstrap_triggers = (
-        "src/pre_onboarding.py",
-        "src/tag_onboarding.py",
-        "src/semantic_onboarding.py",
+        "src/timmy_kb/cli/pre_onboarding.py",
+        "src/timmy_kb/cli/tag_onboarding.py",
+        "src/timmy_kb/cli/semantic_onboarding.py",
         "src/onboarding_full.py",
     )
     for frame in inspect.stack():

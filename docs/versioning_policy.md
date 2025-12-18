@@ -64,7 +64,7 @@ I documenti in `docs/` riportano la versione in testata. Allineare sempre:
 
 ## 7) Allineamento orchestratori per v1.2.1
 
-- Facade `semantic.api` (conversione/enrichment/preview) come SSoT; e disponibile un thin wrapper CLI `semantic_onboarding.py` che richiama la facade per simmetria con gli altri orchestratori.
+- Facade `semantic.api` (conversione/enrichment/preview) come SSoT; e disponibile un thin wrapper CLI `timmy_kb.cli.semantic_onboarding` che richiama la facade per simmetria con gli altri orchestratori.
 - Ridotto: `onboarding_full.py` (solo push, in futuro GitBook).
 - SSoT: `ensure_within` in `pipeline.path_utils`.
 

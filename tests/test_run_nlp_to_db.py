@@ -7,7 +7,7 @@ from pipeline.exceptions import PathTraversalError
 from storage.tags_store import ensure_schema_v2, get_conn
 from storage.tags_store import save_doc_terms as real_save_doc_terms
 from storage.tags_store import upsert_document, upsert_folder
-from tag_onboarding import _resolve_cli_paths, run_nlp_to_db
+from timmy_kb.cli.tag_onboarding import _resolve_cli_paths, run_nlp_to_db
 
 
 def test_run_nlp_to_db_processes_nested_pdf(tmp_path, monkeypatch):

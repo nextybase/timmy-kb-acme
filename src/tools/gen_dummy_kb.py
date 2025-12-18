@@ -117,7 +117,7 @@ def _normalize_relative_path(value: str, *, var_name: str) -> Path:
 # Import delle API usate dalla UI
 # ------------------------------------------------------------
 # pre_onboarding: workspace locale + salvataggio Vision PDF (se fornito)
-from pre_onboarding import ensure_local_workspace_for_ui  # type: ignore
+from timmy_kb.cli.pre_onboarding import ensure_local_workspace_for_ui  # type: ignore
 
 # Vision (stesse firme UI)
 _vision_mod = importlib.import_module("ui.services.vision_provision")

@@ -4,9 +4,9 @@ from types import SimpleNamespace
 import pytest
 from tests.support.contexts import TestClientCtx
 
-import semantic_headless as sh
 from pipeline.exceptions import ConfigError
 from semantic import api as sapi
+from timmy_kb.cli import semantic_headless as sh
 
 
 def test_headless_fails_without_vocab(tmp_path, monkeypatch):

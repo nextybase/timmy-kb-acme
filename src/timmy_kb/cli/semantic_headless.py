@@ -5,9 +5,8 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, List, TypeVar, cast
+from typing import TYPE_CHECKING, Dict, List, TypeVar, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary
@@ -31,19 +30,6 @@ __all__ = [
 ]
 
 _T = TypeVar("_T")
-
-
-def _get_override(name: str, fallback: Callable[..., _T]) -> Callable[..., _T]:
-    shim = sys.modules.get("semantic_headless")
-    if shim is None or shim is sys.modules.get(__name__):
-        return fallback
-    override = getattr(shim, name, None)
-    local = getattr(sys.modules.get(__name__), name, None)
-    if override is None:
-        return fallback
-    if override is local or override is getattr(sys.modules.get(__name__), name, None):
-        return fallback
-    return override
 
 
 # - in fase di type checking usiamo la classe concreta
@@ -119,7 +105,7 @@ def _default_parse_args() -> argparse.Namespace:
 
 
 def _parse_args() -> argparse.Namespace:
-    return _get_override("_parse_args", _default_parse_args)()
+    return _default_parse_args()
 
 
 def _default_setup_logger(level: str, *, slug: str | None = None) -> logging.Logger:
@@ -131,7 +117,7 @@ def _default_setup_logger(level: str, *, slug: str | None = None) -> logging.Log
 
 
 def _setup_logger(level: str, *, slug: str | None = None) -> logging.Logger:
-    return _get_override("_setup_logger", _default_setup_logger)(level, slug=slug)
+    return _default_setup_logger(level, slug=slug)
 
 
 def _safe_len_seq(obj: object) -> int:

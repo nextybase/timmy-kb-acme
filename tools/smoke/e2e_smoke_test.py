@@ -143,7 +143,7 @@ def main():
         [
             sys.executable,
             "-m",
-            "tag_onboarding",
+            "timmy_kb.cli.tag_onboarding",
             "--slug",
             args.slug,
             "--scan-raw",
@@ -160,7 +160,7 @@ def main():
         [
             sys.executable,
             "-m",
-            "tag_onboarding",
+            "timmy_kb.cli.tag_onboarding",
             "--slug",
             args.slug,
             "--nlp",

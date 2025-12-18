@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-import semantic.semantic_extractor as se
+import semantic.core as se
 
 
 class _Ctx:
@@ -44,6 +44,20 @@ def test_enrich_markdown_folder_disabled_logs(
         se.enrich_markdown_folder(ctx, logger)
 
     assert any("enrich.disabled" in r.getMessage() for r in caplog.records)
+
+
+def test_enrich_markdown_folder_noop_when_disabled(tmp_path: Path) -> None:
+    base = tmp_path / "kb"
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    (book / "a.md").write_text("# A\nBody\n", encoding="utf-8")
+
+    ctx = _Ctx(base)
+    ctx.enrich_enabled = False
+
+    # Ensure no exception and files remain untouched (side-effect already limited)
+    se.enrich_markdown_folder(ctx, logging.getLogger("test.enrich.disabled"))
+    assert (book / "a.md").read_text(encoding="utf-8") == "# A\nBody\n"
 
 
 def test_enrich_markdown_folder_invokes_hook(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

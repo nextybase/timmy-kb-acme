@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import tag_onboarding_raw as raw_ingest
 from pipeline.ingest import provider as ingest_provider
-from tag_onboarding import _should_proceed  # type: ignore
-from tag_onboarding_raw import copy_from_local, download_from_drive
+from timmy_kb.cli import tag_onboarding_raw as raw_ingest
+from timmy_kb.cli.tag_onboarding import _should_proceed  # type: ignore
+from timmy_kb.cli.tag_onboarding_raw import copy_from_local, download_from_drive
 
 
 class _NoopLogger:

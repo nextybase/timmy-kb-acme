@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 import inspect
 
-from tag_onboarding import tag_onboarding_main
+from timmy_kb.cli.tag_onboarding import tag_onboarding_main
 
 
 def test_tag_onboarding_default_is_drive():

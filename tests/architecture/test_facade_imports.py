@@ -7,9 +7,9 @@ import ast
 from pathlib import Path
 
 FACADES = [
-    "src/pre_onboarding.py",
-    "src/tag_onboarding.py",
-    "src/semantic_onboarding.py",
+    "src/timmy_kb/cli/pre_onboarding.py",
+    "src/timmy_kb/cli/tag_onboarding.py",
+    "src/timmy_kb/cli/semantic_onboarding.py",
     "src/onboarding_full.py",
     "src/tools/gen_vision_yaml.py",
 ]

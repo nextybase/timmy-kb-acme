@@ -26,9 +26,9 @@ from pipeline.import_utils import import_from_candidates
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.vision_template import load_vision_template_sections
+from semantic.core import compile_document_to_vision_yaml
 from semantic.pdf_utils import PdfExtractError, extract_text_from_pdf
 from semantic.validation import validate_context_slug
-from semantic.vision_ingest import compile_document_to_vision_yaml
 from semantic.vision_utils import json_to_cartelle_raw_yaml, vision_to_semantic_mapping_yaml
 
 # Logger strutturato di modulo

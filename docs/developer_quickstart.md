@@ -11,13 +11,13 @@ Percorso minimo per sviluppatori e agenti Codex: comandi lineari, SSoT rispettat
 ## Flusso 1: CLI end-to-end (happy path)
 ```bash
 # 1) Pre-onboarding: crea workspace e copia template semantic
-py src/pre_onboarding.py --slug <slug> --name "<Cliente>" --non-interactive
+python -m timmy_kb.cli.pre_onboarding --slug <slug> --name "<Cliente>" --non-interactive
 
 # 2) Tag onboarding (estrazione tag + DB sqlite SSoT)
-py src/tag_onboarding.py --slug <slug> --non-interactive --proceed
+python -m timmy_kb.cli.tag_onboarding --slug <slug> --non-interactive --proceed
 
 # 3) Semantic onboarding (convert â†’ enrich â†’ README/SUMMARY)
-py src/semantic_onboarding.py --slug <slug> --non-interactive
+python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive
 
 # 4) Push opzionale (GitBook/preview): usa solo il workspace appena creato
 py src/onboarding_full.py --slug <slug> --non-interactive

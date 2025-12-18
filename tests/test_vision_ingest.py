@@ -8,8 +8,8 @@ from typing import List
 import pytest
 import yaml
 
+from semantic.core import compile_document_to_vision_yaml, compile_pdf_to_yaml
 from semantic.pdf_utils import PdfExtractError
-from semantic.vision_ingest import compile_document_to_vision_yaml, compile_pdf_to_yaml
 
 
 def _make_text_pdf(path: Path, text: str = "Hello Vision") -> None:

@@ -30,7 +30,6 @@ import datetime as _dt
 import logging
 import shutil
 import uuid
-from importlib import import_module
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -108,11 +107,6 @@ def _require_drive_utils() -> None:
             "Oppure disattiva il ramo Drive (usa --dry-run o source=local)."
         )
         raise ConfigError(msg)
-
-
-def _get_pre_onboarding_attr(name: str):
-    shim = import_module("pre_onboarding")
-    return getattr(shim, name)
 
 
 def _resolve_yaml_structure_file() -> Path:
@@ -308,8 +302,7 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
 
     cfg_path = context.config_path
 
-    bootstrap_workspace = _get_pre_onboarding_attr("bootstrap_client_workspace")
-    bootstrap_workspace(context)
+    bootstrap_client_workspace(context)
 
     cfg: Dict[str, Any] = {}
     try:

@@ -39,13 +39,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib
 import logging
 import os
-import sys
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Optional, cast
+from typing import Any, Optional, cast
 
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.context import ClientContext
@@ -70,8 +68,10 @@ from semantic.types import ClientContextProtocol
 from storage.tags_store import clear_doc_terms, derive_db_path_from_yaml_path, ensure_schema_v2, get_conn, has_doc_terms
 from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
 from storage.tags_store import upsert_document, upsert_folder
-from tag_onboarding_context import ContextResources, prepare_context
-from tag_onboarding_semantic import emit_csv_phase, emit_stub_phase
+
+from . import tag_onboarding_raw as tag_onboarding_raw_module
+from .tag_onboarding_context import ContextResources, prepare_context
+from .tag_onboarding_semantic import emit_csv_phase, emit_stub_phase
 
 
 def _prompt(msg: str) -> str:
@@ -89,34 +89,18 @@ def _obs_kwargs() -> dict[str, Any]:
     }
 
 
-def _resolve_prepare_context() -> Callable[..., ContextResources]:
-    shim = sys.modules.get("tag_onboarding")
-    if shim is not None and hasattr(shim, "prepare_context"):
-        return getattr(shim, "prepare_context")
-
-    return prepare_context
-
-
-def _get_tag_onboarding_raw_attr(name: str):
-    raw_mod = sys.modules.get("tag_onboarding_raw")
-    if raw_mod is None:
-        raw_mod = importlib.import_module("tag_onboarding_raw")
-    return getattr(raw_mod, name)
-
-
 def copy_from_local(*args: Any, **kwargs: Any) -> None:
-    return _get_tag_onboarding_raw_attr("copy_from_local")(*args, **kwargs)
+    return tag_onboarding_raw_module.copy_from_local(*args, **kwargs)
 
 
 def download_from_drive(*args: Any, **kwargs: Any) -> None:
-    return _get_tag_onboarding_raw_attr("download_from_drive")(*args, **kwargs)
+    return tag_onboarding_raw_module.download_from_drive(*args, **kwargs)
 
 
 def _ensure_drive_utils_available() -> None:
-    raw_mod = sys.modules.get("tag_onboarding_raw")
     missing: list[str] = []
     for attr in ("get_drive_service", "download_drive_pdfs_to_local"):
-        func = getattr(raw_mod, attr, None) if raw_mod is not None else None
+        func = getattr(tag_onboarding_raw_module, attr, None)
         if not callable(func):
             missing.append(attr)
     if missing:
@@ -512,7 +496,7 @@ def tag_onboarding_main(
 
     # Context + logger coerenti con orchestratori
 
-    context_preparer = _resolve_prepare_context()
+    context_preparer = prepare_context
     resources: ContextResources = context_preparer(
         slug=slug,
         non_interactive=non_interactive,

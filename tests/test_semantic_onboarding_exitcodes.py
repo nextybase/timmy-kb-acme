@@ -2,7 +2,6 @@
 # tests/test_semantic_onboarding_exitcodes.py
 from __future__ import annotations
 
-import importlib
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +9,7 @@ from typing import Any
 
 import semantic.api as sapi
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
+from timmy_kb.cli import semantic_onboarding as mod
 
 
 class _DummyCtx(SimpleNamespace):
@@ -32,7 +32,6 @@ def _set_argv(slug: str = "dummy") -> None:
 
 def test_cli_returns_configerror_exit_code(tmp_path: Path, monkeypatch: Any) -> None:
     _set_argv("dummy")
-    mod = importlib.import_module("src.semantic_onboarding")
 
     # Evita I/O reale
     monkeypatch.setattr(
@@ -54,7 +53,6 @@ def test_cli_returns_configerror_exit_code(tmp_path: Path, monkeypatch: Any) -> 
 
 def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -> None:
     _set_argv("dummy")
-    mod = importlib.import_module("src.semantic_onboarding")
 
     monkeypatch.setattr(
         mod,
@@ -93,7 +91,6 @@ def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -
 
 def test_cli_missing_vocab_db_returns_config_error(tmp_path: Path, monkeypatch: Any) -> None:
     _set_argv("dummy")
-    mod = importlib.import_module("src.semantic_onboarding")
 
     ctx = _make_ctx(tmp_path, "dummy")
     monkeypatch.setattr(
@@ -122,7 +119,6 @@ def test_cli_missing_vocab_db_returns_config_error(tmp_path: Path, monkeypatch: 
 def test_cli_summary_log_excludes_readme_summary(tmp_path: Path, monkeypatch: Any) -> None:
     """Verifica che il riepilogo strutturato riporti solo markdown di contenuto."""
     _set_argv("dummy")
-    mod = importlib.import_module("src.semantic_onboarding")
 
     ctx = _make_ctx(tmp_path, "dummy")
     monkeypatch.setattr(
