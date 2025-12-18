@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai.config import resolve_vision_config
+from ai.vision_config import resolve_vision_config
 from pipeline.exceptions import ConfigError
 
 
@@ -32,7 +32,7 @@ class _GovernorCtx(SimpleNamespace):
 
 def test_env_var_assistant_id(monkeypatch):
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "env-assistant")
-    monkeypatch.setattr("ai.config._resolve_model_for_vision", lambda *args, **kwargs: "stub-model")
+    monkeypatch.setattr("ai.vision_config._resolve_model_for_vision", lambda *args, **kwargs: "stub-model")
     ctx = _GovernorCtx(settings=DummySettings())
     config = resolve_vision_config(ctx)
     assert config.assistant_id == "env-assistant"
@@ -66,7 +66,7 @@ def test_model_from_assistant_called_only_when_needed(monkeypatch):
         called["make"] += 1
         return FakeClient()
 
-    monkeypatch.setattr("ai.config.make_openai_client", fake_make)
+    monkeypatch.setattr("ai.vision_config.make_openai_client", fake_make)
     ctx = _GovernorCtx(settings=DummySettings())
     config = resolve_vision_config(ctx)
     assert config.model == "assistant-model"
@@ -95,7 +95,7 @@ def test_model_from_settings_avoids_make(monkeypatch):
     def fake_make():
         raise AssertionError("make_openai_client should not be called when model present")
 
-    monkeypatch.setattr("ai.config.make_openai_client", fake_make)
+    monkeypatch.setattr("ai.vision_config.make_openai_client", fake_make)
     ctx = _GovernorCtx(settings=SettingsWithModel())
     config = resolve_vision_config(ctx)
     assert config.model == "direct-model"

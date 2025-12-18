@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional
 
-from ai import invoke_kgraph_messages
+from ai.kgraph import invoke_kgraph_messages
 from kg_models import TagKnowledgeGraph
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError

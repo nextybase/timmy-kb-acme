@@ -12,8 +12,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from ai import resolve_vision_config
-from ai.config import resolve_vision_retention_days
+from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger

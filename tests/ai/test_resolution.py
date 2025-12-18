@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from ai import resolution
+import ai.resolution as resolution
 from pipeline.exceptions import ConfigError
 
 

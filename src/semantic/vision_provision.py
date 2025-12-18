@@ -16,7 +16,8 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
 import yaml
 
-from ai import AssistantConfig, run_json_model
+from ai.responses import run_json_model
+from ai.types import AssistantConfig
 from pipeline import ontology
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError

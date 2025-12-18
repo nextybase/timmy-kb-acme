@@ -279,7 +279,7 @@ References: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](..
 
 ## 13) Vision statement & AI tooling
 
-- `tools/gen_vision_yaml.py` generates `semantic/semantic_mapping.yaml` from `config/VisionStatement.pdf`.
+- `src/tools/gen_vision_yaml.py` generates `semantic/semantic_mapping.yaml` from `config/VisionStatement.pdf`.
 - UI always reads the model from `config/config.yaml` via `get_vision_model()` (SSoT).
 - Prefer the Agent scenario; allow Full Access only with explicit justification and on a dedicated branch.
 - `tools/vision_alignment_check.py` exports assistant metadata for diagnostics and logs.

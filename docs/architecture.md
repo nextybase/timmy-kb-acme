@@ -17,7 +17,7 @@ flowchart LR
       KG[kg_build.py (Tag KG Builder)]
       SEMCLI[semantic_onboarding.py (wrapper dei service semantic.*)]
       FULL[onboarding_full.py]
-      VISIONCLI[tools/gen_vision_yaml.py]
+VISIONCLI[src/tools/gen_vision_yaml.py]
     end
 
     subgraph Pipeline
@@ -81,6 +81,8 @@ flowchart LR
     PGIT --> GITHUB
 
     SVISION --> OPENAI
+
+Vision provisioning now relies on the single `ai.vision_config` resolver and the `_with_config` operators exposed by `semantic.vision_provision` (CLI entrypoint `src/tools/gen_vision_yaml.py`). The architecture assumes dedicated hardware, controlled environments, automated processes, and loud failures to keep each step auditable and deterministic.
 
 - **Tag KG Builder:** `kg_build.py` (CLI) e il pannello UI Knowledge Graph dei tag invocano `build_kg_for_workspace`, leggono `semantic/tags_raw.json` e scrivono `semantic/kg.tags.json`/`semantic/kg.tags.md` prima che `semantic_onboarding` rigeneri i README.
 

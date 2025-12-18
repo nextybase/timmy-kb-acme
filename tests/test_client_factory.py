@@ -7,7 +7,8 @@ from typing import Any, Dict
 
 import pytest
 
-from ai import client_factory
+import ai.client_factory as client_factory
+from ai.client_factory import make_openai_client
 from pipeline.exceptions import ConfigError
 
 
@@ -24,7 +25,7 @@ def test_make_openai_client_requires_modern_sdk(monkeypatch):
     monkeypatch.setitem(sys.modules, "openai", dummy_module)
 
     with pytest.raises(ConfigError) as excinfo:
-        client_factory.make_openai_client()
+        make_openai_client()
 
     assert "openai" in str(excinfo.value).lower()
     assert "aggiorna" in str(excinfo.value).lower()
@@ -49,7 +50,7 @@ def test_make_openai_client_success(monkeypatch):
     dummy_module.OpenAI = ModernOpenAI  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "openai", dummy_module)
 
-    client_factory.make_openai_client()
+    make_openai_client()
 
     assert captured_kwargs["api_key"] == "secret"  # pragma: allowlist secret
     assert captured_kwargs["default_headers"] == {"OpenAI-Beta": "assistants=v2"}

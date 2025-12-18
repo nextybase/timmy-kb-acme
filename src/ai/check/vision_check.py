@@ -8,8 +8,7 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from ai import resolve_vision_config
-from ai.config import resolve_vision_retention_days
+from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.env_utils import ensure_dotenv_loaded
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe

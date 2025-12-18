@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from importlib import import_module
 from types import ModuleType
-from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Tuple, Type
+from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Type
 
 
 class _ProvisionFromVisionFunc(Callable[..., Dict[str, Any]]):
@@ -30,7 +30,6 @@ class VisionBindings:
     prepare_with_config: _PreparePromptFunc
     provision_yaml_with_config: Optional[_ProvisionFromVisionYamlFunc]
     prepare_yaml_with_config: Optional[_PreparePromptYamlFunc]
-    diagnostics: Tuple[str, ...] = tuple()
 
 
 VISION_PROVIDER_CANDIDATES: tuple[str, ...] = (
@@ -63,15 +62,13 @@ def iter_available_vision_providers(
 def load_vision_bindings(
     candidates: Sequence[str] | None = None,
 ) -> VisionBindings:
-    """Carica le binding Vision da semantic con fallback sul modulo canonico."""
-
-    diagnostics: list[str] = []
+    """Carica le binding Vision dalla lista ufficiale."""
 
     module_candidates = candidates if candidates is not None else VISION_PROVIDER_CANDIDATES
+
     for module_name in module_candidates:
         module = _import_module(module_name)
         if module is None:
-            diagnostics.append(f"Import fallito: {module_name}")
             continue
 
         halt_error = getattr(module, "HaltError", None)
@@ -87,23 +84,8 @@ def load_vision_bindings(
                 prepare_with_config=prepare,
                 provision_yaml_with_config=provision_yaml if callable(provision_yaml) else None,
                 prepare_yaml_with_config=prepare_yaml if callable(prepare_yaml) else None,
-                diagnostics=tuple(diagnostics),
             )
 
-        diagnostics.append(f"Modulo {module_name} incompleto")
-
-    fallback_module = import_module("semantic.vision_provision")
-    halt_error = getattr(fallback_module, "HaltError")
-    provision = getattr(fallback_module, "provision_from_vision_with_config")
-    prepare = getattr(fallback_module, "prepare_assistant_input_with_config")
-    provision_yaml = getattr(fallback_module, "provision_from_vision_yaml_with_config", None)
-    prepare_yaml = getattr(fallback_module, "prepare_assistant_input_from_yaml_with_config", None)
-
-    return VisionBindings(
-        halt_error=halt_error,
-        provision_with_config=provision,
-        prepare_with_config=prepare,
-        provision_yaml_with_config=provision_yaml if callable(provision_yaml) else None,
-        prepare_yaml_with_config=prepare_yaml if callable(prepare_yaml) else None,
-        diagnostics=tuple(diagnostics),
+    raise ImportError(
+        "Unable to load Vision bindings: no module among " f"{', '.join(module_candidates)} exposes the required API."
     )

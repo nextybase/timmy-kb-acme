@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from ai import assistant_registry
+import ai.assistant_registry as assistant_registry
 
 
 def _fake_settings(mapping: dict[str, object]) -> dict[str, object]:

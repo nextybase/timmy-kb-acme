@@ -6,8 +6,7 @@ from pathlib import Path
 import pytest
 
 import semantic.vision_provision as S
-from ai import resolve_vision_config
-from ai.config import resolve_vision_retention_days
+from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF")
 

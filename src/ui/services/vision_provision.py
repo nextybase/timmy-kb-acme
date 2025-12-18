@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol, cast
 
-from ai import AssistantConfig, resolve_vision_config
-from ai.config import resolve_vision_retention_days
+from ai.types import AssistantConfig
+from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.capabilities.vision import load_vision_bindings
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text

@@ -12,7 +12,7 @@ from .assistant_registry import _resolve_assistant_env_name, _resolve_model_from
 from .client_factory import make_openai_client
 from .types import AssistantConfig
 
-LOGGER = get_structured_logger("ai.config")
+LOGGER = get_structured_logger("ai.vision_config")
 
 
 class VisionCfg(TypedDict, total=False):
@@ -251,7 +251,7 @@ def resolve_vision_retention_days(ctx: Any) -> int:
     def _warn_and_default(reason: str, value: Any) -> int:
         try:
             LOGGER.warning(
-                "ai.config.retention.warning",
+                "ai.vision_config.retention.warning",
                 extra={"slug": slug, "reason": reason, "value": value},
             )
         except Exception:

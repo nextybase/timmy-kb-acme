@@ -9,15 +9,13 @@ from typing import Any, Dict
 
 import pytest
 
-import ai
-
 yaml = pytest.importorskip("yaml")
 
 
+import ai.vision_config as ai_config
 import semantic.vision_provision as vp
-from ai import resolve_vision_config
-from ai.config import resolve_vision_retention_days
 from ai.types import AssistantConfig, ResponseJson
+from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
 from semantic.vision_provision import (
@@ -468,9 +466,12 @@ def test_semantic_with_config_does_not_reresolve_policy(tmp_path: Path, monkeypa
     monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **_: _ok_payload(slug))
 
-    monkeypatch.setattr(ai, "resolve_vision_config", lambda *a, **k: pytest.fail("Semantic should not resolve config"))
     monkeypatch.setattr(
-        "ai.config.resolve_vision_retention_days", lambda *a, **k: pytest.fail("Semantic should not resolve retention")
+        ai_config, "resolve_vision_config", lambda *a, **k: pytest.fail("Semantic should not resolve config")
+    )
+    monkeypatch.setattr(
+        "ai.vision_config.resolve_vision_retention_days",
+        lambda *a, **k: pytest.fail("Semantic should not resolve retention"),
     )
 
     config = AssistantConfig(

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ai import AssistantConfig
+from ai.types import AssistantConfig
 from pipeline.exceptions import ConfigError
 
 

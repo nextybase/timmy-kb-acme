@@ -4,7 +4,8 @@ from typing import Callable
 
 import pytest
 
-from ai import assistant_registry, config
+import ai.assistant_registry as assistant_registry
+import ai.vision_config as config
 from ai.assistant_registry import (
     resolve_audit_assistant_config,
     resolve_kgraph_config,
@@ -73,7 +74,7 @@ def test_resolve_kgraph_config_falls_back_to_assistant_model(monkeypatch):
 
     monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
     monkeypatch.setattr(assistant_registry, "make_openai_client", lambda: _DummyClient())
-    monkeypatch.setattr("ai.config.make_openai_client", lambda: _DummyClient())
+    monkeypatch.setattr("ai.vision_config.make_openai_client", lambda: _DummyClient())
 
     result = resolve_kgraph_config(settings)
     assert result.assistant_id == "kgraph-assistant"
@@ -94,7 +95,7 @@ def test_resolve_vision_config_fallbacks_to_assistant_model(monkeypatch):
 
     monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
     monkeypatch.setattr(assistant_registry, "make_openai_client", lambda: _DummyClient())
-    monkeypatch.setattr("ai.config.make_openai_client", lambda: _DummyClient())
+    monkeypatch.setattr("ai.vision_config.make_openai_client", lambda: _DummyClient())
 
     result = config.resolve_vision_config(ctx)
     assert result.assistant_id == "vision-assistant"

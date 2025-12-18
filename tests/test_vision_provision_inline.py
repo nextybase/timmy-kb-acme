@@ -12,9 +12,8 @@ yaml = pytest.importorskip("yaml")
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF")
 
 import semantic.vision_provision as S
-from ai import resolve_vision_config
-from ai.config import resolve_vision_retention_days
 from ai.types import AssistantConfig
+from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.exceptions import ConfigError
 
 
