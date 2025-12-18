@@ -10,10 +10,11 @@ from pipeline.types import CapabilityAvailability
 def otel_availability_details() -> CapabilityAvailability:
     try:
         import_module("opentelemetry.sdk.trace")
-        return cast(CapabilityAvailability, (True, None))
+        return {"available": True, "reason": None}
     except ImportError as exc:
-        return cast(CapabilityAvailability, (False, str(exc)))
+        return {"available": False, "reason": str(exc)}
 
 
 def is_otel_available() -> bool:
-    return otel_availability_details()[0]
+    availability = otel_availability_details()
+    return cast(bool, availability["available"])

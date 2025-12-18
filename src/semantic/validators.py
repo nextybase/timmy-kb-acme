@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 from semantic.contracts import AssertionContract, RelationContract
 
@@ -28,7 +28,7 @@ def validate_kg(
 
 def validate_explanations(
     *,
-    explanations: Iterable[Mapping[str, object]],
+    explanations: Iterable[Mapping[str, Any]],
     assertions: Iterable[AssertionContract],
 ) -> list[str]:
     assertion_ids = {assertion["assertion_id"] for assertion in assertions if "assertion_id" in assertion}
@@ -42,7 +42,7 @@ def validate_explanations(
 
 def validate_explain_pack(
     *,
-    pack: Mapping[str, object],
+    pack: Mapping[str, Any],
 ) -> list[str]:
     errors: list[str] = []
     if "manifest" not in pack:

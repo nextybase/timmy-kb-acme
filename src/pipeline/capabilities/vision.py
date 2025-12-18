@@ -4,23 +4,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from importlib import import_module
 from types import ModuleType
-from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Type
+from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Type
 
 
-class _ProvisionFromVisionFunc(Callable[..., Dict[str, Any]]):
-    pass
+class _ProvisionFromVisionFunc(Protocol):
+    def __call__(self, *args: Any, **kwargs: Any) -> Dict[str, Any]: ...
 
 
-class _ProvisionFromVisionYamlFunc(Callable[..., Dict[str, Any]]):
-    pass
+class _ProvisionFromVisionYamlFunc(Protocol):
+    def __call__(self, *args: Any, **kwargs: Any) -> Dict[str, Any]: ...
 
 
-class _PreparePromptFunc(Callable[..., str]):
-    pass
+class _PreparePromptFunc(Protocol):
+    def __call__(self, *args: Any, **kwargs: Any) -> str: ...
 
 
-class _PreparePromptYamlFunc(Callable[..., str]):
-    pass
+class _PreparePromptYamlFunc(Protocol):
+    def __call__(self, *args: Any, **kwargs: Any) -> str: ...
 
 
 @dataclass(frozen=True)

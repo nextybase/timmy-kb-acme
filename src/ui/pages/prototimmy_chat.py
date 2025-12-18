@@ -2,7 +2,7 @@
 # src/ui/pages/prototimmy_chat.py
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping, Optional, Sequence
+from typing import Any, Iterable, Mapping, Optional, Sequence, cast
 
 from ai.assistant_registry import resolve_ocp_executor_config, resolve_prototimmy_config
 from ai.check import run_prototimmy_dummy_check
@@ -128,7 +128,7 @@ def _load_settings() -> Settings:
 
 
 def _ensure_history() -> list[dict[str, str]]:
-    history = st.session_state.setdefault(_SESSION_KEY, [])
+    history = cast(list[dict[str, str]], st.session_state.setdefault(_SESSION_KEY, []))
     if not history or history[0].get("role") != "system":
         history.insert(0, dict(_SYSTEM_MESSAGE))
     return history
@@ -197,7 +197,7 @@ def _call_ocp(message: str) -> str:
             request_tag="prototimmy_chat_ocp",
         ),
     )
-    return response.text
+    return cast(str, response.text)
 
 
 def _render_ocp_response(text: str) -> None:
@@ -206,10 +206,11 @@ def _render_ocp_response(text: str) -> None:
 
 
 def _get_codex_prompt() -> str:
-    return st.session_state.setdefault(
+    prompt = st.session_state.setdefault(
         _CODEX_PROMPT_KEY,
         "Prompt fornito da OCP per la prossima esecuzione Codex CLI.",
     )
+    return cast(str, prompt)
 
 
 def _validate_codex_output(output: str) -> None:
@@ -233,7 +234,7 @@ def _validate_codex_output(output: str) -> None:
                 request_tag="prototimmy_chat_codex_validation",
             ),
         )
-        data = response.data
+        data = cast(dict[str, Any], response.data)
         st.json(data)
         ok = bool(data.get("ok"))
         issues = [str(item) for item in data.get("issues") or []]
@@ -318,7 +319,7 @@ def _invoke_prototimmy_json(
                 request_tag="prototimmy_chat_json",
             ),
         )
-        data = response.data
+        data = cast(dict[str, Any], response.data)
         reply = str(data.get("reply_to_user", "")).strip()
         ocp_request = str(data.get("message_for_ocp", "")).strip()
         return (reply or None, ocp_request or "")
@@ -344,7 +345,7 @@ def _invoke_prototimmy_text(prompt_text: str) -> str | None:
                 request_tag="prototimmy_chat_text",
             ),
         )
-        return response.text
+        return cast(str, response.text)
     except Exception as exc:
         st.error(f"ProtoTimmy non ha risposto: {exc}")
         return None

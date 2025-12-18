@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, Protocol
 
 from pipeline.config_utils import get_client_config
+from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, iter_safe_pdfs
@@ -22,7 +23,7 @@ class IngestProvider(Protocol):
     def ingest_raw(
         self,
         *,
-        context,
+        context: ClientContext,
         raw_dir: Path,
         logger: logging.Logger,
         non_interactive: bool,
@@ -34,7 +35,7 @@ class DriveIngestProvider:
     def ingest_raw(
         self,
         *,
-        context,
+        context: ClientContext,
         raw_dir: Path,
         logger: logging.Logger,
         non_interactive: bool,
@@ -59,7 +60,7 @@ class DriveIngestProvider:
         service = get_drive_service(context)
 
         with phase_scope(logger, stage="drive_download", customer=getattr(context, "slug", None)) as phase:
-            download_drive_pdfs_to_local(  # type: ignore[call-arg]
+            download_drive_pdfs_to_local(
                 service=service,
                 remote_root_folder_id=drive_folder_id,
                 local_root_dir=raw_dir,
@@ -88,7 +89,7 @@ class LocalIngestProvider:
     def ingest_raw(
         self,
         *,
-        context,
+        context: ClientContext,
         raw_dir: Path,
         logger: logging.Logger,
         non_interactive: bool,
@@ -113,7 +114,7 @@ class LocalIngestProvider:
             return 0
 
         with phase_scope(logger, stage="local_copy", customer=getattr(context, "slug", None)) as phase:
-            copied = copy_local_pdfs_to_raw(src_path, raw_dir, logger)
+            copied: int = copy_local_pdfs_to_raw(src_path, raw_dir, logger)
             try:
                 phase.set_artifacts(int(copied))
             except Exception:
