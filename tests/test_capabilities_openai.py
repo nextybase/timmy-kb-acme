@@ -12,14 +12,23 @@ from pipeline.exceptions import ConfigError
 
 
 def test_get_openai_ctor_filters_missing_openai(monkeypatch):
+    monkeypatch.delitem(sys.modules, "openai", raising=False)
     original_import = builtins.__import__
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name.startswith("openai"):
+        if name == "openai" or name.startswith("openai."):
             raise ImportError("module missing")
         return original_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    def fake_import_module(name: str):
+        raise ImportError("module missing")
+
+    monkeypatch.setattr(
+        "pipeline.capabilities.openai.import_module",
+        fake_import_module,
+    )
 
     with pytest.raises(ConfigError, match="OpenAI SDK non disponibile"):
         get_openai_ctor()

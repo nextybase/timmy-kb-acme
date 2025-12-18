@@ -88,6 +88,13 @@ jobs:
           GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
           GITHUB_SHA: ${{ github.sha }}
         run: python tools/ci/skeptic_gate.py
+      - name: Architecture Guardrails
+        run: pytest -q tests/architecture/test_facade_imports.py tests/architecture/test_dev_does_not_import_ui.py
+      - name: Entrypoint guard ACK
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python tools/ci/entrypoint_guard_ack.py
       - name: Black (check)
         run: black --check src tests
       - name: Ruff (check)

@@ -4,7 +4,7 @@
 
 - **Audience:** developers, tech writers, QA, maintainers, and the repo-aware agent Codex.
 - **Scope:** local operations, UI/CLI flows, OpenAI/Drive/GitHub integrations, secure I/O and path safety, rollback, and incident response.
-- **Canonical references:** [Developer Guide](developer_guide.md), [Coding Rules](coding_rule.md), [Architecture Overview](architecture.md), [AGENTS Index](AGENTS_INDEX.md), [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md), [User Guide](user_guide.md).
+- **Canonical references:** [Developer Guide](developer_guide.md), [Coding Rules](coding_rule.md), [Architecture Overview](architecture.md), [AGENTS Index](AGENTS_INDEX.md), [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md), [User Guide](user_guide.md), [.codex/USER_DEV_SEPARATION](../.codex/USER_DEV_SEPARATION.md).
 
 ## Visual summary of the Codex system
 
@@ -38,6 +38,7 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](deve
 - The recommended entry point is the Onboarding Task Codex; it inflicts a plan-first, micro-PR, QA-compliant workflow and insists on updating the documentation and AGENTS matrix when touched.
 - Codex flows must remain consistent with the policies in this runbook and the AGENTS matrix.
 - Poiché il workstream finisce solo con un Prompt Closure, ogni Prompt Chain viene chiusa solo dopo il **Closure Protocol** (`.codex/CLOSURE_AND_SKEPTIC.md`), che lega Prompt N+1 (Codex) e Skeptic Gate N+1′ (OCP).
+- Per la separazione Netta tra canale User e Dev, consultare `.codex/USER_DEV_SEPARATION.md` e rispettare i guardrail `tests/architecture/test_facade_imports.py` e `tests/architecture/test_dev_does_not_import_ui.py` prima di chiudere la catena.
 
 ### Codex integration
 - `.codex/PROMPTS.md` defines the operational API for Codex.

@@ -27,6 +27,19 @@ BLACKLIST = (
     "semantic.vision_api",
 )
 
+UI_FORBIDDEN_PREFIXES = (
+    "pipeline.drive.",
+    "pipeline.drive.client",
+    "pipeline.drive.download",
+    "pipeline.drive.upload",
+    "ai.client_factory",
+    "ai.providers",
+    "semantic.vision_provision",
+    "semantic.pdf_utils",
+    "semantic.vision_utils",
+    "semantic.validation",
+)
+
 
 def _normalize(module: str | None) -> str:
     return module or ""
@@ -56,4 +69,32 @@ def test_facade_imports_only_public_surface():
                 module = _normalize(node.module)
                 if any(module.startswith(bad) for bad in BLACKLIST):
                     errors.append(f"{filepath}:{module} importa '{module}' (use the public facade)")
+    assert not errors, "\n".join(errors)
+
+
+def test_ui_imports_use_only_public_surfaces():
+    errors: list[str] = []
+    ui_root = Path("src/ui")
+    for path in ui_root.rglob("*.py"):
+        try:
+            source = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        tree = ast.parse(source, filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    mod = _normalize(alias.name)
+                    if any(mod.startswith(prefix) for prefix in UI_FORBIDDEN_PREFIXES):
+                        errors.append(
+                            f"{path}:{mod} imports '{mod}' "
+                            "(UI must stay within facades; see .codex/USER_DEV_SEPARATION.md)"
+                        )
+            elif isinstance(node, ast.ImportFrom):
+                module = _normalize(node.module)
+                if any(module.startswith(prefix) for prefix in UI_FORBIDDEN_PREFIXES):
+                    errors.append(
+                        f"{path}:{module} imports '{module}' "
+                        "(UI must stay within facades; see .codex/USER_DEV_SEPARATION.md)"
+                    )
     assert not errors, "\n".join(errors)
