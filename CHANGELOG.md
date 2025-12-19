@@ -48,6 +48,30 @@
 - Cache frontmatter Markdown ora LRU bounded (evita crescita infinita su run lunghi).
 - Vision: estrazione PDF passa a pypdf/PyPDF2 (fallback) mantenendo codici di errore invariati; chiamate Responses API evitano keyword non supportate e sollevano ConfigError coerenti.
 
+## [Unreleased] — Prompt Orchestration & Agency Design
+
+### Added
+- Cartella `instructions/` come SSoT temporaneo di design e orchestrazione.
+- Modello di agency formale (Timmy/ProtoTimmy, Domain Gatekeepers, Control Plane, micro-agent).
+- Registry di Intent/Action con whitelist, `allowed_actions` e governance HiTL.
+- Prompt Chain lifecycle con fasi, HiTL, regole di linearità e state machine.
+- Invarianti e failure modes minimi documentati (registry invariants, failure modes, stop/HiTL).
+
+### Changed
+- Chiarito il ruolo di OCP come Control Plane operativo, distinto da agenti cognitivi.
+- Netta separazione tra decisione (Timmy), validazione (Domain Gatekeepers/OCP) ed esecuzione (micro-agent).
+- Rafforzate le regole HiTL e i blocchi mandatory nel registry e nella timeline.
+
+### Design Decisions
+- Adozione di design-first prompt architecture e documenti come contratti verificabili.
+- Separazione WHAT/HOW per prevenire codice intrecciato a specifiche.
+- Documenti esistenti allineati a tabelle, invarianti e failure mode, non a narrazioni.
+
+### Next
+- Completare i documenti mancanti in `instructions/`: `03_gatekeepers_contracts.md`, `04_microagents_work_orders.md`, `05_pipeline_state_machine.md`, `06_ui_contract.md`.
+- Congelare `instructions/` come base della Prompt Chain operativa.
+- Avviare implementazione guidata (beta 1.0) sul modello appena definito.
+
 ## [1.9.7] - 2025-09-28
 
 ### Added
