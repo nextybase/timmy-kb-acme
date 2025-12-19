@@ -18,6 +18,7 @@ from pipeline.context import validate_slug
 from pipeline.exceptions import ConfigError, WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.file_utils import safe_write_bytes, safe_write_text
 from pipeline.logging_utils import get_structured_logger
+from pipeline.ownership import ensure_ownership_file
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.settings import Settings
 from pipeline.workspace_bootstrap import bootstrap_client_workspace
@@ -446,6 +447,7 @@ if current_phase == UI_PHASE_INIT:
                 error_label="Errore durante la preparazione del workspace",
             ) as status:
                 layout = bootstrap_client_workspace(ctx)
+                ensure_ownership_file(s, get_repo_root())
                 if isinstance(pdf_bytes, (bytes, bytearray)) and len(pdf_bytes) > 20 * 1024 * 1024:
                     try:
                         _log_diagnostics(

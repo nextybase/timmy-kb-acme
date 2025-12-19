@@ -1,0 +1,21 @@
+# User channel
+src/ui/** @nextybase/user-channel
+docs/user_guide.md @nextybase/user-channel
+
+# Dev channel
+src/timmy_kb/cli/** @nextybase/dev-channel
+src/tools/** @nextybase/dev-channel
+src/api/** @nextybase/dev-channel
+tools/** @nextybase/dev-channel
+
+# Architecture channel
+src/pipeline/** @nextybase/architecture
+src/ai/** @nextybase/architecture
+src/semantic/** @nextybase/architecture
+tests/architecture/** @nextybase/architecture
+.codex/** @nextybase/architecture
+.github/workflows/** @nextybase/architecture
+tools/ci/** @nextybase/architecture
+
+# Default ownership
+* @nextybase/architecture
