@@ -122,7 +122,7 @@ a `1/true` per forzare la redazione lato console/file.
 ## UI & guide
 
 La guida Streamlit fa riferimento a questa pagina per i dettagli di configurazione.
-Per una panoramica dei flussi UI consulta [docs/user/guida_ui.md](guida_ui.md).
+Per una panoramica dei flussi UI consulta [docs/user/guida_ui.md](user/guida_ui.md).
 
 ## Tooling
 

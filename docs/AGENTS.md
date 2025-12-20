@@ -1,22 +1,23 @@
-# Purpose
-Documentation-specific rules covering language, alignment with UX/flow, and consistent versioning.
+# docs AGENTS
 
+## Scope & Primary Reader
+- Folder scope: human-facing guides in Italian (`docs/`).
+- Primary reader: contributors and subject-matter experts updating usage, UI, developer, or policy guidance.
 
-# Rules (overrides)
-- Prefer English fr technical narratives; Italian can remain for conversational explanations when noted in the index.
-- Reflect UX/flow-relevant code changes within the same PR through documentation updates.
-- Keep titles/frontmatter aligned with the current release (`v1.0 Beta`) across README and docs.
-- Run `pre-commit run cspell --all-files` (or limit to `docs/...` when appropriate) and favor relative links with up-to-date snippets (e.g., Python 3.11, Streamlit 1.50.0).
-- When documenting Streamlit/CLI workflows, describe the orchestrators currently in use (`pipeline.github_push_flow.*`, `tools.gen_dummy_kb.build_payload`, `ui.pages.tools_check._is_gate_error`).
-- Prefer service wrappers (`semantic.*_service`, `semantic.mapping_loader`) when documenting `semantic.api`; example tests should monkeypatch the re-exported wrappers.
+## Authority & Precedence
+- Governance, lifecycle, and HiTL contracts reside in `instructions/*`. This folder provides clarifications, localized narratives, and examples only.
+- Do not override the agency statements in `instructions/00_ssot_agency.md`; cite them when referencing prompt chain behavior.
+- This file is a folder-level engagement guardrail, not an exhaustive entrypoint catalog; refer to `system/architecture.md` for repo→flow mapping.
 
+## Change Policy
+- Allowed changes: clarity edits, formatting, typos, link refinements, screenshots, additional references to supporting docs.
+- Forbidden changes: introducing new governance statements, allowed-action tables, lifecycle phases, or preferences not already approved.
+- If a PR touches agency, Prompt Chain, or HiTL content here, STOP and escalate to OCP for explicit approval before editing this file.
 
-# Acceptance Criteria
-- Clean spell-check results on `docs/` and `README.md` without ad-hoc ignores.
-- Frontmatter and titles consistent with published versioning.
-- Update ADR/changelog entries when documentation practices or tooling change.
+## Required Evidence for Changes
+- Each update must reference the doc(s) it refines, include a short rationale (why the clarification is needed), and show that prompts/tests still pass (`pre-commit`, `cspell`).
+- Provide links to `system/` or `instructions/` entries when quoting workflow behavior.
 
-
-# References
-- system/ops/agents_index.md
-- system/ops/runbook_codex.md
+## Codex Engagement Rules
+- Codex may edit `docs/` files only when the prompt explicitly targets `docs/` via TARGET FILES or declares a documentation-focused INTENT, and supporting proofs (screenshots, flow references, QA results) are provided.
+- Always obey the `Prompt Chain` plan before editing; do not add new governance clauses in this folder.

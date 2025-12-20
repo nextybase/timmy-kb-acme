@@ -8,7 +8,7 @@ Pipeline per generare una Knowledge Base Markdown pronta per l'uso AI a partire 
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![CI](https://github.com/nextybase/timmy-kb-acme/actions/workflows/ci.yaml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/ci.yaml)
 [![Security Status](https://img.shields.io/badge/security-hardened-brightgreen)](docs/security.md)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.md)
 
 ---
 
@@ -62,7 +62,7 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 - [Coding Rules](docs/developer/coding_rule.md) e [Architecture Overview](system/architecture.md).
 - [Configuration split](docs/configurazione.md) e [Runbook Codex](system/ops/runbook_codex.md).
 - [CONTRIBUTING](CONTRIBUTING.md) - policy PR e micro-PR.
-- [LICENSE](LICENSE) - GPL-3.0.
+- [LICENSE](LICENSE.md) - GPL-3.0.
 - [Code of Conduct](CODE_OF_CONDUCT.md) e [Security](SECURITY.md).
 
 ## From Foundation Pipeline to Agency

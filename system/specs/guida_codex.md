@@ -2,7 +2,7 @@
 
 ## 1. Prompt Chain: il modo prioritario di usare Codex
 
-La separazione dei canali User (Streamlit + `ui.services`) e Dev (`timmy_kb.cli.*`, `tools/*`, `src/api/*`) è codificata nello SSoT [.codex/USER_DEV_SEPARATION.md](../.codex/USER_DEV_SEPARATION.md); rispettare quel contratto prima di toccare nuovi entrypoint o import multipli.
+La separazione dei canali User (Streamlit + `ui.services`) e Dev (`timmy_kb.cli.*`, `tools/*`, `src/api/*`) è codificata nello SSoT [.codex/USER_DEV_SEPARATION.md](../../.codex/USER_DEV_SEPARATION.md); rispettare quel contratto prima di toccare nuovi entrypoint o import multipli.
 Ogni cambio deve inoltre passare i guardrail `tests/architecture/test_facade_imports.py` e `tests/architecture/test_dev_does_not_import_ui.py` per assicurare che User e Dev non condividano import proibiti.
 
 La modalità principale e consigliata per usare Codex nel progetto NeXT/Timmy-KB è tramite la **Prompt Chain** orchestrata da l’**OCP (OrchestratoreChainPrompt)**.

@@ -34,7 +34,7 @@ Benvenuto nella documentazione di **Timmy-KB**. Qui trovi architettura, guida ut
 - **Observability**
   - [Observability Stack](observability.md) - Loki/Promtail/Grafana, trace_id/span_id, query utili.
   - [Logging Events](logging_events.md) - eventi log strutturati e nomenclatura.
-  - [Code Review Senior](code_review_report.md) - sintesi delle review tecniche + quick wins sulle policy di logging/tracing.
+  - Code Review Senior (TODO: missing doc) - sintesi delle review tecniche + quick wins sulle policy di logging/tracing.
 - **Agente Codex**
   - [Guida Codex](../system/specs/guida_codex.md) - uso di Codex in VS Code come coding agent, regole AGENTS.md e configurazione avanzata.
   - [Runbook Codex](../system/ops/runbook_codex.md) - flussi operativi per l'uso di Codex.

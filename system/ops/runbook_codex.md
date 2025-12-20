@@ -4,7 +4,7 @@
 
 - **Audience:** developers, tech writers, QA, maintainers, and the repo-aware agent Codex.
 - **Scope:** local operations, UI/CLI flows, OpenAI/Drive/GitHub integrations, secure I/O and path safety, rollback, and incident response.
-- **Canonical references:** [Developer Guide](../../docs/developer/developer_guide.md), [Coding Rules](../../docs/developer/coding_rule.md), [Architecture Overview](../architecture.md), [AGENTS Index](agents_index.md), [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md), [User Guide](../../docs/user/user_guide.md), [.codex/USER_DEV_SEPARATION](../.codex/USER_DEV_SEPARATION.md).
+- **Canonical references:** [Developer Guide](../../docs/developer/developer_guide.md), [Coding Rules](../../docs/developer/coding_rule.md), [Architecture Overview](../architecture.md), [AGENTS Index](agents_index.md), [.codex/WORKFLOWS](../../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../../.codex/CHECKLISTS.md), [User Guide](../../docs/user/user_guide.md), [.codex/USER_DEV_SEPARATION](../../.codex/USER_DEV_SEPARATION.md).
 
 ## Visual summary of the Codex system
 
@@ -63,7 +63,7 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](../.
 
 ## 2) Configuration: secrets vs versioned config
 
-- **SSoT:** keep secrets outside the repo (`.env`), and versioned configuration inside `config/config.yaml`. Reference: [docs/configurazione.md](configurazione.md).
+- **SSoT:** keep secrets outside the repo (`.env`), and versioned configuration inside `config/config.yaml`. Reference: [docs/configurazione.md](../../docs/configurazione.md).
 - Example snippet (for reference: `config/config.yaml`, see also `config/config.example.yaml`):
 ```yaml
 meta:
@@ -102,7 +102,7 @@ pipeline:
   - Retriever adheres to throttle limits and logs `retriever.query.embed_failed`, short-circuiting to an empty result when budgets are exhausted.
   - Flags such as `ui.allow_local_only` and `ui.admin_local_mode` gate Admin access.
 
-References: [Developer Guide → Configuration](../../docs/developer/developer_guide.md), [Configuration Overview](configurazione.md).
+References: [Developer Guide → Configuration](../../docs/developer/developer_guide.md), [Configuration Overview](../../docs/configurazione.md).
 
 ---
 
@@ -149,7 +149,7 @@ References: [Developer Guide → Configuration](../../docs/developer/developer_g
 - Docker preview needs safe port validation and container naming.
 - Telemetry event `semantic.book.frontmatter` tracks enriched file counts.
 
-References: [.codex/WORKFLOWS.md](../.codex/WORKFLOWS.md), [User Guide](../../docs/user/user_guide.md), [Architecture](../architecture.md).
+References: [.codex/WORKFLOWS.md](../../.codex/WORKFLOWS.md), [User Guide](../../docs/user/user_guide.md), [Architecture](../architecture.md).
 
 ---
 
@@ -188,7 +188,7 @@ References: [.codex/WORKFLOWS.md](../.codex/WORKFLOWS.md), [User Guide](../../do
 - Track every step in summaries/logs so the chain remains reproducible and idempotent.
 - For governance details, refer to `system/specs/promptchain_spec.md`.
 
-References: [AGENTS Index](agents_index.md), [.codex/AGENTS.md](../.codex/AGENTS.md).
+References: [AGENTS Index](agents_index.md), [.codex/AGENTS.md](../../.codex/AGENTS.md).
 
 ---
 
@@ -204,7 +204,7 @@ References: [AGENTS Index](agents_index.md), [.codex/AGENTS.md](../.codex/AGENTS
 - Maintain UI/backend wrapper parity and parameter pass-through.
 - Keep `book/` invariants: `README.md`/`SUMMARY.md` must exist; `.md.fp` files stay out of pushes.
 
-References: [Developer Guide → Test](../../docs/developer/developer_guide.md), [Coding Rules → Test & Quality](../../docs/developer/coding_rule.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md).
+References: [Developer Guide → Test](../../docs/developer/developer_guide.md), [Coding Rules → Test & Quality](../../docs/developer/coding_rule.md), [.codex/CHECKLISTS](../../.codex/CHECKLISTS.md).
 
 ---
 
@@ -250,7 +250,7 @@ Push only `.md` files from `book/` to the destination branch.
 - For diverging branches, use `_force_push_with_lease` with explanations.
 - Revert invalid content atomically and rerun preflight (Markdown only, no `.md.fp`).
 
-References: [.codex/AGENTS](../.codex/AGENTS.md).
+References: [.codex/AGENTS](../../.codex/AGENTS.md).
 
 ---
 
@@ -279,7 +279,7 @@ References highlighted area AGENTS as needed.
 - Gate Semantica on `raw/` presence and keep messages short while logging details.
 - Perform all I/O via SSoT utilities; avoid manual writes.
 
-References: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](../src/ui/pages/AGENTS.md), [User Guide → UI](../../docs/user/user_guide.md).
+References: (src/ui/AGENTS.md not present under src/ui), (src/ui/pages/AGENTS.md not present under src/ui/pages), [User Guide → UI](../../docs/user/user_guide.md).
 
 ---
 
@@ -303,7 +303,7 @@ References: [User Guide → Vision Statement](../../docs/user/user_guide.md), [D
 - Drive/Git: credentials ready, push only `.md` from `book/`.
 - Documentation (blocking): update Architecture/Developer Guide/User Guide (and `.codex/WORKFLOWS.md` when pipeline changes) and list the updates in the PR's `Docs:` section.
 
-References: [.codex/CHECKLISTS](../.codex/CHECKLISTS.md).
+References: [.codex/CHECKLISTS](../../.codex/CHECKLISTS.md).
 
 ---
 
@@ -324,7 +324,7 @@ References: [User Guide → Troubleshooting](../../docs/user/user_guide.md).
 - Log architectural decisions as ADRs inside `docs/adr/`.
 - Update the ADR index and link new documents; mark superseded entries accordingly.
 
-References: [docs/adr/README.md](adr/README.md).
+References: [docs/adr/README.md](../../docs/adr/README.md).
 
 ---
 

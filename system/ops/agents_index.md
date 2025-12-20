@@ -30,7 +30,7 @@ Core principles:
 | UI (Streamlit) | `src/ui/pages/AGENTS.md` | ???'???? | Native routing (`st.Page`/`st.navigation`) is present with internal links handled by `st.page_link`; queries/slugs rely solely on dedicated helpers. | UX guidata da stato | Sweep deprecazioni Streamlit 1.50<br>Router nativo `st.Page`/`st.navigation` compliance<br>Path-safety e logging per pagine |
 | UI Fine Tuning | `src/ui/fine_tuning/AGENTS.md` | ???'???? | The System Prompt modal displays `assistant_id`, `model`, full instructions, and a copy button; dry-run output remains unaltered. |  | Modal Assistant read-only + export<br>Dry-run con output grezzo<br>Proposte micro-PR per config Assistant |
 | Test | `tests/AGENTS.md` | ???'???? | Local builds/tests pass with smoke E2E executed on reproducible dummy slugs. |  | Mock Drive/Git e fixture dummy<br>Contract test su guard `book/`<br>Smoke E2E slug di esempio |
-| Documentazione | `docs/AGENTS.md` | ???'???? | Clean spell-check results on `docs/` and `README.md` without ad-hoc ignores. |  | Sweep cSpell e frontmatter versione<br>Allineamento README/docs su nuove feature<br>Aggiornare guide con orchestratori correnti |
+| Documentazione | `docs/AGENTS.md` | ???'???? | ???'???? |  | Sweep cSpell e frontmatter versione<br>Allineamento README/docs su nuove feature<br>Aggiornare guide con orchestratori correnti |
 | Codex (repo) | `.codex/AGENTS.md` | ???'???? | Path safety enforced (writes limited to `src/`, `tests/`, `docs/`, `.codex/` without exception). |  | Esecuzione pipeline QA standard<br>Allineamento uso helper GitHub<br>Riuso tool vision/UI condivisi |
 
 <!-- MATRIX:END -->
