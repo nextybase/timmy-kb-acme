@@ -6,6 +6,8 @@ Questo spazio ti accompagna nel comprendere e usare strumenti che mettono a disp
 
 Il sistema non decide per te né nasconde l'incertezza, e non si sostituisce all'esperienza umana; ogni scelta, dubbio o aggiustamento rimane sotto la tua responsabilità, mentre la sua funzione è rendere esplicite le ambiguità e offrirti contesto e chiarezza.
 
+Per la cornice filosofica del progetto vedi [MANIFEST.md](../../MANIFEST.md).
+
 Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
