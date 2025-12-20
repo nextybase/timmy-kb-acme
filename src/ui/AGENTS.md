@@ -16,5 +16,5 @@ Rules for the Streamlit onboarding UI that prioritize correct gating and safe I/
 
 
 # References
-- docs/AGENTS_INDEX.md
+- system/ops/agents_index.md
 - docs/streamlit_ui.md

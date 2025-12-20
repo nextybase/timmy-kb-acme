@@ -221,7 +221,7 @@ Il refactor viene implementato nei seguenti file:
 [`src/ui/clients_store.py`](../../src/ui/clients_store.py)
 
 - Documentazione aggiornata:
-- `docs/developer_guide.md`
+- `docs/developer/developer_guide.md`
 - `docs/streamlit_ui.md`
 - `docs/adr/ADR-002-dummy-kb-e2e-smoke-test.md`
 
@@ -245,8 +245,8 @@ Il refactor viene implementato nei seguenti file:
 [`src/storage/tags_store.py`](../../src/storage/tags_store.py)
 
 - Documentazione di riferimento:
-`docs/developer_guide.md`,
-`docs/guida_codex.md`,
+`docs/developer/developer_guide.md`,
+`system/specs/guida_codex.md`,
 `docs/streamlit_ui.md`.
 
 ---

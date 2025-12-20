@@ -14,4 +14,4 @@ Pipeline core guidance focused on secure, idempotent I/O and consistent instrume
 
 
 # References
-- docs/AGENTS_INDEX.md
+- system/ops/agents_index.md

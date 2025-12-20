@@ -10,4 +10,4 @@
 - Each intervention by Codex passes through the Prompt Chain model: Phase 0 (analysis/read-only), Phase 1..N (micro-PR operations), Prompt N+1 (final QA + summary).
 - The turn-based protocol Planner → OCP → Codex → OCP → Planner ensures at most one action per prompt and mandates Italian-only replies from Codex while documentation remains English.
 - Prompt Chain prompts follow the Active Rules memo (path safety, zero side effects, Active Rules, language policy, QA) defined in `.codex/PROMPTS.md`; the final QA prompt runs `pre-commit run --all-files` and `pytest -q`.
-- The constitution defers to `docs/PromptChain_spec.md`, `docs/runbook_codex.md`, `.codex/PROMPTS.md` and `.codex/CHECKLISTS.md` as complementary SSoT references for the contract.
+- The constitution defers to `system/specs/promptchain_spec.md`, `system/ops/runbook_codex.md`, `.codex/PROMPTS.md` and `.codex/CHECKLISTS.md` as complementary SSoT references for the contract.

@@ -15,7 +15,7 @@ Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al 
 
 ## 2) Stile e coerenza
 
-- Seguire le [Coding Rules](coding_rule.md).
+- Seguire le [Coding Rules](docs/developer/coding_rule.md).
 - Tipizzazione obbligatoria, docstring brevi, logger strutturati.
 - Nessun `print()`, nessuna variabile d'ambiente hardcoded.
 - Aggiornare sempre documentazione correlata (README, docs/).
@@ -47,10 +47,10 @@ Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al 
 
 - Ogni modifica tecnica richiede aggiornamento coerente di:
   - `README.md`
-  - `docs/user_guide.md`
-  - `docs/developer_guide.md`
-  - `docs/architecture.md`
-  - `docs/coding_rule.md`
+  - `docs/user/user_guide.md`
+  - `docs/developer/developer_guide.md`
+  - `system/architecture.md`
+  - `docs/developer/coding_rule.md`
 - La documentazione e **bloccante** per il merge.
 
 ---

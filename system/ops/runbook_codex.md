@@ -4,13 +4,13 @@
 
 - **Audience:** developers, tech writers, QA, maintainers, and the repo-aware agent Codex.
 - **Scope:** local operations, UI/CLI flows, OpenAI/Drive/GitHub integrations, secure I/O and path safety, rollback, and incident response.
-- **Canonical references:** [Developer Guide](developer_guide.md), [Coding Rules](coding_rule.md), [Architecture Overview](architecture.md), [AGENTS Index](AGENTS_INDEX.md), [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md), [User Guide](user_guide.md), [.codex/USER_DEV_SEPARATION](../.codex/USER_DEV_SEPARATION.md).
+- **Canonical references:** [Developer Guide](../../docs/developer/developer_guide.md), [Coding Rules](../../docs/developer/coding_rule.md), [Architecture Overview](../architecture.md), [AGENTS Index](agents_index.md), [.codex/WORKFLOWS](../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md), [User Guide](../../docs/user/user_guide.md), [.codex/USER_DEV_SEPARATION](../.codex/USER_DEV_SEPARATION.md).
 
 ## Visual summary of the Codex system
 
-This repository blends the shared policies (`docs/AGENTS_INDEX.md`), area overrides (`AGENTS.md`), prompt APIs (`.codex/PROMPTS.md`), the runbook, and workflow documentation. Codex follows the integration guidelines (`docs/guida_codex.md`) and uses the Onboarding Task as the entry point. The flow is: AGENTS → Onboarding prompt → micro-PR + QA → matrix updates.
+This repository blends the shared policies (`system/ops/agents_index.md`), area overrides (`AGENTS.md`), prompt APIs (`.codex/PROMPTS.md`), the runbook, and workflow documentation. Codex follows the integration guidelines (`system/specs/guida_codex.md`) and uses the Onboarding Task as the entry point. The flow is: AGENTS → Onboarding prompt → micro-PR + QA → matrix updates.
 
-> Note: `docs/guida_codex.md` describes the mental model for the Codex + Repo-aware workflow (v2) and mandates the three SSoT documents (AGENTS index, area AGENTS, `~/.codex/AGENTS.md`). The runbook remains the practical flow guide.
+> Note: `system/specs/guida_codex.md` describes the mental model for the Codex + Repo-aware workflow (v2) and mandates the three SSoT documents (AGENTS index, area AGENTS, `~/.codex/AGENTS.md`). The runbook remains the practical flow guide.
 
 ---
 
@@ -31,10 +31,10 @@ make qa-safe
 pytest -q
 ```
 
-References: [README](../README.md), [Developer Guide → Dependencies & QA](developer_guide.md).
+References: [README](../README.md), [Developer Guide → Dependencies & QA](../../docs/developer/developer_guide.md).
 
 ### Codex operational alignment
-- Before any work, the Codex agent loads the three SSoT documents (`docs/AGENTS_INDEX.md`, the relevant `AGENTS.md`, and `~/.codex/AGENTS.md`) and uses `.codex/PROMPTS.md` as the API.
+- Before any work, the Codex agent loads the three SSoT documents (`system/ops/agents_index.md`, the relevant `AGENTS.md`, and `~/.codex/AGENTS.md`) and uses `.codex/PROMPTS.md` as the API.
 - The recommended entry point is the Onboarding Task Codex; it inflicts a plan-first, micro-PR, QA-compliant workflow and insists on updating the documentation and AGENTS matrix when touched.
 - Codex flows must remain consistent with the policies in this runbook and the AGENTS matrix.
 - Poiché il workstream finisce solo con un Prompt Closure, ogni Prompt Chain viene chiusa solo dopo il **Closure Protocol** (`.codex/CLOSURE_AND_SKEPTIC.md`), che lega Prompt N+1 (Codex) e Skeptic Gate N+1′ (OCP).
@@ -42,11 +42,11 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](deve
 
 ### Codex integration
 - `.codex/PROMPTS.md` defines the operational API for Codex.
-- Before each agent-based job, run the startup block: read `docs/AGENTS_INDEX.md`, the relevant area `AGENTS.md`, `.codex/AGENTS.md`, and this runbook.
+- Before each agent-based job, run the startup block: read `system/ops/agents_index.md`, the relevant area `AGENTS.md`, `.codex/AGENTS.md`, and this runbook.
 - The Onboarding Task Codex prompt enforces planning, micro-PR behavior, QA guardrails (path safety, atomic writes, structured logging), and AGENTS matrix maintenance.
 
 ### Prompt Chain governance
-- The Prompt Chain follows the turn-based protocol in `docs/PromptChain_spec.md`: Planner → OCP → Codex → OCP → Planner with exactly one action per prompt.
+- The Prompt Chain follows the turn-based protocol in `system/specs/promptchain_spec.md`: Planner → OCP → Codex → OCP → Planner with exactly one action per prompt.
 - Phase 0 prompts (Prompt 0, 0a..0x) are analytical/read-only and must confirm the SSoT documents before any diff is produced.
 - Phase 1..N prompts are operational micro-PRs that touch files declared by the OCP, include the Active Rules memo, and run at least `pytest -q -k "not slow"` before proceeding.
 - Prompt N+1 runs the final QA (`pre-commit run --all-files` + `pytest -q`), documents retries (up to ten), and ends with an Italian one-line closing commit summary.
@@ -54,6 +54,10 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](deve
 - The OCP issues one prompt at a time, Codex replies with a diff/report and waits, and no prompt may skip a phase or bypass the final QA.
 - Every prompt must preserve the canonical header defined in `.codex/PROMPTS.md`, starting with `ROLE: Codex` and continuing with `PHASE`, `SCOPE`, `ACTIVE RULES MEMO`, `EXPECTED OUTPUTS`, `TESTS`, `CONSTRAINTS`, and `STOP RULE`. Codex and OCP rely on this structure to detect malformed prompts: absence or misassignment of the `ROLE` line halts the chain until corrected.
 - L’OCP ha inoltre la prerogativa esclusiva di approvare i prompt OPS/RUN (Phase 1..N e Prompt N+1) prima di inoltrarli a Codex: la decisione umana deve essere già registrata quando il prompt arriva nell’Active Rules memo. Codex non deve richiedere conferme, né gestire questo gate; esegue la micro-PR solo dopo aver ricevuto il prompt autorizzato e mantiene reporting completo (memo + diff/report/QA) per il gate successivo.
+-## Agency, Control Plane e ruolo dei micro-agent
+- I riferimenti al flusso CLI o agli helper `pipeline.*` delineano gli strumenti della foundation: producono markdown semanticamente arricchiti e validano il knowledge graph ma NON orchestrano né decidono.
+- La governance WHAT della Prompt Chain, del registry Intent/Action e delle escalation HiTL è descritta in `instructions/*`; ProtoTimmy/Timmy (agency) dialogano con Domain Gatekeepers (validazione) e il Control Plane/OCP applica i gate e la consegna ai micro-agent.
+- I micro-agent (Codex incluso) eseguono i task sotto Work Order Envelope (OK / NEED_INPUT / CONTRACT_ERROR) come indicato da `instructions/`; mantengono trace e logging della pipeline senza assumere decisioni operative.
 
 ---
 
@@ -98,7 +102,7 @@ pipeline:
   - Retriever adheres to throttle limits and logs `retriever.query.embed_failed`, short-circuiting to an empty result when budgets are exhausted.
   - Flags such as `ui.allow_local_only` and `ui.admin_local_mode` gate Admin access.
 
-References: [Developer Guide → Configuration](developer_guide.md), [Configuration Overview](configurazione.md).
+References: [Developer Guide → Configuration](../../docs/developer/developer_guide.md), [Configuration Overview](configurazione.md).
 
 ---
 
@@ -145,7 +149,7 @@ References: [Developer Guide → Configuration](developer_guide.md), [Configurat
 - Docker preview needs safe port validation and container naming.
 - Telemetry event `semantic.book.frontmatter` tracks enriched file counts.
 
-References: [.codex/WORKFLOWS.md](../.codex/WORKFLOWS.md), [User Guide](user_guide.md), [Architecture](architecture.md).
+References: [.codex/WORKFLOWS.md](../.codex/WORKFLOWS.md), [User Guide](../../docs/user/user_guide.md), [Architecture](../architecture.md).
 
 ---
 
@@ -153,7 +157,7 @@ References: [.codex/WORKFLOWS.md](../.codex/WORKFLOWS.md), [User Guide](user_gui
 
 ### 5.0 Common operating principles (v2)
 - The default scenario is Agent mode with path safety, atomic writes, and doc/test updates.
-- All activities follow Codex v2 (see `docs/guida_codex.md`), the AGENTS perimeter, and explicit micro-PR + QA.
+- All activities follow Codex v2 (see `system/specs/guida_codex.md`), the AGENTS perimeter, and explicit micro-PR + QA.
 - Select prompts from `.codex/PROMPTS.md`; the Onboarding Task Codex is mandatory.
 - Collaboration between developer, Codex, and Senior Reviewer guides sensitive tasks.
 
@@ -182,9 +186,9 @@ References: [.codex/WORKFLOWS.md](../.codex/WORKFLOWS.md), [User Guide](user_gui
 - Always start with the Onboarding Task Codex and respect the provided scope.
 - Each step adheres to AGENT-first, HiTL, path safety, QA, and atomic writes. The OCP never edits the repo.
 - Track every step in summaries/logs so the chain remains reproducible and idempotent.
-- For governance details, refer to `docs/PromptChain_spec.md`.
+- For governance details, refer to `system/specs/promptchain_spec.md`.
 
-References: [AGENTS Index](AGENTS_INDEX.md), [.codex/AGENTS.md](../.codex/AGENTS.md).
+References: [AGENTS Index](agents_index.md), [.codex/AGENTS.md](../.codex/AGENTS.md).
 
 ---
 
@@ -200,7 +204,7 @@ References: [AGENTS Index](AGENTS_INDEX.md), [.codex/AGENTS.md](../.codex/AGENTS
 - Maintain UI/backend wrapper parity and parameter pass-through.
 - Keep `book/` invariants: `README.md`/`SUMMARY.md` must exist; `.md.fp` files stay out of pushes.
 
-References: [Developer Guide → Test](developer_guide.md), [Coding Rules → Test & Quality](coding_rule.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md).
+References: [Developer Guide → Test](../../docs/developer/developer_guide.md), [Coding Rules → Test & Quality](../../docs/developer/coding_rule.md), [.codex/CHECKLISTS](../.codex/CHECKLISTS.md).
 
 ---
 
@@ -211,7 +215,7 @@ References: [Developer Guide → Test](developer_guide.md), [Coding Rules → Te
 - Use health-check scripts and hooks (`fix-control-chars`, `forbid-control-chars`) to manage characters/encoding.
 - Throttle retriever queries: emit a warning (`retriever.throttle.deadline`) when budgets are depleted and clamp `candidate_limit`.
 
-References: [README → Telemetry & Security](../README.md), [User Guide → Character Checks](user_guide.md).
+References: [README → Telemetry & Security](../README.md), [User Guide → Character Checks](../../docs/user/user_guide.md).
 
 ---
 
@@ -275,7 +279,7 @@ References highlighted area AGENTS as needed.
 - Gate Semantica on `raw/` presence and keep messages short while logging details.
 - Perform all I/O via SSoT utilities; avoid manual writes.
 
-References: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](../src/ui/pages/AGENTS.md), [User Guide → UI](user_guide.md).
+References: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](../src/ui/pages/AGENTS.md), [User Guide → UI](../../docs/user/user_guide.md).
 
 ---
 
@@ -287,7 +291,7 @@ References: [src/ui/AGENTS.md](../src/ui/AGENTS.md), [src/ui/pages/AGENTS.md](..
 - `tools/vision_alignment_check.py` exports assistant metadata for diagnostics and logs.
 - `use_kb` follows SSoT settings with optional overrides (`VISION_USE_KB`) for File Search gating.
 
-References: [User Guide → Vision Statement](user_guide.md), [Developer Guide → Configuration](developer_guide.md).
+References: [User Guide → Vision Statement](../../docs/user/user_guide.md), [Developer Guide → Configuration](../../docs/developer/developer_guide.md).
 
 ---
 
@@ -311,7 +315,7 @@ References: [.codex/CHECKLISTS](../.codex/CHECKLISTS.md).
 - **Spell-check/docs mismatch:** run cSpell on the docs and align frontmatter/title versions.
 - **Model inconsistency:** check `config/config.yaml` and `get_vision_model()`.
 
-References: [User Guide → Troubleshooting](user_guide.md).
+References: [User Guide → Troubleshooting](../../docs/user/user_guide.md).
 
 ---
 

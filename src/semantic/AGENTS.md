@@ -15,4 +15,4 @@ Govern semantic workflows (enrichment/frontmatter) while preserving the SSoT and
 
 
 # References
-- docs/AGENTS_INDEX.md
+- system/ops/agents_index.md

@@ -17,9 +17,9 @@ from ui.chrome import render_chrome_then_require
 
 DOC_OPTIONS: list[tuple[str, str]] = [
     ("NeXT Onboarding - Documentazione (v1.0 Beta)", "docs/index.md"),
-    ("Guide - Architettura del sistema", "docs/architecture.md"),
-    ("Guide - Developer Guide", "docs/developer_guide.md"),
-    ("Guide - Coding Rules", "docs/coding_rule.md"),
+    ("Guide - Architettura del sistema", "system/architecture.md"),
+    ("Guide - Developer Guide", "docs/developer/developer_guide.md"),
+    ("Guide - Coding Rules", "docs/developer/coding_rule.md"),
     ("Guide - Interfaccia Streamlit", "docs/streamlit_ui.md"),
     ("Guide - Test suite", "docs/test_suite.md"),
     ("Policy - Policy di Versioning", "docs/versioning_policy.md"),
@@ -50,9 +50,9 @@ def _read_markdown(rel_path: str) -> str:
 
 def _strip_links(markdown: str) -> str:
     """
-    Disabilita i link Markdown trasformandoli in semplice testo.
+        Disabilita i link Markdown trasformandoli in semplice testo.
 
-    Esempio: [Developer Guide](docs/developer_guide.md) -> Developer Guide
+    Esempio: [Developer Guide](docs/developer/developer_guide.md) -> Developer Guide
     """
     return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", markdown)
 

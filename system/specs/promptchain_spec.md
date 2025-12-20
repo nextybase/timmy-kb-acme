@@ -82,7 +82,7 @@ STOP RULE: ...
 - **Codex:** executes the current prompt alone, respecting the declared scope, template, Active Rules memo, and the Phase model before pausing for the next instruction.
 
 ### 8.2 Onboarding Task Codex (mandatory entry point)
-- Runs once at the start of every chain, ensuring Codex loads `docs/AGENTS_INDEX.md`, the relevant `AGENTS.md`, `.codex/AGENTS.md`, and the other SSoT documents listed in `.codex/PROMPTS.md`.
+- Runs once at the start of every chain, ensuring Codex loads `system/ops/agents_index.md`, the relevant `AGENTS.md`, `.codex/AGENTS.md`, and the other SSoT documents listed in `.codex/PROMPTS.md`.
 - Establishes path safety, QA expectations, and the requirement to plan before coding; sets the tone for micro-PR discipline.
 - Activates the Phase model: Prompt 0 (analysis) always precedes any operational prompt; skipping or collapsing phases is forbidden.
 

@@ -5,11 +5,11 @@
 * [Home](README.md)
 * Documentazione
   * [Indice documentazione](docs/index.md)
-  * [Guida utente](docs/user_guide.md)
-  * [Manuale dell'interfaccia](docs/guida_ui.md)
-  * [Guida sviluppatore](docs/developer_guide.md)
-  * [Regole di codifica](docs/coding_rule.md)
-  * [Architettura tecnica](docs/architecture.md)
+  * [Guida utente](docs/user/user_guide.md)
+  * [Manuale dell'interfaccia](docs/user/guida_ui.md)
+  * [Guida sviluppatore](docs/developer/developer_guide.md)
+  * [Regole di codifica](docs/developer/coding_rule.md)
+  * [Architettura tecnica](system/architecture.md)
   * [Policy di push](docs/policy_push.md)
   * [Versioning policy](docs/versioning_policy.md)
 * Rilasci & manutenzione

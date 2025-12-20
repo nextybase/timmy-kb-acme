@@ -212,7 +212,7 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 - *UI policy*: `forbid-streamlit-deprecated`, `ui-beta0-compliance`.
 - *Boundary error*: `forbid-legacy-valueerror` (vietato `raise ValueError(` in runtime).
 - *Security/Docs* (**commit**): `gitleaks` (segreti), `cspell` (README+docs).
-- *Doc governance* (**commit**): `agents-matrix-check`  verifica che la matrice in `docs/AGENTS_INDEX.md` sia **allineata** agli `AGENTS.md` locali; fallisce se va rigenerata. Esegue `python tools/gen_agents_matrix.py --check`; scope file: `docs/AGENTS_INDEX.md`, `src/**/AGENTS.md`, `tests/AGENTS.md`, `.codex/AGENTS.md`, `AGENTS.md`.
+- *Doc governance* (**commit**): `agents-matrix-check`  verifica che la matrice in `system/ops/agents_index.md` sia **allineata** agli `AGENTS.md` locali; fallisce se va rigenerata. Esegue `python tools/gen_agents_matrix.py --check`; scope file: `system/ops/agents_index.md`, `src/**/AGENTS.md`, `tests/AGENTS.md`, `.codex/AGENTS.md`, `AGENTS.md`.
 
 **Esecuzioni tipiche**
 ```bash
@@ -244,7 +244,7 @@ SKIP=ruff,black git commit -m "..."
 - Versione minima: `pre-commit  3.6`; Python di default: `3.11`.
 - Esclusi dal scan: `.venv/`, `node_modules/`, `output/`, `dist/`, `build/`, `docs/_build/`.
 - Scope file: Python limitato a `src|tests`; cSpell = `README.md` e `docs/*.md`.
-- Matrice AGENTS: hook locale `agents-matrix-check` (`.pre-commit-config.yaml`  `repo: local`, `id: agents-matrix-check`, `entry: python tools/gen_agents_matrix.py --check`, `language: system`, `pass_filenames: false`, `files: ^docs/AGENTS_INDEX\.md$|^src/.*/AGENTS\.md$|^tests/AGENTS\.md$|^\.codex/AGENTS\.md$|^AGENTS\.md$`).
+- Matrice AGENTS: hook locale `agents-matrix-check` (`.pre-commit-config.yaml`  `repo: local`, `id: agents-matrix-check`, `entry: python tools/gen_agents_matrix.py --check`, `language: system`, `pass_filenames: false`, `files: ^system/ops/agents_index\.md$|^src/.*/AGENTS\.md$|^tests/AGENTS\.md$|^\.codex/AGENTS\.md$|^AGENTS\.md$`).
 
 > Riferimenti: `.pre-commit-config.yaml` (stadi, scope, hook e argomenti), README/Developer Guide (installazione rapida), User Guide (fixer/guard Unicode).
 

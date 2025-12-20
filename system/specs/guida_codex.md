@@ -16,7 +16,7 @@ L’idea di base:
 
 1. **Prompt 0 – Onboarding (Phase 0)**
    - Fornisce il contesto generale (repo, obiettivi, regole attive) senza toccare il filesystem.
-   - Ricorda a Codex di leggere gli SSoT chiave: `.github/codex-instructions.md`, `docs/PromptChain_spec.md`, `docs/AGENTS_INDEX.md`, gli `AGENTS.md` di area e `.codex/PROMPTS.md`.
+   - Ricorda a Codex di leggere gli SSoT chiave: `.github/codex-instructions.md`, `system/specs/promptchain_spec.md`, `system/ops/agents_index.md`, gli `AGENTS.md` di area e `.codex/PROMPTS.md`.
    - Definisce l’obiettivo della catena (es. refactor, feature, hardening QA) e conferma il piano operativo con risposta in italiano.
 
 2. **Prompt 1/2 – Analisi e allineamento (Phase 0)**
@@ -100,8 +100,8 @@ Per ottenere il massimo da Codex (sia in Chat che in Agent), alcune tecniche di 
     *"Lavora su `src/ui/preflight.py` e spiega prima il flusso, poi proponi al massimo 2 micro-refactor non-breaking."*
 
 - Cita gli SSoT quando rilevante:
-  - `docs/AGENTS_INDEX.md`,
-  - `docs/PromptChain_spec.md`,
+  - `system/ops/agents_index.md`,
+  - `system/specs/promptchain_spec.md`,
   - `docs/logging_events.md`,
   - `src/semantic/AGENTS.md`.
 
@@ -212,9 +212,9 @@ La catena attiva per proteggere `docs/` e `README.md` da mojibake si basa su tre
 
 ## 6. Riferimenti rapidi
 
-- **Prompt Chain**: definizione completa e contratto operativo → `docs/PromptChain_spec.md`.
-- **Runbook Codex**: flussi operativi dettagliati → `docs/runbook_codex.md`.
-- **Indice AGENTS**: vista centralizzata degli agenti → `docs/AGENTS_INDEX.md`.
+- **Prompt Chain**: definizione completa e contratto operativo → `system/specs/promptchain_spec.md`.
+- **Runbook Codex**: flussi operativi dettagliati → `system/ops/runbook_codex.md`.
+- **Indice AGENTS**: vista centralizzata degli agenti → `system/ops/agents_index.md`.
 - **Costituzione NeXT**: principi fondanti e regole di base → `.codex/CONSTITUTION.md`.
 - **Coding Standards minimi**: → `.codex/CODING_STANDARDS.md`.
 - **Configurazione personale**: → `~/.codex/AGENTS.md` e `~/.codex/config.toml`.

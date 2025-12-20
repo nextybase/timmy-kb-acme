@@ -29,7 +29,7 @@ Per il logging avanzato usa `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TI
 ```bash
 streamlit run onboarding_ui.py
 ```
-La UI guida l'onboarding end-to-end. Per flussi completi e screenshot consulta la [User Guide](docs/user_guide.md).
+La UI guida l'onboarding end-to-end. Per flussi completi e screenshot consulta la [User Guide](docs/user/user_guide.md).
 
 ### CLI automatizzata
 ```bash
@@ -38,7 +38,7 @@ python -m timmy_kb.cli.tag_onboarding --slug acme --non-interactive --proceed
 python -m timmy_kb.cli.semantic_onboarding --slug acme --non-interactive
 py src/onboarding_full.py --slug acme --non-interactive
 ```
-Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user_guide.md).
+Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user/user_guide.md).
 
 ---
 
@@ -57,18 +57,24 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 ---
 
 ## Documentazione & riferimenti
-- [User Guide](docs/user_guide.md) - flussi UI/CLI, Vision, workspace.
-- [Developer Guide](docs/developer_guide.md) - SSoT, pipeline, logging, get_vision_model().
-- [Coding Rules](docs/coding_rule.md) e [Architecture Overview](docs/architecture.md).
-- [Configuration split](docs/configurazione.md) e [Runbook Codex](docs/runbook_codex.md).
+- [User Guide](docs/user/user_guide.md) - flussi UI/CLI, Vision, workspace.
+- [Developer Guide](docs/developer/developer_guide.md) - SSoT, pipeline, logging, get_vision_model().
+- [Coding Rules](docs/developer/coding_rule.md) e [Architecture Overview](system/architecture.md).
+- [Configuration split](docs/configurazione.md) e [Runbook Codex](system/ops/runbook_codex.md).
 - [CONTRIBUTING](CONTRIBUTING.md) - policy PR e micro-PR.
 - [LICENSE](LICENSE) - GPL-3.0.
 - [Code of Conduct](CODE_OF_CONDUCT.md) e [Security](SECURITY.md).
 
+## From Foundation Pipeline to Agency
+- La pipeline di ingestione è l’atto di nascita di Timmy: nasce quando i PDF del cliente vengono trasformati in markdown semanticamente arricchiti e il knowledge graph associato viene validato.
+- Solo a quel punto il passaggio concettuale ProtoTimmy → Timmy diventa operativo: ProtoTimmy governa la fondazione, Timmy assume agency globale e dialoga con Domain Gatekeepers e micro-agent.
+- La pipeline non decide né orchestra: è lo strumento che genera gli artifact (markdown + knowledge graph) richiesti dallo SSoT e abilita il control plane, ma la direzione resta affidata a Timmy e ai gatekeeper.
+- Tutti i riferimenti tecnici a `pipeline.*` descrivono gli strumenti operativi della fondazione; dopo la validazione la Prompt Chain documentata in `instructions/` prende il comando.
+
 ---
 
 ### Prompt Chain (refactor sicuri)
-Le modifiche significative, i refactor complessi o gli interventi multi-step effettuati tramite l'agente Codex seguono il modello **Prompt Chain**, descritto nello SSoT [`docs/PromptChain_spec.md`](docs/PromptChain_spec.md).
+Le modifiche significative, i refactor complessi o gli interventi multi-step effettuati tramite l'agente Codex seguono il modello **Prompt Chain**, descritto nello SSoT [`system/specs/promptchain_spec.md`](system/specs/promptchain_spec.md).
 
 Una Prompt Chain garantisce che ogni step sia un micro-PR con QA, supervisionato dal Planner, e che la chiusura avvenga solo dopo aver portato a verde:
 ```
@@ -77,7 +83,7 @@ pytest -q
 ```
 Questo modello consente interventi profondi mantenendo massima sicurezza, coerenza e tracciabilita'.
 Il ciclo completo è Planner → OCP → Codex → OCP → Planner, con Phase 0 dedicata all’analisi read-only, Phase 1..N ai micro-PR intermedi (con `pytest -q -k "not slow"` e Active Rules memo) e Prompt N+1 alla QA finale (`pre-commit run --all-files` + `pytest -q`) e al riepilogo italiano.
-Per i dettagli operativi vedi `.codex/PROMPTS.md`, `docs/runbook_codex.md` e `.codex/WORKFLOWS.md`.
+Per i dettagli operativi vedi `.codex/PROMPTS.md`, `system/ops/runbook_codex.md` e `.codex/WORKFLOWS.md`.
 
 ---
 
@@ -98,4 +104,4 @@ Per i dettagli operativi vedi `.codex/PROMPTS.md`, `docs/runbook_codex.md` e `.c
   Grafana (`http://localhost:3000`) usa `GRAFANA_ADMIN_PASSWORD` (fallback solo per dev); Loki è su `http://localhost:3100`.
 - Personalizza i bind `./promtail-config.yaml`, `output` e `.timmykb/logs` a seconda del filesystem locale; spegni con `docker compose down`.
 
-Per altre note operative (preview Docker, ingest CSV, gestione extras Drive) rimandiamo alle sezioni dedicate della [User Guide](docs/user_guide.md) e della [Developer Guide](docs/developer_guide.md).
+Per altre note operative (preview Docker, ingest CSV, gestione extras Drive) rimandiamo alle sezioni dedicate della [User Guide](docs/user/user_guide.md) e della [Developer Guide](docs/developer/developer_guide.md).

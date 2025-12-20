@@ -13,4 +13,4 @@ Testing guidance emphasizing the unit → middle/contract → smoke E2E pyramid 
 
 
 # References
-- docs/AGENTS_INDEX.md
+- system/ops/agents_index.md

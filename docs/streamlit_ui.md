@@ -1,6 +1,6 @@
 # Streamlit UI  linee guida (dettagliate)
 
-*Allineato alle regole di progetto (vedi *[***coding\_rule.md***](./coding_rule.md)*)*.
+*Allineato alle regole di progetto (vedi *[***coding\_rule.md***](./developer/coding_rule.md)*)*.
 
 ---
 
@@ -528,5 +528,5 @@ R: Valida **prima** di scrivere (`yaml.safe_load`) e, in caso di errore, emetti 
 
 ### Note finali
 
-- Questo documento e SSoT per la UI Streamlit e si affianca a [coding\_rule.md](./coding_rule.md).
+- Questo documento e SSoT per la UI Streamlit e si affianca a [coding\_rule.md](./developer/coding_rule.md).
 - Gli esempi sono tratti da implementazioni reali nelle pagine **Manage** e **Semantics** e risultano eseguibili nel progetto.

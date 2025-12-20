@@ -12,7 +12,10 @@ Core principles:
 - **Micro-PR:** small, motivated changes with a clear diff; touching area X requires syncing docs/tests and related buffers.
 - **Matrix as contract:** the table below is the single source of truth across domains: build/test/lint/path-safety/documentation are obligations, not suggestions.
 - **Gating UX:** UI surfaces obey state (e.g., Semantica unlocks only when RAW exists) to avoid non-idempotent operations.
-
+## Agency-first model & control plane
+- WHAT (governance): ProtoTimmy/Timmy represent the agency that makes decisions, coordinates Domain Gatekeepers (validation), and relies on the Control Plane / Engineering Gatekeeper (OCP) to apply HiTL gates; the Prompt Chain lifecycle and Intent/Action registry live in `instructions/*`.
+- HOW (execution): `pipeline.*` helpers, CLI flows, semantic services, and Codex/micro-agent workflows execute the foundation pipeline (markdown enrichment + knowledge graph validation) under Work Order Envelope (OK / NEED_INPUT / CONTRACT_ERROR) without decision-making authority.
+- Timmy assumes agency only once the foundation pipeline produces the required artifacts; until then ProtoTimmy and the control plane keep the execution aligned to the SSoT and hand off to Timmy after validation.
 
 <!-- MATRIX:BEGIN -->
 > **Matrice di override (panoramica rapida)**
@@ -39,7 +42,7 @@ Core principles:
 - **Lint & Typecheck:** apply configured formatters/linters (`Ruff`, `Black`, `isort`) and typecheckers (`mypy`/`pyright`) when present. Respect the project's existing standards.
 - **Path-safety & I/O:** every read/write must flow through the SSoT helpers (`ensure_within*`, `safe_write_*`). Never create/delete files outside the customer perimeter.
 - **Documentation & QA:** update documentation when UX/flow changes occur. Keep cSpell clean on tracked paths; only expand dictionaries for domain-specific terms.
- - **Prompt Chain etiquette:** Planner → OCP → Codex → OCP → Planner is mandatory; Phase 0 stays analytical, phases 1..N implement micro-PRs with `pytest -q -k "not slow"`, and Prompt N+1 executes `pytest -q` + `pre-commit run --all-files`, ending with an Italian one-line closing commit. Documentazione SSoT resta in inglese, ma Codex risponde sempre in italiano. Reference: `docs/PromptChain_spec.md`, `docs/runbook_codex.md`, `.codex/PROMPTS.md`.
+ - **Prompt Chain etiquette:** Planner → OCP → Codex → OCP → Planner is mandatory; Phase 0 stays analytical, phases 1..N implement micro-PRs with `pytest -q -k "not slow"`, and Prompt N+1 executes `pytest -q` + `pre-commit run --all-files`, ending with an Italian one-line closing commit. Documentazione SSoT resta in inglese, ma Codex risponde sempre in italiano. Reference: `system/specs/promptchain_spec.md`, `system/ops/runbook_codex.md`, `.codex/PROMPTS.md`.
 
 
 ## Local AGENTS references

@@ -17,4 +17,4 @@ UI surface for inspecting an OpenAI assistant (system prompt + raw output) and m
 
 
 # References
-- docs/AGENTS_INDEX.md
+- system/ops/agents_index.md

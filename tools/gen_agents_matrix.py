@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 REPO = Path(__file__).resolve().parents[1]
-INDEX = REPO / "docs" / "AGENTS_INDEX.md"
+INDEX = REPO / "system" / "ops" / "agents_index.md"
 MARK_BEGIN = "<!-- MATRIX:BEGIN -->"
 MARK_END = "<!-- MATRIX:END -->"
 
@@ -148,7 +148,7 @@ def render_table(rows: List[List[str]]) -> str:
 
 def replace_block(text: str, payload: str) -> str:
     if MARK_BEGIN not in text or MARK_END not in text:
-        raise SystemExit("Marker MATRIX non trovati in docs/AGENTS_INDEX.md")
+        raise SystemExit("Marker MATRIX non trovati in system/ops/agents_index.md")
     pattern = rf"{re.escape(MARK_BEGIN)}.*?{re.escape(MARK_END)}"
     return re.sub(pattern, lambda _m: f"{MARK_BEGIN}\n{payload}\n{MARK_END}", text, flags=re.DOTALL)
 
@@ -164,7 +164,7 @@ def main(check: bool = False) -> None:
         print("MATRIX: aggiornamento necessario (rigenera la tabella).")
         raise SystemExit(1)
     INDEX.write_text(updated, encoding="utf-8")
-    print("MATRIX: rigenerata in docs/AGENTS_INDEX.md")
+    print("MATRIX: rigenerata in system/ops/agents_index.md")
 
 
 if __name__ == "__main__":

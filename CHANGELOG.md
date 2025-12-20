@@ -26,7 +26,7 @@
 - Semantic vocab loader: slug derivato da `REPO_NAME_PREFIX` e logging uniformato (`semantic.vocab.db_missing`, `semantic.vocab.db_empty`, `semantic.vocab.loaded`).
 - Retriever cosine: ora usa generatori con `itertools.tee`, evitando copie in memoria e mantenendo scaling numerico controllato.
 - Vision & KGraph: chiamate Responses API ora modello-only (assistant_id solo per logging/metadata), istruzioni spostate in messaggio system e payload messaggi in formato `input_text`; `TagKgInput` adegua `to_messages` al formato Responses.
-- Documentazione: `docs/developer_guide.md` e `docs/coding_rule.md` descrivono l'uso corretto dell'SDK OpenAI interno (model-only, input_text/output_text, assistant come SSoT di config, pattern di risoluzione modello) e il divieto dei pattern legacy thread/run.
+- Documentazione: `docs/developer/developer_guide.md` e `docs/developer/coding_rule.md` descrivono l'uso corretto dell'SDK OpenAI interno (model-only, input_text/output_text, assistant come SSoT di config, pattern di risoluzione modello) e il divieto dei pattern legacy thread/run.
 - Debug tooling: `kg_debug_dummy` gestisce run offline con output sintetico e riduce eccezioni inattese; logging KGraph include dump raw in caso di JSON non valido.
 
 ### Added

@@ -39,7 +39,7 @@ STOP RULE: <fermo dopo la risposta>
 
 ### Template: Prompt 0
 - Purpose: define the final goal of the Prompt Chain, the high-level plan, and instruct Codex to ingest the SSoT.
-- Required actions: load `docs/coding_rule.md`, `docs/developer_guide.md`, `docs/PromptChain_spec.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, `.codex/WORKFLOWS.md`, `.codex/CHECKLISTS.md`, and `.codex/PROMPTS.md`, then confirm comprehension.
+- Required actions: load `docs/developer/coding_rule.md`, `docs/developer/developer_guide.md`, `system/specs/promptchain_spec.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, `.codex/WORKFLOWS.md`, `.codex/CHECKLISTS.md`, and `.codex/PROMPTS.md`, then confirm comprehension.
 - Mode: analytical, read-only; no files changed, no QA commands executed.
 - Output: Italian summary of the plan, statement of loaded documents, and risks.
 
@@ -63,18 +63,18 @@ STOP RULE: <fermo dopo la risposta>
 - Action: only after both QA commands succeed may the chain be considered complete; Codex must report any remaining issues before ending.
 
 ## Active Rules Memo
-- Begin every operational response (Prompt 1..N) with the Active Rules memo that reminds the team about path safety ON, micro-PR focus, zero side effects, documentation updates, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Italian language policy referenced in `docs/PromptChain_spec.md`.
+- Begin every operational response (Prompt 1..N) with the Active Rules memo that reminds the team about path safety ON, micro-PR focus, zero side effects, documentation updates, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Italian language policy referenced in `system/specs/promptchain_spec.md`.
 - Confirm compliance with the turn-based protocol inside each memo.
 
 ## Prompt Chain Operational Contract
-The Prompt Chain operational contract spells out the dialogue model between the OCP and Codex and requires Codex to act idempotently, attentively, and aligned with the policies documented in `docs/runbook_codex.md`, `docs/codex_integrazione.md`, and `docs/PromptChain_spec.md`. Every prompt must be treated as an independent micro-PR with a fixed scope and no unauthorized creative deviations.
+The Prompt Chain operational contract spells out the dialogue model between the OCP and Codex and requires Codex to act idempotently, attentively, and aligned with the policies documented in `system/ops/runbook_codex.md`, `docs/codex_integrazione.md`, and `system/specs/promptchain_spec.md`. Every prompt must be treated as an independent micro-PR with a fixed scope and no unauthorized creative deviations.
 - Always answer only one prompt at a time: after you reply, halt execution, wait for the next OCP prompt, and never invent additional prompts.
 - Do not design new architectures, refactors, or self-initiatives beyond the OCP's explicit requirements; stay within the provided scope.
 - Observe the "idempotent micro-PR" rule: keep changes minimal, mentally reversible, and free of import-time side effects.
-- Remember that `docs/PromptChain_spec.md` is the SSoT for the Prompt Chain and that `docs/runbook_codex.md`/`docs/codex_integrazione.md` describe the operational context.
+- Remember that `system/specs/promptchain_spec.md` is the SSoT for the Prompt Chain and that `system/ops/runbook_codex.md`/`docs/codex_integrazione.md` describe the operational context.
 
 ## Startup Tasks
-- Read `docs/AGENTS_INDEX.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, and `docs/runbook_codex.md`.
+- Read `system/ops/agents_index.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, and `system/ops/runbook_codex.md`.
 - Use only SSoT utilities (`ensure_within*`, `safe_write_*`); restrict writes to `src/`, `tests/`, `docs/`, `.codex/`.
 
 ## Path Safety Hardening and Atomic Writes
@@ -192,29 +192,29 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 - If the same issue (test or stack trace) repeats more than twice in a single step, stop, log the attempts, and confirm the next action with the OCP.
 - Do not proceed until the following prompt arrives; disclose how many iterations you have exhausted.
 - Every operational prompt (except the final one) must state that it ran `pytest -q -k "not slow"` (plus any additional tests requested); record retries and outcomes before continuing.
-- The final QA cycle (`pytest -q` + `pre-commit run --all-files`) follows the thresholds in `docs/PromptChain_spec.md`; avoid divergent retry counts, keep retries reasonable, and describe each rerun explicitly.
+- The final QA cycle (`pytest -q` + `pre-commit run --all-files`) follows the thresholds in `system/specs/promptchain_spec.md`; avoid divergent retry counts, keep retries reasonable, and describe each rerun explicitly.
 
 ## Using Tests in the Prompt Chain
 - Test execution is scoped per prompt, with two distinct phases: optional tests when requested and mandatory closing QA.
 - Run only the commands explicitly enumerated in the prompt, and explain which tests were executed and why.
 - Each intermediate prompt must include the standard QA `pytest -q -k "not slow"` (and any additional targeted tests); the final prompt executes the full suite without filtering.
-- The closing prompt always runs `pytest -q` and `pre-commit run --all-files` (per `docs/PromptChain_spec.md` and `docs/runbook_codex.md`); if they fail, apply minimal fixes and rerun until both succeed.
+- The closing prompt always runs `pytest -q` and `pre-commit run --all-files` (per `system/specs/promptchain_spec.md` and `system/ops/runbook_codex.md`); if they fail, apply minimal fixes and rerun until both succeed.
 - Document failed tests or repeated retries in your final reply, specifying the fixes and the number of attempts.
 
 ## Commits and Pushes in the Prompt Chain
-- Codex proposes patches, waits for confirmation, and never pushes autonomously: the final commit must follow the semantics in `docs/PromptChain_spec.md`.
+- Codex proposes patches, waits for confirmation, and never pushes autonomously: the final commit must follow the semantics in `system/specs/promptchain_spec.md`.
 - Present the diff, request human/OCP confirmation, and do not perform commit/push before full validation.
 - Pushes happen only after QA completes (`pytest -q`, `pre-commit run --all-files`) and with explicit approval from the OCP or responsible human.
 - The closing Prompt Chain commit must state that the chain is sealed, summarize QA/tests, and notify the OCP of next steps or outstanding issues.
 
 ## Turn-Based Prompt Chain (OCP→Codex Cycle)
-- **SSoT:** refer to `docs/PromptChain_spec.md` for governance and the operational contract.
+- **SSoT:** refer to `system/specs/promptchain_spec.md` for governance and the operational contract.
 - The OrchestratoreChainPrompt (OCP) issues numbered prompts (Prompt 0, 1, 2, ...); each stays within a fixed scope and corresponds to a micro-PR under the same Codex rules (HiTL, AGENT-first, QA, path safety, atomic I/O).
 - The OCP never edits the repository; it converts Timmy/ProtoTimmy's goals into formal prompts and drives Codex one step at a time. Codex must not anticipate future steps, generate additional prompts, or expand the defined scope.
 - The Onboarding Task Codex remains the required entrypoint: it enforces scope, prohibits touching unrequested files, and ensures idempotent, traceable outputs per prompt.
 
 ## Onboarding Task Codex
-- Read the three SSoT documents before making edits: `docs/AGENTS_INDEX.md`, the relevant area `AGENTS.md`, and `.codex/AGENTS.md`.
+- Read the three SSoT documents before making edits: `system/ops/agents_index.md`, the relevant area `AGENTS.md`, and `.codex/AGENTS.md`.
 - Propose a concise action plan (steps and order) before modifying files.
 - Apply the micro-PR model: single scope, minimal diff, idempotent, and clearly motivated.
 - QA checklist: path safety via SSoT utilities, scoped writes, atomic logging; keep the AGENTS matrix updated when touching `AGENTS.md`, refresh documentation if behavior changes, and honor area-specific overrides.
@@ -228,7 +228,7 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 # Semantics & tags.db
 
 ## Startup tasks
-- Read `docs/AGENTS_INDEX.md` and `src/semantic/AGENTS.md`.
+- Read `system/ops/agents_index.md` and `src/semantic/AGENTS.md`.
 - Ensure `semantic/tags.db` exists; treat `tags_reviewed.yaml` as a human authoring checkpoint.
 
 ## Enrichment front matter
@@ -259,7 +259,7 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 # Test & QA
 
 ## Startup tasks
-- Read `docs/AGENTS_INDEX.md` and `tests/AGENTS.md`.
+- Read `system/ops/agents_index.md` and `tests/AGENTS.md`.
 - Prepare dummy datasets; avoid network dependencies by mocking Drive/Git.
 
 ## QA pipeline
@@ -270,11 +270,11 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 # Docs & Runbook
 
 ## Startup tasks
-- Read `docs/runbook_codex.md`, `docs/AGENTS_INDEX.md`, and `docs/AGENTS.md`.
+- Read `system/ops/runbook_codex.md`, `system/ops/agents_index.md`, and `docs/AGENTS.md`.
 - Keep front matter/titles aligned with `v1.0 Beta` and maintain cSpell checks on `docs/` and `README.md`.
 
 ## Doc sync (API or flow changes)
-- Align the code with `docs/architecture.md`, `docs/developer_guide.md`, and `docs/guida_ui.md`.
+- Align the code with `system/architecture.md`, `docs/developer/developer_guide.md`, and `docs/user/guida_ui.md`.
 - Apply minimal patches; update `.codex/WORKFLOWS.md` if the flow changes.
 - Verify cSpell and relative links.
 
@@ -284,4 +284,4 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 
 ## Senior Reviewer request
 - Deliver: concise title, context, files touched + changes, QA results (formatter/linter/type/test), missing tests/known issues, and 2-3 questions for the Senior.
-- Respect `.codex/CONSTITUTION.md`, `.codex/AGENTS.md`, and `docs/AGENTS_INDEX.md`; keep the scope to a micro-PR.
+- Respect `.codex/CONSTITUTION.md`, `.codex/AGENTS.md`, and `system/ops/agents_index.md`; keep the scope to a micro-PR.

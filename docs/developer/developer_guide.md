@@ -10,13 +10,19 @@ Per un percorso rapido step-by-step vedi anche [Developer Quickstart](developer_
 - **Logging strutturato centralizzato**, redazione automatica dei segreti, handler idempotenti.
 - **Path-safety** e **scritture atomiche** per ogni I/O nel workspace cliente.
 - **UI import-safe** (nessun sideeffect a import-time).
-- **Parita di firma** tra wrapper/facade UI e backend `pipeline.*`/`semantic.*`.
-- **Riproducibilita ambienti** tramite pin gestiti con `pip-tools` (requirements/constraints).
-
+- - **Parita di firma** tra wrapper/facade UI e backend `pipeline.*`/`semantic.*`.
+- - **Riproducibilita ambienti** tramite pin gestiti con `pip-tools` (requirements/constraints).
+-
 ---
 
+## Agency & Control Plane
+- WHAT: la governance agency-first (ProtoTimmy → Timmy, Domain Gatekeepers, Control Plane/OCP, Prompt Chain) è documentata in `instructions/*` e definisce chi decide, valida ed esegue.
+- HOW: i moduli `pipeline.*`, `semantic.*`, `workspace_bootstrap` e `WorkspaceLayout` sono strumenti operativi per I/O, path, logging e semantica; garantiscono artifact affidabili (markdown arricchiti + knowledge graph validato) ma non orchestrano né decidono.
+- La pipeline di foundation apre Timmy quando produce gli artifact richiesti e il knowledge graph viene validato; fino a quel momento ProtoTimmy guida la fondazione e OCP gestisce il control plane senza porsi come agency.
+- Ogni riferimento a `pipeline.*` in questo documento va inteso come HOW (strumento tecnico); le decisioni e i gate sono descritte nelle sezioni `instructions/00*`, `instructions/01*` e `instructions/02*`.
+
 ## Architettura in breve
-- **Pipeline** (`pipeline.*`): funzioni SSoT per I/O, path-safety, logging, semantica e orchestrazione.
+- **Pipeline** (`pipeline.*`): funzioni SSoT per I/O, path-safety, logging e semantica.
 - **UI/Service Layer** (`src/ui/*`): presenta funzioni e schermate Streamlit, delega alla pipeline senza cambiare semantica.
 - **Semantic** (`semantic.*`): conversione PDFMarkdown, arricchimento frontmatter, generazione `SUMMARY.md`/`README.md`.
 - **Workspace cliente**: `output/timmy-kb-<slug>/` con sottocartelle `raw/`, `book/`, `semantic/`, `config/`, `logs/`.
@@ -333,8 +339,8 @@ logger.info("debug.raw_output", extra={"sample": text[:500]})
 ```
 
 ### Prompt Chain & agenti (vista sviluppatore)
-- Il Prompt Chain segue il protocollo Planner → OCP → Codex → OCP → Planner definito in `docs/PromptChain_spec.md` con la sequenza Phase 0 (analisi read-only), Phase 1..N (micro-PR operativi) e Prompt N+1 (final QA + closing summary).
-- Phase 0 risponde solo con ragionamento strutturato e piano operativo dopo aver caricato gli SSoT (`docs/PromptChain_spec.md`, `docs/runbook_codex.md`, `.codex/PROMPTS.md`, `.codex/WORKFLOWS.md`, `docs/AGENTS_INDEX.md`); nessun diff o QA viene eseguito in questa fase.
+- Il Prompt Chain segue il protocollo Planner → OCP → Codex → OCP → Planner definito in `system/specs/promptchain_spec.md` con la sequenza Phase 0 (analisi read-only), Phase 1..N (micro-PR operativi) e Prompt N+1 (final QA + closing summary).
+- Phase 0 risponde solo con ragionamento strutturato e piano operativo dopo aver caricato gli SSoT (`system/specs/promptchain_spec.md`, `system/ops/runbook_codex.md`, `.codex/PROMPTS.md`, `.codex/WORKFLOWS.md`, `system/ops/agents_index.md`); nessun diff o QA viene eseguito in questa fase.
 - I prompt Phase 1..N applicano micro-PR limitati allo scope dichiarato, includono il memo Active Rules definito in `.codex/PROMPTS.md`, confermano path safety, eseguono `pytest -q -k "not slow"` (o giustificano l’eccezione) e producono una risposta italiana con diff e report.
 - Prompt N+1 chiude la chain: esegue `pre-commit run --all-files` e `pytest -q`, documenta eventuali retry (fino a dieci tentativi) e termina con un one-line commit summary in italiano.
 - Il linguaggio delle guide, dell’SSoT e dei template rimane inglese, ma tutte le risposte, i report QA e le comunicazioni tra Codex, OCP e Planner sono in italiano per rispettare la policy linguistica.

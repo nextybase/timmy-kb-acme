@@ -678,7 +678,7 @@ class Settings:
     @staticmethod
     def env_catalog() -> list[dict[str, Any]]:
         """Ritorna l'elenco delle variabili d'ambiente ritenute critiche/opzionali."""
-        doc_url = "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/guida_ui.md#configurazione-env"
+        doc_url = "https://github.com/nextybase/timmy-kb-acme/blob/main/docs/user/guida_ui.md#configurazione-env"
         return [
             {
                 "name": "SERVICE_ACCOUNT_FILE",

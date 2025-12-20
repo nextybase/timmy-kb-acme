@@ -107,7 +107,7 @@ def _normalise_rel_path(cell: str) -> str:
 
 def _parse_agents_index(md: str) -> AgentsTree:
     """
-    Parsea docs/AGENTS_INDEX.md e costruisce una struttura Area -> [AgentNode].
+    Parsea system/ops/agents_index.md e costruisce una struttura Area -> [AgentNode].
     Si appoggia alla matrice principale (righe Markdown con '|').
     """
     raw_block = _extract_matrix_block(md)
@@ -247,21 +247,21 @@ def _regenerate_agents_matrix() -> None:
         except Exception:
             LOGGER.warning("ui.agents_network.cache_clear_failed")
 
-        st.success("Matrice AGENTS rigenerata. " "Ricorda di committare anche docs/AGENTS_INDEX.md.")
+        st.success("Matrice AGENTS rigenerata. " "Ricorda di committare anche system/ops/agents_index.md.")
         LOGGER.info(
             "ui.agents_network.matrix_regenerated",
-            extra={"rel_path": "docs/AGENTS_INDEX.md"},
+            extra={"rel_path": "system/ops/agents_index.md"},
         )
     except SystemExit as exc:
         LOGGER.warning(
             "ui.agents_network.matrix_regen_failed",
-            extra={"rel_path": "docs/AGENTS_INDEX.md", "code": exc.code},
+            extra={"rel_path": "system/ops/agents_index.md", "code": exc.code},
         )
         st.error("Rigenerazione matrice AGENTS fallita. Verifica i log e riprova.")
     except Exception as exc:  # pragma: no cover - degradazione
         LOGGER.warning(
             "ui.agents_network.matrix_regen_failed",
-            extra={"rel_path": "docs/AGENTS_INDEX.md", "error": str(exc)},
+            extra={"rel_path": "system/ops/agents_index.md", "error": str(exc)},
         )
         st.error("Errore durante la rigenerazione della matrice AGENTS. Controlla i log.")
 
@@ -396,7 +396,7 @@ def _open_markdown_modal(title: str, rel_path: str, *, editable: bool = True) ->
 
 def _render_agents_tree(tree: AgentsTree) -> None:
     """
-    Colonna sinistra: mappa ad albero degli AGENT derivata da docs/AGENTS_INDEX.md.
+    Colonna sinistra: mappa ad albero degli AGENT derivata da system/ops/agents_index.md.
     Niente box apri/chiudi: ogni area è una radice e i file sono mostrati come rami,
     ciascuno con il proprio pulsante per aprire la scheda in un modal.
     """
@@ -408,7 +408,7 @@ def _render_agents_tree(tree: AgentsTree) -> None:
 
     if not tree.areas:
         st.warning(
-            "Non riesco a leggere la matrice in `docs/AGENTS_INDEX.md`. "
+            "Non riesco a leggere la matrice in `system/ops/agents_index.md`. "
             "Controlla che i marker MATRIX siano presenti e ben formattati."
         )
         return
@@ -464,14 +464,14 @@ def _render_codex_docs_panel() -> None:
         if st.button("Runbook Codex", key="doc_runbook_codex"):
             _open_markdown_modal(
                 title="Runbook Codex",
-                rel_path="docs/runbook_codex.md",
+                rel_path="system/ops/runbook_codex.md",
                 editable=False,
             )
     with col2:
         if st.button("Guida Codex", key="doc_codex_guide"):
             _open_markdown_modal(
                 title="Integrazione Codex",
-                rel_path="docs/guida_codex.md",
+                rel_path="system/specs/guida_codex.md",
                 editable=False,
             )
 
@@ -516,7 +516,7 @@ with col_left:
     if st.button("↻ Aggiorna matrice AGENTS", key="regen_agents_matrix"):
         _regenerate_agents_matrix()
 
-    agents_index_md = _read_markdown("docs/AGENTS_INDEX.md")
+    agents_index_md = _read_markdown("system/ops/agents_index.md")
     tree = _parse_agents_index(agents_index_md)
     _render_agents_tree(tree)
 

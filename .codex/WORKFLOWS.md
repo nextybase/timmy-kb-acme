@@ -5,11 +5,11 @@
 - Goal: turn PDFs into AI-ready KB Markdown with coherent front matter, a synchronized README/SUMMARY, an HonKit Docker preview, and eventually a push to GitHub.
 
 ### Codex Integration (Repo-aware, v2)
-- Every UI/CLI workflow can also be executed through the repo-aware Codex agent, following `docs/codex_integrazione.md` and `docs/runbook_codex.md`.
-- Each Codex-assisted execution must load the three mandated SSoT documents: `docs/AGENTS_INDEX.md`, the relevant area `AGENTS.md`, and `~/.codex/AGENTS.md`.
+- Every UI/CLI workflow can also be executed through the repo-aware Codex agent, following `docs/codex_integrazione.md` and `system/ops/runbook_codex.md`.
+- Each Codex-assisted execution must load the three mandated SSoT documents: `system/ops/agents_index.md`, the relevant area `AGENTS.md`, and `~/.codex/AGENTS.md`.
 - The recommended entrypoint is the Onboarding Task Codex (see `.codex/PROMPTS.md`), which enforces a preliminary plan, idempotent micro-PRs, explicit QA, and AGENTS matrix updates.
 - Workflows in this file must honor path safety, atomic writes, structured logging, and import-time safety even when driven by Codex.
-- Every Prompt Chain follows `docs/PromptChain_spec.md` as the single source of truth: Planner ? OCP ? Codex ? OCP ? Planner, Phase 0 (analytical/read-only), Phase 1..N (operational micro-PRs with intermediate QA), and Prompt N+1 (final QA plus narrative summary and an Italian one-line commit message).
+- Every Prompt Chain follows `system/specs/promptchain_spec.md` as the single source of truth: Planner ? OCP ? Codex ? OCP ? Planner, Phase 0 (analytical/read-only), Phase 1..N (operational micro-PRs with intermediate QA), and Prompt N+1 (final QA plus narrative summary and an Italian one-line commit message).
 - The Active Rules memo opens each operational prompt to remind teams about path safety ON, micro-PR discipline, zero side effects, documentation updates, the mandatory pre-check, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Italian-only response policy; this memo enforces the template described in `.codex/PROMPTS.md`.
 - Governance forbids skipping phases, executing multiple prompts per turn, or chaining prompts without Codex responses; after two failed autocorrections the agent must stop and ask the OCP for guidance.
 - Operational prompts may touch only the files declared by the OCP, reference the SSoT documents in their reports, and document every QA attempt; the closing prompt runs the full QA stack before confirming completion.
@@ -53,7 +53,7 @@
 - **Idempotence** (safe reruns) and **path safety** (all writes via dedicated utilities).
 - **Structured logging** with redaction where required; portability across Windows/Linux.
 - **Collector + Orchestrator patterns (UI refactor v2):** aggregator functions must be composable collectors, while the orchestrator keeps original order, outputs, and semantics (see preflight refactor).
-- **Alignment with `.codex/PROMPTS.md`:** workflows triggered by Codex must apply the prompts defined therein (dependencies, path safety, QA, documentation/matrix updates) and stay within the perimeter defined in `docs/AGENTS_INDEX.md`.
+- **Alignment with `.codex/PROMPTS.md`:** workflows triggered by Codex must apply the prompts defined therein (dependencies, path safety, QA, documentation/matrix updates) and stay within the perimeter defined in `system/ops/agents_index.md`.
 
 ## Semantic APIs Additions (v1)
 These functions extend the semantic pipeline without altering UI/CLI flows. They remain idempotent, offline, path-safe, and employ atomic writes, allowing invocation from Codex workflows while honoring micro-PR and QA rules in `.codex/PROMPTS.md`.

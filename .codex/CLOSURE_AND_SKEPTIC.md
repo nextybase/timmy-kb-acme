@@ -35,7 +35,7 @@ Una Prompt Chain è chiusa solo dopo PASS del Skeptic Gate N+1′.
 - `.codex/PROMPTS.md`
 - `.codex/WORKFLOWS.md`
 - `.codex/AGENTS.md`
-- `docs/runbook_codex.md`
+- `system/ops/runbook_codex.md`
 - `SKEPTIC_ACK.md`
 
 ## Nota ACK / skip

@@ -18,5 +18,5 @@ Documentation-specific rules covering language, alignment with UX/flow, and cons
 
 
 # References
-- docs/AGENTS_INDEX.md
-- docs/runbook_codex.md
+- system/ops/agents_index.md
+- system/ops/runbook_codex.md

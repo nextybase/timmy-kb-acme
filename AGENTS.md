@@ -3,7 +3,7 @@ Reference index that directs agents to the shared policies and the `.codex/` ope
 
 
 # Rules (overrides)
-- Read `docs/runbook_codex.md` and the `.codex/` guides before starting any task to align on workflows and standards.
+- Read `system/ops/runbook_codex.md` and the `.codex/` guides before starting any task to align on workflows and standards.
 
 
 # Acceptance Criteria
@@ -11,8 +11,8 @@ Reference index that directs agents to the shared policies and the `.codex/` ope
 
 
 # References
-- docs/AGENTS_INDEX.md
-- docs/runbook_codex.md
+- system/ops/agents_index.md
+- system/ops/runbook_codex.md
 - .codex/CONSTITUTION.md
 - .codex/WORKFLOWS.md
 - .codex/CODING_STANDARDS.md

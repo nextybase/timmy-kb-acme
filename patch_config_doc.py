@@ -1,3 +1,3 @@
 from pathlib import Path
 
-text = Path("docs/guida_ui.md").read_text()
+text = Path("docs/user/guida_ui.md").read_text()

@@ -37,7 +37,7 @@ Document the 1.0 Beta split between the **User channel** (Streamlit screens plus
 ## Guardrails & References
 - This contract is enforced via `tests/architecture/test_facade_imports.py` (no forbidden imports).
 - Follow the Closure Protocol in `.codex/CLOSURE_AND_SKEPTIC.md` to wrap each change.
-- Mentioned guardrail tests already live in `.codex/CHECKLISTS.md` and `docs/AGENTS_INDEX.md`.
+- Mentioned guardrail tests already live in `.codex/CHECKLISTS.md` and `system/ops/agents_index.md`.
 - The enforcement is automated by `tools/ci/entrypoint_guard_ack.py`, which rejects changes touching public entrypoints unless `.codex/USER_DEV_SEPARATION.md` or `SEPARATION_ACK.md` is updated with rationale.
 - Ownership mappings are enforced per channel via `.github/CODEOWNERS`, keeping reviews aligned with these boundaries.
 - Il flusso “Nuovo cliente” ora invoca `pipeline.ownership.ensure_ownership_file()` e crea `clients/<slug>/ownership.yaml` per ogni workspace; aggiorna la governance tenant-level quando cambia la pagina `src/ui/pages/new_client.py`.
