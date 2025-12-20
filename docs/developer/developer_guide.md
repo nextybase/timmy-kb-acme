@@ -1,5 +1,11 @@
 # Developer Guide  v1.0 Beta
 
+Executive summary
+
+Questo testo accompagna chi costruisce il sistema, ricordando che il valore è nel disegnare condizioni epistemiche condivise, non nel consegnare soluzioni autonome: ogni scelta tecnica nasce dal confronto con un contesto incerto e ogni modifica aggiorna una narrativa di responsabilità collettiva.
+
+Il ruolo del developer è presidiare vincoli, tracciare l'incertezza e rendere esplicito ciò che non è ancora deciso, mantenendo la propria autorità e lasciando che il sistema resti uno strumento di supporto, mai una sostituzione del giudizio umano.
+
 Guida per sviluppare e manutenere **Timmy KB** in modo coerente e sicuro. Questa versione e la base iniziale della documentazione tecnica: niente riferimenti a legacy o migrazioni passate.
 Per un percorso rapido step-by-step vedi anche [Developer Quickstart](developer_quickstart.md).
 

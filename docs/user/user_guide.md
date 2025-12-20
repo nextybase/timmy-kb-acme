@@ -1,5 +1,11 @@
 # Timmy-KB - User Guide (v1.0 Beta)
 
+Executive summary
+
+Questo spazio ti accompagna nel comprendere e usare strumenti che mettono a disposizione conoscenze strutturate: l'intento è sostenere la tua lettura e costruzione dei contenuti mantenendo chiara la separazione tra ciò che ti viene proposto e le decisioni che restano tue.
+
+Il sistema non decide per te né nasconde l'incertezza, e non si sostituisce all'esperienza umana; ogni scelta, dubbio o aggiustamento rimane sotto la tua responsabilità, mentre la sua funzione è rendere esplicite le ambiguità e offrirti contesto e chiarezza.
+
 Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
