@@ -80,9 +80,9 @@ TASKS = {
 def extract_summary(md: str) -> Tuple[str, str]:
     """
     Estrae due righe sintetiche:
-    - Override: cerca sezioni 'Override'/'Regole' e prende 1-2 bullet.
-    - Accettazione: cerca 'Accettazione'/'Acceptance' e prende 1 bullet.
-    Fallback: '???'????'
+    - Override: riconosce varianti di heading e prende 1-2 bullet.
+    - Accettazione: contiene i criteri/acceptance.
+    Fallback: 'Non definito'
     """
 
     def bullets_after(heading_regex: str, take: int = 2) -> List[str]:
@@ -101,13 +101,20 @@ def extract_summary(md: str) -> Tuple[str, str]:
                 break
         return out
 
-        return out
+    override = bullets_after(
+        r"^\s*#+\s*(Override|Regole|Rules|Rules \(overrides\)|Policy|Linee guida)\b",
+        take=2,
+    )
+    accept = bullets_after(
+        r"^\s*#+\s*(Accettazione|Acceptance|Acceptance Criteria|Criteri di accettazione|Criteri)\b",
+        take=1,
+    )
 
-    override = bullets_after(r"^\s*#+\s*(Override|Regole)\b", take=2)
-    accept = bullets_after(r"^\s*#+\s*(Accettazione|Acceptance|Criteri)\b", take=1)
+    fallback_override = "Non definito"
+    fallback_accept = "Non definito"
 
-    override_txt = "; ".join(override) if override else "???'????"
-    accept_txt = "; ".join(accept) if accept else "???'????"
+    override_txt = "; ".join(override) if override else fallback_override
+    accept_txt = "; ".join(accept) if accept else fallback_accept
     return override_txt, accept_txt
 
 
