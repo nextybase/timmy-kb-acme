@@ -40,7 +40,7 @@ Benvenuto nella documentazione di **Timmy-KB**: sistema di creazione governata c
 - **Observability**
   - [Observability Stack](observability.md) - Loki/Promtail/Grafana, trace_id/span_id, query utili.
   - [Logging Events](logging_events.md) - eventi log strutturati e nomenclatura.
-  - Code Review Senior (TODO: missing doc) - sintesi delle review tecniche + quick wins sulle policy di logging/tracing.
+- [Code Review Senior](developer/code_review_senior.md) - sintesi delle review tecniche + quick wins sulle policy di logging/tracing.
 - **Agente Codex**
   - [Guida Codex](../system/specs/guida_codex.md) - uso di Codex in VS Code come coding agent, regole AGENTS.md e configurazione avanzata.
   - [Runbook Codex](../system/ops/runbook_codex.md) - flussi operativi per l'uso di Codex.

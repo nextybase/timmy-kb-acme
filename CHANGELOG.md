@@ -68,9 +68,9 @@
 - Documenti esistenti allineati a tabelle, invarianti e failure mode, non a narrazioni.
 
 ### Next
-- Completare i documenti mancanti in `instructions/`: `03_gatekeepers_contracts.md`, `04_microagents_work_orders.md`, `05_pipeline_state_machine.md`, `06_ui_contract.md`.
-- Congelare `instructions/` come base della Prompt Chain operativa.
-- Avviare implementazione guidata (beta 1.0) sul modello appena definito.
+- Consolidare l’adozione del contratto workspace in `instructions/05_pipeline_workspace_state_machine.md` e monitorare i gap residui.
+- Verificare che `instructions/06_promptchain_workspace_mapping.md` e `instructions/07_gate_checklists.md` guidino i gate Evi/Skeptic e mantengano l’OCP-plane coerente.
+- Mantenere centrata la formalizzazione dell’Evidence/Retry/QA Gate in `instructions/08_gate_evidence_and_retry_contract.md` durante la fine dell’alpha.
 
 ## [1.9.7] - 2025-09-28
 
