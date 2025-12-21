@@ -1,14 +1,16 @@
 # Timmy KB - README (v1.0 Beta)
 
-Pipeline per generare una Knowledge Base Markdown pronta per l'uso AI a partire dai PDF del cliente, con arricchimento semantico e anteprima locale (HonKit).
+Pipeline e governance per generare una Knowledge Base Markdown e fondare l'assistente Timmy in modalità Human-in-the-Loop: partire dai PDF del cliente, arricchire semanticamente i contenuti, anteprima locale (HonKit) e agency sempre sotto controllo umano.
 
-[**Design premise:** il sistema è pensato per hardware dedicato e ambienti controllati, esegue processi automatizzati e usa regole/tests rigorosi per garantire riproducibilità e auditabilità: qualsiasi rottura deve fallire rumorosamente.]
+[**Design premise:** il sistema è pensato per hardware dedicato e ambienti controllati, esegue processi automatizzati e usa regole/test rigorosi per garantire riproducibilità e auditabilità: qualsiasi rottura deve fallire rumorosamente.]
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![CI](https://github.com/nextybase/timmy-kb-acme/actions/workflows/ci.yaml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/ci.yaml)
 [![Security Status](https://img.shields.io/badge/security-hardened-brightgreen)](docs/security.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.md)
+
+Cornice filosofica e di responsabilità: [MANIFEST.md](MANIFEST.md).
 
 ---
 
@@ -70,6 +72,8 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 - Solo a quel punto il passaggio concettuale ProtoTimmy → Timmy diventa operativo: ProtoTimmy governa la fondazione, Timmy assume agency globale e dialoga con Domain Gatekeepers e micro-agent.
 - La pipeline non decide né orchestra: è lo strumento che genera gli artifact (markdown + knowledge graph) richiesti dallo SSoT e abilita il control plane, ma la direzione resta affidata a Timmy e ai gatekeeper.
 - Tutti i riferimenti tecnici a `pipeline.*` descrivono gli strumenti operativi della fondazione; dopo la validazione la Prompt Chain documentata in `instructions/` prende il comando.
+
+La sezione seguente descrive il passaggio dalla fondazione alla fase di agency governata, mantenendo sempre la supervisione umana.
 
 ---
 

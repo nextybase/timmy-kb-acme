@@ -6,7 +6,7 @@ Timmy-KB nasce da una presa di posizione netta: l'intelligenza artificiale non d
 
 In un mondo dominato da modelli sempre più potenti e opachi, Timmy-KB rifiuta l'idea di un'AI onnisciente, neutra o autonoma. Accetta invece l'incertezza come dato strutturale, e la rende **visibile, tracciabile, governabile**.
 
-Il sistema non nasce per “avere ragione”, ma per **rendere esplicito ciò che è ancora aperto**.
+Il sistema non nasce per "avere ragione", ma per **rendere esplicito ciò che è ancora aperto**.
 
 ---
 
@@ -42,7 +42,7 @@ L'astensione non è un errore: è una **funzione epistemica**.
 
 Quando il contesto è ambiguo, incompleto o fuori dominio, il sistema:
 - non improvvisa
-- non “riempie i buchi”
+- non "riempie i buchi"
 - non produce certezze cosmetiche
 
 Attiva invece meccanismi di **Human-in-the-Loop**, come definiti in `instructions/*`.
@@ -79,7 +79,7 @@ La governance di Timmy-KB non è demandata a linee guida esterne o controlli ex-
 - nelle fasi
 - nei meccanismi di stop
 
-La cartella `instructions/` è l'unica fonte di verità normativa (SSoT). Tutto il resto — codice, documentazione, UI — **deriva** e **obbedisce**.
+La cartella `instructions/` è l'unica fonte di verità normativa (SSoT). Tutto il resto - codice, documentazione, UI - **deriva** e **obbedisce**.
 
 Questo non è un dettaglio organizzativo, ma una scelta politica: la governance non è un accessorio, è il sistema.
 
@@ -96,7 +96,7 @@ Ogni deviazione è:
 - leggibile
 - utilizzabile per apprendimento
 
-Il sistema cresce non perché “sbaglia meno”, ma perché **capisce meglio dove e perché sbaglia**.
+Il sistema cresce non perché "sbaglia meno", ma perché **capisce meglio dove e perché sbaglia**.
 
 ---
 
