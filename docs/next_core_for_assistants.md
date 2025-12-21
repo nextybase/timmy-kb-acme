@@ -1,5 +1,7 @@
 # NeXT - Core per Assistant OpenAI
 
+La scheda raccoglie best practice per componenti OpenAI; il contesto operativo resta Timmy-KB come ambiente di creazione/governo, con envelope epistemico e HiTL che limitano i moduli cognitivi descritti qui.
+
 Questo documento definisce le regole di base che tutti gli Assistant usati nell'ecosistema NeXT devono rispettare.
 E pensato come knowledge base condivisa: ogni Assistant avra poi indicazioni aggiuntive specifiche per il proprio ruolo.
 

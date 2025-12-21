@@ -1,5 +1,7 @@
 # Arricchimento semantico - Flusso completo (UI/CLI)
 
+Timmy-KB resta un ambiente di creazione e governo: questa sezione descrive uno strumento tecnico che lavora entro l’envelope epistemico, supporta HiTL e non prende decisioni autonome.
+
 Questa pagina descrive, passo per passo, cosa succede quando avvii l'arricchimento semantico (UI o CLI) e come vengono generati i tag (euristica vs SpaCy).
 
 ## 1) Innesco dalla UI

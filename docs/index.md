@@ -11,14 +11,20 @@ Benvenuto nella documentazione di **Timmy-KB**: sistema di creazione governata c
 
 - **Guide**
   - [User Guide](user/user_guide.md) - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, push).
+  - [Arricchimento semantico](arricchimento.md) - flusso UI/CLI, tag, euristica vs SpaCy.
   - [Architettura del sistema](../system/architecture.md) - componenti, flussi end-to-end, API interne.
+  - [Next Core per Assistant](next_core_for_assistants.md) - linee guida NeXT per moduli OpenAI (context operativo Timmy-KB).
   - [Developer Guide](developer/developer_guide.md) - principi architetturali, redazione log, test suggeriti.
   - [Developer Quickstart](developer/developer_quickstart.md) - happy path minimi (CLI e UI).
   - [Coding Rules](developer/coding_rule.md) - stile, tipizzazione, logging, I/O sicuro, atomicita', versioning.
+  - [Revisione pipeline di trasformazione](data_transformation_review.md) - strumenti della pipeline di fondazione e aggiornamenti.
+  - [NeXT alignment](next_alignment.md) - allineamento NeXT ↔ Timmy-KB per auditor e developer.
+  - [NeXT boundary](next_boundary.md) - limiti tra NeXT teorico e implementazione Timmy-KB.
   - [Configurazione (YAML, .env, OIDC)](configurazione.md) - SSoT, segreti, wiring OIDC.
   - [Configuration (EN)](configurazione.md) - overview di configurazione in inglese.
   - [Interfaccia Streamlit ](streamlit_ui.md) - Regole di coding per Streamlit 1.50.0.
   - [Test suite](test_suite.md) - test smoke e suite PyTest.
+  - [Explainability overview](explainability_overview.md) - segnale/lineage delle risposte.
   - [Guida UI (Streamlit)](user/guida_ui.md) - interfaccia grafica; **avvio rapido**: `streamlit run onboarding_ui.py`.
   - Type checking rapido: `make type` (mypy), `make type-pyright` (pyright/npx)
 - **Policy**
