@@ -16,7 +16,7 @@ CANDIDATES = [
     ("Pipeline Core", REPO / "src" / "pipeline" / "AGENTS.md"),
     ("Semantica", REPO / "src" / "semantic" / "AGENTS.md"),
     ("UI (Streamlit)", REPO / "src" / "ui" / "AGENTS.md"),
-    ("UI (Streamlit)", REPO / "src" / "ui" / "pages" / "AGENTS.md"),
+    ("UI (Streamlit Pages)", REPO / "src" / "ui" / "pages" / "AGENTS.md"),
     ("UI Fine Tuning", REPO / "src" / "ui" / "fine_tuning" / "AGENTS.md"),
     ("Test", REPO / "tests" / "AGENTS.md"),
     ("Documentazione", REPO / "docs" / "AGENTS.md"),
@@ -49,7 +49,7 @@ TASKS = {
         "Audit gating RAW/slug e router `st.navigation`<br>"
         "Messaggistica/log `ui.<pagina>` coerente"
     ),
-    "UI (Streamlit) pages": (
+    "UI (Streamlit Pages)": (
         "Sweep deprecazioni Streamlit 1.50<br>"
         "Router nativo `st.Page`/`st.navigation` compliance<br>"
         "Path-safety e logging per pagine"
@@ -122,7 +122,7 @@ def make_row(area: str, path: Path) -> List[str]:
     area_key = area
     note = ""
     if "ui/pages" in path.as_posix():
-        area_key = "UI (Streamlit) pages"
+        area_key = "UI (Streamlit Pages)"
     if not path.exists():
         return [
             area,
