@@ -1,6 +1,6 @@
 # Timmy-KB - Documentazione (v1.0 Beta)
 
-Benvenuto nella documentazione di **Timmy-KB**: sistema di creazione governata in cui la pipeline di fondazione costruisce la base della KB e l'assistente Timmy opera sotto controllo umano, con Human-in-the-Loop come invariabile. Qui trovi architettura, guide utente e sviluppatore, policy operative e regole di versioning; per la cornice valoriale consulta [MANIFEST.md](../MANIFEST.md).
+Benvenuto nella documentazione di **Timmy-KB**: sistema di creazione governata che traduce tecnicamente i principi di NeXT, con la pipeline di fondazione che costruisce la KB e l’assistente Timmy operativo sotto controllo umano (Human-in-the-Loop). Questo spazio mostra il “come” concreto mantenendo l’envelope epistemico e l’orchestrazione di agenti HiTL/micro-agenti; per la cornice valoriale consulta [MANIFEST.md](../MANIFEST.md).
 
 - **Lingue**: la documentazione operativa rimane in italiano; il documento di architettura (`../system/architecture.md`) resta in inglese per coerenza con diagrammi e naming del codice.
 

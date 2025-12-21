@@ -1,6 +1,6 @@
 # Timmy KB - README (v1.0 Beta)
 
-Pipeline e governance per generare una Knowledge Base Markdown e fondare l'assistente Timmy in modalità Human-in-the-Loop: partire dai PDF del cliente, arricchire semanticamente i contenuti, anteprima locale (HonKit) e agency sempre sotto controllo umano.
+Timmy-KB è un ambiente per la creazione e il governo di Timmy: attraverso una pipeline di fondazione inghiotte dati, costruisce artefatti e abilita l’emergere controllato dell’agency, restando HiTL e mantenendo governance by design.
 
 [**Design premise:** il sistema è pensato per hardware dedicato e ambienti controllati, esegue processi automatizzati e usa regole/test rigorosi per garantire riproducibilità e auditabilità: qualsiasi rottura deve fallire rumorosamente.]
 
@@ -9,6 +9,8 @@ Pipeline e governance per generare una Knowledge Base Markdown e fondare l'assis
 [![CI](https://github.com/nextybase/timmy-kb-acme/actions/workflows/ci.yaml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/ci.yaml)
 [![Security Status](https://img.shields.io/badge/security-hardened-brightgreen)](docs/security.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.md)
+
+Timmy-KB è l’implementazione operativa che incarna i principi del framework NeXT: mantiene l’envelope epistemico, resta Human-in-the-Loop e imposta governance by design; NeXT è la cornice teorica che descrive l’AI come strumento di supporto, non come autorità autonoma.
 
 Cornice filosofica e di responsabilità: [MANIFEST.md](MANIFEST.md).
 
@@ -66,6 +68,8 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 - [CONTRIBUTING](CONTRIBUTING.md) - policy PR e micro-PR.
 - [LICENSE](LICENSE.md) - GPL-3.0.
 - [Code of Conduct](CODE_OF_CONDUCT.md) e [Security](SECURITY.md).
+
+La pipeline costruisce artefatti necessari e orchestra l’emergere di agenti HiTL e micro-agenti sotto supervisione umana, mantenendo l’envelope epistemico come limite operativo.
 
 ## From Foundation Pipeline to Agency
 - La pipeline di ingestione è l’atto di nascita di Timmy: nasce quando i PDF del cliente vengono trasformati in markdown semanticamente arricchiti e il knowledge graph associato viene validato.

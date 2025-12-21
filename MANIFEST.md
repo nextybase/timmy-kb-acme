@@ -100,6 +100,8 @@ Il sistema cresce non perché "sbaglia meno", ma perché **capisce meglio dove e
 
 ---
 
+Definiamo qui i principi e i limiti della conoscenza; il perimetro operativo completo, con strumenti e policy, vive altrove e può essere aggiornato mantenendo intatti i confini epistemici.
+
 ### 7. Un sistema per contesti reali
 Timmy-KB non è pensato per ambienti ideali.
 
