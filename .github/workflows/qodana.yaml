@@ -47,7 +47,7 @@ jobs:
 
       - name: Qodana - Code Inspection (with baseline, no cache)
         if: steps.detect.outputs.has_baseline == 'true'
-        uses: JetBrains/qodana-action@v2025.2
+        uses: JetBrains/qodana-action@v2025.3
         with:
           use-caches: false
           pr-mode: false
@@ -57,7 +57,7 @@ jobs:
 
       - name: Qodana - Code Inspection (first run, no cache)
         if: steps.detect.outputs.has_baseline != 'true'
-        uses: JetBrains/qodana-action@v2025.2
+        uses: JetBrains/qodana-action@v2025.3
         with:
           use-caches: false
           pr-mode: false
