@@ -43,9 +43,9 @@ __all__ = [
 
 
 def _get_paths(slug: str) -> Dict[str, Path]:
-    from semantic.api import get_paths  # import locale per evitare cicli
+    from semantic.paths import get_semantic_paths  # import locale per evitare cicli
 
-    return cast(Dict[str, Path], get_paths(slug))
+    return cast(Dict[str, Path], get_semantic_paths(slug))
 
 
 def _get_vision_statement_path(base_dir: Path) -> Path:

@@ -1,3 +1,44 @@
+## [Unreleased] — Semantic subsystem refactor & automation readiness
+
+### Contesto
+Questa fase di lavoro è stata condotta come Prompt Chain manuale (HiTL), con l’utente umano nel ruolo di “passacarte”, per validare sul campo le regole di governance (ProtoTimmy / OCP / Codex), prima della loro automazione.
+
+### Cosa è stato fatto
+- Analisi architetturale completa del repository partendo da MANIFEST.md, con mappatura delle aree funzionali, dei flussi CLI/UI e dei contratti SSoT.
+- Analisi approfondita del sottosistema `semantic`, con evidenza dei boundary tra:
+  - facade (`semantic.api`)
+  - service layer (`convert_service`, `frontmatter_service`, `embedding_service`)
+  - domain/persistence (tagging, DB, filesystem).
+- Refactor mirato e non funzionale:
+  - introduzione di `semantic.paths.get_semantic_paths` come utility neutra;
+  - eliminazione di dipendenze inverse service → facade;
+  - rimozione di import underscore da `semantic.api` in file non-test;
+  - spostamento di `build_tags_csv` in `semantic.tagging_service` con delega retro-compatibile da `semantic.api`.
+- Rafforzamento del safety net:
+  - aggiornamento test per usare il seam reale (`semantic.paths`);
+  - nuovi test deterministici su artefatti di tagging (README_TAGGING.md, tags.db / doc_entities).
+- Esecuzione completa della test suite:
+  - `pytest -q`: 855 passed, 10 skipped, 3 deselected.
+- Formalizzazione della decisione architetturale tramite ADR-0005.
+
+### Cosa NON è stato fatto (intenzionalmente)
+- Nessun cambiamento funzionale o di comportamento osservabile.
+- Nessuna modifica a schema DB, UX CLI/UI, pipeline non-semantic.
+- Nessuna automazione di governance (ADR trigger, Evidence persistence, dispatcher runtime).
+
+### Stato attuale
+- Il sottosistema semantic è strutturalmente più pulito e testato.
+- Le regole di governance (Prompt Chain, Gate, HiTL) sono validate manualmente.
+- Il sistema è **READY FOR AUTOMATION: medium**.
+
+### Prossimi passi (intenzioni)
+- Avviare una nuova Prompt Chain focalizzata su:
+  - enforcement runtime di allowed_actions e fasi;
+  - dispatcher / control plane OCP;
+  - persistence delle evidenze (Evidence Gate, QA Gate, HiTL ack);
+  - standardizzazione run_id / trace_id end-to-end.
+- Questa fase potrà includere refactor anche sostanziosi, ma solo dopo planning formale.
+
 ## [Unreleased]  2025-11-13
 <!-- cspell:ignore configurativo -->
 - Hardening sicurezza: lettura di `tags_raw.json` in `kg_builder` ora usa `read_text_safe` con path validato (niente `Path.read_text` diretto) per rispettare i vincoli path-safety.

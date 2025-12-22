@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Sequence, cast
 
-import semantic.api as sapi
 from semantic import frontmatter_service as front
 
 
@@ -40,10 +39,12 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     _write(book / "analytics_report.md", existing)
     _write(book / "risk" / "analytics_nested.md", "Nested body\n")
 
-    # Monkeypatch get_paths to confine I/O under tmp_path
+    # Monkeypatch get_semantic_paths to confine I/O under tmp_path
+    from semantic import paths as sem_paths
+
     monkeypatch.setattr(
-        sapi,
-        "get_paths",
+        sem_paths,
+        "get_semantic_paths",
         lambda slug: {
             "base": base,
             "raw": base / "raw",

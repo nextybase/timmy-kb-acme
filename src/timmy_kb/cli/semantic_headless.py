@@ -12,10 +12,10 @@ from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary
 from pipeline.tracing import start_root_trace
 from semantic.api import (
-    _require_reviewed_vocab,
     convert_markdown,
     enrich_frontmatter,
     get_paths,
+    require_reviewed_vocab,
     write_summary_and_readme,
 )
 
@@ -58,7 +58,7 @@ def build_markdown_headless(
     # 2) Caricamento vocabolario canonico: usa ctx.base_dir se presente, altrimenti get_paths(...)
     ctx_base = getattr(ctx, "base_dir", None)
     base = ctx_base if isinstance(ctx_base, Path) else get_paths(slug)["base"]
-    vocab = _require_reviewed_vocab(base, log, slug=slug)
+    vocab = require_reviewed_vocab(base, log, slug=slug)
 
     # 3) Arricchimento frontmatter: esegui SEMPRE anche con vocab vuoto
     #    (titoli normalizzati devono essere impostati comunque)

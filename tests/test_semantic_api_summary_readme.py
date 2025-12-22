@@ -32,9 +32,11 @@ def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> Non
     book.mkdir(parents=True, exist_ok=True)
 
     # Confinare i percorsi sotto tmp_path
+    from semantic import paths as sem_paths
+
     monkeypatch.setattr(
-        sapi,
-        "get_paths",
+        sem_paths,
+        "get_semantic_paths",
         lambda slug: {
             "base": base,
             "raw": raw,
@@ -72,9 +74,11 @@ def test_write_summary_and_readme_generators_fail_raise(monkeypatch, tmp_path: P
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
 
+    from semantic import paths as sem_paths
+
     monkeypatch.setattr(
-        sapi,
-        "get_paths",
+        sem_paths,
+        "get_semantic_paths",
         lambda slug: {
             "base": base,
             "raw": raw,
@@ -112,9 +116,11 @@ def test_write_summary_and_readme_logs_errors_with_context(
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
 
+    from semantic import paths as sem_paths
+
     monkeypatch.setattr(
-        sapi,
-        "get_paths",
+        sem_paths,
+        "get_semantic_paths",
         lambda slug: {
             "base": base,
             "raw": raw,
