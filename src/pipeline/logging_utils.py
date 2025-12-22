@@ -53,6 +53,15 @@ except Exception:
     _otel_trace = None
 
 _SENSITIVE_KEYS = {"GITHUB_TOKEN", "SERVICE_ACCOUNT_FILE", "Authorization", "GIT_HTTP_EXTRAHEADER"}
+GATE_EVENT_NAMES = {
+    "evidence_gate_blocked",
+    "skeptic_gate_blocked",
+    "skeptic_gate_pass_with_conditions",
+    "qa_gate_failed",
+    "qa_gate_retry",
+}
+BRIDGE_FIELDS_ALWAYS = {"run_id", "slug", "phase_id", "state_id", "intent_id", "action_id"}
+BRIDGE_FIELDS_OTEL = {"trace_id", "span_id"}
 
 
 def redact_secrets(msg: str) -> str:
@@ -229,8 +238,18 @@ class _KVFormatter(logging.Formatter):
         return base
 
 
+class _SafeStreamHandler(logging.StreamHandler):
+    """StreamHandler con flush best-effort per evitare crash su stdout Windows."""
+
+    def flush(self) -> None:
+        try:
+            super().flush()
+        except (OSError, ValueError):
+            return
+
+
 def _make_console_handler(level: int, fmt: str) -> logging.Handler:
-    ch = logging.StreamHandler(stream=sys.stdout)
+    ch = _SafeStreamHandler(stream=sys.stdout)
     ch.setLevel(level)
     ch.setFormatter(_KVFormatter(fmt))
     return ch
@@ -666,6 +685,46 @@ def log_workflow_summary(
     logger.info(event, extra=payload)
 
 
+def log_gate_event(
+    logger: logging.Logger,
+    event_name: str,
+    *,
+    fields: Mapping[str, Any] | None = None,
+) -> None:
+    """Emette eventi canonici di gate con bridge fields best-effort."""
+    payload: dict[str, Any] = dict(fields or {})
+    ctx_view = getattr(logger, "_logging_ctx_view", None)
+    if ctx_view is not None:
+        payload.setdefault("slug", getattr(ctx_view, "slug", None))
+        payload.setdefault("run_id", getattr(ctx_view, "run_id", None))
+
+    missing: list[str] = [k for k in BRIDGE_FIELDS_ALWAYS if not payload.get(k)]
+    tracing_enabled = False
+    try:
+        from pipeline.observability_config import get_observability_settings
+
+        tracing_enabled = bool(get_observability_settings().tracing_enabled)
+    except Exception:
+        tracing_enabled = False
+
+    if tracing_enabled and _otel_trace is not None:
+        try:
+            span = _otel_trace.get_current_span()
+            ctx = span.get_span_context()
+            if ctx is not None and ctx.is_valid:
+                payload.setdefault("trace_id", f"{ctx.trace_id:032x}")
+                payload.setdefault("span_id", f"{ctx.span_id:016x}")
+        except Exception:
+            pass
+        missing.extend([k for k in BRIDGE_FIELDS_OTEL if not payload.get(k)])
+
+    if missing:
+        payload["missing_fields"] = sorted(set(missing))
+
+    payload["event"] = event_name
+    logger.info(event_name, extra=payload)
+
+
 __all__ = [
     "get_structured_logger",
     "phase_scope",
@@ -676,4 +735,8 @@ __all__ = [
     "mask_updates",
     "PHASE_ARTIFACT_SCHEMA",
     "log_workflow_summary",
+    "GATE_EVENT_NAMES",
+    "BRIDGE_FIELDS_ALWAYS",
+    "BRIDGE_FIELDS_OTEL",
+    "log_gate_event",
 ]

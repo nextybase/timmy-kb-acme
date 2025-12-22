@@ -6,6 +6,7 @@
 - Prompts 0/0a..0x remain analytical/read-only, prompts 1..N are operational micro-PRs, and prompt N+1 finalizes the chain with full QA.
 - The Onboarding Task Codex sets this protocol before any edits can happen, so its acknowledgement is mandatory in Prompt 0.
 - **Evidence Gate reminder:** nessun prompt 1..N avanza se l’ultima risposta di Codex manca di memo Active Rules, diff, report o QA; l’OCP trattiene il prompt successivo finché l’evidenza non è completa.
+- **Fonte canonica:** `system/specs/promptchain_spec.md` (SSoT); questo documento è l’API operativa dei prompt.
 
 ## Language Policy for Codex
 - All codified documents and templates stay in English to preserve the SSoT grammar.
@@ -17,7 +18,7 @@
 - Operational prompts (1..N) exclusively produce diffs, touch files, and run intermediate QA (`pytest -q -k "not slow"`). Phase 0 prompts stay analytical and perform no edits, while prompt N+1 runs the full QA suite plus final narration.
 - Every prompt must be supplied as a single copyable block listing Role, Phase, Scope (allowed/prohibited files), Active Rules memo, Expected Outputs (diff + structured report + QA), Tests executed, Constraints, and Stop Rules to keep instructions unambiguous.
 - **If a prompt expects any file change, it must explicitly request a unified diff and a structured report in the “Expected Outputs” section.** Codex must not treat a change as “done” without those artifacts.
-- **Skeptic Gate MUST:** l’OCP documenta subito dopo ogni risposta operativa Codex che ha condotto il gate obbligatorio (Evidence/Scope/Risk/Decision) e solo Decision=PASS abilita il prompt successivo. PASS WITH CONDITIONS impone vincoli da rispettare e BLOCK ferma la catena.
+- **Skeptic Gate MUST:** l’OCP documenta subito dopo ogni risposta operativa Codex che ha condotto il gate obbligatorio (Evidence/Scope/Risk/Decision) e solo Decision=PASS abilita il prompt successivo. PASS WITH CONDITIONS impone vincoli da rispettare e BLOCK ferma la catena (vedi `system/specs/promptchain_spec.md`).
 - **Tooling change reminder:** modifiche a file di configurazione o tooling (es. `cspell.json`) devono essere esplicitamente autorizzate dall’OCP nel prompt corrente oppure posticipate a un prompt dedicato; non sono implicite nel solo superamento della QA.
 
 ## Canonical Prompt Header

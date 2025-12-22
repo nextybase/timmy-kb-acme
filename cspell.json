@@ -122,7 +122,9 @@
     "multilivello",
     "nexty",
     "petrov",
-    "lifecycles"
+    "lifecycles",
+    "dataclass",
+    "touchpoints"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

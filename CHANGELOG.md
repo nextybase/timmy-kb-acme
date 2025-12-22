@@ -29,6 +29,9 @@
 - Documentazione: `docs/developer/developer_guide.md` e `docs/developer/coding_rule.md` descrivono l'uso corretto dell'SDK OpenAI interno (model-only, input_text/output_text, assistant come SSoT di config, pattern di risoluzione modello) e il divieto dei pattern legacy thread/run.
 - Debug tooling: `kg_debug_dummy` gestisce run offline con output sintetico e riduce eccezioni inattese; logging KGraph include dump raw in caso di JSON non valido.
 
+### Status
+- Prompt Chain e governance HiTL (ruoli, gate, template) completate e operative; fonti canoniche: `system/specs/promptchain_spec.md` e `.codex/CLOSURE_AND_SKEPTIC.md`.
+
 ### Added
 - Test di integrazione su indexing (mismatch parziale, invariance ranking, metriche coerce, casi artifacts=0).
 - Dummy tooling: writer vision YAML completo sempre applicato a fine orchestrazione, CLI di diagnostica sezioni Vision.
@@ -67,7 +70,7 @@
 - Separazione WHAT/HOW per prevenire codice intrecciato a specifiche.
 - Documenti esistenti allineati a tabelle, invarianti e failure mode, non a narrazioni.
 
-### Next
+### Backlog (post-kernel)
 - Consolidare l’adozione del contratto workspace in `instructions/05_pipeline_workspace_state_machine.md` e monitorare i gap residui.
 - Verificare che `instructions/06_promptchain_workspace_mapping.md` e `instructions/07_gate_checklists.md` guidino i gate Evi/Skeptic e mantengano l’OCP-plane coerente.
 - Mantenere centrata la formalizzazione dell’Evidence/Retry/QA Gate in `instructions/08_gate_evidence_and_retry_contract.md` durante la fine dell’alpha.

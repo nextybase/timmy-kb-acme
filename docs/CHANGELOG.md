@@ -28,10 +28,10 @@ Questa fase di lavoro è stata condotta come Prompt Chain manuale (HiTL), con l�
 
 ### Stato attuale
 - Il sottosistema semantic è strutturalmente più pulito e testato.
-- Le regole di governance (Prompt Chain, Gate, HiTL) sono validate manualmente.
-- Il sistema è **READY FOR AUTOMATION: medium**.
+- Le regole di governance (Prompt Chain, Gate, HiTL) sono complete e operative, con validazione manuale eseguita.
+- Il sistema è **READY FOR AUTOMATION: medium**; kernel governance chiuso, automazione in backlog.
 
-### Prossimi passi (intenzioni)
+### Backlog automazione (intenzioni)
 - Avviare una nuova Prompt Chain focalizzata su:
   - enforcement runtime di allowed_actions e fasi;
   - dispatcher / control plane OCP;

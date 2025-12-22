@@ -16,7 +16,7 @@ st: StreamlitLike = get_streamlit()
 
 
 from pipeline.exceptions import ConfigError, ConversionError
-from pipeline.logging_utils import get_structured_logger, tail_path
+from pipeline.logging_utils import get_structured_logger, log_gate_event, tail_path
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.api import get_paths  # noqa: F401 - usato dai test tramite monkeypatch
 from semantic.api import load_reviewed_vocab  # noqa: F401
@@ -247,6 +247,14 @@ def _log_gating_block(slug: str | None, state: str, raw_ready: bool, raw_dir: Pa
                 "state": state or "n/d",
                 "raw_ready": bool(raw_ready),
                 "raw_path": tail_path(raw_dir) if raw_dir else "",
+            },
+        )
+        log_gate_event(
+            _GATING_LOG,
+            "evidence_gate_blocked",
+            fields={
+                "slug": slug or "",
+                "state_id": state or "",
             },
         )
     except Exception:

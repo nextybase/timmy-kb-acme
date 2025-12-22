@@ -25,8 +25,8 @@ Scopo: formalizzare il packet di chiusura (Prompt N+1) e il successivo Skeptic G
 
 ## Esiti
 - PASS → Prompt Chain chiusa.
-- PASS CON RISERVA → non chiuso; richiede nuovo Prompt N+1 prima di merge.
-- FAIL → HiTL necessario.
+- PASS WITH CONDITIONS → non chiuso; richiede nuovo Prompt N+1 prima di merge.
+- BLOCK → HiTL necessario.
 
 ## Regola vincolante
 Una Prompt Chain è chiusa solo dopo PASS del Skeptic Gate N+1′.
@@ -36,6 +36,7 @@ Una Prompt Chain è chiusa solo dopo PASS del Skeptic Gate N+1′.
 - `.codex/WORKFLOWS.md`
 - `.codex/AGENTS.md`
 - `system/ops/runbook_codex.md`
+- `system/specs/promptchain_spec.md` (SSoT)
 - `SKEPTIC_ACK.md`
 
 ## Nota ACK / skip

@@ -4,6 +4,7 @@
 - **Purpose:** keep the planning phase (Planner → OCP) and the operational work (Codex) strictly separated while ensuring every step remains controlled, traceable, and compliant with the micro-PR discipline.
 - **Why a SSoT:** this document is the authoritative reference for actors, expected outputs, governance rules, and template requirements across the Prompt Chain.
 - **Principles:** turn-based rigor, micro-PR safety (path safety, atomic I/O), human oversight (HiTL), explicit QA, and strict adherence to the Phase model.
+- **Support docs:** `.codex/PROMPTS.md` (template API), `.codex/CHECKLISTS.md` (checklist), `.codex/CLOSURE_AND_SKEPTIC.md` (closure packet), `system/ops/runbook_codex.md` (operational guide).
 
 ## 2. Mandatory Turn-Based Protocol
 - Planner defines objectives and constraints, never editing the repository.

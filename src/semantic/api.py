@@ -108,6 +108,13 @@ def _require_reviewed_vocab(
 BuildWorkflowResult: TypeAlias = tuple[Path, list[Path], list[Path]]
 
 
+def _extract_candidates(raw_dir: Path, cfg: object) -> Dict[str, Dict[str, object]]:
+    """Private seam per test/patching: delega al motore di estrazione candidato."""
+    from semantic.auto_tagger import extract_semantic_candidates
+
+    return cast(Dict[str, Dict[str, object]], extract_semantic_candidates(raw_dir, cfg))
+
+
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
     """Costruisce `tags_raw.csv` dal workspace corrente applicando arricchimento NLP (DB + Spacy)."""
     return tagging_service.build_tags_csv(context, logger, slug=slug)

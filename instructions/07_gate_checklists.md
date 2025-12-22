@@ -1,12 +1,13 @@
 # 07 — Modular Gate Checklists (for Engineering Gatekeeper via OCP-plane)
 **Status:** ACTIVE
-**Scope:** checklist cognitive per decisioni PASS / PASS WITH CONDITIONS / BLOCK sulle transizioni workspace, rivolte all’Engineering Gatekeeper (assistant AI) che opera attraverso l’OCP-plane.
-**Authority:** si basa sui contratti di `instructions/05_pipeline_workspace_state_machine.md`, `instructions/06_promptchain_workspace_mapping.md` e `instructions/02_prompt_chain_lifecycle.md`.
+**Scope:** checklist cognitive per decisioni PASS / PASS WITH CONDITIONS / BLOCK sulle transizioni workspace, rivolte all’Engineering Gatekeeper (assistant AI) che opera attraverso l’OCP-plane. Il binding lifecycle↔workspace↔gate↔event è definito in `instructions/06_promptchain_workspace_mapping.md`.
+**Authority:** si basa sui contratti di `instructions/05_pipeline_workspace_state_machine.md`, `instructions/06_promptchain_workspace_mapping.md` e `instructions/02_prompt_chain_lifecycle.md`. Questo documento fornisce checklist operative, non logica di binding.
 
 ## Global Rules
 - Modulare: un modulo per ciascuna transizione workspace (05), usato prima di decidere PASS/BLOCK.
 - Il Gatekeeper OCP-role lavora tramite il Control Plane (OCP-plane); non esegue azioni, valuta artefatti/segni.
 - Le evidenze devono essere verificabili (file, log, segnali); se un artefatto non è formalizzato, si annota “non formalizzato”.
+- L’applicabilità dei gate per transizione è definita in `instructions/06_promptchain_workspace_mapping.md`.
 
 ## Modulo 1 — bootstrap → raw_ready
 - **Gate coinvolti:** Evidence Gate (layout integrity) + Skeptic Gate (OCP supervision)
@@ -72,4 +73,4 @@
 - Mancano PASS artifact formali per Evidence Gate su ogni transizione (`raw_ready`, `tagging_ready`).
 - derived states (raw_ready/tagging_ready) non hanno una predicate unica nel codice; “non formalizzato”.
 - Retry/resume dopo fallimento non è definito; documentare la policy (solo log warning attuali).
-- QA Gate non collegato esplicitamente agli stati (non c’è “arricchito solo se QA passa”). Documentare quale gate guardi quale stato.
+- Il binding QA↔FINITO e l’applicabilità dei gate sono definiti in `instructions/06_promptchain_workspace_mapping.md`.

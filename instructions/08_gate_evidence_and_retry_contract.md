@@ -1,7 +1,7 @@
 # 08 — Gate Evidence and Retry Contract (SSoT)
 **Status:** ACTIVE
-**Scope:** formalizzazione di Evidence Gate PASS, predicate derived states (`raw_ready`, `tagging_ready`), policy di retry/resume e collegamento QA Gate → stato `finito`.
-**Authority:** costruito su `instructions/05_pipeline_workspace_state_machine.md`, `instructions/06_promptchain_workspace_mapping.md`, `instructions/07_gate_checklists.md` e `instructions/02_prompt_chain_lifecycle.md`.
+**Scope:** formalizzazione di Evidence Gate PASS, predicate derived states (`raw_ready`, `tagging_ready`), policy di retry/resume e collegamento QA Gate → stato `finito`. Il binding lifecycle↔workspace↔gate↔event è definito in `instructions/06_promptchain_workspace_mapping.md`.
+**Authority:** costruito su `instructions/05_pipeline_workspace_state_machine.md`, `instructions/06_promptchain_workspace_mapping.md`, `instructions/07_gate_checklists.md` e `instructions/02_prompt_chain_lifecycle.md`. Questo documento definisce i contratti dei gate, non la logica di binding.
 
 ## Evidence Gate — PASS Artifacts (Log-based)
 | Transition | Required log event(s) | Producer module |
@@ -25,7 +25,7 @@
 - Retry è BLOCCATO se: `WorkspaceLayoutInvalid`, `WorkspaceNotFound`, o `ConfigError` persistono senza essere risolti; in tal caso serve intervento manuale (HiTL) e il gate restituisce BLOCK.
 
 ## QA Gate ↔ Workspace State
-- Il QA Gate è prerequisito per dichiarare lo stato `finito`: prima della transizione `arricchito → finito` occorre presentare `pre-commit run --all-files` + `pytest -q` con esito PASS e i relativi log strutturati.
+- Il QA Gate è prerequisito per dichiarare lo stato `finito`: prima della transizione `arricchito → finito` occorre presentare `pre-commit run --all-files` + `pytest -q` con esito PASS e i relativi log strutturati. L’applicabilità dei gate per transizione è definita in `instructions/06_promptchain_workspace_mapping.md`.
 - L’Evidence per QA include l’output dei comandi, il report `context.step.status` aggiornato e `semantic.book.frontmatter` privo di errori; solo dopo il passaggio QA l’Engineering Gatekeeper tramite OCP-plane può consentire `finito`.
 
 ## Non-goals

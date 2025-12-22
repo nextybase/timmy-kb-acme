@@ -45,7 +45,7 @@ from typing import Any, Mapping, Sequence
 from pipeline.constants import DEFAULT_GIT_BRANCH_ENV_KEYS
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ForcePushError, PipelineError, PushError
-from pipeline.logging_utils import get_structured_logger, phase_scope, redact_secrets
+from pipeline.logging_utils import get_structured_logger, log_gate_event, phase_scope, redact_secrets
 from pipeline.path_utils import ensure_within, is_safe_subpath, iter_safe_paths, sorted_paths  # sicurezza path
 from pipeline.proc_utils import CmdError  # âœ… timeout/retry wrapper
 
@@ -345,6 +345,18 @@ def push_output_to_github(
         tail = tail[-2000:] if tail else ""
         raw = f"Errore Git: {e.op or 'git'} (tentativo {e.attempt}/{e.attempts}) -> {tail}"
         safe = redact_secrets(raw) if redact_logs else raw
+        try:
+            log_gate_event(
+                local_logger,
+                "qa_gate_failed",
+                fields={
+                    "slug": context.slug,
+                    "phase_id": "push_with_retry" if not force_push else "force_push",
+                    "state_id": "finito",
+                },
+            )
+        except Exception:
+            pass
         raise PushError(safe, slug=context.slug) from e
     finally:
         lock.release()

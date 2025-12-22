@@ -78,6 +78,66 @@ def _install_yaml_stub() -> None:
 
 _install_yaml_stub()
 
+
+def _safe_flush(fn: Any) -> None:
+    try:
+        fn()
+    except (OSError, ValueError):
+        return
+
+
+def _apply_safe_stdio_flush() -> list[tuple[Any, Any]]:
+    saved: list[tuple[Any, Any]] = []
+
+    def _patch(stream: Any) -> None:
+        if stream is None:
+            return
+        try:
+            current = stream.flush
+        except Exception:
+            return
+        if getattr(current, "_safe_flush_wrapped", False):
+            return
+
+        def _wrapped_flush() -> None:
+            _safe_flush(current)
+
+        _wrapped_flush._safe_flush_wrapped = True  # type: ignore[attr-defined]
+        _wrapped_flush._safe_flush_original = current  # type: ignore[attr-defined]
+        try:
+            stream.flush = _wrapped_flush  # type: ignore[assignment]
+        except Exception:
+            return
+        saved.append((stream, current))
+
+    _patch(getattr(sys, "stdout", None))
+    _patch(getattr(sys, "stderr", None))
+    _patch(getattr(sys, "__stdout__", None))
+    _patch(getattr(sys, "__stderr__", None))
+    return saved
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _safe_stdio_flush():
+    """Rende best-effort il flush di stdout/stderr durante pytest su Windows."""
+    if os.name != "nt":
+        yield
+        return
+    saved = _apply_safe_stdio_flush()
+    yield
+    for stream, original in saved:
+        try:
+            stream.flush = original  # type: ignore[assignment]
+        except Exception:
+            pass
+
+
+def pytest_runtest_setup(item):  # type: ignore[no-untyped-def]
+    if os.name != "nt":
+        return
+    _apply_safe_stdio_flush()
+
+
 from pipeline.file_utils import safe_write_text
 
 # Reindirizza di default il registry clienti verso una copia interna usata solo dai test
