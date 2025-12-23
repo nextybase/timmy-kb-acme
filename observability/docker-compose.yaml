@@ -14,7 +14,7 @@ services:
     volumes:
       - ./promtail-config.yaml:/etc/promtail/config.yaml:ro
       - ../output:/var/timmy/output:ro
-      - ../.timmykb/logs:/var/timmy/global-logs:ro
+      - ../.timmy_kb/logs:/var/timmy/global-logs:ro
     depends_on:
       - loki
     restart: unless-stopped

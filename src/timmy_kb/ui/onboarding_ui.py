@@ -15,7 +15,7 @@ from typing import Any
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.paths import ensure_src_on_sys_path, get_repo_root
+from pipeline.paths import ensure_src_on_sys_path, get_repo_root, global_logs_dir
 from ui.types import StreamlitLike
 
 try:
@@ -90,12 +90,10 @@ def _bootstrap_sys_path() -> None:
 
 
 def _init_ui_logging() -> None:
-    """Inizializza il logger condiviso della UI su `.timmykb/logs/ui.log`."""
+    """Inizializza il logger condiviso della UI su `.timmy_kb/logs/ui.log`."""
     from pipeline.logging_utils import get_structured_logger
-    from pipeline.path_utils import ensure_within_and_resolve
 
-    log_dir = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / ".timmykb" / "logs")
-    log_dir.mkdir(parents=True, exist_ok=True)
+    log_dir = global_logs_dir(REPO_ROOT)
     log_file = log_dir / "ui.log"
     # Propagazione abilitata cosi i logger delle pagine ereditano l'handler file.
     os.environ.setdefault("TIMMY_LOG_PROPAGATE", "1")

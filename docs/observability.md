@@ -22,7 +22,7 @@ promuovono come label principali:
  - `slug`
   - `run_id`
   - `ui.semantics.*` eventi di gating (`ui.semantics.gating_blocked` / `ui.semantics.gating_allowed`) utili per verificare lo stato RAW e i percorsi.
-  - `run_id` viene estratto anche dai log UI globali (`.timmykb/logs/ui.log`) generati da l'entrypoint Streamlit; se OTEL e attivo compaiono anche `trace_id`/`span_id` nel log (non come label) e possono essere usati in Grafana per la correlazione traces/logs.
+  - `run_id` viene estratto anche dai log UI globali (`.timmy_kb/logs/ui.log`) generati da l'entrypoint Streamlit; se OTEL e attivo compaiono anche `trace_id`/`span_id` nel log (non come label) e possono essere usati in Grafana per la correlazione traces/logs.
 
 > Nota: le stage `replace` nel file `promtail-config.yaml` oscurano automaticamente
 > header sensibili (`Authorization`, `x-access-token`).
@@ -32,7 +32,7 @@ promuovono come label principali:
 
 - Le configurazioni vengono caricate da `observability/grafana-provisioning/`:
   - `datasources/` definisce la sorgente Loki (UID `Loki`).
-  - `alerting/` contiene le regole (`TimmyKB Alerts`).
+  - `alerting/` contiene le regole (`Timmy KB Alerts`).
   - `dashboards/` punta alla directory montata `/var/lib/grafana/dashboards`.
 - Le dashboard JSON risiedono in `observability/grafana-dashboards/`
   e vengono montate in sola lettura; usa `grafana-toolkit export` o copia manuale

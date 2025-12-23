@@ -66,7 +66,7 @@ def test_workspace_paths_invalid_slug(tmp_path: Path) -> None:
 def test_global_logs_dir(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path)
     path = global_logs_dir(repo)
-    assert path == repo / ".timmykb" / "logs"
+    assert path == repo / ".timmy_kb" / "logs"
     assert path.exists() and path.is_dir()
 
 

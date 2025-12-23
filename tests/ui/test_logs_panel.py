@@ -111,7 +111,7 @@ def streamlit_stub(monkeypatch: pytest.MonkeyPatch) -> _StreamlitStub:
 def test_shows_hint_when_no_logs(
     streamlit_stub: _StreamlitStub, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    log_dir = tmp_path / ".timmykb" / "logs"
+    log_dir = tmp_path / ".timmy_kb" / "logs"
     monkeypatch.setattr(page, "list_global_log_files", lambda max_files=20: [])
     monkeypatch.setattr(page, "get_global_logs_dir", lambda: log_dir)
 
@@ -126,7 +126,7 @@ def test_data_frame_filtered_by_level(
     streamlit_stub: _StreamlitStub, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     fake_file = LogFileInfo(path=tmp_path / "log.log", size_bytes=10, mtime=0)
-    log_dir = tmp_path / ".timmykb" / "logs"
+    log_dir = tmp_path / ".timmy_kb" / "logs"
     monkeypatch.setattr(page, "list_global_log_files", lambda max_files=20: [fake_file])
     monkeypatch.setattr(page, "get_global_logs_dir", lambda: log_dir)
 

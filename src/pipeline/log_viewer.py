@@ -10,7 +10,7 @@ Obiettivi:
 - Rispettare il modello di path-safety (ensure_within_and_resolve).
 
 Scope (step 1):
-- Gestione dei log GLOBALI della UI salvati in `.timmykb/logs/`.
+- Gestione dei log GLOBALI della UI salvati in `.timmy_kb/logs/`.
 - Nessuna dipendenza da Streamlit o dalla UI.
 
 Formato atteso delle righe di log (semplificato):

@@ -113,8 +113,8 @@ References: [Developer Guide → Configuration](../../docs/developer/developer_g
 - **Atomic writes:** use `pipeline.file_utils.safe_write_text/bytes` with temporary files and replacements.
 - **Structured logging:** use `pipeline.logging_utils.get_structured_logger`, enabling redaction when `LOG_REDACTION` is active.
   - Log rotation is adjustable via `TIMMY_LOG_MAX_BYTES` and `TIMMY_LOG_BACKUP_COUNT`.
-  - Customer logs live in `output/timmy-kb-<slug>/logs/`; global UI logs are in `.timmykb/logs/`.
-  - The UI entrypoint writes `.timmykb/logs/ui.log` with shared handlers; Promtail augments logs with `run_id`, `trace_id`, and `span_id`.
+- Customer logs live in `output/timmy-kb-<slug>/logs/`; global UI logs are in `.timmy_kb/logs/`.
+- The UI entrypoint writes `.timmy_kb/logs/ui.log` with shared handlers; Promtail augments logs with `run_id`, `trace_id`, and `span_id`.
   - `TIMMY_LOG_PROPAGATE` forces handler propagation; avoid console duplication by not overriding it unless required.
   - OTLP tracing uses `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, and `TIMMY_ENV`.
 - **Hashing & masking:** use `hash_identifier`/`sha256_path` with `TIMMY_HASH_SALT`, and prefer `mask_id_map` for sensitive extras.
@@ -128,8 +128,8 @@ References: [Developer Guide → Configuration](../../docs/developer/developer_g
 
 ### Observability stack
 - Config lives in `observability/docker-compose.yaml` and `observability/promtail-config.yaml`.
-- Promtail monitors `../output/` and `../.timmykb/logs/`, tagging logs with `slug`, `run_id`, and `event`.
-- Start locally with `docker compose up -d` inside `observability/`; Grafana listens on port 3000, Loki on 3100. Remember to map `output` and `.timmykb` in Docker Desktop on Windows.
+- Promtail monitors `../output/` and `../.timmy_kb/logs/`, tagging logs with `slug`, `run_id`, and `event`.
+- Start locally with `docker compose up -d` inside `observability/`; Grafana listens on port 3000, Loki on 3100. Remember to map `output` and `.timmy_kb/logs` in Docker Desktop on Windows.
 - Newer stack includes `tempo` (ports 3200/4317) and `otel-collector` (port 4318) for OTLP tracing.
 - The UI log dashboard or `tools/observability_stack.py` can pulse the stack with the same env/compose files.
 

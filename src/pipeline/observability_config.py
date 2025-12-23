@@ -4,7 +4,7 @@
 """
 Gestione delle impostazioni globali di osservabilit? / logging.
 
-Le impostazioni sono salvate in uno YAML globale (default: ~/.timmykb/observability.yaml)
+Le impostazioni sono salvate in uno YAML globale (default: ~/.timmy_kb/observability.yaml)
 per non legarle a uno specifico workspace cliente.
 
 Campi gestiti (fonte di verit? per il comportamento applicativo del logging):
@@ -33,7 +33,7 @@ import yaml
 from pipeline.capabilities import is_otel_available
 
 _OBS_CONFIG_ENV = "TIMMY_OBSERVABILITY_CONFIG"
-_DEFAULT_RELATIVE_CONFIG = ".timmykb/observability.yaml"
+_DEFAULT_RELATIVE_CONFIG = ".timmy_kb/observability.yaml"
 _GRAFANA_URL_ENV = "TIMMY_GRAFANA_URL"
 _GRAFANA_LOGS_UID_ENV = "TIMMY_GRAFANA_LOGS_UID"
 _GRAFANA_ERRORS_UID_ENV = "TIMMY_GRAFANA_ERRORS_UID"
@@ -80,7 +80,7 @@ def get_observability_config_path() -> Path:
     Percorso del file di configurazione osservabilità.
 
     - Se TIMMY_OBSERVABILITY_CONFIG è impostata, usa quel path.
-    - Altrimenti usa ~/.timmykb/observability.yaml
+    - Altrimenti usa ~/.timmy_kb/observability.yaml
     """
     custom = os.getenv(_OBS_CONFIG_ENV)
     if custom:

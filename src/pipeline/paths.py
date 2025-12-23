@@ -166,7 +166,7 @@ def workspace_paths(slug: str, *, repo_root: Path | None = None, create: bool = 
     config_dir = ensure_within_and_resolve(workspace_root, workspace_root / CONFIG_DIR_NAME)
     config_file = ensure_within_and_resolve(config_dir, config_dir / CONFIG_FILE_NAME)
     logs_dir = ensure_within_and_resolve(workspace_root, workspace_root / LOGS_DIR_NAME)
-    dot_timmy_logs_dir = ensure_within_and_resolve(root, root / ".timmykb" / LOGS_DIR_NAME)
+    dot_timmy_logs_dir = ensure_within_and_resolve(root, root / ".timmy_kb" / LOGS_DIR_NAME)
     clients_db_dir = ensure_within_and_resolve(root, root / "clients_db")
     preview_logs_dir = ensure_within_and_resolve(root, root / LOGS_DIR_NAME / "preview")
 
@@ -202,8 +202,8 @@ def workspace_paths(slug: str, *, repo_root: Path | None = None, create: bool = 
 
 
 def global_logs_dir(repo_root: Path) -> Path:
-    """Restituisce .timmykb/logs sotto la repo root, creandolo se mancante."""
-    path = ensure_within_and_resolve(repo_root, repo_root / ".timmykb" / LOGS_DIR_NAME)
+    """Restituisce .timmy_kb/logs sotto la repo root, creandolo se mancante."""
+    path = ensure_within_and_resolve(repo_root, repo_root / ".timmy_kb" / LOGS_DIR_NAME)
     _ensure_dir(repo_root, path)
     return path
 

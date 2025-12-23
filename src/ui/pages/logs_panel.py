@@ -4,7 +4,7 @@
 """
 Dashboard dei log globali della UI + pannello osservabilità.
 
-- Vista globale sui log Streamlit salvati in `.timmykb/logs/`.
+- Vista globale sui log Streamlit salvati in `.timmy_kb/logs/`.
 - Sezione di controllo per gli strumenti di osservabilità:
   - preferenza uso stack esterno (Grafana/Loki)
   - preferenza tracing OpenTelemetry
@@ -436,9 +436,9 @@ def _render_observability_controls() -> None:
 
 def _render_global_logs_view() -> None:
     """Viewer dei log globali UI (versione estesa dell'implementazione originale)."""
-    st.markdown("### Log globali UI (`.timmykb/logs/`)")
+    st.markdown("### Log globali UI (`.timmy_kb/logs/`)")
     st.caption(
-        "Esplora i log globali della UI Streamlit salvati in `.timmykb/logs/`. "
+        "Esplora i log globali della UI Streamlit salvati in `.timmy_kb/logs/`. "
         "La pagina non richiede uno slug attivo."
     )
 
@@ -516,7 +516,7 @@ def main() -> None:
     render_chrome_then_require(
         allow_without_slug=True,
         title="Log dashboard",
-        subtitle="Pannello di controllo per log e osservabilità (.timmykb/logs + Grafana/OTEL).",
+        subtitle="Pannello di controllo per log e osservabilità (.timmy_kb/logs + Grafana/OTEL).",
     )
 
     st.subheader("Log dashboard")
