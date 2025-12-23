@@ -9,6 +9,7 @@ import yaml
 from .env_utils import get_env_var
 from .exceptions import ConfigError
 from .file_utils import safe_write_text
+from .logging_utils import get_structured_logger
 from .path_utils import ensure_within_and_resolve, read_text_safe
 
 OwnershipRole = Literal["user", "dev", "architecture"]
@@ -33,24 +34,50 @@ TEMPLATE_SLUG = "example"
 CODE_COMPONENT = "ownership"
 GLOBAL_SUPERADMIN_ENV = "TIMMY_GLOBAL_SUPERADMINS"
 
+LOGGER = get_structured_logger("pipeline.ownership")
+
+
+def _clients_root(base_dir: Path) -> Path:
+    base = Path(base_dir)
+    return ensure_within_and_resolve(base, base / "clients_db" / "clients")
+
+
+def _legacy_clients_root(base_dir: Path) -> Path:
+    base = Path(base_dir)
+    return ensure_within_and_resolve(base, base / "clients")
+
 
 def _ownership_file(base_dir: Path, slug: str) -> Path:
-    base = Path(base_dir)
-    clients_root = ensure_within_and_resolve(base, base / "clients")
+    clients_root = _clients_root(base_dir)
+    slug_dir = ensure_within_and_resolve(clients_root, clients_root / slug)
+    return ensure_within_and_resolve(slug_dir, slug_dir / OWNERSHIP_FILENAME)
+
+
+def _legacy_ownership_file(base_dir: Path, slug: str) -> Path:
+    clients_root = _legacy_clients_root(base_dir)
     slug_dir = ensure_within_and_resolve(clients_root, clients_root / slug)
     return ensure_within_and_resolve(slug_dir, slug_dir / OWNERSHIP_FILENAME)
 
 
 def load_ownership(slug: str, base_dir: Path | str) -> OwnershipConfig:
-    path = _ownership_file(Path(base_dir), slug)
+    base_path = Path(base_dir)
+    path = _ownership_file(base_path, slug)
     if not path.exists():
-        raise ConfigError(
-            "Ownership non configurata",
-            slug=slug,
-            file_path=str(path),
-            code="ownership.missing",
-            component=CODE_COMPONENT,
-        )
+        legacy_path = _legacy_ownership_file(base_path, slug)
+        if legacy_path.exists():
+            LOGGER.warning(
+                "ownership.legacy_path_used",
+                extra={"slug": slug, "path": str(legacy_path)},
+            )
+            path = legacy_path
+        else:
+            raise ConfigError(
+                "Ownership non configurata",
+                slug=slug,
+                file_path=str(path),
+                code="ownership.missing",
+                component=CODE_COMPONENT,
+            )
     try:
         text = read_text_safe(path.parent, path, encoding="utf-8")
         payload = yaml.safe_load(text) or {}
@@ -120,8 +147,7 @@ def validate_ownership(cfg: OwnershipConfig | Dict[str, object], slug: str) -> O
 
 
 def _template_file(base_dir: Path) -> Path:
-    base = Path(base_dir)
-    clients_root = ensure_within_and_resolve(base, base / "clients")
+    clients_root = _clients_root(base_dir)
     template_dir = ensure_within_and_resolve(clients_root, clients_root / TEMPLATE_SLUG)
     return ensure_within_and_resolve(template_dir, template_dir / OWNERSHIP_FILENAME)
 

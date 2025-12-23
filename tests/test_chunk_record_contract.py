@@ -10,7 +10,7 @@ def test_chunk_record_contract():
     record: ChunkRecord = {
         "id": "chunk-123",
         "slug": "dummy",
-        "source_path": "clients/example/README.md",
+        "source_path": "clients_db/clients/example/README.md",
         "text": "locale",
         "chunk_index": 0,
         "created_at": "2025-12-13T21:00:00Z",

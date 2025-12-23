@@ -16,7 +16,7 @@ def _write_yaml(path: Path, text: str) -> None:
 
 def test_load_ownership_normalizes_roles(tmp_path):
     slug = "demo"
-    ownership_path = tmp_path / "clients" / slug / "ownership.yaml"
+    ownership_path = tmp_path / "clients_db" / "clients" / slug / "ownership.yaml"
     _write_yaml(
         ownership_path,
         """schema_version: "1"

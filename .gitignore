@@ -114,7 +114,9 @@ node_modules/
 /Scripts/
 !scripts/
 !scripts/**
-clients_db/
+clients_db/*
+!clients_db/clients/
+!clients_db/clients/**
 
 # E2E reports
 playwright-report/
