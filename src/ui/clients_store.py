@@ -63,11 +63,17 @@ def _normalize_relative(value: Union[str, Path], *, var_name: str) -> Path:
     return normalised
 
 
+def _require_clients_db_prefix(path: Path, *, var_name: str) -> None:
+    if not path.parts or path.parts[0] != DEFAULT_DB_DIR.as_posix():
+        raise ConfigError(f"{var_name} deve iniziare con '{DEFAULT_DB_DIR.as_posix()}'")
+
+
 def _path_override() -> Optional[tuple[Path, Path]]:
     raw = _optional_env(PATH_ENV)
     if not raw:
         return None
     relative = _normalize_relative(raw, var_name=PATH_ENV)
+    _require_clients_db_prefix(relative, var_name=PATH_ENV)
     rel_dir = relative.parent
     rel_file = Path(relative.name)
     return rel_dir, rel_file
@@ -83,6 +89,7 @@ def _db_dir() -> Path:
     value = _optional_env("CLIENTS_DB_DIR")
     if value:
         relative = _normalize_relative(value, var_name="CLIENTS_DB_DIR")
+        _require_clients_db_prefix(relative, var_name="CLIENTS_DB_DIR")
     else:
         relative = _normalize_relative(DB_DIR, var_name="DB_DIR")
     target = base_root / relative

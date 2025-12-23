@@ -24,7 +24,7 @@ from pipeline.workspace_bootstrap import bootstrap_dummy_workspace
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def _cleanup(path: Path) -> None:
@@ -68,7 +68,7 @@ def _has_semantics(nav: dict) -> bool:
 
 def run_smoke(verbose: bool = False) -> None:
     repo_root = _repo_root()
-    clients_dir = repo_root / "clients_db_semantics_smoke"
+    clients_dir = repo_root / "clients_db" / "semantics_smoke"
     workspace_root = repo_root / "output"
 
     slug_a = "semantics-smoke-a"
@@ -84,7 +84,7 @@ def run_smoke(verbose: bool = False) -> None:
     clients_dir.mkdir(parents=True, exist_ok=True)
 
     env_base = {
-        "CLIENTS_DB_DIR": "clients_db_semantics_smoke",
+        "CLIENTS_DB_DIR": "clients_db/semantics_smoke",
         "CLIENTS_DB_FILE": "clients.yaml",
     }
 

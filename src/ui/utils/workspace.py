@@ -129,7 +129,10 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
     except Exception:
         return False, None
 
-    raw_dir = resolve_raw_dir(slug_value)
+    try:
+        raw_dir = get_ui_workspace_layout(slug_value, require_env=False).raw_dir
+    except Exception:
+        return False, None
     if not raw_dir.is_dir():
         return False, raw_dir
 

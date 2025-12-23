@@ -299,7 +299,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "--clients-db",
         dest="clients_db",
         default=None,
-        help="(Legacy) Percorso relativo (clients_db/clients.yaml); imposta CLIENTS_DB_DIR/FILE per la UI.",
+        help="(Override test/CI) Percorso relativo (clients_db/clients.yaml); imposta CLIENTS_DB_DIR/FILE per la UI.",
     )
     ap.add_argument(
         "--records",

@@ -39,14 +39,38 @@ def test_clients_db_path_override(tmp_path, monkeypatch):
     module = _reset_store(tmp_path)
     monkeypatch.delenv("CLIENTS_DB_DIR", raising=False)
     monkeypatch.delenv("CLIENTS_DB_FILE", raising=False)
-    monkeypatch.setenv("CLIENTS_DB_PATH", "alt_db/registry.yaml")
+    monkeypatch.setenv("CLIENTS_DB_PATH", "clients_db/alt_db/registry.yaml")
     module.REPO_ROOT = tmp_path
     module.DB_DIR = Path("clients_db")
     module.DB_FILE = Path("clients.yaml")
     module.ensure_db()
-    expected_dir = tmp_path / "alt_db"
+    expected_dir = tmp_path / "clients_db" / "alt_db"
     assert module._db_dir() == expected_dir
     assert module._db_file() == expected_dir / "registry.yaml"
+
+
+def test_clients_db_path_rejects_non_clients_db(tmp_path, monkeypatch):
+    module = _reset_store(tmp_path)
+    monkeypatch.delenv("CLIENTS_DB_DIR", raising=False)
+    monkeypatch.delenv("CLIENTS_DB_FILE", raising=False)
+    monkeypatch.setenv("CLIENTS_DB_PATH", "alt_db/registry.yaml")
+    module.REPO_ROOT = tmp_path
+    module.DB_DIR = Path("clients_db")
+    module.DB_FILE = Path("clients.yaml")
+    with pytest.raises(ConfigError):
+        module.ensure_db()
+
+
+def test_clients_db_dir_rejects_non_clients_db(tmp_path, monkeypatch):
+    module = _reset_store(tmp_path)
+    monkeypatch.delenv("CLIENTS_DB_PATH", raising=False)
+    monkeypatch.setenv("CLIENTS_DB_DIR", "alt_db")
+    monkeypatch.setenv("CLIENTS_DB_FILE", "clients.yaml")
+    module.REPO_ROOT = tmp_path
+    module.DB_DIR = Path("clients_db")
+    module.DB_FILE = Path("clients.yaml")
+    with pytest.raises(ConfigError):
+        module.ensure_db()
 
 
 def test_upsert_preserves_order_and_deduplicates(store):

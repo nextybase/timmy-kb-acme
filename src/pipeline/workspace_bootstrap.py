@@ -64,10 +64,7 @@ def bootstrap_client_workspace(context: ClientContext) -> WorkspaceLayout:
 
 
 def _project_root() -> Path:
-    candidate = Path(__file__).resolve()
-    for _ in range(2):
-        candidate = candidate.parent
-    return candidate
+    return Path(__file__).resolve().parents[2]
 
 
 def _assert_within(base: Path, candidate: Path) -> Path:
