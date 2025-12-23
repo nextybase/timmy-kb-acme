@@ -153,6 +153,7 @@ class ClientEnvSettings(_BaseSettings):
 
     Le variabili sono risolte dall'ambiente (.env/processo) tramite Pydantic.
     I campi critici vengono validati al termine dell'inizializzazione del modello.
+    Nota: config.yaml resta non-segreto; qui si validano solo variabili d'ambiente.
 
     Attributi (principali):
         DRIVE_ID: ID dello Shared Drive (critico).

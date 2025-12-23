@@ -430,7 +430,10 @@ class Settings:
         logger: Optional[logging.Logger] = None,
         slug: Optional[str] = None,
     ) -> "Settings":
-        """Carica config/config.yaml rispettando path-safety."""
+        """Carica config/config.yaml (SSoT non segreto) rispettando path-safety.
+
+        Nota: i segreti restano in .env e vanno risolti tramite *_env + resolve_env_ref().
+        """
         repo_root = repo_root.resolve()
         cfg_path = (config_path or (repo_root / "config" / "config.yaml")).resolve()
         payload = yaml_read(repo_root, cfg_path) or {}
@@ -507,6 +510,7 @@ class Settings:
 
     @cached_property
     def openai_settings(self) -> OpenAISection:
+        # Sezione obbligatoria: assenza o tipo errato -> ConfigError in from_mapping.
         return OpenAISection.from_mapping(
             self._section_mapping("ai.openai", required=True),
             config_path=self.config_path,
@@ -514,6 +518,7 @@ class Settings:
 
     @cached_property
     def vision_settings(self) -> VisionSection:
+        # Sezione obbligatoria: ai.vision.model deve essere presente e non vuoto.
         return VisionSection.from_mapping(
             self._section_mapping("ai.vision", required=True),
             config_path=self.config_path,

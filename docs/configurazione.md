@@ -56,11 +56,18 @@ ai:
 - `meta`: nome cliente, riferimenti SSoT (`semantic_mapping_yaml`, `vision_statement_pdf`), versioning (`N_VER`, `DATA_VER`).
 - `ui`: `skip_preflight`, `allow_local_only`, `admin_local_mode`.
 - `ai.openai`: timeout (s), max_retries, `http2_enabled`.
-- `ai.vision`: modello, engine (enum `assistants|responses|...`), `snapshot_retention_days`, `use_kb`, riferimenti *_env ai segreti.
+- `ai.vision`: modello, engine (enum `assistants|responses|...`), `snapshot_retention_days`, `use_kb`, `strict_output`, riferimenti *_env ai segreti.
 - `pipeline.retriever.throttle`: `candidate_limit`, `latency_budget_ms`, `parallelism`, `sleep_ms_between_calls`; flag `auto_by_budget`.
 - `pipeline.raw_cache`: `ttl_seconds`, `max_entries`.
 - `ops`: `log_level` per i logger applicativi.
 - `finance`: `import_enabled` per attivare il flusso Finance.
+- `integrations`: sezione mostrata in UI Configurazione (valori operativi per integrazioni esterne).
+- `rosetta`: flag `rosetta.enabled` e `rosetta.provider` letti dal client Rosetta.
+- `slug_regex`: regex opzionale per validare gli slug (fallback: `^[a-z0-9-]+$`).
+
+Sezioni assistant (letto da `ai.assistant_registry`):
+- `ai.prototimmy`, `ai.planner_assistant`, `ai.ocp_executor`, `ai.audit_assistant`, `ai.kgraph`
+  con `model`, `assistant_id_env`, `use_kb` (per audit: `model` + `assistant_id_env`).
 
 La sezione `security.oidc` resta invariata e segue qui sotto:
 
@@ -102,12 +109,22 @@ gli altri valori da Secrets o da un Secret Manager esterno.
 
 ## OIDC (locale & CI)
 
-Il modulo `pipeline.oidc_utils` espone `ensure_oidc(settings)`:
+Il modulo `pipeline.oidc_utils.ensure_oidc_context(...)` consuma `security.oidc`
+dal YAML e risolve i valori *_env dall'ambiente:
 
 1. Legge `security.oidc` (provider, nomi delle ENV).
 2. Recupera un ID token (preferibilmente via GitHub Actions, fallback a file `.jwt` locale).
 3. Se `provider=vault`, scambia il JWT con un client token (`VAULT_TOKEN`) tramite login standard.
 4. Restituisce un dizionario di variabili da esportare/loggare (mai il token vero).
+
+Campi YAML vs env:
+- YAML: `security.oidc.enabled`, `security.oidc.provider`, `security.oidc.*_env`.
+- Env risolti: i valori puntati da `audience_env`, `role_env`, `token_request_url_env`,
+  `token_request_token_env` (oltre a `ACTIONS_ID_TOKEN_REQUEST_*` in GitHub Actions).
+
+Comportamento: se `enabled=false` la funzione ritorna `enabled: False` senza errore; se i
+valori env richiesti mancano, la gestione e' best-effort e non solleva ConfigError
+in `ensure_oidc_context` (evidenza: `src/pipeline/oidc_utils.py`).
 
 Lo script `tools/ci/oidc_probe.py` richiama `ensure_oidc` e fallisce quando
 `ci_required=true` ma mancano i prerequisiti: e eseguito automaticamente in CI quando
@@ -134,3 +151,24 @@ Per una panoramica dei flussi UI consulta [docs/user/guida_ui.md](user/guida_ui.
 
 Per il razionale di separazione segreti/config consulta lADR
 [0002-separation-secrets-config](adr/0002-separation-secrets-config.md).
+
+## Appendice: note operative
+
+## File candidati legacy in config/ (evidenze repo-wide)
+
+Classificazione (cautelativa): **UNUSED_UNKNOWN** per tutti i file elencati.
+L'evidenza e' una ricerca repo-wide senza occorrenze; non e' prova definitiva
+perche' potrebbero esistere usi esterni, dinamici o non versionati.
+
+- `config/config.yaml.bak`
+  - Evidenza: nessuna occorrenza trovata con pattern
+    `config/config.yaml.bak|config\\config.yaml.bak|config.yaml.bak`.
+  - Limite: possibili usi esterni/dinamici/non versionati.
+- `config/pdf_dummy.yaml`
+  - Evidenza: nessuna occorrenza trovata con pattern
+    `config/pdf_dummy.yaml|config\\pdf_dummy.yaml|pdf_dummy.yaml`.
+  - Limite: possibili usi esterni/dinamici/non versionati.
+- `config/tags_template.yaml`
+  - Evidenza: nessuna occorrenza trovata con pattern
+    `config/tags_template.yaml|config\\tags_template.yaml|tags_template.yaml`.
+  - Limite: possibili usi esterni/dinamici/non versionati.

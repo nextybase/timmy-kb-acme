@@ -125,7 +125,7 @@ def get_config_path() -> Path:
 
 
 def _load_config() -> GlobalConfig:
-    """Carica config/config.yaml tramite Settings (SSoT)."""
+    """Carica config/config.yaml tramite Settings (SSoT non segreto)."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if not CONFIG_FILE.exists():
         safe_write_text(CONFIG_FILE, "{}\n", encoding="utf-8", atomic=True)
@@ -214,6 +214,7 @@ def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:
                 extra={"slug": slug, "error": str(exc)},
             )
 
+    # Atteso: pipeline.retriever.throttle.* + pipeline.retriever.auto_by_budget.
     pipeline_section: Any = source_cfg.get("pipeline") if isinstance(source_cfg, dict) else {}
     raw_section: Any = (
         pipeline_section.get("retriever") if isinstance(pipeline_section, dict) else source_cfg.get("retriever")

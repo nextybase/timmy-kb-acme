@@ -213,6 +213,7 @@ class ClientContext:
         config_path = cls._ensure_config(repo_root, slug, _logger)
 
         # 5) Carica config cliente (yaml)
+        # Config YAML e' SSoT non-segreto; i segreti restano in .env.
         settings = cls._load_yaml_config(repo_root, config_path, slug, _logger)
 
         # 6) Livello log (default dal config, override opzionale da kwargs)

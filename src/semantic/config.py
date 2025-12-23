@@ -227,7 +227,7 @@ def load_semantic_config(base_dir: Path | Any, *, overrides: Optional[dict[str, 
     # 1) Defaults hardcoded
     acc: dict[str, Any] = dict(_DEFAULTS)
 
-    # 2) config.yaml -> semantic_defaults
+    # 2) config.yaml -> semantic_defaults (chiavi ammesse in _ALLOWED_KEYS)
     cfg_all = _load_client_settings(base_dir)
     defaults_from_cfg = _normalize_tagger_section(
         (cfg_all.get("semantic_defaults") or {}) if isinstance(cfg_all, dict) else {}
