@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 
@@ -78,6 +79,12 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     dummy = _DummySt()
     monkeypatch.setattr(landing, "st", dummy, raising=True)
     monkeypatch.setattr(landing, "_render_logo", lambda: None, raising=True)
+    monkeypatch.setattr(
+        landing,
+        "get_ui_workspace_layout",
+        lambda *_args, **_kwargs: SimpleNamespace(base_dir=base),
+        raising=True,
+    )
 
     # Stub provisioning e context
     monkeypatch.setattr(landing, "ensure_local_workspace_for_ui", lambda *a, **k: None, raising=True)

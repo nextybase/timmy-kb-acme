@@ -4,6 +4,7 @@ import logging
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from tests.ui.test_manage_modal_save import _build_streamlit_stub
@@ -24,6 +25,21 @@ def manage_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     fake_clients_store.get_ui_state_path = lambda: tmp_path / "ui_state.json"  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "ui.chrome", fake_chrome)
     monkeypatch.setitem(sys.modules, "ui.clients_store", fake_clients_store)
+
+    base_dir = tmp_path / "timmy-kb-dummy"
+    raw_dir = base_dir / "raw"
+    semantic_dir = base_dir / "semantic"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+
+    fake_workspace = types.ModuleType("ui.utils.workspace")
+    fake_workspace.get_ui_workspace_layout = lambda *_a, **_k: SimpleNamespace(
+        base_dir=base_dir,
+        raw_dir=raw_dir,
+        semantic_dir=semantic_dir,
+    )
+    fake_workspace.count_pdfs_safe = lambda *_a, **_k: 0
+    monkeypatch.setitem(sys.modules, "ui.utils.workspace", fake_workspace)
 
     sys.modules.pop("ui.pages.manage", None)
     manage = importlib.import_module("ui.pages.manage")

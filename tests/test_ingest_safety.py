@@ -15,6 +15,11 @@ class FakeEmb:
         return [[0.0] * 3 for _ in texts]
 
 
+@pytest.fixture(autouse=True)
+def _isolate_repo_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path / "kb-root"))
+
+
 def test_ingest_rejects_outside_base(monkeypatch, tmp_path: Path) -> None:
     base = tmp_path / "base"
     base.mkdir()

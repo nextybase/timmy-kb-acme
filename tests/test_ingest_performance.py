@@ -4,6 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
+import pytest
+
 import ingest as ing
 
 
@@ -15,6 +17,11 @@ class _SpyEmb:
 
     def embed_texts(self, texts: Sequence[str], *, model: str | None = None):  # type: ignore[override]
         return [[0.1] for _ in texts]
+
+
+@pytest.fixture(autouse=True)
+def _isolate_repo_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path / "kb-root"))
 
 
 def test_ingest_folder_reuses_single_embeddings_instance(monkeypatch, tmp_path: Path):
