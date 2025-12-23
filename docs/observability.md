@@ -117,7 +117,7 @@ Le opzioni `--env-file` / `--compose-file` permettono di sovrascrivere rispettiv
 
 La nuova telemetria OTEL e composta da:
 
-- **Trace root** (`timmykb.<journey>`, es. `timmykb.onboarding`, `timmykb.ingest`, `timmykb.reindex`)
+- **Trace root** (`timmy_kb.<journey>`, es. `timmy_kb.onboarding`, `timmy_kb.ingest`, `timmy_kb.reindex`)
   - Attributi: `slug`, `run_id`, `trace_kind`, `env`, `entry_point`, `journey`
 - **Phase span** (`phase:<phase>`, aperto da `phase_scope`)
   - Attributi: `phase`, `slug`, `run_id`, `trace_kind`, `status`, `artifact_count`, `dataset_area`, `source_type`, `policy_id`, `petrov_action`, `rosetta_quality_score`, `risk_level`, `error_kind`, `error_code`

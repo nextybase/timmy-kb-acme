@@ -127,7 +127,6 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 - **Observability smoke:** `test_observability_smoke.py`.
 
 ### 10) Prompting e layout  Prompt builder, suggerimenti
-- **Prompt builder:** `test_prompt_builder.py`.
 - **Layout enricher:** `test_layout_enricher.py` (+ eventuale variante parametrizzata).
 
 ### 11) Adapter e IO esterni  Drive, finanza, client

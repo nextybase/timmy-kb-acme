@@ -22,7 +22,7 @@ except Exception:  # pragma: no cover
     _OTEL_IMPORT_OK = False
 
 _TRACING_READY = False
-_TRACER_NAME = "timmykb"
+_TRACER_NAME = "timmy_kb"
 _raw_sampling = os.getenv("TIMMY_DECISION_SPAN_SAMPLING", "1.0")
 try:
     _DECISION_SPAN_SAMPLING = float(_raw_sampling)
@@ -117,7 +117,7 @@ def start_root_trace(
         "journey": journey,
     }
     attrs.update(_normalize_attrs(extra))
-    return _span_context(f"timmykb.{journey}", attributes=attrs)
+    return _span_context(f"timmy_kb.{journey}", attributes=attrs)
 
 
 def start_phase_span(

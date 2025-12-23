@@ -49,7 +49,7 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 ## Dipendenze & QA
 - Installa gli ambienti tramite i pin generati con `pip-compile` (`requirements*.txt`). Maggiori dettagli in [docs/configurazione.md](docs/configurazione.md).
 - L'import del vocabolario (`tags_reviewed.yaml`) funziona anche senza PyYAML grazie a un parser fallback minimale, ma per YAML complessi raccomandiamo di installare PyYAML: in fallback viene emesso il log `storage.tags_store.import_yaml.fallback`.
-- Namespace: i moduli sono importabili direttamente da `src` (es. `from ingest import ingest_folder`, `from pipeline.context import ClientContext`); il vecchio alias `timmykb.*` è stato rimosso.
+- Namespace: i moduli sono importabili direttamente da `src` (es. `from ingest import ingest_folder`, `from pipeline.context import ClientContext`); gli alias di import legacy sono stati rimossi, usa il namespace attuale.
 - Hook consigliati:
   ```bash
   pre-commit install --hook-type pre-commit --hook-type pre-push
@@ -97,19 +97,19 @@ Per i dettagli operativi vedi `.codex/PROMPTS.md`, `system/ops/runbook_codex.md`
 
 ## Telemetria & sicurezza
 - **Workspace slug-based:** Tutti i log operativi (output, ingest, UI, semantic) vivono sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti; ogni componente scrive sotto il proprio slug/workspace e rispetta path-safety e scritture atomiche.
-- **Global UI log guard:** L'handler condiviso `.timmykb/logs/ui.log` serve al viewer globale (Log dashboard) ma non ospita dati operativi o fallback di ingest; Promtail è configurato solo per leggere `output/timmy-kb-*/logs/*.log` e `.timmykb/logs/*.log` per le dashboard di grafana/tempo.
+- **Global UI log guard:** L'handler condiviso dei log UI globali serve al viewer (Log dashboard) ma non ospita dati operativi o fallback di ingest; Promtail è configurato solo per leggere `output/timmy-kb-*/logs/*.log` e i log UI globali per le dashboard di grafana/tempo.
 - Rotazione file (`RotatingFileHandler`) e tracing OTEL (configurazioni `TIMMY_LOG_*`, `TIMMY_OTEL_*`) sono gestiti come prima, senza introdurre meccanismi legacy.
 - `pre-commit` include CSpell, gitleaks e controlli SPDX per mantenere documentazione e codice coerenti.
 - Il push GitHub (`py src/onboarding_full.py`) usa `pipeline.github_utils.push_output_to_github`: prepara un clone temporaneo `.push_*`, copia solo i Markdown e gestisce retry/force push (`--force-with-lease`) secondo `TIMMY_NO_GITHUB`/`SKIP_GITHUB_PUSH`, `GIT_DEFAULT_BRANCH` e `GIT_FORCE_ALLOWED_BRANCHES` + `force_ack`.
 
 ### Observability stack (Loki + Grafana + Promtail)
-- `observability/docker-compose.yaml` (Loki + Grafana + Promtail) legge solo `output/timmy-kb-*/logs/*.log` e il log UI globale (`.timmykb/logs/*.log`); non usa alcun fallback di storage.
+- `observability/docker-compose.yaml` (Loki + Grafana + Promtail) legge solo `output/timmy-kb-*/logs/*.log` e i log UI globali; non usa alcun fallback di storage.
 - Le righe structured `slug=... run_id=... event=...` sono esportate come label Loki (`slug`, `run_id`, `event`) e alimentano liste di alert o dashboard.
 - Avvia con:
   ```bash
   docker compose --env-file ./.env -f observability/docker-compose.yaml up -d
   ```
   Grafana (`http://localhost:3000`) usa `GRAFANA_ADMIN_PASSWORD` (fallback solo per dev); Loki è su `http://localhost:3100`.
-- Personalizza i bind `./promtail-config.yaml`, `output` e `.timmykb/logs` a seconda del filesystem locale; spegni con `docker compose down`.
+- Personalizza i bind `./promtail-config.yaml` e `output` a seconda del filesystem locale; spegni con `docker compose down`.
 
 Per altre note operative (preview Docker, ingest CSV, gestione extras Drive) rimandiamo alle sezioni dedicate della [User Guide](docs/user/user_guide.md) e della [Developer Guide](docs/developer/developer_guide.md).
