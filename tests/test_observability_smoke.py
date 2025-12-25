@@ -16,6 +16,7 @@ import semantic.frontmatter_service as front
 @dataclass
 class _Ctx:
     base_dir: Path
+    repo_root_dir: Path
     raw_dir: Path
     md_dir: Path
     slug: str
@@ -27,14 +28,27 @@ def _logger(name: str = "test.obs") -> logging.Logger:
     return lg
 
 
+def _write_minimal_layout(base: Path) -> None:
+    (base / "config").mkdir(parents=True, exist_ok=True)
+    (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
+    (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "book").mkdir(parents=True, exist_ok=True)
+    (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
+    (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+
+
 def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
     # Setup workspace minimo con 2 file MD
     base = tmp_path / "output" / "timmy-kb-dummy"
+    _write_minimal_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
     (book / "B.md").write_text("# B\ndue", encoding="utf-8")
-    ctx = _Ctx(base_dir=base, raw_dir=base / "raw", md_dir=book, slug="dummy")
+    ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=base / "raw", md_dir=book, slug="dummy")
     logger = _logger("test.obs.index")
 
     # Stub embeddings e inserimento DB
@@ -69,6 +83,7 @@ def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
 def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
     # Patch pipeline per generare rapidamente 2 MD
     base = tmp_path / "output" / "timmy-kb-dummy"
+    _write_minimal_layout(base)
     raw = base / "raw"
     book = base / "book"
     raw.mkdir(parents=True, exist_ok=True)
@@ -96,7 +111,7 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
         raising=True,
     )
 
-    ctx = _Ctx(base_dir=base, raw_dir=raw, md_dir=book, slug="dummy")
+    ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=raw, md_dir=book, slug="dummy")
     logger = _logger("test.obs.build")
 
     caplog.set_level(logging.INFO)
@@ -116,10 +131,11 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
 
 def test_observability_indexing_failure_emits_error(monkeypatch, tmp_path, caplog):
     base = tmp_path / "output" / "timmy-kb-dummy"
+    _write_minimal_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
-    ctx = _Ctx(base_dir=base, raw_dir=base / "raw", md_dir=book, slug="dummy")
+    ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=base / "raw", md_dir=book, slug="dummy")
     logger = _logger("test.obs.index.fail")
 
     class Emb:

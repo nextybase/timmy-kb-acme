@@ -132,7 +132,7 @@ def main() -> int:
     # Riepilogo artefatti (best-effort, non influenza l'exit code)
     summary_extra: dict[str, object] = {}
     try:
-        book_dir: Path = getattr(ctx, "md_dir", None) or layout.book_dir
+        book_dir: Path = layout.book_dir
         summary_path = book_dir / "SUMMARY.md"
         readme_path = book_dir / "README.md"
 

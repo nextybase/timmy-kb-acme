@@ -14,10 +14,25 @@ def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch,
     book = base / "book"
     raw.mkdir(parents=True)
     book.mkdir(parents=True)
+    (base / "config").mkdir(parents=True, exist_ok=True)
+    (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (book / "README.md").write_text("# KB\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     pdf = raw / "doc.pdf"
     pdf.write_text("fake-pdf", encoding="utf-8")
 
-    ctx = TestClientCtx(slug="dummy", base_dir=base, raw_dir=raw, md_dir=book)
+    ctx = TestClientCtx(
+        slug="dummy",
+        base_dir=base,
+        repo_root_dir=base,
+        raw_dir=raw,
+        md_dir=book,
+        semantic_dir=base / "semantic",
+        config_dir=base / "config",
+    )
 
     # Forziamo la discovery sicura: ritorna il PDF trovato
     monkeypatch.setattr(convert_service, "_collect_safe_pdfs", lambda *a, **k: ([pdf], 0))

@@ -9,7 +9,15 @@ import pipeline.content_utils as cu
 
 
 def _ctx(base: Path, book: Path) -> TestClientCtx:
-    return TestClientCtx(slug="dummy", base_dir=base, raw_dir=base / "raw", md_dir=book)
+    return TestClientCtx(
+        slug="dummy",
+        base_dir=base,
+        repo_root_dir=base,
+        raw_dir=base / "raw",
+        md_dir=book,
+        semantic_dir=base / "semantic",
+        config_dir=base / "config",
+    )
 
 
 def test_readme_and_summary_respect_mapping(tmp_path: Path) -> None:

@@ -11,6 +11,7 @@ from semantic import convert_service
 
 class _Ctx:
     def __init__(self, base: Path, slug: str = "proj"):
+        self.repo_root_dir = base
         self.base_dir = base
         self.raw_dir = base / "raw"
         self.md_dir = base / "book"
@@ -40,9 +41,18 @@ def test_convert_markdown_without_pdfs_raises_configerror(tmp_path: Path, monkey
     ctx = _Ctx(base)
     logger = _NoopLogger()
 
-    # RAW con sole cartelle (vuote) e BOOK vuoto
+    # Layout minimo richiesto dal WorkspaceLayout (bootstrap-like)
+    (base / "config").mkdir(parents=True, exist_ok=True)
+    (base / "config" / "config.yaml").write_text("meta:\n  client_name: dummy\n", encoding="utf-8")
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+    (base / "book").mkdir(parents=True, exist_ok=True)
+    (base / "book" / "README.md").write_text("# Placeholder\n", encoding="utf-8")
+    (base / "book" / "SUMMARY.md").write_text("# Placeholder\n", encoding="utf-8")
+
+    # RAW con sole cartelle (vuote) e BOOK senza contenuti aggiuntivi
     (ctx.raw_dir / "foo").mkdir(parents=True, exist_ok=True)
-    ctx.md_dir.mkdir(parents=True, exist_ok=True)
 
     # Se non ci sono PDF, il converter NON deve essere chiamato: falliremmo qui
     monkeypatch.setattr(
@@ -64,10 +74,18 @@ def test_convert_markdown_without_pdfs_returns_existing_book_md(tmp_path: Path, 
     ctx = _Ctx(base)
     logger = _NoopLogger()
 
-    # RAW senza PDF
+    # Layout minimo richiesto dal WorkspaceLayout (bootstrap-like)
+    (base / "config").mkdir(parents=True, exist_ok=True)
+    (base / "config" / "config.yaml").write_text("meta:\n  client_name: dummy\n", encoding="utf-8")
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+    (base / "book").mkdir(parents=True, exist_ok=True)
+    (base / "book" / "README.md").write_text("# Placeholder\n", encoding="utf-8")
+    (base / "book" / "SUMMARY.md").write_text("# Placeholder\n", encoding="utf-8")
     ctx.raw_dir.mkdir(parents=True, exist_ok=True)
+
     # BOOK con un contenuto preesistente
-    ctx.md_dir.mkdir(parents=True, exist_ok=True)
     (ctx.md_dir / "foo.md").write_text("# Foo\n\n", encoding="utf-8")
 
     # Il converter NON deve essere chiamato quando non ci sono PDF in RAW

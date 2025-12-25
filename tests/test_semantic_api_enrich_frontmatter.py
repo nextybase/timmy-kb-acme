@@ -12,6 +12,10 @@ from semantic import frontmatter_service as front
 
 @dataclass
 class DummyCtx:
+    repo_root_dir: Path
+    base_dir: Path
+    raw_dir: Path
+    md_dir: Path
     slug: str = "e2e"
 
 
@@ -20,9 +24,19 @@ def _write(p: Path, text: str) -> None:
     p.write_text(text, encoding="utf-8")
 
 
+def _write_minimal_layout(base: Path) -> None:
+    _write(base / "config" / "config.yaml", "meta:\n  client_name: test\n")
+    (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+    _write(base / "book" / "README.md", "# KB\n")
+    _write(base / "book" / "SUMMARY.md", "# Summary\n")
+    _write(base / "semantic" / "semantic_mapping.yaml", "{}")
+
+
 def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     base = tmp_path / "kb"
     book = base / "book"
+    _write_minimal_layout(base)
     # Prepare two MD files: one without frontmatter, one with existing frontmatter
     _write(book / "data_governance-intro.md", "Body A\n")
     existing = (
@@ -39,20 +53,6 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     _write(book / "analytics_report.md", existing)
     _write(book / "risk" / "analytics_nested.md", "Nested body\n")
 
-    # Monkeypatch get_semantic_paths to confine I/O under tmp_path
-    from semantic import paths as sem_paths
-
-    monkeypatch.setattr(
-        sem_paths,
-        "get_semantic_paths",
-        lambda slug: {
-            "base": base,
-            "raw": base / "raw",
-            "book": book,
-            "semantic": base / "semantic",
-        },
-    )
-
     # Minimal vocab with aliases; both canon and alias should map back to canon
     vocab: Dict[str, Dict[str, Sequence[str]]] = {
         "governance": {"aliases": ["policy", "governance"]},
@@ -60,7 +60,9 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     }
 
     touched = front.enrich_frontmatter(
-        cast(Any, DummyCtx()),  # bypass nominal type; context non usato dalla funzione
+        cast(
+            Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=base / "raw", md_dir=book)
+        ),  # duck typing nei test
         logging.getLogger("test"),
         vocab,
         slug="e2e",

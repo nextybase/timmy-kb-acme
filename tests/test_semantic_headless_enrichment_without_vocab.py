@@ -19,7 +19,15 @@ def test_headless_fails_without_vocab(tmp_path, monkeypatch):
     md = book / "my_first_doc.md"
     md.write_text("Body only\n", encoding="utf-8")
 
-    ctx = TestClientCtx(slug="dummy", base_dir=base, raw_dir=raw, md_dir=book)
+    ctx = TestClientCtx(
+        slug="dummy",
+        base_dir=base,
+        repo_root_dir=base,
+        raw_dir=raw,
+        md_dir=book,
+        semantic_dir=base / "semantic",
+        config_dir=base / "config",
+    )
 
     monkeypatch.setattr(sapi, "convert_markdown", lambda *a, **k: [md.relative_to(book)])
     monkeypatch.setattr(sapi, "load_reviewed_vocab", lambda *a, **k: {})

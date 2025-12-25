@@ -17,7 +17,7 @@ from typing import Any, cast
 
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
-from pipeline.exceptions import WorkspaceLayoutInvalid, WorkspaceNotFound
+from pipeline.exceptions import WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, validate_slug
 
 __all__ = ["WorkspaceLayout", "get_workspace_layout"]
@@ -58,19 +58,17 @@ class WorkspaceLayout:
         WorkspaceLayoutInvalid/WorkspaceLayoutInconsistent quando il layout disponibile
         è carente o incoerente; in runtime non viene mai creata o riparata alcuna
         directory o asset."""
-        context_repo_root = getattr(context, "repo_root_dir", None)
-        root = context_repo_root or getattr(context, "base_dir", None)
-        if root is None:
-            raise WorkspaceNotFound("ClientContext privo di repo_root_dir/base_dir", slug=context.slug)
-        root = Path(root).resolve()
+        if not hasattr(context, "repo_root_dir") or context.repo_root_dir is None:
+            raise WorkspaceNotFound("ClientContext privo di repo_root_dir", slug=context.slug)
 
-        raw_dir = _to_path(getattr(context, "raw_dir", None), root / "raw")
-        book_dir = _to_path(getattr(context, "md_dir", None), root / "book")
-        semantic_dir = _to_path(getattr(context, "semantic_dir", None), root / "semantic")
-        log_dir_attr = getattr(context, "logs_dir", None) or getattr(context, "log_dir", None)
-        logs_dir = _to_path(log_dir_attr, root / LOGS_DIR_NAME)
-        config_path = _to_path(getattr(context, "config_path", None), root / "config" / "config.yaml")
-        mapping_path = _to_path(getattr(context, "mapping_path", None), semantic_dir / "semantic_mapping.yaml")
+        root = Path(context.repo_root_dir).resolve()
+
+        raw_dir = root / "raw"
+        book_dir = root / "book"
+        semantic_dir = root / "semantic"
+        logs_dir = root / LOGS_DIR_NAME
+        config_path = root / "config" / "config.yaml"
+        mapping_path = semantic_dir / "semantic_mapping.yaml"
         config_dir = config_path.parent
 
         raw_dir = ensure_within_and_resolve(root, raw_dir)
@@ -84,11 +82,13 @@ class WorkspaceLayout:
         if root.exists():
             _validate_layout_assets(
                 slug=context.slug,
+                workspace_root=root,
+                raw_dir=raw_dir,
                 book_dir=book_dir,
+                logs_dir=logs_dir,
                 config_path=config_path,
                 semantic_dir=semantic_dir,
                 mapping_path=mapping_path,
-                enforce_integrity=context_repo_root is not None,
             )
 
         log_file = ensure_within_and_resolve(logs_dir, logs_dir / LOG_FILE_NAME)
@@ -159,7 +159,10 @@ class WorkspaceLayout:
 
         _validate_layout_assets(
             slug=resolved_slug,
+            workspace_root=repo_root,
+            raw_dir=raw_dir,
             book_dir=book_dir,
+            logs_dir=logs_dir,
             config_path=config_path,
             semantic_dir=semantic_dir,
             mapping_path=mapping_path,
@@ -216,30 +219,37 @@ def _extract_env_from_context(context: ClientContext) -> str | None:
 def _validate_layout_assets(
     *,
     slug: str,
+    workspace_root: Path,
+    raw_dir: Path,
     book_dir: Path,
+    logs_dir: Path,
     config_path: Path,
     semantic_dir: Path,
     mapping_path: Path | None = None,
-    enforce_integrity: bool = True,
 ) -> None:
     """Fail-fast se gli asset minimi del layout non esistono.
 
     In futuro la logica di validazione di config/version/mapping solleverà
     WorkspaceLayoutInconsistent tramite `_ensure_layout_consistency`.
-    Quando `enforce_integrity` è False o `_should_skip_layout_validation()` segnala un flow
-    bootstrap/dummy/UI la verifica viene saltata; in runtime standard il config è confermato."""
-    if not enforce_integrity:
-        return
+    Quando `_should_skip_layout_validation()` segnala un flow bootstrap/dummy/UI la verifica viene
+    saltata; in runtime standard il config è confermato."""
     if _should_skip_layout_validation():
         return
+    _ensure_directory(workspace_root, slug, description="workspace root")
     _ensure_file(config_path, slug, description="config/config.yaml")
+    _ensure_directory(raw_dir, slug, description="raw directory")
     _ensure_directory(book_dir, slug, description="book directory")
     _ensure_file(book_dir / "README.md", slug, description="book/README.md")
     _ensure_file(book_dir / "SUMMARY.md", slug, description="book/SUMMARY.md")
     _ensure_directory(semantic_dir, slug, description="semantic directory")
+    _ensure_directory(logs_dir, slug, description="logs directory")
     _ensure_layout_consistency(
         slug=slug,
+        workspace_root=workspace_root,
+        raw_dir=raw_dir,
         config_path=config_path,
+        book_dir=book_dir,
+        logs_dir=logs_dir,
         semantic_dir=semantic_dir,
         mapping_path=mapping_path,
     )
@@ -266,13 +276,30 @@ def _ensure_file(path: Path, slug: str, *, description: str) -> None:
 def _ensure_layout_consistency(
     *,
     slug: str,
+    workspace_root: Path,
+    raw_dir: Path,
     config_path: Path,
+    book_dir: Path,
+    logs_dir: Path,
     semantic_dir: Path,
     mapping_path: Path | None = None,
 ) -> None:
-    """Placeholder per la logica che scatterà WorkspaceLayoutInconsistent."""
-    # Non ancora implementato: verrà usato per mismatch di schema/versione/mapping.
-    return
+    """Fail-fast se il layout contiene path fuori perimetro o incoerenti."""
+    try:
+        ensure_within(workspace_root, raw_dir)
+        ensure_within(workspace_root, book_dir)
+        ensure_within(workspace_root, semantic_dir)
+        ensure_within(workspace_root, logs_dir)
+        ensure_within(workspace_root, config_path)
+        if mapping_path is not None:
+            ensure_within(workspace_root, mapping_path)
+            ensure_within(semantic_dir, mapping_path)
+    except Exception as exc:
+        raise WorkspaceLayoutInconsistent(
+            f"Layout incoerente: path fuori perimetro per workspace {slug}: {exc}",
+            slug=slug,
+            file_path=mapping_path or config_path,
+        ) from exc
 
 
 def _should_skip_layout_validation() -> bool:

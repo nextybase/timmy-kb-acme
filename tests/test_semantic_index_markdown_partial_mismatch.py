@@ -24,7 +24,15 @@ def test_index_markdown_partial_on_mismatch_inserts_and_logs(tmp_path, caplog, m
     (book / "content_2.md").write_text("# B\ntext", encoding="utf-8")
 
     # context minimo
-    ctx = TestClientCtx(slug="dummy", base_dir=base, raw_dir=base / "raw", md_dir=book)
+    ctx = TestClientCtx(
+        slug="dummy",
+        base_dir=base,
+        repo_root_dir=base,
+        raw_dir=base / "raw",
+        md_dir=book,
+        semantic_dir=base / "semantic",
+        config_dir=base / "config",
+    )
     logger = logging.getLogger("test.index_mismatch")
     caplog.set_level(logging.INFO)
 

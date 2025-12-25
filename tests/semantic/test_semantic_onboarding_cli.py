@@ -14,7 +14,15 @@ from timmy_kb.cli import semantic_onboarding as cli
 
 def _ctx(base_dir: Path) -> TestClientCtx:
     book_dir = base_dir / "book"
-    return TestClientCtx(slug="dummy", base_dir=base_dir, raw_dir=base_dir / "raw", md_dir=book_dir)
+    return TestClientCtx(
+        slug="dummy",
+        base_dir=base_dir,
+        repo_root_dir=base_dir,
+        raw_dir=base_dir / "raw",
+        md_dir=book_dir,
+        semantic_dir=base_dir / "semantic",
+        config_dir=base_dir / "config",
+    )
 
 
 def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

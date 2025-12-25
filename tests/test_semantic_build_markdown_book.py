@@ -12,13 +12,27 @@ from semantic import api as sapi
 class _Ctx:
     def __init__(self, base: Path, slug: str = "obs"):
         self.base_dir = base
+        self.repo_root_dir = base
         self.raw_dir = base / "raw"
         self.md_dir = base / "book"
         self.slug = slug
 
 
+def _write_minimal_layout(base: Path) -> None:
+    (base / "config").mkdir(parents=True, exist_ok=True)
+    (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
+    (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "book").mkdir(parents=True, exist_ok=True)
+    (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
+    (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+
+
 def test_build_markdown_book_no_success_if_enrich_fails(tmp_path, caplog, monkeypatch):
     base = tmp_path / "kb"
+    _write_minimal_layout(base)
     raw = base / "raw"
     book = base / "book"
     raw.mkdir(parents=True, exist_ok=True)
@@ -67,6 +81,7 @@ class _NoopLogger:
 def test_build_markdown_book_logs_enriched_count(tmp_path, caplog, monkeypatch):
     base = tmp_path / "kb"
     base.mkdir(parents=True, exist_ok=True)
+    _write_minimal_layout(base)
 
     ctx = _Ctx(base)
 
@@ -88,6 +103,7 @@ def test_build_markdown_book_logs_enriched_count(tmp_path, caplog, monkeypatch):
 def test_run_build_workflow_clears_frontmatter_cache(monkeypatch, tmp_path):
     base = tmp_path / "kb"
     base.mkdir(parents=True, exist_ok=True)
+    _write_minimal_layout(base)
 
     ctx = _Ctx(base)
     logger = logging.getLogger("semantic.book.test")

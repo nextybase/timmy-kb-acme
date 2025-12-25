@@ -1,9 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from types import SimpleNamespace
 
-import pytest
-
-from pipeline.exceptions import PathTraversalError
 from timmy_kb.cli.tag_onboarding import validate_tags_reviewed
 
 
@@ -14,7 +11,7 @@ def test_validate_tags_reviewed_rejects_semantic_outside_base(tmp_path, monkeypa
     context = SimpleNamespace(
         slug="dummy",
         base_dir=base_dir,
-        repo_root_dir=None,
+        repo_root_dir=base_dir,
         raw_dir=base_dir / "raw",
         semantic_dir=tmp_path.parent / "evil",
         redact_logs=False,
@@ -26,5 +23,4 @@ def test_validate_tags_reviewed_rejects_semantic_outside_base(tmp_path, monkeypa
 
     monkeypatch.setattr("timmy_kb.cli.tag_onboarding.ClientContext.load", fake_load)
 
-    with pytest.raises(PathTraversalError):
-        validate_tags_reviewed("dummy")
+    assert validate_tags_reviewed("dummy") == 1

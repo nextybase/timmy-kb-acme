@@ -32,8 +32,19 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     raw = workspace / "raw"
     book = workspace / "book"
     semantic = workspace / "semantic"
-    for d in (raw, book, semantic):
+    config_dir = workspace / "config"
+    logs_dir = workspace / "logs"
+    for d in (raw, book, semantic, config_dir, logs_dir):
         d.mkdir(parents=True, exist_ok=True)
+
+    (book / "README.md").write_text("# README\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+    (semantic / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    repo_root = Path(__file__).resolve().parents[1]
+    (config_dir / "config.yaml").write_text(
+        (repo_root / "config" / "config.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
 
     # Forza la root repo al workspace temporaneo
     monkeypatch.setenv("REPO_ROOT_DIR", str(workspace))

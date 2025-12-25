@@ -23,6 +23,9 @@ def _make_context(tmp_path: Path, slug: str):
         base_dir / "config",
     ):
         folder.mkdir(parents=True, exist_ok=True)
+    (book_dir / "README.md").write_text("# Placeholder\n", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("# Placeholder\n", encoding="utf-8")
+    (semantic_dir / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
 
     (base_dir / "config" / "config.yaml").write_text(
         """

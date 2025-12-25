@@ -13,7 +13,25 @@ from semantic import convert_service
 
 
 def _make_ctx(base_dir: Path, raw_dir: Path, md_dir: Path) -> TestClientCtx:
-    return TestClientCtx(slug="dummy", base_dir=base_dir, raw_dir=raw_dir, md_dir=md_dir)
+    return TestClientCtx(
+        slug="dummy",
+        base_dir=base_dir,
+        repo_root_dir=base_dir,
+        raw_dir=raw_dir,
+        md_dir=md_dir,
+        semantic_dir=base_dir / "semantic",
+        config_dir=base_dir / "config",
+    )
+
+
+def _write_minimal_layout(base: Path) -> None:
+    (base / "config").mkdir(parents=True, exist_ok=True)
+    (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
+    (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
 
 
 def test_convert_markdown_logs_done_once_on_success(tmp_path: Path, caplog, monkeypatch):
@@ -22,6 +40,7 @@ def test_convert_markdown_logs_done_once_on_success(tmp_path: Path, caplog, monk
     book = base / "book"
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
+    _write_minimal_layout(base)
     # Un PDF valido (contenuto irrilevante)
     (raw / "a.pdf").write_bytes(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
 
@@ -51,6 +70,7 @@ def test_convert_markdown_phase_failed_on_no_output(tmp_path: Path, caplog, monk
     book = base / "book"
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
+    _write_minimal_layout(base)
     # Un PDF sicuro ma la conversione non produce contenuti
     (raw / "b.pdf").write_bytes(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
 

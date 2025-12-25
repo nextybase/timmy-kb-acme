@@ -13,6 +13,7 @@ class _Ctx:
     # Protocol minimale compatibile con semantic.api
     def __init__(self, base: Path, raw: Path, md: Path, slug: str = "x"):
         self.base_dir = base
+        self.repo_root_dir = base
         self.raw_dir = raw
         self.md_dir = md
         self.slug = slug
@@ -28,17 +29,30 @@ def _logger() -> logging.Logger:
     return log
 
 
-def test_convert_markdown_respects_ctx_overrides(tmp_path: Path, monkeypatch):
+def _write_minimal_layout(base: Path) -> None:
+    (base / "config").mkdir(parents=True, exist_ok=True)
+    (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
+    (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "book").mkdir(parents=True, exist_ok=True)
+    (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
+    (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+
+
+def test_convert_markdown_ignores_ctx_overrides(tmp_path: Path, monkeypatch):
     base = tmp_path / "base"
     raw = base / "custom_raw"  # deve stare sotto base
     book = base / "custom_book"  # idem
     base.mkdir()
+    _write_minimal_layout(base)
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     ctx = _Ctx(base, raw, book)
 
     # 👇 RAW deve contenere almeno un PDF affinché il converter venga invocato
-    (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n%dummy\n")
+    (base / "raw" / "dummy.pdf").write_bytes(b"%PDF-1.4\n%dummy\n")
 
     # Fake converter: deve scrivere in md_dir
     def _fake_convert_md(ctxlike, md_dir: Path):
@@ -49,7 +63,7 @@ def test_convert_markdown_respects_ctx_overrides(tmp_path: Path, monkeypatch):
     # cast(Any, ...) per evitare reportArgumentType: accettiamo duck typing nei test
     mds = sapi.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
 
-    assert (book / "A.md").exists()
+    assert (base / "book" / "A.md").exists()
     assert any(p.name == "A.md" for p in mds)
 
 
@@ -59,6 +73,7 @@ def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, mon
     book = base / "book"
     for d in (base, raw, book):
         d.mkdir(parents=True, exist_ok=True)
+    _write_minimal_layout(base)
     ctx = _Ctx(base, raw, book)
 
     # converter: crea almeno un md

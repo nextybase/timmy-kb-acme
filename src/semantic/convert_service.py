@@ -8,13 +8,14 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple, cast
+from typing import Any, List, Optional, Protocol, Sequence, Tuple, cast
 from weakref import WeakKeyDictionary
 
 from pipeline.content_utils import convert_files_to_structured_markdown as _convert_md
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.context_paths import ContextPaths, resolve_context_paths
 from semantic.embedding_service import list_content_markdown
 from semantic.types import ClientContextProtocol
@@ -28,12 +29,6 @@ class RawDiscovery:
     discarded_unsafe: int
 
 
-def _get_paths(slug: str) -> Dict[str, Path]:
-    from semantic.paths import get_semantic_paths  # import locale per evitare cicli
-
-    return cast(Dict[str, Path], get_semantic_paths(slug))
-
-
 def convert_markdown(
     context: ClientContextProtocol,
     logger: logging.Logger,
@@ -42,7 +37,8 @@ def convert_markdown(
 ) -> List[Path]:
     """Converte i PDF in RAW in Markdown strutturato dentro book/."""
     start_ts = time.perf_counter()
-    paths = resolve_context_paths(context, slug, paths_provider=_get_paths)
+    layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
+    paths = resolve_context_paths(layout)
     base_dir, raw_dir, md_dir = paths.base_dir, paths.raw_dir, paths.md_dir
     ensure_within(base_dir, raw_dir)
     ensure_within(base_dir, md_dir)
@@ -138,7 +134,7 @@ def _call_convert_md(
     if not callable(func):
         raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=md_dir)
 
-    kwargs: Dict[str, Any] = {}
+    kwargs: dict[str, Any] = {}
 
     try:
         sig = inspect.signature(func)

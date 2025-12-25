@@ -111,7 +111,8 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
 
     def _ctx_logger(_slug: str):
         logger = SimpleNamespace(info=_logger_info, warning=_logger_warning)
-        return SimpleNamespace(base_dir=tmp_path), logger
+        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book")
+        return SimpleNamespace(base_dir=tmp_path), logger, layout
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _ctx_logger)
 
@@ -265,7 +266,8 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
 
     # ctx/logger minimi
     def _mk_ctx_and_logger(slug: str):
-        return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(name="test-logger")
+        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book")
+        return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(name="test-logger"), layout
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
 
@@ -325,7 +327,8 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     logger = _Logger()
 
     def _mk_ctx_and_logger(slug: str):
-        return SimpleNamespace(base_dir=tmp_path), logger
+        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book")
+        return SimpleNamespace(base_dir=tmp_path), logger, layout
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
@@ -355,7 +358,8 @@ def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
 
     # ctx/logger minimi
     def _mk_ctx_and_logger(slug: str):
-        return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(name="test-logger")
+        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book")
+        return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(name="test-logger"), layout
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
 

@@ -15,6 +15,7 @@ from timmy_kb.cli import semantic_onboarding as mod
 class _DummyCtx(SimpleNamespace):
     base_dir: Path
     md_dir: Path
+    repo_root_dir: Path
     slug: str
 
 
@@ -23,7 +24,7 @@ def _make_ctx(tmp_path: Path, slug: str = "dummy") -> _DummyCtx:
     book = base / "book"
     base.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
-    return _DummyCtx(base_dir=base, md_dir=book, slug=slug)
+    return _DummyCtx(base_dir=base, md_dir=book, repo_root_dir=base, slug=slug)
 
 
 def _set_argv(slug: str = "dummy") -> None:

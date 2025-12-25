@@ -13,10 +13,22 @@ from semantic import convert_service
 
 class _Ctx:
     def __init__(self, base: Path, slug: str = "proj"):
+        self.repo_root_dir = base
         self.base_dir = base
         self.raw_dir = base / "raw"
         self.md_dir = base / "book"
         self.slug = slug
+
+
+def _write_minimal_layout(base: Path) -> None:
+    (base / "config").mkdir(parents=True, exist_ok=True)
+    (base / "config" / "config.yaml").write_text("meta:\n  client_name: dummy\n", encoding="utf-8")
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+    (base / "book").mkdir(parents=True, exist_ok=True)
+    (base / "book" / "README.md").write_text("# Placeholder\n", encoding="utf-8")
+    (base / "book" / "SUMMARY.md").write_text("# Placeholder\n", encoding="utf-8")
 
 
 class _NoopLogger:
@@ -31,6 +43,7 @@ def test_only_unsafe_pdfs_raise_explicit_message(tmp_path: Path, monkeypatch: py
     ctx = _Ctx(base)
     logger = _NoopLogger()
 
+    _write_minimal_layout(base)
     ctx.raw_dir.mkdir(parents=True, exist_ok=True)
     ctx.md_dir.mkdir(parents=True, exist_ok=True)
 
@@ -62,6 +75,7 @@ def test_mixed_unsafe_and_valid_pdfs_processes_valid_ones(tmp_path: Path, monkey
     ctx = _Ctx(base)
     logger = _NoopLogger()
 
+    _write_minimal_layout(base)
     ctx.raw_dir.mkdir(parents=True, exist_ok=True)
     ctx.md_dir.mkdir(parents=True, exist_ok=True)
 

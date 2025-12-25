@@ -16,6 +16,10 @@ from semantic import frontmatter_service as front
 
 @dataclass
 class DummyCtx:
+    repo_root_dir: Path
+    base_dir: Path
+    raw_dir: Path
+    md_dir: Path
     slug: str = "e2e"
 
 
@@ -24,26 +28,22 @@ def _write(p: Path, text: str) -> None:
     p.write_text(text, encoding="utf-8")
 
 
+def _write_minimal_layout(base: Path) -> None:
+    _write(base / "config" / "config.yaml", "meta:\n  client_name: test\n")
+    (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+    _write(base / "book" / "README.md", "# KB\n")
+    _write(base / "book" / "SUMMARY.md", "# Summary\n")
+    _write(base / "semantic" / "semantic_mapping.yaml", "{}")
+
+
 def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> None:
     base = tmp_path / "kb"
     book = base / "book"
     raw = base / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
-
-    # Confinare i percorsi sotto tmp_path
-    from semantic import paths as sem_paths
-
-    monkeypatch.setattr(
-        sem_paths,
-        "get_semantic_paths",
-        lambda slug: {
-            "base": base,
-            "raw": raw,
-            "book": book,
-            "semantic": base / "semantic",
-        },
-    )
+    _write_minimal_layout(base)
 
     # Fake generators: scrivono i file attesi
     def _fake_summary(ctx) -> None:
@@ -58,7 +58,7 @@ def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> Non
     monkeypatch.setattr(front, "_validate_md", lambda ctx: None, raising=True)
 
     sapi.write_summary_and_readme(
-        cast(Any, DummyCtx()),  # bypass nominal type di ClientContext
+        cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, md_dir=book)),  # duck typing nei test
         logging.getLogger("test"),
         slug="e2e",
     )
@@ -73,19 +73,7 @@ def test_write_summary_and_readme_generators_fail_raise(monkeypatch, tmp_path: P
     raw = base / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
-
-    from semantic import paths as sem_paths
-
-    monkeypatch.setattr(
-        sem_paths,
-        "get_semantic_paths",
-        lambda slug: {
-            "base": base,
-            "raw": raw,
-            "book": book,
-            "semantic": base / "semantic",
-        },
-    )
+    _write_minimal_layout(base)
 
     def _boom_summary(ctx) -> None:
         raise ValueError("summary failed")
@@ -99,7 +87,7 @@ def test_write_summary_and_readme_generators_fail_raise(monkeypatch, tmp_path: P
     logger = logging.getLogger("test")
     with pytest.raises(ConversionError) as exc:
         sapi.write_summary_and_readme(
-            cast(Any, DummyCtx()),  # idem sopra
+            cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, md_dir=book)),  # idem sopra
             logger,
             slug="e2e",
         )
@@ -115,19 +103,7 @@ def test_write_summary_and_readme_logs_errors_with_context(
     raw = base / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
-
-    from semantic import paths as sem_paths
-
-    monkeypatch.setattr(
-        sem_paths,
-        "get_semantic_paths",
-        lambda slug: {
-            "base": base,
-            "raw": raw,
-            "book": book,
-            "semantic": base / "semantic",
-        },
-    )
+    _write_minimal_layout(base)
 
     def _boom_summary(ctx) -> None:
         raise RuntimeError("boom")
@@ -143,7 +119,7 @@ def test_write_summary_and_readme_logs_errors_with_context(
     with caplog.at_level(logging.ERROR):
         with pytest.raises(ConversionError):
             sapi.write_summary_and_readme(
-                cast(Any, DummyCtx()),
+                cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, md_dir=book)),
                 logger,
                 slug="e2e",
             )

@@ -47,7 +47,7 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
         raw_dir=client_root / "raw",
         md_dir=client_root / "book",
         config_path=client_root / "config" / "config.yaml",
-        repo_root_dir=None,
+        repo_root_dir=client_root,
         env={},
         run_id=None,
         redact_logs=False,

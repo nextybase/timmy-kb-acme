@@ -26,21 +26,15 @@ _UI_RAW_CACHE_TTL = 3.0  # secondi, garantisce feedback rapido in UI
 
 
 def _load_context_layout(slug: str) -> Optional[WorkspaceLayout]:
-    """Prova a caricare il layout dal ClientContext (se disponibile)."""
+    """Carica il layout dal ClientContext in modo fail-fast."""
     slug_key = (slug or "").strip().lower()
     if not slug_key:
         return None
     cached = _LAYOUT_CACHE.get(slug_key)
     if cached:
         return cached
-    try:
-        ctx = get_client_context(slug_key, interactive=False, require_env=False)
-    except Exception:
-        return None
-    try:
-        layout = WorkspaceLayout.from_context(ctx)
-    except Exception:
-        return None
+    ctx = get_client_context(slug_key, interactive=False, require_env=False)
+    layout = WorkspaceLayout.from_context(ctx)
     _LAYOUT_CACHE[slug_key] = layout
     return layout
 
@@ -56,7 +50,7 @@ def get_ui_workspace_layout(slug: str, *, require_env: bool = True) -> Workspace
 
     layout = _load_context_layout(slug_value)
     if layout is None:
-        layout = WorkspaceLayout.from_slug(slug=slug_value, require_env=require_env)
+        raise ConfigError("Slug mancante: impossibile risolvere il layout.", slug=slug_value)
     _LAYOUT_CACHE[slug_value] = layout
     return layout
 
@@ -123,16 +117,9 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
     if not slug_value:
         return False, None
 
-    # Validazione coerente con resolve_raw_dir (non solleva verso l'UI in questo helper)
-    try:
-        validate_slug(slug_value)
-    except Exception:
-        return False, None
+    validate_slug(slug_value)
 
-    try:
-        raw_dir = get_ui_workspace_layout(slug_value, require_env=False).raw_dir
-    except Exception:
-        return False, None
+    raw_dir = get_ui_workspace_layout(slug_value, require_env=False).raw_dir
     if not raw_dir.is_dir():
         return False, raw_dir
 

@@ -16,6 +16,7 @@ from semantic.config import SemanticConfig
 class _Ctx:
     def __init__(self, base: Path, slug: str = "proj"):
         self.base_dir = base
+        self.repo_root_dir = base
         self.raw_dir = base / "raw"
         self.md_dir = base / "book"
         self.slug = slug
@@ -33,6 +34,18 @@ class _NoopLogger:
 
     def error(self, *a, **k):
         pass
+
+
+def _write_minimal_layout(base: Path) -> None:
+    (base / "config").mkdir(parents=True, exist_ok=True)
+    (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
+    (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "book").mkdir(parents=True, exist_ok=True)
+    (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
+    (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "logs").mkdir(parents=True, exist_ok=True)
 
 
 def test_auto_tagger_skips_symlink_outside_base(tmp_path: Path):
@@ -55,6 +68,7 @@ def test_auto_tagger_skips_symlink_outside_base(tmp_path: Path):
 
 def test_convert_markdown_treats_only_symlinks_as_no_pdfs(tmp_path: Path):
     base = tmp_path / "kb"
+    _write_minimal_layout(base)
     ctx = _Ctx(base)
     logger = _NoopLogger()
 
@@ -78,6 +92,7 @@ def test_convert_markdown_treats_only_symlinks_as_no_pdfs(tmp_path: Path):
 
 def test_convert_markdown_raises_when_only_readme_summary_with_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     base = tmp_path / "kb"
+    _write_minimal_layout(base)
     ctx = _Ctx(base)
     logger = _NoopLogger()
 

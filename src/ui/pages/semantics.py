@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence, Tuple, cast
+from typing import Any, Callable, Sequence, cast
 
 from ui.types import StreamlitLike
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab  # noqa: F401
@@ -25,39 +25,19 @@ from semantic.book_readiness import is_book_ready
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
 from ui.components.semantic_wizard import render_semantic_wizard
-from ui.constants import SEMANTIC_ENTRY_STATES, SEMANTIC_GATING_MESSAGE
+from ui.constants import SEMANTIC_ENTRY_STATES
 from ui.errors import to_user_message
+from ui.gating import reset_gating_cache as _reset_gating_cache
 from ui.pages.registry import PagePaths
 from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard  # helper condiviso (con fallback)
+from ui.utils.workspace import get_ui_workspace_layout, has_raw_pdfs
 
 LOGGER = get_structured_logger("ui.semantics")
-try:
-    from ui.utils.workspace import get_ui_workspace_layout, has_raw_pdfs
-except Exception:  # pragma: no cover
-
-    def has_raw_pdfs(slug: Optional[str], *, layout: WorkspaceLayout | None = None) -> Tuple[bool, Optional[Path]]:
-        return False, None
-
-
-try:
-    from ui.gating import reset_gating_cache as _reset_gating_cache
-except Exception:  # pragma: no cover
-
-    def _reset_gating_cache(_slug: str | None = None) -> None:
-        return
 
 
 # SSoT: stati ammessi per la pagina Semantica (entry: include 'pronto')
 ALLOWED_STATES = SEMANTIC_ENTRY_STATES
-
-
-def _resolve_layout(slug: str) -> WorkspaceLayout | None:
-    try:
-        return get_ui_workspace_layout(slug, require_env=False)
-    except Exception as exc:
-        LOGGER.warning("ui.semantics.layout_resolution_failed", extra={"slug": slug, "error": str(exc)})
-        return None
 
 
 def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger, WorkspaceLayout]:
@@ -65,22 +45,6 @@ def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger, WorkspaceLayou
     logger = get_structured_logger("ui.semantics", run_id=run_id)
     ctx = get_client_context(slug, interactive=False, require_env=False, run_id=run_id)
     layout = WorkspaceLayout.from_context(ctx)
-    return ctx, logger, layout
-
-
-def _ctx_logger_layout(slug: str) -> tuple[Any, logging.Logger, WorkspaceLayout]:
-    """Supporta sia la firma legacy (ctx, logger) sia la nuova (ctx, logger, layout)."""
-    result = _make_ctx_and_logger(slug)
-    if len(result) == 3:
-        return result
-    ctx, logger = result
-    try:
-        layout = WorkspaceLayout.from_context(ctx)
-    except Exception:
-        base_dir = getattr(ctx, "base_dir", None) or getattr(ctx, "repo_root_dir", None)
-        if base_dir is None:
-            raise
-        layout = WorkspaceLayout.from_workspace(workspace=Path(base_dir), slug=slug)
     return ctx, logger, layout
 
 
@@ -109,23 +73,21 @@ def _update_client_state(slug: str, target_state: str, logger: logging.Logger) -
         _reset_gating_cache(slug)
 
 
-def _require_semantic_gating(
-    slug: str, *, reuse_last: bool = False, layout: WorkspaceLayout | None = None
-) -> tuple[str, bool, Path | None]:
+def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[str, bool, Path | None]:
     """Verifica gating indipendente dal contesto Streamlit."""
     cache_key = (slug or "<none>").strip().lower()
     state = (get_state(slug) or "").strip().lower()
     if reuse_last and cache_key in _GATE_CACHE:
         cached_state, _, _ = _GATE_CACHE[cache_key]
         if cached_state in ALLOWED_STATES:
-            ready_now, raw_dir_now = has_raw_pdfs(slug, layout=layout)
+            ready_now, raw_dir_now = has_raw_pdfs(slug)
             if ready_now:
                 result = (cached_state, ready_now, raw_dir_now)
                 _GATE_CACHE[cache_key] = result
                 return result
             _GATE_CACHE.pop(cache_key, None)
             _raise_semantic_unavailable(slug, state, ready_now, raw_dir_now)
-    ready, raw_dir = has_raw_pdfs(slug, layout=layout)
+    ready, raw_dir = has_raw_pdfs(slug)
     if state not in ALLOWED_STATES or not ready:
         _raise_semantic_unavailable(slug, state, ready, raw_dir)
     result = (state, ready, raw_dir)
@@ -146,8 +108,8 @@ def _require_semantic_gating(
 
 
 def _run_convert(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
-    _require_semantic_gating(slug, reuse_last=True, layout=layout)
-    ctx, logger, _ = _ctx_logger_layout(slug)
+    _require_semantic_gating(slug, reuse_last=True)
+    ctx, logger, _ = _make_ctx_and_logger(slug)
     with status_guard(
         "Converto PDF in Markdown...",
         expanded=True,
@@ -174,8 +136,8 @@ def _get_canonical_vocab(
 
 
 def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
-    _require_semantic_gating(slug, reuse_last=True, layout=layout)
-    ctx, logger, layout = _ctx_logger_layout(slug)
+    _require_semantic_gating(slug, reuse_last=True)
+    ctx, logger, layout = _make_ctx_and_logger(slug)
     base_dir = layout.base_dir
     try:
         vocab = _get_canonical_vocab(base_dir, logger, slug=slug)
@@ -201,8 +163,8 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
 
 
 def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
-    _require_semantic_gating(slug, reuse_last=True, layout=layout)
-    ctx, logger, _ = _ctx_logger_layout(slug)
+    _require_semantic_gating(slug, reuse_last=True)
+    ctx, logger, _ = _make_ctx_and_logger(slug)
     with status_guard(
         "Genero SUMMARY.md e README.md...",
         expanded=True,
@@ -285,7 +247,15 @@ def main() -> None:
     """Entry point Streamlit per la pagina Semantica."""
 
     slug = cast(str, render_chrome_then_require())
-    layout = _resolve_layout(slug)
+    try:
+        layout = get_ui_workspace_layout(slug, require_env=False)
+    except (ConfigError, ConversionError) as exc:
+        LOGGER.error("ui.semantics.layout_invalid", extra={"slug": slug, "error": str(exc)})
+        _display_user_error(exc)
+        try:
+            st.stop()
+        except Exception as stop_exc:  # pragma: no cover - Streamlit specific
+            raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from stop_exc
 
     try:  # pragma: no cover - dipende dall'ambiente Streamlit
         from streamlit.runtime.scriptrunner import get_script_run_ctx
@@ -297,37 +267,15 @@ def main() -> None:
     global _client_state, _raw_ready, _book_ready, _book_dir
 
     if has_ctx:
-        try:
-            _client_state, _raw_ready, _ = _require_semantic_gating(slug, layout=layout)
-        except ConfigError as exc:
-            st.info(SEMANTIC_GATING_MESSAGE)
-            st.caption(str(exc))
-            try:
-                st.stop()
-            except Exception as stop_exc:  # pragma: no cover - Streamlit specific
-                raise RuntimeError("Semantica non disponibile senza contesto Streamlit") from stop_exc
-
-        try:
-            _, _, ctx_layout = _ctx_logger_layout(slug)
-            _book_dir = ctx_layout.book_dir
-            _book_ready = is_book_ready(_book_dir)
-        except Exception as exc:  # pragma: no cover - best effort
-            try:
-                _GATING_LOG.warning(
-                    "ui.semantics.book_readiness_check_failed",
-                    extra={
-                        "slug": slug,
-                        "error": str(exc),
-                    },
-                )
-            except Exception:
-                pass
+        _client_state, _raw_ready, _ = _require_semantic_gating(slug)
+        _book_dir = layout.book_dir
+        _book_ready = is_book_ready(_book_dir)
 
     if _column_button(st, "Rileva PDF in raw", key="btn_rescan_raw", width="stretch"):
         cache_key = (slug or "<none>").strip().lower()
         _GATE_CACHE.pop(cache_key, None)
         _reset_gating_cache(slug)
-        has_raw_pdfs(slug, layout=layout)
+        has_raw_pdfs(slug)
         st.toast("Stato raw aggiornato.")
 
     client_state_ok = _client_state in SEMANTIC_ENTRY_STATES

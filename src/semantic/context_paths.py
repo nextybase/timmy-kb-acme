@@ -1,19 +1,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Utility condivise per risolvere i percorsi del contesto semantico."""
+"""Utility condivise per risolvere i percorsi del contesto semantico.
+
+Contratto 1.0 Beta (layout-first):
+- I path canonici (base/raw/book) devono derivare esclusivamente da WorkspaceLayout.
+- È vietato ricostruire i path con join manuali o leggere context.*_dir come override.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any
+
+from pipeline.exceptions import ConfigError
+from pipeline.workspace_layout import WorkspaceLayout
 
 __all__ = ["ContextPaths", "resolve_context_paths"]
-
-
-class ContextProtocol(Protocol):
-    base_dir: Path | None
-    raw_dir: Path | None
-    md_dir: Path | None
 
 
 @dataclass(frozen=True)
@@ -24,10 +26,21 @@ class ContextPaths:
     slug: str
 
 
-def resolve_context_paths(context: Any, slug: str, *, paths_provider: Any) -> ContextPaths:
-    """Risoluzione condivisa di base/raw/md a partire da un contesto."""
-    paths = paths_provider(slug)
-    base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
-    raw_dir = cast(Path, getattr(context, "raw_dir", None) or (base_dir / "raw"))
-    md_dir = cast(Path, getattr(context, "md_dir", None) or (base_dir / "book"))
-    return ContextPaths(base_dir=base_dir, raw_dir=raw_dir, md_dir=md_dir, slug=slug)
+def resolve_context_paths(layout: WorkspaceLayout) -> ContextPaths:
+    """Risoluzione canonica (layout-first) di base/raw/md."""
+    return ContextPaths(
+        base_dir=layout.base_dir,
+        raw_dir=layout.raw_dir,
+        md_dir=layout.book_dir,
+        slug=layout.slug,
+    )
+
+
+def __getattr__(name: str) -> Any:  # pragma: no cover
+    if name == "ContextProtocol":
+        raise AttributeError("ContextProtocol rimosso (1.0 Beta): usa WorkspaceLayout e resolve_context_paths(layout).")
+    raise AttributeError(name)
+
+
+def _legacy_resolve_context_paths(*_a: Any, **_k: Any) -> None:  # pragma: no cover
+    raise ConfigError("API legacy disabilitata (1.0 Beta): resolve_context_paths accetta solo WorkspaceLayout.")

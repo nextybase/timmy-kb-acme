@@ -35,7 +35,15 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
     (nested / "Welcome Packet 2024.pdf").write_bytes(b"%PDF-1.4\n")
     (raw / "Security-Guide_v2.pdf").write_bytes(b"%PDF-1.4\n")
 
-    context = TestClientCtx(slug=slug, base_dir=base_dir, raw_dir=raw, md_dir=book)
+    context = TestClientCtx(
+        slug=slug,
+        base_dir=base_dir,
+        repo_root_dir=base_dir,
+        raw_dir=raw,
+        md_dir=book,
+        semantic_dir=sem,
+        config_dir=config_dir,
+    )
     csv_path = build_tags_csv(context, logging.getLogger("test"), slug=slug)
 
     assert csv_path == sem / "tags_raw.csv"
@@ -82,7 +90,15 @@ def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeyp
 
     (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n")
 
-    context = TestClientCtx(slug=slug, base_dir=base_dir, raw_dir=raw, md_dir=book)
+    context = TestClientCtx(
+        slug=slug,
+        base_dir=base_dir,
+        repo_root_dir=base_dir,
+        raw_dir=raw,
+        md_dir=book,
+        semantic_dir=sem,
+        config_dir=config_dir,
+    )
 
     monkeypatch.setattr(
         "semantic.api._derive_tags_db_path",
@@ -121,7 +137,15 @@ def test_build_tags_csv_writes_doc_entities_db(tmp_path: Path, monkeypatch: pyte
 
     monkeypatch.setattr("semantic.api._extract_candidates", _fake_candidates)
 
-    context = TestClientCtx(slug=slug, base_dir=base_dir, raw_dir=raw, md_dir=book)
+    context = TestClientCtx(
+        slug=slug,
+        base_dir=base_dir,
+        repo_root_dir=base_dir,
+        raw_dir=raw,
+        md_dir=book,
+        semantic_dir=sem,
+        config_dir=config_dir,
+    )
     build_tags_csv(context, logging.getLogger("test"), slug=slug)
 
     db_path = Path(derive_db_path_from_yaml_path(sem / "tags_reviewed.yaml"))

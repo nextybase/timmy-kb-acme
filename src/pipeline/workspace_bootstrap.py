@@ -41,7 +41,6 @@ def bootstrap_client_workspace(context: ClientContext) -> WorkspaceLayout:
     workspace_root.mkdir(parents=True, exist_ok=True)
 
     context.repo_root_dir = workspace_root
-    context.base_dir = workspace_root
 
     raw_dir = _assert_within(workspace_root, workspace_root / "raw")
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -92,11 +91,11 @@ def _dummy_output_root() -> Path:
 
 
 def _workspace_root_from_context(context: ClientContext) -> Path:
-    """Determina la directory workspace del cliente partendo dal context."""
-    candidate = context.repo_root_dir or context.base_dir
-    if candidate is None:
-        candidate = _project_root() / "output" / f"timmy-kb-{context.slug}"
-    return Path(candidate).resolve()
+    """Determina la directory workspace del cliente partendo dal contract Beta."""
+    validate_slug(context.slug)
+    if context.repo_root_dir is None:
+        raise WorkspaceNotFound("repo_root_dir obbligatorio (contract Beta)", slug=context.slug)
+    return Path(context.repo_root_dir).resolve()
 
 
 def bootstrap_dummy_workspace(slug: str) -> WorkspaceLayout:
@@ -122,6 +121,8 @@ def bootstrap_dummy_workspace(slug: str) -> WorkspaceLayout:
     semantic_dir.mkdir(parents=True, exist_ok=True)
     book_dir = _assert_within(workspace_dir, workspace_dir / "book")
     book_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir = _assert_within(workspace_dir, workspace_dir / LOGS_DIR_NAME)
+    logs_dir.mkdir(parents=True, exist_ok=True)
     config_dir = _assert_within(workspace_dir, workspace_dir / "config")
     config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -147,7 +148,6 @@ def migrate_or_repair_workspace(context: ClientContext) -> WorkspaceLayout:
         raise WorkspaceNotFound("Workspace root missing", slug=context.slug, file_path=workspace_root)
 
     context.repo_root_dir = workspace_root
-    context.base_dir = workspace_root
 
     dirs = {
         "raw": workspace_root / "raw",

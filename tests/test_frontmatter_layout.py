@@ -82,13 +82,20 @@ def test_enrich_frontmatter_sets_layout_section(tmp_path: Path) -> None:
     class Ctx:
         def __init__(self, base: Path):
             self.base_dir = base
+            self.repo_root_dir = base
             self.raw_dir = base / "raw"
             self.md_dir = base / "book"
             self.slug = "dummy"
 
     base_dir = tmp_path
+    (base_dir / "config").mkdir(parents=True)
+    (base_dir / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
+    (base_dir / "raw").mkdir(parents=True)
+    (base_dir / "logs").mkdir(parents=True)
     book_dir = base_dir / "book"
     book_dir.mkdir(parents=True)
+    (book_dir / "README.md").write_text("# KB\n", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     doc_dir = book_dir / "strategy"
     doc_dir.mkdir(parents=True)
     doc_path = doc_dir / "doc.md"
@@ -96,6 +103,7 @@ def test_enrich_frontmatter_sets_layout_section(tmp_path: Path) -> None:
 
     semantic_dir = base_dir / "semantic"
     semantic_dir.mkdir(parents=True)
+    (semantic_dir / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
     layout = semantic_dir / "layout_proposal.yaml"
     layout.write_text("areas:\n  - key: strategy\n    ambito: ops\n", encoding="utf-8")
 

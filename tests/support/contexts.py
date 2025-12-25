@@ -18,12 +18,11 @@ class TestClientCtx(ClientContextProtocol):
 
     slug: str
     base_dir: Path
+    repo_root_dir: Path
     raw_dir: Path
     md_dir: Path
-
-    repo_root_dir: Optional[Path] = None
-    semantic_dir: Optional[Path] = None
-    config_dir: Optional[Path] = None
+    semantic_dir: Path
+    config_dir: Path
 
     redact_logs: bool = False
     run_id: Optional[str] = None
@@ -32,19 +31,21 @@ class TestClientCtx(ClientContextProtocol):
 
     @classmethod
     def from_dummy_workspace(cls, ws: dict[str, object]) -> "TestClientCtx":
-        base = Path(ws["base"])
-        raw = Path(ws.get("raw_dir", base / "raw"))
-        md = Path(ws.get("book_dir", base / "book"))
-        slug = str(ws.get("slug", "dummy"))
-        semantic_root = Path(ws.get("semantic_dir", base / "semantic"))
+        slug = str(ws["slug"])
+        base_dir = Path(ws["base_dir"])
+        repo_root_dir = Path(ws["repo_root_dir"])
+        raw_dir = Path(ws["raw_dir"])
+        md_dir = Path(ws["md_dir"])
+        semantic_dir = Path(ws["semantic_dir"])
+        config_dir = Path(ws["config_dir"])
         return cls(
             slug=slug,
-            base_dir=base,
-            raw_dir=raw,
-            md_dir=md,
-            repo_root_dir=base,
-            semantic_dir=semantic_root,
-            config_dir=base / "config",
+            base_dir=base_dir,
+            repo_root_dir=repo_root_dir,
+            raw_dir=raw_dir,
+            md_dir=md_dir,
+            semantic_dir=semantic_dir,
+            config_dir=config_dir,
         )
 
 

@@ -19,6 +19,7 @@ from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmat
 from pipeline.frontmatter_utils import parse_frontmatter as _shared_parse_frontmatter
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.config import load_semantic_config
 from semantic.context_paths import resolve_context_paths
 from semantic.embedding_service import list_content_markdown
@@ -40,12 +41,6 @@ __all__ = [
     "_dump_frontmatter",
     "_parse_frontmatter",
 ]
-
-
-def _get_paths(slug: str) -> Dict[str, Path]:
-    from semantic.paths import get_semantic_paths  # import locale per evitare cicli
-
-    return cast(Dict[str, Path], get_semantic_paths(slug))
 
 
 def _get_vision_statement_path(base_dir: Path) -> Path:
@@ -294,7 +289,15 @@ def enrich_frontmatter(
     from pipeline.frontmatter_utils import read_frontmatter as _read_fm
 
     start_ts = time.perf_counter()
-    paths = resolve_context_paths(context, slug, paths_provider=_get_paths)
+    if not vocab and not allow_empty_vocab:
+        tags_db = Path(_derive_tags_db_path(Path("semantic") / "tags_reviewed.yaml"))
+        raise ConfigError(
+            "Vocabolario canonico assente: impossibile arricchire i front-matter senza tags canonici.",
+            slug=slug,
+            file_path=tags_db,
+        )
+    layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
+    paths = resolve_context_paths(layout)
     base_dir, md_dir = paths.base_dir, paths.md_dir
     ensure_within(base_dir, md_dir)
     layout_keys = _read_layout_top_levels(base_dir / "semantic" / "layout_proposal.yaml")
@@ -319,12 +322,6 @@ def enrich_frontmatter(
 
     if not vocab:
         tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
-        if not allow_empty_vocab:
-            raise ConfigError(
-                "Vocabolario canonico assente: impossibile arricchire i front-matter senza tags canonici.",
-                slug=slug,
-                file_path=tags_db,
-            )
         logger.info(
             "semantic.frontmatter.skip_tags",
             extra={"slug": slug, "reason": "empty_vocab_allowed", "file_path": str(tags_db)},
@@ -432,7 +429,8 @@ def enrich_frontmatter(
 
 def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Logger, *, slug: str) -> None:
     start_ts = time.perf_counter()
-    paths = resolve_context_paths(context, slug, paths_provider=_get_paths)
+    layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
+    paths = resolve_context_paths(layout)
     base_dir = paths.base_dir
     md_dir = paths.md_dir
     summary_func = _gen_summary

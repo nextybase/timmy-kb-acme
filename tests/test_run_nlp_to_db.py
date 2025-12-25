@@ -127,17 +127,18 @@ def test_run_nlp_to_db_rejects_paths_outside_base(tmp_path):
 
 def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):
     base_dir = tmp_path / "client-sandbox"
-    raw_dir = base_dir / "custom-raw"
-    semantic_dir = base_dir / "semantic-data"
+    raw_dir = base_dir / "raw"
+    semantic_dir = base_dir / "semantic"
     raw_dir.mkdir(parents=True)
     semantic_dir.mkdir(parents=True)
     ctx = TestClientCtx(
         slug="dummy",
         base_dir=base_dir,
+        repo_root_dir=base_dir,
         raw_dir=raw_dir,
         md_dir=base_dir / "book",
-        repo_root_dir=None,
         semantic_dir=semantic_dir,
+        config_dir=base_dir / "config",
         redact_logs=False,
         run_id=None,
     )

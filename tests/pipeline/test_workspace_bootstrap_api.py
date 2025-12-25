@@ -32,6 +32,13 @@ def test_migrate_or_repair_workspace_raises(dummy_context: ClientContext) -> Non
         workspace_bootstrap.migrate_or_repair_workspace(dummy_context)
 
 
+def test_bootstrap_client_workspace_requires_repo_root_dir() -> None:
+    context = ClientContext(slug="dummy")
+    context.repo_root_dir = None
+    with pytest.raises(WorkspaceNotFound):
+        workspace_bootstrap.bootstrap_client_workspace(context)
+
+
 def test_bootstrap_dummy_workspace_creates_minimal_layout(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TIMMY_KB_DUMMY_OUTPUT_ROOT", str(tmp_path))
     layout = workspace_bootstrap.bootstrap_dummy_workspace("dummy")
