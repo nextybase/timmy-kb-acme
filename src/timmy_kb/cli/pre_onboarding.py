@@ -42,7 +42,7 @@ from pipeline.config_utils import (
 )
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var
-from pipeline.exceptions import ConfigError, PipelineError
+from pipeline.exceptions import ConfigError, PipelineError, WorkspaceNotFound
 from pipeline.file_utils import safe_write_bytes, safe_write_text  # SSoT scritture atomiche
 from pipeline.logging_utils import (
     get_structured_logger,
@@ -55,7 +55,7 @@ from pipeline.logging_utils import (
 from pipeline.metrics import start_metrics_server_once
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_valid_slug, ensure_within, read_text_safe  # STRONG guard SSoT
-from pipeline.paths import get_repo_root
+from pipeline.paths import get_repo_root, workspace_paths
 from pipeline.tracing import start_root_trace
 from pipeline.types import WorkflowResult
 from pipeline.workspace_bootstrap import bootstrap_client_workspace as _pipeline_bootstrap_client_workspace
@@ -160,10 +160,11 @@ def bootstrap_semantic_templates(
 
     Nota: duplica automaticamente anche semantic/semantic_mapping.yaml per compatibilita UI.
     """
-    if context.base_dir is None:
-        raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)
-    semantic_dir = context.base_dir / "semantic"
-    semantic_dir.mkdir(parents=True, exist_ok=True)
+    if not context.slug:
+        raise WorkspaceNotFound("Contesto incompleto: slug mancante", slug=context.slug)
+    if repo_root is None:
+        raise WorkspaceNotFound("Contesto incompleto: repo_root_dir mancante", slug=context.slug)
+    semantic_dir = workspace_paths(context.slug, repo_root=repo_root, create=True).semantic_dir
 
     cfg_dir = repo_root / "config"
     struct_src = _resolve_yaml_structure_file()
