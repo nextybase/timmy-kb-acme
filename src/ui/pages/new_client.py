@@ -272,7 +272,7 @@ def _open_error_modal(
 ) -> None:
     """
     Mostra un modal di errore con bottone 'Annulla'.
-    - Usa st.dialog se disponibile (Streamlit >= 1.50), altrimenti degrada a messaggio inline.
+    - Richiede st.dialog (Streamlit >= 1.50).
     - Se `on_force` è fornito, mostra anche il bottone per forzare l'azione.
     """
 
@@ -293,14 +293,10 @@ def _open_error_modal(
             if st.button("Annulla", type="secondary"):
                 return
 
-    dialog_builder = getattr(st, "dialog", None)
-    if callable(dialog_builder):
-        open_modal = dialog_builder(title, width="large")
-        modal_runner = open_modal(_modal)
-        if callable(modal_runner):
-            modal_runner()
-        else:
-            _modal()
+    open_modal = st.dialog(title, width="large")
+    modal_runner = open_modal(_modal)
+    if callable(modal_runner):
+        modal_runner()
     else:
         _modal()
 

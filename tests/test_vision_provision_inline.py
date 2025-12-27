@@ -254,7 +254,7 @@ def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
     bad_output = {"context": {"slug": "dummy", "client_name": "Dummy"}}  # manca areas
 
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: bad_output)
-    monkeypatch.setenv("ASSISTANT_ID", "asst_dummy")
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
 
     ctx = DummyCtx(base_dir=tmp_workspace)
     config = _vision_config_for(ctx)
@@ -307,7 +307,7 @@ def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
         "metadata_policy": {"chunk_length_tokens": {"target": 800, "overlap": 100}, "mandatory_fields": []},
     }
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: mismatched)
-    monkeypatch.setenv("ASSISTANT_ID", "asst_dummy")
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
     ctx = DummyCtx(base_dir=tmp_workspace)
     config = _vision_config_for(ctx)
     retention_days = _vision_retention_for(ctx)
@@ -359,7 +359,7 @@ def test_missing_system_folders_raises(monkeypatch, tmp_workspace: Path):
         "metadata_policy": {"chunk_length_tokens": {"target": 800, "overlap": 100}, "mandatory_fields": []},
     }
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: out)
-    monkeypatch.setenv("ASSISTANT_ID", "asst_dummy")
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
     ctx = DummyCtx(base_dir=tmp_workspace)
     config = _vision_config_for(ctx)
     retention_days = _vision_retention_for(ctx)

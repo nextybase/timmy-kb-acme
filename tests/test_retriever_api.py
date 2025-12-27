@@ -13,8 +13,8 @@ from typing import Sequence
 
 from tests.conftest import DUMMY_SLUG
 
-import retriever as retr
-from retriever import QueryParams
+import timmy_kb.cli.retriever as retr
+from timmy_kb.cli.retriever import QueryParams
 
 
 class FakeEmb:
@@ -112,7 +112,7 @@ def test_search_accepts_numpy_embeddings(monkeypatch):
 def test_search_skips_invalid_candidate_embeddings(monkeypatch):
     """Candidati con embedding vuoto o non numerico vengono ignorati (no crash)."""
 
-    import retriever as retr
+    import timmy_kb.cli.retriever as retr
 
     # 2 validi, 3 invalidi
     def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
@@ -146,7 +146,7 @@ def test_search_skips_invalid_candidate_embeddings(monkeypatch):
 def test_search_empty_query_embedding_returns_empty(monkeypatch):
     """Se l'embedding della query risulta vuoto, ritorna []."""
 
-    import retriever as retr
+    import timmy_kb.cli.retriever as retr
 
     def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
         yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}
@@ -174,8 +174,8 @@ def test_search_accepts_deque_embedding(monkeypatch):
     """Client che ritorna deque o generatore come singolo vettore."""
     from collections import deque
 
-    import retriever as retr
-    from retriever import QueryParams
+    import timmy_kb.cli.retriever as retr
+    from timmy_kb.cli.retriever import QueryParams
 
     # Stub di fetch_candidates: un solo candidato compatibile
     def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
@@ -207,8 +207,8 @@ def test_search_accepts_list_of_numpy_arrays(monkeypatch):
     """Client che ritorna list[np.ndarray] come batch (uno vettore)."""
     import numpy as np
 
-    import retriever as retr
-    from retriever import QueryParams
+    import timmy_kb.cli.retriever as retr
+    from timmy_kb.cli.retriever import QueryParams
 
     def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
         yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}

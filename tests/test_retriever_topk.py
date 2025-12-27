@@ -5,8 +5,8 @@ import math
 from pathlib import Path
 from typing import Sequence
 
-import retriever as retr
-from retriever import QueryParams
+import timmy_kb.cli.retriever as retr
+from timmy_kb.cli.retriever import QueryParams
 
 
 class FakeEmb:

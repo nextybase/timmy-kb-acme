@@ -8,7 +8,7 @@ from typing import Any, List
 import pytest
 from tests.conftest import DUMMY_SLUG
 
-from retriever import QueryParams, search
+from timmy_kb.cli.retriever import QueryParams, search
 
 
 class _DummyEmbeddingsClient:
@@ -38,7 +38,7 @@ def _fake_candidates_with_lineage(*_: Any, **__: Any) -> list[dict[str, Any]]:
 def test_retriever_logs_explainability_events(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    monkeypatch.setattr("retriever.fetch_candidates", _fake_candidates_with_lineage, raising=True)
+    monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", _fake_candidates_with_lineage, raising=True)
     params = QueryParams(db_path=None, slug=DUMMY_SLUG, scope="kb", query="hello world", k=2, candidate_limit=800)
     client = _DummyEmbeddingsClient([0.1, 0.1, 0.1])
 
@@ -77,7 +77,7 @@ def test_retriever_logs_explainability_events(
 def test_response_manifest_event_emitted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    monkeypatch.setattr("retriever.fetch_candidates", _fake_candidates_with_lineage, raising=True)
+    monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", _fake_candidates_with_lineage, raising=True)
     params = QueryParams(db_path=None, slug=DUMMY_SLUG, scope="kb", query="hello world", k=1, candidate_limit=600)
     client = _DummyEmbeddingsClient([0.1, 0.1, 0.1])
 
@@ -97,7 +97,7 @@ def test_retriever_logging_handles_missing_lineage(
     def _fake_candidates_no_lineage(*_: Any, **__: Any) -> list[dict[str, Any]]:
         return [{"content": "foo", "meta": {}, "embedding": [0.1, 0.2]}]
 
-    monkeypatch.setattr("retriever.fetch_candidates", _fake_candidates_no_lineage, raising=True)
+    monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", _fake_candidates_no_lineage, raising=True)
     params = QueryParams(db_path=None, slug=DUMMY_SLUG, scope="kb", query="hi", k=1, candidate_limit=600)
     client = _DummyEmbeddingsClient([0.1, 0.2])
 

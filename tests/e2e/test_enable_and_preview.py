@@ -78,7 +78,7 @@ def e2e_environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Dict[s
         "-m",
         "streamlit",
         "run",
-        str(repo_root / "onboarding_ui.py"),
+        str(repo_root / "src" / "timmy_kb" / "ui" / "onboarding_ui.py"),
         "--server.headless=true",
         f"--server.port={PORT}",
         "--server.fileWatcherType=none",

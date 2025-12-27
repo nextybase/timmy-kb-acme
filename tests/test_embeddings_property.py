@@ -18,7 +18,7 @@ from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays as np_arrays
 
 from pipeline.embedding_utils import is_numeric_vector, normalize_embeddings
-from retriever import cosine
+from timmy_kb.cli.retriever import cosine
 
 
 def _gen_like(seq: Sequence[float]) -> Any:

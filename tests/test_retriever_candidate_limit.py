@@ -3,8 +3,8 @@ import logging
 
 import pytest
 
-import retriever as retriever
-from retriever import QueryParams, with_config_or_budget
+import timmy_kb.cli.retriever as retriever
+from timmy_kb.cli.retriever import QueryParams, with_config_or_budget
 
 
 def test_with_config_or_budget_clamps_candidate_limit(

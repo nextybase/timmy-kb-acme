@@ -18,7 +18,6 @@ if str(_SRC_ROOT) not in sys.path:
 _T = TypeVar("_T")
 
 
-from kg_builder import build_kg_for_workspace
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
@@ -33,6 +32,7 @@ from semantic.api import require_reviewed_vocab  # noqa: F401  # esposto per mon
 from semantic.api import write_summary_and_readme  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import run_semantic_pipeline
 from semantic.types import SemanticContextProtocol
+from timmy_kb.cli.kg_builder import build_kg_for_workspace
 
 
 def get_paths(slug: str) -> dict[str, Path]:

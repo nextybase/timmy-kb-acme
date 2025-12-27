@@ -32,7 +32,7 @@ if str(SRC_ROOT) not in sys.path:
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.context import ClientContext
 from pipeline.path_utils import ensure_within_and_resolve
-from retriever import QueryParams, search
+from timmy_kb.cli.retriever import QueryParams, search
 from storage.kb_store import KbStore
 
 

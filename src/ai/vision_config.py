@@ -11,8 +11,7 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.settings import Settings
 
 from . import resolution
-from .assistant_registry import _resolve_assistant_env_name, _resolve_model_from_assistant
-from .client_factory import make_openai_client
+from .assistant_registry import _resolve_assistant_env_name
 from .types import AssistantConfig
 
 LOGGER = get_structured_logger("ai.vision_config")
@@ -236,33 +235,12 @@ def _resolve_model_for_vision(
         )
         return settings_candidate
     try:
-        client = make_openai_client()
-    except ConfigError as exc:
-        raise ConfigError(
-            "Vision model lookup failed during client creation: " + str(exc),
-            code="vision.client.config.invalid",
-            component="vision_config",
-        ) from exc
-    assistant_candidate = _resolve_model_from_assistant(client, assistant_id)
-    if assistant_candidate:
-        LOGGER.info(
-            "ai.vision_config.model_resolved",
-            extra={
-                "source": "assistant",
-                "assistant_id": assistant_id,
-                "model": assistant_candidate,
-            },
-        )
-    try:
         return resolution.resolve_model_precedence(
             override_candidate,
             settings_candidate,
             "",
-            assistant_candidate,
-            error_message=(
-                "Modello Vision non configurato: imposta vision.model nel config o assegna un modello all'assistant "
-                f"{assistant_id}."
-            ),
+            "",
+            error_message=("Modello Vision non configurato: imposta vision.model nel config."),
         )
     except ConfigError as exc:
         raise ConfigError(
@@ -284,10 +262,8 @@ def resolve_vision_config(ctx: Any, *, override_model: Optional[str] = None) -> 
 
     assistant_env = _resolve_env_name_for_vision(settings_obj, settings_payload)
     primary_env_value = _optional_env(assistant_env)
-    fallback_env_value = _optional_env("ASSISTANT_ID")
     assistant_id = resolution.resolve_assistant_id(
         primary_env_value,
-        fallback_env_value,
         assistant_env,
     )
 

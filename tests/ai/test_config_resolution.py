@@ -40,38 +40,18 @@ def test_env_var_assistant_id(monkeypatch):
 
 def test_missing_assistant_env_raises(monkeypatch):
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
-    monkeypatch.delenv("ASSISTANT_ID", raising=False)
     ctx = _GovernorCtx(settings=DummySettings())
     with pytest.raises(ConfigError):
         resolve_vision_config(ctx)
 
 
-def test_model_from_assistant_called_only_when_needed(monkeypatch):
-    monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
-    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "env-model")
-
-    called = {"make": 0, "retrieve": 0}
-
-    class FakeAssistant(SimpleNamespace):
-        model = "assistant-model"
-
-    class FakeClient:
-        assistants = SimpleNamespace(retrieve=lambda identifier: _count(identifier))
-
-    def _count(identifier: str) -> SimpleNamespace:
-        called["retrieve"] += 1
-        return FakeAssistant()
-
-    def fake_make():
-        called["make"] += 1
-        return FakeClient()
-
-    monkeypatch.setattr("ai.vision_config.make_openai_client", fake_make)
+def test_missing_model_raises(monkeypatch):
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "env-assistant")
     ctx = _GovernorCtx(settings=DummySettings())
-    config = resolve_vision_config(ctx)
-    assert config.model == "assistant-model"
-    assert called["make"] == 1
-    assert called["retrieve"] == 1
+    with pytest.raises(ConfigError) as exc:
+        resolve_vision_config(ctx)
+    assert exc.value.code == "vision.model.missing"
+    assert exc.value.component == "vision_config"
 
 
 def test_model_from_settings_avoids_make(monkeypatch):
@@ -92,28 +72,9 @@ def test_model_from_settings_avoids_make(monkeypatch):
         def vision_model(self) -> str:
             return "direct-model"
 
-    def fake_make():
-        raise AssertionError("make_openai_client should not be called when model present")
-
-    monkeypatch.setattr("ai.vision_config.make_openai_client", fake_make)
     ctx = _GovernorCtx(settings=SettingsWithModel())
     config = resolve_vision_config(ctx)
     assert config.model == "direct-model"
-
-
-def test_resolve_vision_config_client_failure(monkeypatch):
-    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "env-assistant")
-
-    def fail_make():
-        raise ConfigError("missing OPENAI_API_KEY")
-
-    monkeypatch.setattr("ai.vision_config.make_openai_client", fail_make)
-    ctx = _GovernorCtx(settings=DummySettings())
-    with pytest.raises(ConfigError) as exc:
-        resolve_vision_config(ctx)
-    assert "Vision model lookup failed" in str(exc.value)
-    assert exc.value.code == "vision.client.config.invalid"
-    assert exc.value.component == "vision_config"
 
 
 def test_strict_output_logs_settings_load_failure(monkeypatch, caplog, tmp_path):
@@ -147,24 +108,3 @@ def test_strict_output_load_cached(monkeypatch, caplog, tmp_path):
     assert calls == 1
     warnings = [rec for rec in caplog.records if "settings_load_failed" in rec.getMessage()]
     assert len(warnings) == 1
-
-
-def test_resolve_vision_config_assistant_lookup_failure(monkeypatch, caplog):
-    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "env-assistant")
-    caplog.set_level("WARNING", logger="ai.assistant_registry")
-
-    class _FailingAssistants:
-        def retrieve(self, _: str):
-            raise TimeoutError("timeout")
-
-    client = type("C", (), {"assistants": _FailingAssistants()})()
-    monkeypatch.setattr("ai.vision_config.make_openai_client", lambda: client)
-
-    ctx = _GovernorCtx(settings=DummySettings())
-    with pytest.raises(ConfigError) as exc:
-        resolve_vision_config(ctx)
-
-    assert "Modello Vision non configurato" in str(exc.value)
-    assert any("assistant_model_lookup_failed" in rec.getMessage() for rec in caplog.records)
-    assert exc.value.code == "vision.model.missing"
-    assert exc.value.component == "vision_config"

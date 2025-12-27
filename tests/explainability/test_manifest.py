@@ -4,7 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from explainability.manifest import SNIPPET_MAX_LEN, build_response_manifest
-from retriever import QueryParams
+from timmy_kb.cli.retriever import QueryParams
 
 
 def _make_result(

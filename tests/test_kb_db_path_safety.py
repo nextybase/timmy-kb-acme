@@ -1,22 +1,25 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# tests/test_kb_db_path_safety.py
+
 from pathlib import Path
 
+import pytest
+
 from kb_db import insert_chunks
+from pipeline.exceptions import ConfigError
 
 
-def test_db_default_under_data(tmp_path: Path, monkeypatch):
-    # Isola il working dir: il DB predefinito (data/kb.sqlite) verrà creato sotto tmp_path
+def test_db_rejects_legacy_global_data_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
+    (tmp_path / "semantic").mkdir(parents=True, exist_ok=True)
 
-    inserted = insert_chunks(
-        slug="obs",
-        scope="s",
-        path="p",
-        version="v",
-        meta_dict={},
-        chunks=["c1"],
-        embeddings=[[1.0]],
-        db_path=None,  # usa data/kb.sqlite relativo al cwd (qui: tmp_path)
-    )
-    assert inserted == 1
+    with pytest.raises(ConfigError):
+        insert_chunks(
+            slug="obs",
+            scope="s",
+            path="p",
+            version="v",
+            meta_dict={},
+            chunks=["c1"],
+            embeddings=[[1.0]],
+            db_path=Path("data") / "kb.sqlite",
+        )

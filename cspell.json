@@ -124,7 +124,8 @@
     "petrov",
     "lifecycles",
     "dataclass",
-    "touchpoints"
+    "touchpoints",
+    "retrocompat"
   ],
   "flagWords": [
     "fa\uFFFD\uFFFDade",

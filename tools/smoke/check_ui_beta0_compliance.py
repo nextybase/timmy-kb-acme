@@ -99,22 +99,22 @@ def scan_global_rules() -> list[str]:
 
 def scan_onboarding_file() -> list[str]:
     findings: list[str] = []
-    onboarding = REPO_ROOT / "onboarding_ui.py"
+    onboarding = SOURCE_ROOT / "timmy_kb" / "ui" / "onboarding_ui.py"
     if not onboarding.exists():
-        findings.append("[STRUCT] onboarding_ui.py non trovato nella root")
+        findings.append("[STRUCT] src/timmy_kb/ui/onboarding_ui.py non trovato")
         return findings
 
     content = onboarding.read_text(encoding="utf-8", errors="ignore")
 
     for required_pattern, message in REQUIRED_IN_ONBOARDING.items():
         if not re.search(required_pattern, content):
-            findings.append(f"[ONBOARDING] onboarding_ui.py: manca requisito: {message}")
+            findings.append(f"[ONBOARDING] src/timmy_kb/ui/onboarding_ui.py: manca requisito: {message}")
 
     for forbidden_pattern, message in FORBIDDEN_IN_ONBOARDING.items():
         match = re.search(forbidden_pattern, content)
         if match:
             line_no = content.count("\n", 0, match.start()) + 1
-            findings.append(f"[ONBOARDING] onboarding_ui.py:{line_no}: {message}")
+            findings.append(f"[ONBOARDING] src/timmy_kb/ui/onboarding_ui.py:{line_no}: {message}")
 
     return findings
 

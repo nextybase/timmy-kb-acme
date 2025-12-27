@@ -82,7 +82,7 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
 
     monkeypatch.setitem(
         sys.modules,
-        "retriever",
+        "timmy_kb.cli.retriever",
         SimpleNamespace(
             QueryParams=_QueryParams,
             RetrieverError=RuntimeError,

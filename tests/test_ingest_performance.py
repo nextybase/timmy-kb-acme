@@ -6,7 +6,7 @@ from typing import Sequence
 
 import pytest
 
-import ingest as ing
+import timmy_kb.cli.ingest as ing
 
 
 class _SpyEmb:

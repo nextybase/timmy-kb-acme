@@ -3,8 +3,8 @@
 
 import pytest
 
-from ingest import get_vision_cfg
 from pipeline.exceptions import ConfigError
+from timmy_kb.cli.ingest import get_vision_cfg
 
 
 def test_get_vision_cfg_requires_assistant_id(monkeypatch):

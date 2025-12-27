@@ -367,38 +367,12 @@ def test_provision_with_prepared_prompt_skips_pdf_read(tmp_path: Path, monkeypat
 
 
 def test_provision_uses_assistant_fallback_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    slug = "dummy-srl"
     ctx = _Ctx(tmp_path)
-    pdf = tmp_path / "vision.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
-
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
     monkeypatch.setenv("ASSISTANT_ID", "asst_fallback")
-
-    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
-
-    captured: dict[str, object] = {}
-
-    def _fake_call(**kwargs: object) -> dict[str, object]:
-        captured["assistant_id"] = kwargs.get("assistant_id")
-        return _ok_payload(slug)
-
-    monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
-
-    config = resolve_vision_config(ctx, override_model="test-model")
-    retention_days = resolve_vision_retention_days(ctx)
-    res = vp.provision_from_vision_with_config(
-        ctx=ctx,
-        logger=logging.getLogger("test"),
-        slug=slug,
-        pdf_path=pdf,
-        config=config,
-        retention_days=retention_days,
-    )
-
-    assert Path(res["mapping"]).exists()
-    assert Path(res["cartelle_raw"]).exists()
-    assert captured.get("assistant_id") == "asst_fallback"
+    with pytest.raises(ConfigError) as excinfo:
+        resolve_vision_config(ctx, override_model="test-model")
+    assert "OBNEXT_ASSISTANT_ID" in str(excinfo.value)
 
 
 def test_provision_missing_assistant_id_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -47,7 +47,7 @@ def test_onboarding_ui_hydrate_defaults_handles_missing_route_state(monkeypatch)
     if version_tuple < (1, 50, 0) or not hasattr(st, "Page") or not hasattr(st, "navigation"):
         pytest.skip("Streamlit navigation API non disponibile nel runtime corrente")
 
-    import onboarding_ui as module
+    from timmy_kb.ui import onboarding_ui as module
 
     original_route_state = sys.modules.get("ui.utils.route_state")
     stub = types.ModuleType("ui.utils.route_state")

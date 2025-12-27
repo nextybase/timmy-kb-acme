@@ -5,18 +5,7 @@ from __future__ import annotations
 from collections.abc import MutableMapping
 from typing import Any, Optional, cast
 
-try:
-    import streamlit as st
-except Exception:  # pragma: no cover - fallback per ambienti test senza streamlit
-
-    class _QueryParams(dict[str, str]):
-        pass
-
-    class _StreamlitStub:
-        def __init__(self) -> None:
-            self.query_params: _QueryParams = _QueryParams()
-
-    st = cast(Any, _StreamlitStub())
+import streamlit as st
 
 from pipeline.context import validate_slug
 from pipeline.exceptions import ConfigError, InvalidSlug
@@ -24,10 +13,10 @@ from pipeline.exceptions import ConfigError, InvalidSlug
 QueryParams = MutableMapping[str, Any]
 
 
-def _query_params() -> QueryParams | None:
+def _query_params() -> QueryParams:
     params = getattr(st, "query_params", None)
     if params is None:
-        return None
+        raise RuntimeError("Streamlit query params non disponibili nel runtime corrente.")
     if isinstance(params, MutableMapping):
         return params
     return cast(QueryParams, params)
@@ -51,9 +40,7 @@ def get_slug(params: QueryParams | None = None) -> Optional[str]:
     - get_slug()                    -> legge da st.query_params
     - get_slug(custom_params_dict)  -> usa il dict passato (utile nei test)
     """
-    qp: QueryParams | None = params if params is not None else _query_params()
-    if qp is None:
-        return None
+    qp: QueryParams = params if params is not None else _query_params()
 
     raw = qp.get("slug")
     if isinstance(raw, list):
@@ -72,8 +59,7 @@ def set_slug(slug_or_params: Any, maybe_slug: Optional[str] = None) -> None:
     - set_slug(slug)                        -> scrive su st.query_params
     - set_slug(custom_params_dict, slug)    -> scrive sul dict passato (test-friendly)
     """
-    # Determina i target dei parametri in modo type-safe per mypy
-    params_opt: QueryParams | None
+    params_opt: QueryParams
     slug_value: Optional[str]
 
     if isinstance(slug_or_params, MutableMapping):
@@ -82,9 +68,6 @@ def set_slug(slug_or_params: Any, maybe_slug: Optional[str] = None) -> None:
     else:
         params_opt = _query_params()
         slug_value = cast(Optional[str], slug_or_params)
-
-    if params_opt is None:
-        return
 
     normalized = _sanitize((slug_value or "").strip().lower())
     if normalized:
@@ -95,3 +78,6 @@ def set_slug(slug_or_params: Any, maybe_slug: Optional[str] = None) -> None:
         del params_opt["slug"]
     except KeyError:
         pass
+
+
+__all__ = ["get_slug", "set_slug"]

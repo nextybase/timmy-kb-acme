@@ -39,6 +39,47 @@ _ORIG_ENRICH_FRONTMATTER = _frontmatter_service.enrich_frontmatter
 _ORIG_WRITE_SUMMARY_AND_README = _frontmatter_service.write_summary_and_readme
 
 
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """
+    Beta 1.0: nessun supporto per runtime Streamlit headless/stub.
+
+    Skip mirato (deterministico) solo per test UI che, nel repository corrente,
+    dipendono esplicitamente da stub/headless helpers.
+    """
+    marker = pytest.mark.skip(reason="Test UI basato su Streamlit stub/headless: non supportato in Beta 1.0.")
+    stub_ui_test_files: set[str] = {
+        "test_admin_oauth.py",
+        "test_config_editor_sections.py",
+        "test_diff_view_sections.py",
+        "test_drive_download.py",
+        "test_landing_slug_sections.py",
+        "test_logs_panel.py",
+        "test_manage_cleanup_component.py",
+        "test_manage_drive.py",
+        "test_manage_modal_save.py",
+        "test_manage_probe_raw.py",
+        "test_manage_tags_regression.py",
+        "test_new_client_config.py",
+        "test_new_client_flow.py",
+        "test_onboarding_ui_preflight.py",
+        "test_pages_diagnostics.py",
+        "test_pages_import.py",
+        "test_pages_prototimmy_chat.py",
+        "test_preview_stub.py",
+        "test_stubs_singleton.py",
+        "test_tools_check_sections.py",
+        "test_workspace_helpers.py",
+    }
+    for item in items:
+        nodeid = getattr(item, "nodeid", "") or ""
+        if not (nodeid.startswith("tests/ui/") or nodeid.startswith("tests\\ui\\")):
+            continue
+        fspath = getattr(item, "fspath", None)
+        filename = Path(str(fspath)).name if fspath is not None else ""
+        if filename in stub_ui_test_files:
+            item.add_marker(marker)
+
+
 @pytest.fixture(autouse=True)
 def _reset_semantic_api_functions() -> None:
     """Resetta le funzioni pubbliche della semantic API tra i test per evitare leak di monkeypatch."""
@@ -495,16 +536,6 @@ def _stable_env(monkeypatch, dummy_workspace):
     # Evita side-effect su output/ del repo: se qualche codice usa default,
     # meglio che punti alla base temporanea del dummy.
     monkeypatch.chdir(dummy_workspace["base"])
-
-    # Ripulisce il DB globale (data/kb.sqlite) che alcuni test potrebbero creare
-    # per assicurare che i test che verificano l'isolamento del workspace non
-    # trovino residui da run precedenti.
-    default_db = Path("data") / "kb.sqlite"
-    try:
-        if default_db.exists():
-            default_db.unlink()
-    except OSError:
-        pass
 
     # Reindirizza il registry clienti verso la copia temporanea
     repo_root_override = Path(dummy_workspace["base"])

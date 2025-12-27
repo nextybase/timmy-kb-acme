@@ -3,31 +3,16 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
-from pipeline.logging_utils import get_structured_logger
-
-try:
-    import streamlit as st
-except Exception:  # pragma: no cover - fallback per ambienti test senza streamlit
-
-    class _StreamlitStub:
-        def __init__(self) -> None:
-            self.session_state: dict[str, Any] = {}
-
-        def info(self, *_args: Any, **_kwargs: Any) -> None:
-            return None
-
-        def stop(self, *_args: Any, **_kwargs: Any) -> None:
-            raise RuntimeError("Streamlit non disponibile in questo contesto")
-
-    st = cast(Any, _StreamlitStub())
+import streamlit as st
 
 from pipeline.context import validate_slug
 from pipeline.exceptions import ConfigError, InvalidSlug
 
 # Manteniamo compat con l'attuale gestione querystring
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import read_text_safe
 from ui.clients_store import get_ui_state_path
 
@@ -38,10 +23,8 @@ LOGGER = get_structured_logger("ui.slug")
 
 
 def _has_streamlit_context() -> bool:
-    try:
-        from streamlit.runtime.scriptrunner import get_script_run_ctx
-    except Exception:
-        return False
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+
     return get_script_run_ctx() is not None
 
 
@@ -185,13 +168,7 @@ def clear_active_slug(*, persist: bool = True, update_query: bool = True) -> Non
         _save_persisted("")
     # 3) querystring
     if update_query:
-        try:
-            _qp_set(None)  # rimuovi il param se supportato
-        except Exception:
-            try:
-                _qp_set("")  # fallback: vuoto
-            except Exception:
-                pass
+        _qp_set(None)
 
 
 # alias comodo
@@ -209,7 +186,7 @@ def require_active_slug() -> str:
         return slug
 
     if not _has_streamlit_context():
-        return ""
+        raise RuntimeError("Streamlit runtime non attivo: impossibile risolvere lo slug in UI.")
 
     st.info("Seleziona o inserisci uno slug cliente dalla pagina **Gestisci cliente**.")
     st.stop()

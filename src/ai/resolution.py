@@ -36,10 +36,7 @@ def resolve_assistant_env(
 
 def resolve_assistant_id(
     env_value: Optional[str],
-    fallback_value: Optional[str],
     primary_env_name: str,
-    *,
-    fallback_env_name: str = "ASSISTANT_ID",
 ) -> str:
     """
     Restituisce l'assistant_id effettivo: preferisce la variabile primaria,
@@ -48,11 +45,8 @@ def resolve_assistant_id(
     primary = _normalize_string(env_value)
     if primary:
         return primary
-    fallback = _normalize_string(fallback_value)
-    if fallback:
-        return fallback
     raise ConfigError(
-        f"Assistant ID mancante: imposta {primary_env_name} (o {fallback_env_name}) nell'ambiente.",
+        f"Assistant ID mancante: imposta {primary_env_name} nell'ambiente.",
         code="assistant.id.missing",
         component="resolution",
     )

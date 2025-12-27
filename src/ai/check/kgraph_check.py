@@ -34,7 +34,7 @@ def run_kgraph_dummy_check(
             file_path=str(tags_raw_path),
         )
 
-    from kg_builder import _prepare_input, call_openai_tag_kg_assistant
+    from timmy_kb.cli.kg_builder import _prepare_input, call_openai_tag_kg_assistant
 
     payload = _prepare_input(workspace_slug, semantic_dir)
 

@@ -6,11 +6,11 @@ from typing import Sequence
 
 import pytest
 
-import ingest as ingest_mod
-from ingest import ingest_path
-from kb_db import DEFAULT_DB_PATH, fetch_candidates
-from retriever import MIN_CANDIDATE_LIMIT, QueryParams, search
+import timmy_kb.cli.ingest as ingest_mod
+from kb_db import fetch_candidates
 from storage.kb_store import KbStore
+from timmy_kb.cli.ingest import ingest_path
+from timmy_kb.cli.retriever import MIN_CANDIDATE_LIMIT, QueryParams, search
 
 
 class DummyEmbeddingsClient:
@@ -54,7 +54,7 @@ def test_ingest_and_search_use_workspace_db(dummy_workspace: dict[str, Path], mo
     )
     assert inserted > 0
     assert db_path.exists()
-    assert not DEFAULT_DB_PATH.exists()
+    assert not (base / "data" / "kb.sqlite").exists()
 
     params = QueryParams(
         db_path=db_path,

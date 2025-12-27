@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-import retriever as retriever
+import timmy_kb.cli.retriever as retriever
 
 
 def test_wait_interval_returns_true_when_deadline_passed() -> None:

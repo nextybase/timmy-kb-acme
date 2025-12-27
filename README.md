@@ -31,7 +31,7 @@ Per il logging avanzato usa `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TI
 
 ### Interfaccia Streamlit
 ```bash
-streamlit run onboarding_ui.py
+streamlit run src/timmy_kb/ui/onboarding_ui.py
 ```
 La UI guida l'onboarding end-to-end. Per flussi completi e screenshot consulta la [User Guide](docs/user/user_guide.md).
 
@@ -48,8 +48,8 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 
 ## Dipendenze & QA
 - Installa gli ambienti tramite i pin generati con `pip-compile` (`requirements*.txt`). Maggiori dettagli in [docs/configurazione.md](docs/configurazione.md).
-- L'import del vocabolario (`tags_reviewed.yaml`) funziona anche senza PyYAML grazie a un parser fallback minimale, ma per YAML complessi raccomandiamo di installare PyYAML: in fallback viene emesso il log `storage.tags_store.import_yaml.fallback`.
-- Namespace: i moduli sono importabili direttamente da `src` (es. `from ingest import ingest_folder`, `from pipeline.context import ClientContext`); gli alias di import legacy sono stati rimossi, usa il namespace attuale.
+- Il vocabolario richiede PyYAML. Non sono supportati parser di fallback o retrocompat: usa `semantic/tags.db` come SSoT runtime e `semantic/tags_reviewed.yaml` solo come artefatto di editing.
+- Namespace: i moduli sono importabili direttamente da `src` (es. `from timmy_kb.cli.ingest import ingest_folder`, `from pipeline.context import ClientContext`); gli alias di import legacy sono stati rimossi, usa il namespace attuale.
 - Hook consigliati:
   ```bash
   pre-commit install --hook-type pre-commit --hook-type pre-push

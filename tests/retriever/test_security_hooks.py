@@ -8,8 +8,8 @@ import pytest
 from tests.conftest import DUMMY_SLUG
 
 from pipeline.exceptions import RetrieverError
-from retriever import QueryParams, search
 from security.throttle import reset_token_buckets, throttle_token_bucket
+from timmy_kb.cli.retriever import QueryParams, search
 
 
 class _DummyEmbeddingsClient:
@@ -22,7 +22,7 @@ class _DummyEmbeddingsClient:
 
 @pytest.fixture(autouse=True)
 def _stub_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("src.retriever.fetch_candidates", lambda *args, **kwargs: [], raising=True)
+    monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", lambda *args, **kwargs: [], raising=True)
 
 
 def _base_params(query: str = "hello") -> QueryParams:

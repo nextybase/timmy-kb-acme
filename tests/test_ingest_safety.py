@@ -6,7 +6,7 @@ from typing import Any, Sequence
 
 import pytest
 
-import ingest as ingest
+import timmy_kb.cli.ingest as ingest
 from pipeline.exceptions import ConfigError
 
 

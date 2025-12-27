@@ -18,7 +18,6 @@ class _FakeResponse:
         ]
         self.status = "completed"
         self.id = "fake"
-        self.output_text = text
 
 
 class _FakeClient:

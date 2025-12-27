@@ -16,7 +16,6 @@ from pipeline.tracing import start_decision_span
 from storage.tags_store import ensure_schema_v2, import_tags_yaml_to_db
 from ui.clients_store import get_state as _get_client_state
 from ui.utils.core import safe_write_text
-from ui.utils.stubs import StreamlitStub, _FunctionStub
 
 __all__ = [
     "handle_tags_raw_save",
@@ -454,7 +453,7 @@ def open_tags_editor_modal(
     reader = read_fn or read_text_safe
     writer = write_fn or safe_write_text
     importer = import_yaml_fn or import_tags_yaml_to_db
-    is_stub_runtime = isinstance(st, StreamlitStub)
+    is_stub_runtime = False
     try:
         initial_text = reader(yaml_parent, yaml_path, encoding="utf-8")
     except Exception:
@@ -482,7 +481,7 @@ def open_tags_editor_modal(
             except Exception:
                 content = initial_text
 
-        col_a, col_b = st.columns(2) if hasattr(st, "columns") else (_FunctionStub(), _FunctionStub())
+        col_a, col_b = st.columns(2)
         save_clicked = bool(column_button(col_a, "Salva", type="primary")) or is_stub_runtime
         if save_clicked:
             try:

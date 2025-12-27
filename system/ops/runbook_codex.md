@@ -343,7 +343,7 @@ References: [docs/adr/README.md](../../docs/adr/README.md).
 ## 18) Useful commands
 ```bash
 # UI
-streamlit run onboarding_ui.py
+streamlit run src/timmy_kb/ui/onboarding_ui.py
 
 # CLI orchestrators
 python -m timmy_kb.cli.pre_onboarding --slug <slug> --name "<Cliente>" --non-interactive

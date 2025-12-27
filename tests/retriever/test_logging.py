@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from tests.conftest import DUMMY_SLUG
 
-from retriever import QueryParams, search
+from timmy_kb.cli.retriever import QueryParams, search
 
 
 class _DummyEmbeddingsClient:
@@ -20,7 +20,7 @@ class _DummyEmbeddingsClient:
 
 @pytest.fixture(autouse=True)
 def _no_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("src.retriever.fetch_candidates", lambda *args, **kwargs: [], raising=True)
+    monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", lambda *args, **kwargs: [], raising=True)
 
 
 def _base_params(query: str) -> QueryParams:

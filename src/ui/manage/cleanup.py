@@ -156,16 +156,9 @@ def open_cleanup_modal(
             else:
                 _store("error", "Operazione completata con avvisi o errori parziali.")
 
-    dialog_builder = getattr(st, "dialog", None)
-    if callable(dialog_builder):
-        decorator = dialog_builder("Conferma eliminazione cliente", width="large")
-        if callable(decorator):
-            runner_candidate = decorator(_modal)
-            if callable(runner_candidate):
-                runner_candidate()
-            else:
-                _modal()
-        else:
-            _modal()
+    decorator = st.dialog("Conferma eliminazione cliente", width="large")
+    runner_candidate = decorator(_modal)
+    if callable(runner_candidate):
+        runner_candidate()
     else:
         _modal()

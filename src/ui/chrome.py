@@ -203,15 +203,10 @@ def _on_dummy_kb() -> None:
                 cmd.append("--deep-testing")
             _run_and_render(cmd)
 
-    dialog_builder = getattr(st, "dialog", None)
-    if callable(dialog_builder):
-        open_modal = dialog_builder("Generazione Dummy KB", width="large")
-        runner = open_modal(_render_modal_body)
-        if callable(runner):
-            runner()
-    else:
-        # Fallback per Streamlit vecchio: render inline
-        _render_modal_body()
+    open_modal = st.dialog("Generazione Dummy KB", width="large")
+    runner = open_modal(_render_modal_body)
+    if callable(runner):
+        runner()
 
 
 def _on_exit() -> None:

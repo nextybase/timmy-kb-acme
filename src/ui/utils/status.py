@@ -5,33 +5,21 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Any, Iterator
 
-try:
-    import streamlit as st
-except Exception:  # pragma: no cover
-    st = None
+import streamlit as st
 
 
 @contextmanager
 def status_guard(label: str, *, error_label: str | None = None, **kwargs: Any) -> Iterator[Any]:
     """
-    Wrapper unico per st.status che aggiorna automaticamente il messaggio di errore,
-    con fallback stub quando Streamlit o st.status non sono disponibili.
+    Wrapper unico per st.status che aggiorna automaticamente il messaggio di errore.
+    Fail-fast se Streamlit/st.status non sono disponibili.
     """
     clean_label = label.rstrip(" .…")
     error_prefix = error_label or (f"Errore durante {clean_label}" if clean_label else "Errore")
-    status_cm = getattr(st, "status", None) if st is not None else None
+    status_cm = getattr(st, "status", None)
 
     if not callable(status_cm):
-
-        @contextmanager
-        def _noop_cm(*_args: Any, **_kwargs: Any) -> Iterator[Any]:
-            class _StatusStub:
-                def update(self, *args: Any, **kwargs: Any) -> None:
-                    return None
-
-            yield _StatusStub()
-
-        status_cm = _noop_cm
+        raise RuntimeError("Streamlit st.status non disponibile nel runtime corrente.")
 
     with status_cm(label, **kwargs) as status:
         try:

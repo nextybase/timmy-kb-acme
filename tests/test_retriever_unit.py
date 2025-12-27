@@ -13,8 +13,8 @@ from typing import Iterable
 import pytest
 from tests.conftest import DUMMY_SLUG
 
-import retriever as retriever
-from retriever import (
+import timmy_kb.cli.retriever as retriever
+from timmy_kb.cli.retriever import (
     QueryParams,
     cosine,
     preview_effective_candidate_limit,

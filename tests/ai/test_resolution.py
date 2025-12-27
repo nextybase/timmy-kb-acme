@@ -13,11 +13,10 @@ def test_resolve_assistant_env_prefers_settings_over_payload() -> None:
     assert resolution.resolve_assistant_env(None, None, "DEFAULT_ENV") == "DEFAULT_ENV"
 
 
-def test_resolve_assistant_id_uses_fallback_and_errors() -> None:
-    assert resolution.resolve_assistant_id("primary", "fallback", "PRIMARY_NAME") == "primary"
-    assert resolution.resolve_assistant_id(None, "fallback_value", "PRIMARY_NAME") == "fallback_value"
+def test_resolve_assistant_id_errors_when_missing() -> None:
+    assert resolution.resolve_assistant_id("primary", "PRIMARY_NAME") == "primary"
     with pytest.raises(ConfigError) as exc:
-        resolution.resolve_assistant_id(None, None, "PRIMARY_NAME")
+        resolution.resolve_assistant_id(None, "PRIMARY_NAME")
     assert "PRIMARY_NAME" in str(exc.value)
 
 

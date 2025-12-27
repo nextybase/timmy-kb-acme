@@ -568,13 +568,9 @@ if slug:
                     ):
                         _safe_rerun()
 
-            dialog_builder = getattr(st, "dialog", None)
-            if callable(dialog_builder):
-                open_modal = dialog_builder("Scarica da Google Drive nelle cartelle locali", width="large")
-                runner = open_modal(_modal)
-                (runner if callable(runner) else _modal)()
-            else:
-                _modal()
+            open_modal = st.dialog("Scarica da Google Drive nelle cartelle locali", width="large")
+            runner = open_modal(_modal)
+            (runner if callable(runner) else _modal)()
 
     with col_semantic:
         if _column_button(

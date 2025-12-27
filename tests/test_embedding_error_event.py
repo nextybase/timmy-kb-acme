@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-import ingest as ingest_mod
 import semantic.api as sapi
-from ingest import ingest_path
+import timmy_kb.cli.ingest as ingest_mod
 from pipeline.logging_utils import get_structured_logger
+from timmy_kb.cli.ingest import ingest_path
 
 
 class _BoomEmb:

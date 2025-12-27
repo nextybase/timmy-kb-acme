@@ -61,17 +61,21 @@ def _extract_output_text(response: Any) -> str:
     """
     Estrae il testo da una risposta OpenAI Responses, replicando il pattern usato nel repo.
     """
-    for item in getattr(response, "output", []) or []:
-        if getattr(item, "type", "") != "output_text":
+    output = getattr(response, "output", None)
+    if not isinstance(output, list):
+        raise ConfigError(
+            "Risposta Responses non valida: attributo 'output' mancante o non-list.",
+            code="responses.output.invalid",
+            component="responses",
+        )
+
+    for item in output:
+        if getattr(item, "type", None) != "output_text":
             continue
         text_obj = getattr(item, "text", None)
         value = getattr(text_obj, "value", None) if text_obj is not None else None
         if isinstance(value, str) and value.strip():
             return value.strip()
-
-    fallback = getattr(response, "output_text", None)
-    if isinstance(fallback, str) and fallback.strip():
-        return fallback.strip()
 
     raise ConfigError("Responses completata ma nessun testo nel messaggio di output.")
 
@@ -195,35 +199,21 @@ def run_json_model(
     )
 
     try:
-        request_kwargs: Dict[str, Any] = {
-            "model": model,
-            "input": input_payload,
-            "metadata": normalized_metadata,
-        }
-        if response_format is not None:
-            request_kwargs["response_format"] = rf_payload
-        resp = client.responses.create(**request_kwargs)
+        resp = client.responses.create(
+            model=model,
+            input=input_payload,
+            metadata=normalized_metadata,
+            response_format=rf_payload,
+        )
     except AttributeError as exc:  # pragma: no cover
         LOGGER.error("ai.responses.unsupported", extra={"error": str(exc)})
         raise ConfigError("Client OpenAI non supporta l'API Responses.") from exc
     except TypeError as exc:
-        message = str(exc)
-        if "response_format" in message:
-            LOGGER.warning(
-                "ai.responses.responses_v2_incompatible",
-                extra={
-                    "error": message,
-                    "reason": "response_format_unsupported",
-                },
-            )
-            fallback_kwargs: Dict[str, Any] = {
-                "model": model,
-                "input": input_payload,
-                "metadata": normalized_metadata,
-            }
-            resp = client.responses.create(**fallback_kwargs)
-        else:
-            raise
+        raise ConfigError(
+            f"Chiamata Responses fallita per incompatibilità SDK/argomenti: {exc}",
+            code="responses.request.invalid",
+            component="responses",
+        ) from exc
     except Exception as exc:
         LOGGER.error("ai.responses.error", extra={"error": str(exc)})
         raise ConfigError(f"Chiamata Responses fallita: {exc}") from exc

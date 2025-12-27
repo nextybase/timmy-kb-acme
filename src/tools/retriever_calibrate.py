@@ -223,7 +223,7 @@ def main() -> int:
 
     from pipeline.context import ClientContext
     from pipeline.logging_utils import get_structured_logger
-    from retriever import QueryParams, RetrieverError, retrieve_candidates
+    from timmy_kb.cli.retriever import QueryParams, RetrieverError, retrieve_candidates
 
     log = get_structured_logger("tools.retriever_calibrate")
 

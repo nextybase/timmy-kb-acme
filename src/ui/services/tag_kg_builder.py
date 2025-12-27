@@ -5,11 +5,11 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
-from kg_builder import build_kg_for_workspace
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.workspace_layout import WorkspaceLayout
+from timmy_kb.cli.kg_builder import build_kg_for_workspace
 from ui.utils.context_cache import get_client_context
 
 try:

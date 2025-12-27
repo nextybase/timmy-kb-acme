@@ -7,8 +7,8 @@ from typing import Sequence
 import pytest
 from tests.conftest import DUMMY_SLUG
 
-import retriever as r
-from retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
+import timmy_kb.cli.retriever as r
+from timmy_kb.cli.retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
 
 
 class DummyEmbeddings:

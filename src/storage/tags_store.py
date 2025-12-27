@@ -19,7 +19,6 @@ __all__ = [
     "save_tags_reviewed",
     "derive_db_path_from_yaml_path",
     "ensure_schema_v2",
-    "migrate_to_v2",
     "DocEntityRecord",
     "save_doc_entities",
     "list_doc_entities",
@@ -317,6 +316,11 @@ def derive_db_path_from_yaml_path(p: str | Path) -> str:
     adiacente `tags.db`.
     """
     pp = Path(p)
+    if pp.parent.name != "semantic":
+        raise ConfigError(
+            "Percorso tags_reviewed non valido: il file deve stare sotto `<workspace>/semantic/`.",
+            file_path=str(pp),
+        )
     return str(pp.parent / "tags.db")
 
 
@@ -519,64 +523,51 @@ _V2_TABLES = [
 
 
 def ensure_schema_v2(db_path: str) -> None:
-    """Ensure the DB has v1 base schema and all v2 tables and indexes.
+    """Garantisce lo schema v2 e fallisce se rileva un DB legacy.
 
-    Does not alter meta.version. Use migrate_to_v2() for migration semantics.
+    Regola:
+    - Se il file DB esiste già, deve contenere `meta(id=1)` con `version == '2'`.
+      In caso contrario solleva ConfigError (nessuna migrazione implicita).
+    - Se il file DB non esiste, crea lo schema e imposta `meta.version='2'`.
     """
     dbp = Path(db_path)
     dbp.parent.mkdir(parents=True, exist_ok=True)
+    existed = dbp.exists()
     with closing(sqlite3.connect(dbp)) as conn:
         try:
-            conn.execute("BEGIN")
-            _ensure_schema(conn)
-            _create_v2_tables(conn)
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-
-
-def migrate_to_v2(db_path: str) -> None:
-    """Create v2 tables if missing and set meta.version='2' only if any table was created.
-
-    load/save semantics remain unchanged; this only manages structure and meta version.
-    """
-    dbp = Path(db_path)
-    dbp.parent.mkdir(parents=True, exist_ok=True)
-    with closing(sqlite3.connect(dbp)) as conn:
-        try:
-            _ensure_schema(conn)
-            cur = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name IN (%s)"
-                % (",".join(["?"] * len(_V2_TABLES))),
-                _V2_TABLES,
-            )
-            present = {r[0] for r in cur.fetchall()}
-            missing = [t for t in _V2_TABLES if t not in present]
-
-            conn.execute("BEGIN")
-            _create_v2_tables(conn)
-
-            if missing:
-                cur = conn.execute("SELECT version, reviewed_at, keep_only_listed FROM meta WHERE id=1")
+            if existed:
+                cur = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='meta'",
+                )
+                if cur.fetchone() is None:
+                    raise ConfigError(
+                        "legacy tags.db detected; regenerate <workspace>/semantic/tags.db",
+                        file_path=str(dbp),
+                    )
+                cur = conn.execute("SELECT version FROM meta WHERE id=1")
                 row = cur.fetchone()
                 if row is None:
-                    version = "2"
-                    reviewed_at = _now_iso()
-                    keep_only_listed = 0
-                else:
-                    version = "2"
-                    reviewed_at = str(row[1])
-                    keep_only_listed = _to_int(row[2])
-                conn.execute(
-                    (
-                        "INSERT INTO meta(id, version, reviewed_at, keep_only_listed) "
-                        "VALUES(1, ?, ?, ?) "
-                        "ON CONFLICT(id) DO UPDATE SET version=excluded.version"
-                    ),
-                    (version, reviewed_at, keep_only_listed),
-                )
-                conn.commit()
+                    raise ConfigError(
+                        "legacy tags.db detected; regenerate <workspace>/semantic/tags.db",
+                        file_path=str(dbp),
+                    )
+                version = str(row[0])
+                if version != "2":
+                    raise ConfigError(
+                        "legacy tags.db detected; regenerate <workspace>/semantic/tags.db",
+                        file_path=str(dbp),
+                    )
+
+            conn.execute("BEGIN")
+            _ensure_schema(conn)
+            _create_v2_tables(conn)
+            conn.execute(
+                "INSERT INTO meta(id, version, reviewed_at, keep_only_listed) "
+                "VALUES(1, '2', ?, 0) "
+                "ON CONFLICT(id) DO UPDATE SET version='2'",
+                (_now_iso(),),
+            )
+            conn.commit()
         except Exception:
             conn.rollback()
             raise

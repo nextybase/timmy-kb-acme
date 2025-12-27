@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Sequence, TypedDict
 
 if TYPE_CHECKING:
-    from retriever import QueryParams, SearchResult
+    from timmy_kb.cli.retriever import QueryParams, SearchResult
 
 SNIPPET_MAX_LEN = 200
 

@@ -8,7 +8,6 @@ import pipeline.env_utils as env_utils
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 
-from .client_factory import make_openai_client
 from .resolution import resolve_assistant_env, resolve_assistant_id, resolve_boolean_flag
 from .types import AssistantConfig
 
@@ -34,44 +33,6 @@ def _optional_env(name: str) -> Optional[str]:
         )
         return None
     return value.strip() if isinstance(value, str) else None
-
-
-def _resolve_model_from_assistant(client: Any, assistant_id: str) -> Optional[str]:
-    assistants = getattr(client, "assistants", None)
-    if assistants is None:
-        beta = getattr(client, "beta", None)
-        assistants = getattr(beta, "assistants", None)
-    if not assistants:
-        LOGGER.warning(
-            "ai.assistant_registry.assistant_model_lookup_failed",
-            extra={"assistant_id": assistant_id, "reason": "no_assistants_collection"},
-        )
-        return None
-    try:
-        assistant = assistants.retrieve(assistant_id)
-    except Exception as exc:  # pragma: no cover - best-effort
-        LOGGER.warning(
-            "ai.assistant_registry.assistant_model.error", extra={"assistant_id": assistant_id, "error": str(exc)}
-        )
-        LOGGER.warning(
-            "ai.assistant_registry.assistant_model_lookup_failed",
-            extra={
-                "assistant_id": assistant_id,
-                "reason": type(exc).__name__,
-                "error": str(exc),
-            },
-        )
-        return None
-    model = getattr(assistant, "model", None)
-    if isinstance(model, str):
-        value = model.strip()
-        if value:
-            LOGGER.info(
-                "ai.assistant_registry.assistant_model_resolved",
-                extra={"assistant_id": assistant_id, "model": value},
-            )
-            return value
-    return None
 
 
 def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
@@ -131,7 +92,7 @@ def _resolve_assistant_env_name(settings: Any, path: str, default_env: str) -> s
     return resolve_assistant_env(settings_candidate, payload_value, default_env)
 
 
-def _resolve_assistant_id(env_name: str, *, primary_env_name: str, fallback_env_name: str) -> str:
+def _resolve_assistant_id(env_name: str, *, primary_env_name: str) -> str:
     primary_value = _optional_env(env_name)
     if primary_value is not None and not primary_value.strip():
         LOGGER.warning(
@@ -139,18 +100,9 @@ def _resolve_assistant_id(env_name: str, *, primary_env_name: str, fallback_env_
             extra={"env": env_name, "primary_env": primary_env_name},
         )
         primary_value = None
-    fallback_value = _optional_env(fallback_env_name)
-    if fallback_value is not None and not fallback_value.strip():
-        LOGGER.warning(
-            "ai.assistant_registry.env_var_empty",
-            extra={"env": fallback_env_name, "primary_env": fallback_env_name},
-        )
-        fallback_value = None
     return resolve_assistant_id(
         primary_value,
-        fallback_value,
         primary_env_name,
-        fallback_env_name=fallback_env_name,
     )
 
 
@@ -188,9 +140,7 @@ def _build_assistant_config(
 ) -> AssistantConfig:
     assistant_env = _resolve_assistant_env_name(settings, assistant_env_path, default_env)
     model = _resolve_model(settings, model_path, default=model_default)
-    assistant_id = _resolve_assistant_id(
-        assistant_env, primary_env_name=assistant_env, fallback_env_name="ASSISTANT_ID"
-    )
+    assistant_id = _resolve_assistant_id(assistant_env, primary_env_name=assistant_env)
     use_kb = (
         resolve_boolean_flag(None, _resolve_bool(settings, use_kb_path, default_use_kb), None, default=True)
         if use_kb_path
@@ -219,19 +169,15 @@ def resolve_kgraph_config(settings: Any, assistant_env_override: Optional[str] =
     assistant_id = _optional_env(assistant_env)
     if not assistant_id:
         raise ConfigError(
-            f"Assistant ID mancante: imposta {assistant_env} (o ASSISTANT_ID) nell'ambiente.",
+            f"Assistant ID mancante: imposta {assistant_env} nell'ambiente.",
             code="assistant.id.missing",
             component="assistant_registry",
         )
     raw_model = _get_from_settings(settings, "ai.kgraph.model")
     model = raw_model.strip() if isinstance(raw_model, str) else ""
     if not model:
-        client = make_openai_client()
-        model = _resolve_model_from_assistant(client, assistant_id) or ""
-    if not model:
         raise ConfigError(
-            "Modello KGraph non configurato: imposta ai.kgraph.model o assegna un modello all'assistant "
-            f"{assistant_id}.",
+            "Modello KGraph non configurato: imposta ai.kgraph.model nel config.",
             code="assistant.kgraph.model.missing",
             component="assistant_registry",
         )
@@ -273,9 +219,7 @@ def resolve_ocp_executor_config(settings: Any) -> AssistantConfig:
 
 def resolve_audit_assistant_config(settings: Any) -> AssistantConfig:
     assistant_env = _resolve_assistant_env_name(settings, "ai.audit_assistant.assistant_id_env", "AUDIT_ASSISTANT_ID")
-    assistant_id = _resolve_assistant_id(
-        assistant_env, primary_env_name=assistant_env, fallback_env_name="ASSISTANT_ID"
-    )
+    assistant_id = _resolve_assistant_id(assistant_env, primary_env_name=assistant_env)
     model = _resolve_model(settings, "ai.audit_assistant.model")
     return AssistantConfig(
         model=model,

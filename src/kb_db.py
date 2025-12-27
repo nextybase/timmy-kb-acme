@@ -8,8 +8,7 @@ Espone:
 
 Questo modulo centralizza la gestione del path del DB e l'inizializzazione.
 Il contratto sul path e' formalizzato in `storage.kb_store.KbStore`, che risolve
- gia' i DB per workspace/slug (default: <workspace>/semantic/kb.sqlite) con
- fallback sicuro al DB globale sotto `data/`.
+ gia' i DB per workspace/slug (default: <workspace>/semantic/kb.sqlite).
 Le embedding sono salvate come array JSON per portabilita'. Usa la modalita' WAL
 per ridurre la contesa dei lock.
 """
@@ -24,6 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator, Optional, cast
 
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 
@@ -38,15 +38,7 @@ for _handler in list(LOGGER.handlers):
     if key.endswith("::console"):
         _handler.setLevel(logging.WARNING)
 
-DEFAULT_DATA_DIR = Path("data")
-DEFAULT_DB_PATH = DEFAULT_DATA_DIR / "kb.sqlite"
-
-
-def ensure_data_dir(path: Path | str = DEFAULT_DATA_DIR) -> Path:
-    """Garantisce l'esistenza della cartella dati e la restituisce."""
-    p = Path(path)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+_LEGACY_GLOBAL_DB_PARTS = ("data", "kb.sqlite")
 
 
 def _resolve_db_path(db_path: Optional[Path]) -> Path:
@@ -58,19 +50,44 @@ def _resolve_db_path(db_path: Optional[Path]) -> Path:
     - Se `db_path` è relativo: interpretalo sotto `data/` e valida che resti entro il perimetro.
     """
     if db_path is None:
-        ensure_data_dir(DEFAULT_DATA_DIR)
-        return cast(Path, ensure_within_and_resolve(DEFAULT_DATA_DIR, DEFAULT_DB_PATH))
+        base = Path.cwd().resolve()
+        semantic_dir = base / "semantic"
+        if not semantic_dir.exists():
+            raise ConfigError(
+                "DB KB non configurato: esegui il comando dentro un workspace (directory con `semantic/`) "
+                "oppure passa un db_path esplicito (workspace-based).",
+                code="kb.db_path.missing",
+                component="kb_db",
+                file_path=str(base),
+            )
+        candidate = semantic_dir / "kb.sqlite"
+        resolved = cast(Path, ensure_within_and_resolve(base, candidate))
+        if resolved.parts[-2:] == _LEGACY_GLOBAL_DB_PARTS:
+            raise ConfigError(
+                "DB globale legacy `data/kb.sqlite` non supportato: usa `<workspace>/semantic/kb.sqlite`.",
+                code="kb.db_path.legacy",
+                component="kb_db",
+                file_path=str(resolved),
+            )
+        return resolved
     p = Path(db_path)
     if p.is_absolute():
-        return p.resolve()
-    # relativo: ancora a data/
-    ensure_data_dir(DEFAULT_DATA_DIR)
-    candidate = (DEFAULT_DATA_DIR / p).resolve()
-    return cast(Path, ensure_within_and_resolve(DEFAULT_DATA_DIR, candidate))
+        resolved = p.resolve()
+    else:
+        base = Path.cwd().resolve()
+        resolved = cast(Path, ensure_within_and_resolve(base, (base / p)))
+    if resolved.parts[-2:] == _LEGACY_GLOBAL_DB_PARTS:
+        raise ConfigError(
+            "DB globale legacy `data/kb.sqlite` non supportato: usa `<workspace>/semantic/kb.sqlite`.",
+            code="kb.db_path.legacy",
+            component="kb_db",
+            file_path=str(resolved),
+        )
+    return resolved
 
 
 def get_db_path() -> Path:
-    """Restituisce il path del DB SQLite predefinito sotto `data/` (crea la cartella se manca)."""
+    """Restituisce il path del DB SQLite del workspace corrente (`./semantic/kb.sqlite`)."""
     return _resolve_db_path(None)
 
 
@@ -78,7 +95,7 @@ def connect_from_store(store: "KbStore") -> Iterator[sqlite3.Connection]:
     """Convenience wrapper: apre una connessione usando il path risolto da KbStore.
 
     Se lo store e' legato a un workspace/slug, usa `base_dir/semantic/kb.sqlite`;
-    in assenza di base_dir o override, usa il DB globale sotto `data/`.
+    in assenza di base_dir o override, fallisce (nessun fallback globale).
     """
     return connect(db_path=store.effective_db_path())
 
@@ -96,24 +113,15 @@ def connect(db_path: Optional[Path] = None) -> Iterator[sqlite3.Connection]:
             con.execute("PRAGMA synchronous=NORMAL;")
             con.execute("PRAGMA foreign_keys=ON;")
         except sqlite3.DatabaseError as e:
-            if "malformed" in str(e).lower():
-                try:
-                    con.close()
-                except Exception:
-                    pass
-                try:
-                    backup = dbp.with_suffix(dbp.suffix + ".bak")
-                    if dbp.exists():
-                        dbp.replace(backup)
-                    LOGGER.warning("db.malformed.recreated", extra={"db_path": str(dbp), "backup": str(backup)})
-                except Exception:
-                    pass
-                con = sqlite3.connect(str(dbp), timeout=30, check_same_thread=False)
-                con.execute("PRAGMA journal_mode=WAL;")
-                con.execute("PRAGMA synchronous=NORMAL;")
-                con.execute("PRAGMA foreign_keys=ON;")
-            else:
-                raise
+            message = str(e)
+            if "malformed" in message.lower():
+                raise ConfigError(
+                    "DB SQLite corrotto (malformed): elimina/rigenera il DB del workspace prima di procedere.",
+                    code="kb.db.malformed",
+                    component="kb_db",
+                    file_path=str(dbp),
+                ) from e
+            raise
         yield con
     finally:
         con.close()
@@ -154,9 +162,15 @@ def init_db(db_path: Optional[Path] = None) -> None:
                 """
             )
         except sqlite3.IntegrityError:
-            LOGGER.warning("Migrazione UNIQUE ux_chunks_natural saltata: duplicati presenti")
+            raise ConfigError(
+                "DB KB non conforme: duplicati presenti e indice UNIQUE non applicabile. "
+                "Rigenera il DB del workspace prima di procedere.",
+                code="kb.db.schema.invalid",
+                component="kb_db",
+                file_path=str(_resolve_db_path(db_path)),
+            )
         con.commit()
-    LOGGER.debug("DB inizializzato in %s", (db_path or get_db_path()))
+    LOGGER.debug("DB inizializzato in %s", _resolve_db_path(db_path))
 
 
 def insert_chunks(

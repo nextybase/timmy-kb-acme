@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-import kg_builder
-from kg_builder import RawTag, TagKgInput, _load_raw_tags, call_openai_tag_kg_assistant
+import timmy_kb.cli.kg_builder as kg_builder
 from pipeline.exceptions import ConfigError
+from timmy_kb.cli.kg_builder import RawTag, TagKgInput, _load_raw_tags, call_openai_tag_kg_assistant
 
 
 def _create_minimal_workspace(tmp_path: Path) -> Path:

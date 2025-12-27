@@ -1,22 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, TypeVar, cast
+from typing import Any, Callable, TypeVar, cast
+
+import streamlit as st
+from streamlit import fragment as _fragment
 
 from pipeline.logging_utils import get_structured_logger
-
-try:
-    import streamlit as st
-except Exception:  # pragma: no cover
-    st = cast(Any, None)
-
-try:
-    from streamlit import fragment as _fragment_impl
-except Exception:  # pragma: no cover
-    _fragment_impl = None
-
-FragmentCallable = Callable[[Callable[[], None]], Callable[[], None]]
-_FRAGMENT: Optional[FragmentCallable] = cast(Optional[FragmentCallable], _fragment_impl)
 
 T = TypeVar("T")
 
@@ -36,39 +26,34 @@ def show_error_with_details(
     log_extra: dict[str, object] = {"error": str(exc), "exception_type": type(exc).__name__}
     if extra:
         log_extra.update(extra)
-    try:
-        log.exception(event, extra=log_extra)
-    except Exception:
-        pass
 
-    if st is None:
-        return
+    log.exception(event, extra=log_extra)
 
-    try:
-        st.error(message)
-        if show_details:
-            with st.expander(expander_label, expanded=False):
-                st.exception(exc)
-    except Exception:
-        pass
+    st.error(message)
+    if show_details:
+        with st.expander(expander_label, expanded=False):
+            st.exception(exc)
 
 
 def run_fragment(key: str, body: Callable[[], T]) -> T:
-    """Execute `body` inside a Streamlit fragment when available and return its result."""
-    if _FRAGMENT is not None:
-        sentinel = object()
-        box: dict[str, object | T] = {"value": sentinel}
+    """Esegue body dentro un frammento Streamlit e ne restituisce il risultato."""
+    sentinel = object()
+    box: dict[str, object | T] = {"value": sentinel}
 
-        def _wrapped() -> None:
-            box["value"] = body()
+    def _wrapped() -> None:
+        box["value"] = body()
 
-        safe_key = key.replace("/", "_").replace(".", "_")
-        _wrapped.__name__ = f"fragment_{safe_key}"
-        _wrapped.__qualname__ = _wrapped.__name__
-        runner = _FRAGMENT(_wrapped)
-        runner()
-        value = box["value"]
-        if value is sentinel:  # pragma: no cover - should not happen
-            raise RuntimeError("Streamlit fragment did not execute the body")
-        return cast(T, value)
-    return body()
+    safe_key = key.replace("/", "_").replace(".", "_")
+    _wrapped.__name__ = f"fragment_{safe_key}"
+    _wrapped.__qualname__ = _wrapped.__name__
+
+    runner = _fragment(_wrapped)
+    runner()
+
+    value = box["value"]
+    if value is sentinel:  # pragma: no cover - should not happen
+        raise RuntimeError("Streamlit fragment did not execute the body")
+    return cast(T, value)
+
+
+__all__ = ["run_fragment", "show_error_with_details"]

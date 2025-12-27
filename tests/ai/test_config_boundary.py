@@ -1,10 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from types import SimpleNamespace
 from typing import Callable
 
 import pytest
 
-import ai.assistant_registry as assistant_registry
 import ai.vision_config as config
 from ai.assistant_registry import (
     resolve_audit_assistant_config,
@@ -57,49 +55,19 @@ def test_resolve_prototimmy_config_missing_assistant_id_raises(monkeypatch):
     assert "PROTOTIMMY_ID" in str(exc.value)
 
 
-def test_resolve_kgraph_config_falls_back_to_assistant_model(monkeypatch):
-    settings = {}
+def test_resolve_kgraph_config_requires_model(monkeypatch):
+    settings = {"ai": {"kgraph": {"model": "kgraph-model"}}}
 
     def fake_env(name: str, required: bool = False) -> str:
         if name == "KGRAPH_ASSISTANT_ID":
             return "kgraph-assistant"
         raise KeyError(name)
 
-    class _DummyAssistants:
-        def retrieve(self, _: str) -> SimpleNamespace:
-            return SimpleNamespace(model="assistant-model")
-
-    class _DummyClient:
-        assistants = _DummyAssistants()
-
     monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
-    monkeypatch.setattr(assistant_registry, "make_openai_client", lambda: _DummyClient())
-    monkeypatch.setattr("ai.vision_config.make_openai_client", lambda: _DummyClient())
 
     result = resolve_kgraph_config(settings)
     assert result.assistant_id == "kgraph-assistant"
-    assert result.model == "assistant-model"
-
-
-def test_resolve_vision_config_fallbacks_to_assistant_model(monkeypatch):
-    ctx = _DummyCtx(settings={})
-
-    fake_env = _fake_env_factory({"OBNEXT_ASSISTANT_ID": "vision-assistant"})
-
-    class _DummyAssistants:
-        def retrieve(self, _: str) -> SimpleNamespace:
-            return SimpleNamespace(model="vision-assistant-model")
-
-    class _DummyClient:
-        assistants = _DummyAssistants()
-
-    monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
-    monkeypatch.setattr(assistant_registry, "make_openai_client", lambda: _DummyClient())
-    monkeypatch.setattr("ai.vision_config.make_openai_client", lambda: _DummyClient())
-
-    result = config.resolve_vision_config(ctx)
-    assert result.assistant_id == "vision-assistant"
-    assert result.model == "vision-assistant-model"
+    assert result.model == "kgraph-model"
 
 
 def test_assistant_env_precedence_settings(monkeypatch):
