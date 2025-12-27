@@ -7,24 +7,24 @@ from typing import Dict, Tuple
 
 
 class PagePaths:
-    HOME = "src/ui/pages/home.py"
-    NEW_CLIENT = "src/ui/pages/new_client.py"
-    MANAGE = "src/ui/pages/manage.py"
-    SEMANTICS = "src/ui/pages/semantics.py"
-    PREVIEW = "src/ui/pages/preview.py"
+    HOME = "../../ui/pages/home.py"
+    NEW_CLIENT = "../../ui/pages/new_client.py"
+    MANAGE = "../../ui/pages/manage.py"
+    SEMANTICS = "../../ui/pages/semantics.py"
+    PREVIEW = "../../ui/pages/preview.py"
 
-    CONFIG_EDITOR = "src/ui/pages/config_editor.py"
-    CONFIGURAZIONE = "src/ui/pages/configurazione.py"
-    GUIDA = "src/ui/pages/guida_ui.py"
-    GUIDA_DEV = "src/ui/pages/guida_dev.py"
-    AGENTS_NETWORK = "src/ui/pages/agents_network.py"
+    CONFIG_EDITOR = "../../ui/pages/config_editor.py"
+    CONFIGURAZIONE = "../../ui/pages/configurazione.py"
+    GUIDA = "../../ui/pages/guida_ui.py"
+    GUIDA_DEV = "../../ui/pages/guida_dev.py"
+    AGENTS_NETWORK = "../../ui/pages/agents_network.py"
 
-    ADMIN = "src/ui/pages/admin.py"
-    TUNING = "src/ui/pages/tools_check.py"
-    SECRETS = "src/ui/pages/secrets_healthcheck.py"  # pragma: allowlist secret
-    DIAGNOSTICS = "src/ui/pages/diagnostics.py"
-    LOGS_PANEL = "src/ui/pages/logs_panel.py"
-    PROTOTIMMY_CHAT = "src/ui/pages/prototimmy_chat.py"
+    ADMIN = "../../ui/pages/admin.py"
+    TUNING = "../../ui/pages/tools_check.py"
+    SECRETS = "../../ui/pages/secrets_healthcheck.py"  # pragma: allowlist secret
+    DIAGNOSTICS = "../../ui/pages/diagnostics.py"
+    LOGS_PANEL = "../../ui/pages/logs_panel.py"
+    PROTOTIMMY_CHAT = "../../ui/pages/prototimmy_chat.py"
 
 
 @dataclass(frozen=True)

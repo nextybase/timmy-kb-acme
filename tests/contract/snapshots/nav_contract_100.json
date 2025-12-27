@@ -7,71 +7,71 @@
   "navigation": {
     "Admin": [
       {
-        "path": "src/ui/pages/admin.py",
+        "path": "../../ui/pages/admin.py",
         "title": "Admin",
         "url_path": "admin"
       },
       {
-        "path": "src/ui/pages/configurazione.py",
+        "path": "../../ui/pages/configurazione.py",
         "title": "Configurazione",
         "url_path": "configurazione"
       },
       {
-        "path": "src/ui/pages/prototimmy_chat.py",
+        "path": "../../ui/pages/prototimmy_chat.py",
         "title": "ProtoTimmy Chat",
         "url_path": "prototimmy-chat"
       },
       {
-        "path": "src/ui/pages/secrets_healthcheck.py",
+        "path": "../../ui/pages/secrets_healthcheck.py",
         "title": "Secrets Healthcheck",
         "url_path": "secrets"
       },
       {
-        "path": "src/ui/pages/logs_panel.py",
+        "path": "../../ui/pages/logs_panel.py",
         "title": "Log dashboard",
         "url_path": null
       },
       {
-        "path": "src/ui/pages/guida_dev.py",
+        "path": "../../ui/pages/guida_dev.py",
         "title": "Guida Dev",
         "url_path": "guida-dev"
       },
       {
-        "path": "src/ui/pages/agents_network.py",
+        "path": "../../ui/pages/agents_network.py",
         "title": "Rete degli AGENT",
         "url_path": "agents_network"
       }
     ],
     "Onboarding": [
       {
-        "path": "src/ui/pages/home.py",
+        "path": "../../ui/pages/home.py",
         "title": "Home",
         "url_path": "home"
       },
       {
-        "path": "src/ui/pages/new_client.py",
+        "path": "../../ui/pages/new_client.py",
         "title": "Nuovo cliente",
         "url_path": "new"
       },
       {
-        "path": "src/ui/pages/manage.py",
+        "path": "../../ui/pages/manage.py",
         "title": "Gestisci cliente",
         "url_path": "manage"
       }
     ],
     "Tools": [
       {
-        "path": "src/ui/pages/config_editor.py",
+        "path": "../../ui/pages/config_editor.py",
         "title": "Config Editor",
         "url_path": "config"
       },
       {
-        "path": "src/ui/pages/diagnostics.py",
+        "path": "../../ui/pages/diagnostics.py",
         "title": "Diagnostica",
         "url_path": "diagnostics"
       },
       {
-        "path": "src/ui/pages/guida_ui.py",
+        "path": "../../ui/pages/guida_ui.py",
         "title": "Guida UI",
         "url_path": "guida"
       }
