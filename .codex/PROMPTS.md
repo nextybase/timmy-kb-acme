@@ -58,7 +58,12 @@ STOP RULE: <fermo dopo la risposta>
 - Purpose: refine the plan with deeper analysis, file-by-file mapping, and sequencing of upcoming prompts.
 - Mode: analytical/read-only; still no edits or QA.
 - Output: Italian reasoning for each mandated document, points of ambiguity, proposed sequence for prompts 1..N, and explicit confirmation that no files or tests were touched.
-  - **Legacy note:** `Prompt 0a..0x` is legacy and should not be used for read-only inspections anymore. Any read-only inspection required for analysis must be explicitly whitelisted in Prompt 0 under `OPS AUTHORIZATION (READ-ONLY)`.
+  - **Phase 0 model (v1.1, SSoT: `system/specs/promptchain_spec.md`):**
+    - `Prompt 0` is the official entrypoint into the Prompt Chain (Phase 0).
+    - `Prompt 0x` (0a, 0b, ... 0n) is a formal Phase 0 extension for controlled uncertainty reduction; it is not legacy, deprecated, or discouraged.
+    - Exiting Phase 0 (authorizing `Prompt 1`) is an OCP governance act based on a sufficient information state.
+    - **Non-return rule:** once the operational phase starts (`Prompt 1`), new structural uncertainties must not be resolved via new `Prompt 0x` prompts; this is a BLOCK condition for the chain.
+  - Read-only inspection commands are permitted only if explicitly whitelisted by the OCP in the prompt itself (Prompt 0 or Prompt 0x), under `OPS AUTHORIZATION (READ-ONLY)`.
 
 ### Template: Prompt 1..N
 - Purpose: deliver operational micro-PRs that implement the scoped changes declared by the OCP.
