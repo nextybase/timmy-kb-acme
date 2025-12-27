@@ -25,11 +25,51 @@
 ## 4. Prompt Chain Phase Model
 The Prompt Chain unfolds in three clearly delimited phases that map to numbered prompts. Each phase carries a precise mandate, acceptable actions, and deliverables.
 
-### 4.1 Phase 0 – Analytical, read-only prompts (Prompt 0, 0a..0x)
-- Objective: load every SSoT document, surface ambiguities, and design the operational plan without touching the filesystem.
-- Allowed exception (explicit): read-only inspection commands are permitted only if explicitly whitelisted by the OCP inside Prompt 0 (to make SSoT ingestion verifiable without introducing ad-hoc “Prompt 0a” variants).
-- Codex responses must focus on structured reasoning (plans, mappings, risks) and cite the documents reviewed.
-- No patch, diff, or QA command may be executed in this phase; no writes, no formatting, no tests, no builds.
+### 4.1 Phase 0 – Analytical, read-only prompts (Prompt 0, 0x)
+
+**Normative clarification (v1.1):** Prompt 0x (0a, 0b, … 0n) are not legacy, fallback, or deprecated. They are a formal extension of Phase 0 and an integral part of controlled uncertainty reduction.
+
+#### Phase 0 — Purpose
+Phase 0 exists to:
+- build a shared, verifiable understanding of the system;
+- identify constraints, risks, and objectives;
+- make explicit the remaining uncertainties that prevent safe action.
+
+Phase 0 does not aim at exhaustiveness; it aims at mapping the relevant ignorance.
+
+#### Prompt 0 — Official entrypoint (role and limits)
+Prompt 0 is the official entrypoint into the Prompt Chain. It is valid even when the output is:
+- incomplete information;
+- a list of open questions;
+- an explicit inability to formulate a robust operational plan.
+
+A Prompt 0 that declares missing information is a correct outcome, not a failure.
+
+#### Prompt 0x — Exploratory Prompts
+Prompt 0x prompts are Phase 0 read-only deep-dives, used exclusively during Phase 0.
+Their purpose is to close specific uncertainties that emerged from:
+- Prompt 0;
+- previous Prompt 0x prompts.
+
+**Epistemic governance (core rule):** Prompt 0x is not a procedural fallback. It persists until the OCP deems the information state sufficient to authorize entry into the operational phase.
+
+#### Admissibility rules (Prompt 0x)
+A Prompt 0x is admissible only if it:
+- addresses an uncertainty explicitly declared in a previous prompt;
+- has a distinct, non-redundant informational scope;
+- is entirely read-only (no edits, no patch/diff, no build, no tests, no execution);
+- is explicitly authorized by the OCP.
+
+#### Allowed actions in Phase 0 (read-only inspections)
+Phase 0 forbids any write, patch/diff generation, formatting, QA commands, tests, or builds.
+Read-only inspection commands are permitted only if explicitly whitelisted by the OCP in the prompt itself (Prompt 0 or Prompt 0x), to keep SSoT ingestion verifiable.
+
+#### Exit condition (leaving Phase 0)
+Leaving Phase 0 is not automatic nor numerical. Phase 0 ends only when the OCP formally declares that the achieved information level is sufficient to formulate a robust, safe, and effective operational plan.
+This declaration is a governance act and a prerequisite to issuing any operational prompt (Prompt 1..N).
+
+#### Non-return rule (important)
+Once the operational phase starts (Prompt 1), the emergence of new structural uncertainties must not be resolved via new Prompt 0x prompts; it is a BLOCK condition for the Prompt Chain.
 
 ### 4.2 Phase 1..N – Operational micro-PR prompts
 - Purpose: implement scoped changes defined by the OCP while honoring path safety, template structure, and the Active Rules memo.
@@ -49,7 +89,7 @@ The Prompt Chain unfolds in three clearly delimited phases that map to numbered 
 - Conversations between Planner, OCP, and Codex must remain Italian to keep the human-in-the-loop flow consistent with this policy.
 
 ## 6. Prompt Template Expectations
-- Templates for Prompt 0, Prompt 0a..0x, Prompt 1..N, and Prompt N+1 live in `.codex/PROMPTS.md` and define the mandatory sections that each prompt must declare (purpose, allowed files, Active Rules memo, phase constraints, tests, etc.).
+- Templates for Prompt 0, Prompt 0x, Prompt 1..N, and Prompt N+1 live in `.codex/PROMPTS.md` and define the mandatory sections that each prompt must declare (purpose, allowed files, Active Rules memo, phase constraints, tests, etc.).
 - Operational prompts (Phase 1..N) are the only ones authorized to generate diffs, touch files, and execute the intermediate QA mentioned above; Phase 0 prompts remain analytical, and Prompt N+1 focuses on final QA plus narrative closure.
 - Every prompt must embed the Active Rules memo at the start of the response to remind all stakeholders of path safety, micro-PR scope, QA requirements, and the language policy.
 
