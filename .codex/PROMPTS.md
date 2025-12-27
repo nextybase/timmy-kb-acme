@@ -40,14 +40,25 @@ STOP RULE: <fermo dopo la risposta>
 
 ### Template: Prompt 0
 - Purpose: define the final goal of the Prompt Chain, the high-level plan, and instruct Codex to ingest the SSoT.
-- Required actions: load `docs/developer/coding_rule.md`, `docs/developer/developer_guide.md`, `system/specs/promptchain_spec.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, `.codex/WORKFLOWS.md`, `.codex/CHECKLISTS.md`, and `.codex/PROMPTS.md`, then confirm comprehension.
+- Required actions: load `docs/developer/coding_rule.md`, `docs/developer/developer_guide.md`, `system/specs/promptchain_spec.md`, `system/ops/agents_index.md`, `system/ops/runbook_codex.md`, `.codex/AGENTS.md`, `.codex/CODING_STANDARDS.md`, `.codex/WORKFLOWS.md`, `.codex/CHECKLISTS.md`, `.codex/CLOSURE_AND_SKEPTIC.md`, and `.codex/PROMPTS.md`, then confirm comprehension.
 - Mode: analytical, read-only; no files changed, no QA commands executed.
 - Output: Italian summary of the plan, statement of loaded documents, and risks.
+
+#### OPS AUTHORIZATION (READ-ONLY) — REQUIRED
+- Allowed (inspection only): `ls`/`dir`/`tree`/`find`/`Get-ChildItem`, `cat`/`less`/`head`/`tail`/`sed -n`/`Get-Content`, `rg`/`grep`, `git grep`/`git ls-files`/`git status`/`git diff`/`git log`.
+- Forbidden: any write/modify command, `apply_patch`, any formatter or tool that writes files, any test/build execution (`pytest`, `pre-commit`, etc.), any `git commit`/`git push`.
+
+#### DELIVERY STRATEGY (PLANNING DECISION) — REQUIRED
+- `target`: `main` | `branch`
+- `target_branch`: required iff `target=branch`
+- `push_policy`: `N+1_only`
+- `push_gate`: `OCP_explicit_authorization` + `SkepticGate_N+1′_PASS`
 
 ### Template: Prompt 0a..0x
 - Purpose: refine the plan with deeper analysis, file-by-file mapping, and sequencing of upcoming prompts.
 - Mode: analytical/read-only; still no edits or QA.
 - Output: Italian reasoning for each mandated document, points of ambiguity, proposed sequence for prompts 1..N, and explicit confirmation that no files or tests were touched.
+  - **Legacy note:** `Prompt 0a..0x` is legacy and should not be used for read-only inspections anymore. Any read-only inspection required for analysis must be explicitly whitelisted in Prompt 0 under `OPS AUTHORIZATION (READ-ONLY)`.
 
 ### Template: Prompt 1..N
 - Purpose: deliver operational micro-PRs that implement the scoped changes declared by the OCP.

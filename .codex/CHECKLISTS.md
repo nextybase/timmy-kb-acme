@@ -8,6 +8,9 @@
 - Respect the turn-based OCP ? Codex model defined in `system/specs/promptchain_spec.md`: process prompts in order, cite the specification as the SSoT, and never skip or reorder prompts.
 - Document final QA in the closing prompt: `pytest -q` plus `pre-commit run --all-files`.
 - Prompt Chain checklist: confirm Phase 0 stayed analytical/read-only with no diff/QA, each prompt 1..N produced a diff, included the Active Rules memo, executed (or justified) `pytest -q -k "not slow"`, and responded in Italian; Prompt N+1 must run `pytest -q` + `pre-commit run --all-files` and finish with an Italian one-line closing summary.
+  - Prompt 0 contains **OPS AUTHORIZATION (READ-ONLY)** (whitelist + explicit forbidden actions) and **DELIVERY STRATEGY (PLANNING DECISION)** (target + push policy/gate).
+  - Prompt N+1 contains commit subject (ITA) + commit id corto + commit SHA completo + SHA effettivamente pushato.
+  - Push behavior is coherent with the spec “push is not default” (`system/specs/promptchain_spec.md`) and with Prompt 0 `DELIVERY STRATEGY` (push only in N+1, only with explicit OCP authorization in N+1, only after QA PASS). Skeptic Gate N+1′ PASS closes the chain post N+1.
 - Skeptic Gate MUST presente (Evidence/Scope/Risk/Decision e Decision=PASS) prima di avanzare al prompt successivo; PASS WITH CONDITIONS richiede vincoli, BLOCK ferma la chain (SSoT: `system/specs/promptchain_spec.md`).
 - Evidence Gate reminder: se manca memo/diff/report/QA non si avanza con Prompt 1..N; il prossimo prompt rimane bloccato finché l’evidenza non ritorna completa (SSoT: `system/specs/promptchain_spec.md`).
 - Skeptic Gate reminder: dopo ogni risposta operativa Codex l’OCP valuta rischi/limiti e decide se proseguire; Codex può annotare problemi ma non autorizza il passaggio.

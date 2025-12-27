@@ -9,7 +9,17 @@ Scopo: formalizzare il packet di chiusura (Prompt N+1) e il successivo Skeptic G
   1. riepilogo delle modifiche e dei motivi di sicurezza,
   2. verifica delle policy `.codex/AGENTS.md`, `.codex/PROMPTS.md`, `.codex/WORKFLOWS.md`,
   3. elenco test automatizzati eseguiti + log di Skeptic Gate,
-  4. nota conclusiva “Chain chiusa” in italiano.
+  4. commit info obbligatorie:
+     - commit subject (ITA)
+     - commit id corto
+     - commit SHA completo
+     - SHA effettivamente pushato
+  5. nota conclusiva “Chain chiusa” in italiano.
+
+### Push policy (parametrica)
+- Il push (branch o `main`) è guidato da `DELIVERY STRATEGY` dichiarata in Prompt 0.
+- Il push **non è default**: avviene solo in Prompt N+1, solo con autorizzazione esplicita OCP nel Prompt N+1, e solo se la QA finale è PASS.
+- Il PASS del Skeptic Gate N+1′ chiude formalmente la chain (post N+1); non è un prerequisito runtime per eseguire il push dentro N+1.
 
 ## Skeptic Gate N+1′
 - ruolo: `OCP`

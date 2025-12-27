@@ -27,8 +27,9 @@ The Prompt Chain unfolds in three clearly delimited phases that map to numbered 
 
 ### 4.1 Phase 0 – Analytical, read-only prompts (Prompt 0, 0a..0x)
 - Objective: load every SSoT document, surface ambiguities, and design the operational plan without touching the filesystem.
+- Allowed exception (explicit): read-only inspection commands are permitted only if explicitly whitelisted by the OCP inside Prompt 0 (to make SSoT ingestion verifiable without introducing ad-hoc “Prompt 0a” variants).
 - Codex responses must focus on structured reasoning (plans, mappings, risks) and cite the documents reviewed.
-- No patch, diff, or QA command may be executed in this phase.
+- No patch, diff, or QA command may be executed in this phase; no writes, no formatting, no tests, no builds.
 
 ### 4.2 Phase 1..N – Operational micro-PR prompts
 - Purpose: implement scoped changes defined by the OCP while honoring path safety, template structure, and the Active Rules memo.
