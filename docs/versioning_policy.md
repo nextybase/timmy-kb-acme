@@ -19,7 +19,7 @@ Usiamo SemVer `MAJOR.MINOR.PATCH`:
 
 - Ogni release viene taggata come: `vMAJOR.MINOR.PATCH` (es. `v1.2.1`).
 - Il tag referenzia una commit in `main` (o `GIT_DEFAULT_BRANCH`).
-- Il changelog (`docs/CHANGELOG.md`) deve essere aggiornato contestualmente al tag.
+- Il changelog (`CHANGELOG.md`) deve essere aggiornato contestualmente al tag.
 
 ## 3) Branching
 
