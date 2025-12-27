@@ -13,6 +13,9 @@
 - Timmy KB Coder è stato rimosso insieme ai test/strumenti che si appoggiavano al DB globale `.timmykb`; il workflow 1.0 ora è totalmente slug-based e la documentazione riflette il flusso supportato.
 
 ### Changed
+- Changelog: eliminata la duplicazione (il changelog canonico e' `CHANGELOG.md` in root).
+- Documentazione: rimossi riferimenti al changelog duplicato; i riferimenti puntano al changelog canonico in root.
+Delivery anchor: CHAIN_ID=PC-VERIFY-001 | SHA=086807675cea8e71b969a7296a1a01ab13071d9f | Date=2025-12-27
 - Dev tooling: gli script legacy sono stati consolidati in `tools/` (`tools/smoke` per gli smoke); aggiornati riferimenti in CI (`.github/workflows/ci.yaml`), pre-commit (`.pre-commit-config.yaml`), `makefile` e documentazione (`docs/*`, `README`).
 - Indexing: indicizzazione parziale su mismatch `embeddings != contents` (troncamento al minimo comune) con telemetria aggiornata (`semantic.index.mismatched_embeddings`, `semantic.index.embedding_pruned`, `semantic.index.skips`).
 - Telemetria phase_scope: i rami "no files" e "no contents" ora emettono sempre `artifact_count=0` e chiusura `semantic.index.done`.
