@@ -32,9 +32,7 @@ def _write_required_dummy_files(workspace_root: Path) -> None:
     (workspace_root / "raw" / "sample.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
 
 
-def test_dummy_validate_structure_passes_when_cartelle_yaml_present(
-    tmp_path: Path, logger: logging.Logger
-) -> None:
+def test_dummy_validate_structure_passes_when_cartelle_yaml_present(tmp_path: Path, logger: logging.Logger) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     slug = "dummy-hc"
@@ -46,9 +44,7 @@ def test_dummy_validate_structure_passes_when_cartelle_yaml_present(
     validate_dummy_structure(layout.workspace_root, logger)
 
 
-def test_dummy_validate_structure_fails_when_cartelle_yaml_missing(
-    tmp_path: Path, logger: logging.Logger
-) -> None:
+def test_dummy_validate_structure_fails_when_cartelle_yaml_missing(tmp_path: Path, logger: logging.Logger) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     slug = "dummy-hc"

@@ -36,6 +36,18 @@ def test_pre_onboarding_local_structure_invokes_bootstrap(
     base = tmp_path / f"timmy-kb-{slug}"
     context = _build_context(base, slug)
 
+    src_timmy_kb = Path(pre_onboarding.__file__).resolve().parents[1]
+    spurious_paths = [
+        src_timmy_kb / "output" / "timmy-kb-dummy",
+        src_timmy_kb / "output" / f"timmy-kb-{slug}",
+    ]
+    existing_spurious = [str(path) for path in spurious_paths if path.exists()]
+    assert not existing_spurious, (
+        "Trovate directory spurie sotto src/timmy_kb/output (non devono essere create dai test):\n"
+        + "\n".join(f"- {path}" for path in existing_spurious)
+        + "\nSuggerimento: rimuovile manualmente e verifica la regressione su repo_root."
+    )
+
     called: list[ClientContext] = []
 
     original = pre_onboarding.bootstrap_client_workspace
@@ -53,6 +65,10 @@ def test_pre_onboarding_local_structure_invokes_bootstrap(
     assert (base / "config" / "config.yaml").is_file()
     layout = pre_onboarding.WorkspaceLayout.from_context(context)
     assert layout.slug == slug
+
+    # Regression guard: non creare output spurio sotto src/timmy_kb/
+    assert not (src_timmy_kb / "output" / "timmy-kb-dummy").exists()
+    assert not (src_timmy_kb / "output" / f"timmy-kb-{slug}").exists()
 
 
 def test_bootstrap_semantic_templates_writes_cartelle_raw_only_in_workspace(

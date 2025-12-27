@@ -319,7 +319,9 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
 
     write_client_config_file(context, cfg)
 
-    repo_root = Path(__file__).resolve().parents[1]
+    # Nota: non usare Path(__file__).parents[1] (-> src/timmy_kb) come repo root:
+    # innesca la creazione di output/ sotto src/timmy_kb tramite workspace_paths(..., create=True).
+    repo_root = get_repo_root(allow_env=False)
     bootstrap_semantic_templates(repo_root, context, client_name, logger)
 
     if context.base_dir is None or context.raw_dir is None or context.md_dir is None:

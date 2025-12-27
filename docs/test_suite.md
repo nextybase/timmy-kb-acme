@@ -31,6 +31,43 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 
 ---
 
+## Eseguire i test (menu pratico)
+
+Questa sezione evita run pesanti non necessari. I marker ufficiali sono definiti in `pytest.ini` (es. `contract`, `ui`, `pipeline`, `semantic`, `slow`, `e2e`, `push`, `drive`).
+
+```bash
+# default "smoke locale" (rispetta la selezione di pytest.ini; esclude push/drive/e2e)
+pytest -q
+
+# suite "default CI" esplicita (equivalente alla selezione di default in pytest.ini)
+pytest -q -m "not push and not drive and not e2e" --maxfail=1
+
+# per area: selezione per cartella (rapida e prevedibile)
+pytest -q tests/pipeline --maxfail=1
+pytest -q tests/ui --maxfail=1
+pytest -q tests/tools --maxfail=1
+pytest -q tests/semantic --maxfail=1
+
+# per marker (usa i marker ufficiali in pytest.ini)
+pytest -q -m "contract" --maxfail=1
+pytest -q -m "ui" --maxfail=1
+pytest -q -m "pipeline" --maxfail=1
+pytest -q -m "semantic" --maxfail=1
+
+# pesanti (esegui solo quando serve)
+pytest -q -m "slow" --maxfail=1                 # smoke/end-to-end lenti
+pytest -q -m "e2e" --maxfail=1                  # Playwright (vedi ADR-0003)
+pytest -q -m "push" --maxfail=1                 # richiede GITHUB_TOKEN
+pytest -q -m "drive" --maxfail=1                # richiede SERVICE_ACCOUNT_FILE e DRIVE_ID
+```
+
+Quando usare cosa (regola pratica)
+- PR piccola su utility/pipeline: `pytest -q tests/pipeline --maxfail=1`
+- Modifiche UI/Streamlit: `pytest -q -m "ui" --maxfail=1` (o `pytest -q tests/ui --maxfail=1`)
+- Gating/navigazione: `pytest -q -m "contract" --maxfail=1`
+- Verifica regressioni E2E UI: `pytest -q -m "e2e" --maxfail=1` (solo con Playwright pronto)
+- Smoke end-to-end “lento”: `pytest -q -m "slow" --maxfail=1`
+
 ## Marker e convenzioni
 
 - `slow`  test lenti/smoke end-to-end.
