@@ -9,18 +9,24 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from pipeline.logging_utils import get_structured_logger
+from pipeline.settings import Settings
 
 
 class _Ctx:
     """Contesto minimo compatibile con run_vision (serve .base_dir)."""
 
-    def __init__(self, base_dir: Path) -> None:
+    def __init__(self, base_dir: Path, *, slug: str) -> None:
         self.base_dir = base_dir
+        self.slug = slug
+        try:
+            self.settings = Settings.load(base_dir)
+        except Exception:
+            self.settings = {}
 
 
 def _vision_worker(queue: mp.Queue, slug: str, base_dir: str, pdf_path: str, run_vision: Callable[..., Any]) -> None:
     """Esegue run_vision in un sottoprocesso e restituisce esito tramite queue."""
-    ctx = _Ctx(Path(base_dir))
+    ctx = _Ctx(Path(base_dir), slug=slug)
     logger = get_structured_logger("tools.gen_dummy_kb.vision", context={"slug": slug})
     try:
         run_vision(ctx, slug=slug, pdf_path=Path(pdf_path), logger=logger)

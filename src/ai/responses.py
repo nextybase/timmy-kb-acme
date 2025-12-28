@@ -61,6 +61,11 @@ def _extract_output_text(response: Any) -> str:
     """
     Estrae il testo da una risposta OpenAI Responses, replicando il pattern usato nel repo.
     """
+    # Alcune versioni dell'SDK espongono direttamente l'output aggregato.
+    direct_text = getattr(response, "output_text", None)
+    if isinstance(direct_text, str) and direct_text.strip():
+        return direct_text.strip()
+
     output = getattr(response, "output", None)
     if not isinstance(output, list):
         raise ConfigError(
@@ -69,13 +74,30 @@ def _extract_output_text(response: Any) -> str:
             component="responses",
         )
 
+    def _maybe_text_from_block(block: Any) -> str | None:
+        if block is None:
+            return None
+        if getattr(block, "type", None) == "output_text":
+            text_obj = getattr(block, "text", None)
+            value = getattr(text_obj, "value", None) if text_obj is not None else None
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return None
+
     for item in output:
-        if getattr(item, "type", None) != "output_text":
-            continue
-        text_obj = getattr(item, "text", None)
-        value = getattr(text_obj, "value", None) if text_obj is not None else None
-        if isinstance(value, str) and value.strip():
-            return value.strip()
+        # Forma A: output=[OutputText(...)]
+        direct = _maybe_text_from_block(item)
+        if direct:
+            return direct
+
+        # Forma B (più comune): output=[Message(content=[OutputText(...), ...]), ...]
+        if getattr(item, "type", None) == "message":
+            content = getattr(item, "content", None)
+            if isinstance(content, list):
+                for block in content:
+                    nested = _maybe_text_from_block(block)
+                    if nested:
+                        return nested
 
     raise ConfigError("Responses completata ma nessun testo nel messaggio di output.")
 
@@ -209,11 +231,28 @@ def run_json_model(
         LOGGER.error("ai.responses.unsupported", extra={"error": str(exc)})
         raise ConfigError("Client OpenAI non supporta l'API Responses.") from exc
     except TypeError as exc:
-        raise ConfigError(
-            f"Chiamata Responses fallita per incompatibilità SDK/argomenti: {exc}",
-            code="responses.request.invalid",
-            component="responses",
-        ) from exc
+        # Alcune versioni dell'SDK non accettano `response_format` su Responses.create.
+        # In tal caso riproviamo senza `response_format`, mantenendo comunque il vincolo
+        # "JSON-only" a livello di prompt/system message.
+        if "response_format" in str(exc):
+            try:
+                resp = client.responses.create(
+                    model=model,
+                    input=input_payload,
+                    metadata=normalized_metadata,
+                )
+            except Exception as inner_exc:  # pragma: no cover - fallback best-effort
+                raise ConfigError(
+                    f"Chiamata Responses fallita per incompatibilità SDK/argomenti: {exc}",
+                    code="responses.request.invalid",
+                    component="responses",
+                ) from inner_exc
+        else:
+            raise ConfigError(
+                f"Chiamata Responses fallita per incompatibilità SDK/argomenti: {exc}",
+                code="responses.request.invalid",
+                component="responses",
+            ) from exc
     except Exception as exc:
         LOGGER.error("ai.responses.error", extra={"error": str(exc)})
         raise ConfigError(f"Chiamata Responses fallita: {exc}") from exc

@@ -37,6 +37,14 @@ class AiCfgRoot(TypedDict, total=False):
 
 
 def _vision_section(payload: Mapping[str, Any]) -> Optional[VisionCfg]:
+    # Schema attuale: ai.vision (config/config.yaml riorganizzato)
+    ai_candidate = payload.get("ai")
+    if isinstance(ai_candidate, Mapping):
+        nested = ai_candidate.get("vision")
+        if isinstance(nested, Mapping):
+            return cast(VisionCfg, nested)
+
+    # Legacy compat: vision.* a root
     candidate = payload.get("vision")
     if isinstance(candidate, Mapping):
         return cast(VisionCfg, candidate)

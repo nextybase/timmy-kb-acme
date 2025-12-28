@@ -37,6 +37,17 @@ def test_get_repo_root_env_invalid(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         get_repo_root()
 
 
+def test_get_repo_root_env_ignored_when_sentinel_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _make_repo(tmp_path)
+    # Simula un path "workspace-like": esiste ma non è una repo root (mancano sentinel).
+    workspace_like = repo / "output" / "timmy-kb-dummy"
+    workspace_like.mkdir(parents=True)
+    monkeypatch.setenv("REPO_ROOT_DIR", str(workspace_like))
+    monkeypatch.chdir(repo)
+    found = get_repo_root()
+    assert found == repo
+
+
 def test_get_repo_root_detects_from_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _make_repo(tmp_path)
     monkeypatch.delenv("REPO_ROOT_DIR", raising=False)

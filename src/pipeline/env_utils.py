@@ -29,7 +29,6 @@ __all__ = [
 
 _LOGGER = get_structured_logger("pipeline.env_utils")
 _ENV_LOADED = False
-_MISSING_KEYS_PRESERVED = {"SERVICE_ACCOUNT_FILE", "DRIVE_ID"}
 
 
 def ensure_dotenv_loaded() -> bool:
@@ -41,7 +40,6 @@ def ensure_dotenv_loaded() -> bool:
     global _ENV_LOADED
     if _ENV_LOADED:
         return False
-    missing_keys = {key for key in _MISSING_KEYS_PRESERVED if key not in os.environ}
     if importlib.util.find_spec("dotenv") is None:
         return False
     try:
@@ -79,8 +77,9 @@ def ensure_dotenv_loaded() -> bool:
         # Non propagare: il caricamento .env è best-effort
         return False
     finally:
-        for key in missing_keys:
-            os.environ.pop(key, None)
+        # Non ripristiniamo le variabili mancanti: se .env le fornisce, sono necessarie
+        # per i flussi reali (Drive/GitHub) e devono rimanere disponibili nel processo.
+        pass
 
 
 def get_env_var(name: str, default: Optional[str] = None, *, required: bool | None = False) -> Optional[str]:

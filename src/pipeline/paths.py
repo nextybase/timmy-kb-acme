@@ -78,29 +78,24 @@ def _detect_repo_root(candidates: Sequence[Path]) -> Path | None:
     return None
 
 
-def _validate_repo_root_env(raw: str) -> Path:
-    candidate = Path(raw).expanduser()
-    if not candidate.is_absolute():
-        LOGGER.error(
-            "paths.repo_root.invalid_env",
-            extra={"repo_root_dir": raw, "reason": "not_absolute"},
-        )
-        raise ConfigError(f"REPO_ROOT_DIR deve essere un path assoluto: {raw}")
-
-    resolved = candidate.resolve()
+def _validate_repo_root_env(value: str) -> Path | None:
+    resolved = Path(value).expanduser().resolve()
     if not resolved.exists():
         LOGGER.error(
-            "paths.repo_root.invalid_env",
-            extra={"repo_root_dir": raw, "reason": "not_found"},
+            "paths.repo_root.env_invalid",
+            extra={"repo_root_dir": value, "reason": "not_exists"},
         )
         raise ConfigError(f"REPO_ROOT_DIR non esiste: {resolved}")
 
-    if not _has_sentinel(resolved):
-        LOGGER.error(
-            "paths.repo_root.invalid_env",
-            extra={"repo_root_dir": raw, "reason": "sentinel_missing"},
+    has_git = (resolved / ".git").exists()
+    has_pyproject = (resolved / "pyproject.toml").exists()
+    if not (has_git or has_pyproject):
+        # ORA: warning + ignore (fallback detection)
+        LOGGER.warning(
+            "paths.repo_root.env_ignored",
+            extra={"repo_root_dir": value, "resolved": str(resolved), "reason": "sentinel_missing"},
         )
-        raise ConfigError("REPO_ROOT_DIR non sembra la root del repo " f"(manca .git/pyproject): {resolved}")
+        return None
 
     return resolved
 
@@ -117,8 +112,10 @@ def get_repo_root(*, allow_env: bool = True) -> Path:
     env_root = os.getenv("REPO_ROOT_DIR") if allow_env else None
     if env_root:
         resolved = _validate_repo_root_env(env_root)
-        LOGGER.info("paths.repo_root.env", extra={"repo_root": str(resolved)})
-        return resolved
+        if resolved is not None:
+            LOGGER.info("paths.repo_root.env", extra={"repo_root": str(resolved)})
+            return resolved
+        # se None: continuiamo col detection standard (no fail-fast)
 
     this_file = Path(__file__).resolve()
     candidates = [Path.cwd(), this_file.parent]
