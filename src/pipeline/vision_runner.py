@@ -23,11 +23,9 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from semantic.vision_provision import (
-    HaltError,
-    provision_from_vision_with_config as _provision_from_pdf,
-    provision_from_vision_yaml_with_config as _provision_from_yaml,
-)
+from semantic.vision_provision import HaltError
+from semantic.vision_provision import provision_from_vision_with_config as _provision_from_pdf
+from semantic.vision_provision import provision_from_vision_yaml_with_config as _provision_from_yaml
 
 # Alias patchabili per test/dummy
 _provision_from_vision_with_config = _provision_from_pdf
@@ -146,9 +144,7 @@ def run_vision_with_gating(
         "vision_provision"
     )
     use_yaml = (
-        _provision_from_vision_yaml_with_config is not None
-        and provision_from_semantic_module
-        and yaml_path.exists()
+        _provision_from_vision_yaml_with_config is not None and provision_from_semantic_module and yaml_path.exists()
     )
 
     try:

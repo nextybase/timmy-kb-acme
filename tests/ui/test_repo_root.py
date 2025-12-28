@@ -1,30 +1,34 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from pathlib import Path
-
-from ui.utils.repo_root import _find_repo_root
+from ui.utils.repo_root import get_repo_root
 
 
-def test_find_repo_root_prefers_git_marker(tmp_path) -> None:
+def test_get_repo_root_detects_marker_from_cwd(monkeypatch, tmp_path) -> None:
     project_root = tmp_path / "project"
     nested_dir = project_root / "src" / "ui"
     nested_dir.mkdir(parents=True)
     (project_root / ".git").mkdir()
 
-    assert _find_repo_root(nested_dir) == project_root
+    monkeypatch.chdir(nested_dir)
+    monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
+
+    assert get_repo_root(allow_env=False) == project_root
 
 
-def test_find_repo_root_uses_pyproject_marker(tmp_path) -> None:
-    project_root = tmp_path / "project"
-    nested_dir = project_root / "app"
-    nested_dir.mkdir(parents=True)
-    (project_root / "pyproject.toml").touch()
+def test_get_repo_root_env_valid(monkeypatch, tmp_path) -> None:
+    repo = tmp_path / "project-env"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    monkeypatch.setenv("REPO_ROOT_DIR", str(repo))
+    assert get_repo_root() == repo
 
-    assert _find_repo_root(nested_dir) == project_root
 
-
-def test_find_repo_root_fallbacks_to_cwd(tmp_path, monkeypatch) -> None:
-    nested_dir = tmp_path / "orphan" / "deep"
-    nested_dir.mkdir(parents=True)
-    monkeypatch.chdir(tmp_path)
-
-    assert _find_repo_root(nested_dir) == Path.cwd().resolve()
+def test_get_repo_root_env_disabled(monkeypatch, tmp_path) -> None:
+    repo = tmp_path / "project-disabled"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / ".git").mkdir()
+    monkeypatch.setenv("REPO_ROOT_DIR", str(other))
+    monkeypatch.chdir(repo)
+    assert get_repo_root(allow_env=False) == repo

@@ -21,6 +21,7 @@ Cornice filosofica e di responsabilità: [MANIFEST.md](MANIFEST.md).
 - (Opz.) Docker per la preview HonKit
 - Credenziali Google Drive (Service Account JSON) se usi la sorgente Drive
 - Token GitHub se abiliti il push finale
+- Le credenziali (es. service_account.json, OPENAI_API_KEY) restano fuori dal repo e vanno fornite via `.env`/file locali non tracciati
 
 Variabili d'ambiente principali: `OPENAI_API_KEY`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `LOG_REDACTION`.
 Per il logging avanzato usa `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TIMMY_LOG_PROPAGATE`, `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, `TIMMY_ENV`.

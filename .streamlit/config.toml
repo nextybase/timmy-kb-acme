@@ -1,8 +1,0 @@
-[theme]
-# Palette base coerente con il brand; Streamlit la applica prima di ogni HTML custom.
-primaryColor = "#2B6CB0"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F8FAFC"
-textColor = "#111827"
-font = "sans serif"
-base = "light"
