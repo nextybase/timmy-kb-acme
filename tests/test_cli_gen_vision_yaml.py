@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-import src.tools.gen_vision_yaml as cli
+import tools.gen_vision_yaml as cli
 from ai.types import AssistantConfig
 from pipeline.exceptions import ConfigError
 from semantic.vision_provision import HaltError

@@ -6,7 +6,7 @@ from importlib import import_module
 from types import ModuleType
 from typing import Any, Callable, Sequence
 
-DEFAULT_DUMMY_PREFIXES: tuple[str, ...] = ("src.tools.dummy", "tools.dummy")
+DEFAULT_DUMMY_PREFIXES: tuple[str, ...] = ("tools.dummy",)
 
 
 def _import_dummy_module(suffix: str, prefixes: Sequence[str]) -> ModuleType:

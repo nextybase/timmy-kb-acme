@@ -8,6 +8,18 @@
 ### Pending
 - Push intermedio: integrazione UI Vision e adapter OpenAI (vector stores/responses/chat) ancora in debug; modifiche non definitive, seguiranno fix per completare il flusso nuovo cliente.
 
+## Import Contract unico + tools/ SSoT (breaking interna)
+- Eliminato il doppio namespace: niente fallback `src.*`, healthcheck Vision senza sys.path hacking, dummy loader su `tools.dummy.*`, gen_vision_yaml come entrypoint tools/.
+- Tooling consolidato: `tools/dummy/**` come package nativo, `tools/gen_dummy_kb.py` e `tools/gen_vision_yaml.py` sotto tools/, cleanup UI allineato a tools SSoT.
+- Impatto: chi importava `src.tools.*` o manipolava `sys.path` deve migrare a `tools.*`/namespace top-level; nessun shim legacy.
+- File principali: docs/import_contract.md, tools/gen_dummy_kb.py, tools/gen_vision_yaml.py, tools/dummy/*, tools/smoke/kb_healthcheck.py, src/ui/manage/cleanup.py, src/pipeline/capabilities/dummy_kb.py, tests/test_capabilities_dummy_kb.py, tests/test_cli_gen_vision_yaml.py.
+
+### TODO (next session)
+- Residui `src.*` fuori scope da ripulire: docs/import_contract.md (esempio), tests/semantic/test_manage_dedup.py, tests/test_gen_dummy_kb_import_safety.py (2 occorrenze).
+- Comandi: `rg 'from\\s+src\\.|import\\s+src\\.|importlib\\.import_module\\(\"src\\.' -n` e `rg 'sys\\.path\\.(insert|append)' -n tools src`.
+- Pulizia sys.path: rimuovere insert/append residui in tools (ci_dump_nav.py, forbid_control_chars.py, ci/oidc_probe.py, retriever_benchmark.py, dev/test_push_shallow.py, smoke/vision_alignment_check.py, smoke/smoke_semantic_from_drive.py, smoke/smoke_e2e.py, smoke/debug_vision_schema.py) e in src (ui/chrome.py, src/tools/gen_vision_yaml.py, src/tools/gen_dummy_kb.py, ui/pages/agents_network.py, timmy_kb/cli/semantic_onboarding.py, pipeline/paths.py); DoD: sys.path hacking solo in entrypoint motivati/documentati.
+- DoD complessivo: zero import `src.*` nei moduli applicativi/test/docs; sys.path limitato agli entrypoint dichiarati; esempi/docs allineati all’Import Contract unico.
+
 ### Breaking
 - Schema `config/config.yaml` riorganizzato in macro-sezioni `meta`, `ui`, `ai` (openai/vision), `pipeline` (retriever/raw_cache), `security`, `integrations`, `ops`, `finance`; aggiornare eventuali tool esterni che leggevano le chiavi legacy.
 - Timmy KB Coder è stato rimosso insieme ai test/strumenti che si appoggiavano al DB globale `.timmykb`; il workflow 1.0 ora è totalmente slug-based e la documentazione riflette il flusso supportato.

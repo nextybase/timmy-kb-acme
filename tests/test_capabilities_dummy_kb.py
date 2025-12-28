@@ -14,13 +14,13 @@ def _make_module(**attrs):
 
 def test_load_dummy_helpers_success(monkeypatch):
     modules = {
-        "src.tools.dummy.bootstrap": _make_module(client_base=lambda: "base", pdf_path=lambda: "pdf"),
-        "src.tools.dummy.orchestrator": _make_module(
+        "tools.dummy.bootstrap": _make_module(client_base=lambda: "base", pdf_path=lambda: "pdf"),
+        "tools.dummy.orchestrator": _make_module(
             build_dummy_payload=lambda: "payload",
             register_client=lambda: "register",
             validate_dummy_structure=lambda: "validate",
         ),
-        "src.tools.dummy.semantic": _make_module(
+        "tools.dummy.semantic": _make_module(
             ensure_book_skeleton=lambda: "skeleton",
             ensure_local_readmes=lambda: "readmes",
             ensure_minimal_tags_db=lambda: "tags",
@@ -28,7 +28,7 @@ def test_load_dummy_helpers_success(monkeypatch):
             load_mapping_categories=lambda: "mapping",
             write_basic_semantic_yaml=lambda: "yaml",
         ),
-        "src.tools.dummy.vision": _make_module(run_vision_with_timeout=lambda: "vision"),
+        "tools.dummy.vision": _make_module(run_vision_with_timeout=lambda: "vision"),
     }
 
     def fake_import(name: str):

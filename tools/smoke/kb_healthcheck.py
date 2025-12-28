@@ -13,28 +13,13 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# --- ensure repo root & src are on sys.path ---------------------------------
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_DIR = REPO_ROOT / "src"
-# metti prima src (cosÃ¬ importiamo "ui.*"), poi root (per fallback "src.ui.*")
-if SRC_DIR.exists():
-    sys.path.insert(0, str(SRC_DIR))
-sys.path.insert(0, str(REPO_ROOT))
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
 from pipeline.file_utils import safe_write_bytes
 from pipeline.path_utils import ensure_within_and_resolve
-
-# ---- UI config (SSoT del modello Vision) -------------------------------------
-try:
-    from ui.config_store import get_vision_model  # type: ignore
-except Exception:
-    try:
-        from src.ui.config_store import get_vision_model  # type: ignore
-    except Exception:
-
-        def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:  # type: ignore
-            return default
+from ui.config_store import get_vision_model  # type: ignore
+from ui.services.vision_provision import run_vision  # type: ignore
 
 
 def _optional_env(name: str) -> Optional[str]:
@@ -47,13 +32,13 @@ def _optional_env(name: str) -> Optional[str]:
 
 
 def _is_gate_error(exc: BaseException) -> bool:
-    """Riconosce l'eccezione del gate Vision giÃ  eseguito."""
+    """Riconosce l'eccezione del gate Vision già eseguito."""
     normalized = unicodedata.normalize("NFKD", str(exc)).casefold()
     return "vision" in normalized and "gia" in normalized and "eseguito" in normalized
 
 
 def _existing_vision_artifacts(base_dir: Path) -> Dict[str, str]:
-    """Restituisce i path agli artefatti Vision giÃ  presenti (se esistono)."""
+    """Restituisce i path agli artefatti Vision già presenti (se esistono)."""
     payload = {"mapping": "", "cartelle_raw": ""}
     try:
         semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
@@ -120,23 +105,11 @@ def _sync_workspace_pdf(base_dir: Path, source_pdf: Path) -> Path:
     return target
 
 
-# ---- Vision UI API (primary: ui.*, fallback: src.ui.*) ----------------------
-try:
-    from ui.services.vision_provision import run_vision  # type: ignore
-except Exception:
-    try:
-        from src.ui.services.vision_provision import run_vision  # type: ignore
-    except Exception as e:
-        _print_err({"error": f"Impossibile importare run_vision: {e}"}, 1)
-
-# ---- semantic module for monkey-patch (primary: semantic.*, fallback: src.semantic.*)
+# ---- semantic module for monkey-patch (only semantic.*) ----------------------
 try:
     vp = importlib.import_module("semantic.vision_provision")
-except Exception:
-    try:
-        vp = importlib.import_module("src.semantic.vision_provision")
-    except Exception as e:
-        _print_err({"error": f"Impossibile importare semantic.vision_provision: {e}"}, 1)
+except Exception as e:
+    _print_err({"error": f"Impossibile importare semantic.vision_provision: {e}"}, 1)
 
 
 # ---- guardie ambiente / .env -----------------------------------------------
@@ -169,7 +142,7 @@ def _ensure_kb_enabled_or_fail() -> None:
     if not get_bool("VISION_USE_KB", default=True):
         _print_err(
             {
-                "error": "VISION_USE_KB Ã¨ disabilitata ma l'healthcheck richiede la KB attiva.",
+                "error": "VISION_USE_KB è disabilitata ma l'healthcheck richiede la KB attiva.",
                 "hint": "Rimuovi VISION_USE_KB oppure impostala a 1",
             },
             3,
@@ -205,7 +178,7 @@ def run_healthcheck(
         def __init__(self, base_dir: Path):
             self.base_dir = base_dir
             self.client_name = slug
-            self.settings = {}
+            self.settings: Dict[str, Any] = {}
 
     ctx = _Ctx(base_dir)
     logger = logging.getLogger("healthcheck.vision")
@@ -250,9 +223,6 @@ def run_healthcheck(
         else:
             raise HealthcheckError({"error": f"Vision failed: {exc}"}, 1)
 
-    # Con il nuovo pattern model-only (Responses), non utilizziamo piÃ¹ thread/run.
-    # La diagnostica si basa sugli artefatti prodotti (mapping/cartelle) e su un breve
-    # estratto del contenuto YAML, senza introspezione di thread Assistant.
     used_file_search = False
     citations: List[Dict[str, Any]] = []
     excerpt = ""
@@ -272,12 +242,6 @@ def run_healthcheck(
         if len(excerpt) > 400:
             excerpt = excerpt[:400].rstrip() + "..."
         used_file_search = True
-
-    # NOTE:
-    # - used_file_search qui indica che Vision ha prodotto un mapping valido/leggibile,
-    #   NON l'uso diretto del tool file_search via API threads/runs.
-    # - citations è sempre [] in questa versione: se in futuro serviranno citazioni
-    #   esplicite, andrà esteso il prompt/JSON del modello.
 
     out: Dict[str, Any] = {
         "status": "skipped" if run_skipped else "completed",
