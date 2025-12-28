@@ -11,8 +11,6 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 _VAC_PATH = ROOT / "tools" / "smoke" / "vision_alignment_check.py"
 _spec = importlib.util.spec_from_file_location("vision_alignment_check", _VAC_PATH)

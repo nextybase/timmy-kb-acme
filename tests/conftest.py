@@ -22,11 +22,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 OBSERVABILITY_COMPOSE = REPO_ROOT / "observability" / "docker-compose.yaml"
 DOCKER_BIN = shutil.which("docker")
 SRC_ROOT = REPO_ROOT / "src"
-for candidate in (REPO_ROOT, SRC_ROOT):
-    if str(candidate) not in sys.path:
-        sys.path.insert(0, str(candidate))
 
 import sqlite3
+
+try:
+    import pipeline  # type: ignore # noqa: F401
+except Exception as exc:  # pragma: no cover - fail fast on misconfigured env
+    raise RuntimeError("Esegui pytest con PYTHONPATH=src per importare pipeline/*") from exc
 
 from semantic import api as _semantic_api
 from semantic import convert_service as _convert_service

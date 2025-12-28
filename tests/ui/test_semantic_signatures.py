@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import inspect
-import sys
 from importlib import import_module
-from pathlib import Path
 
 
 def _sig(fn: object) -> list[tuple[inspect._ParameterKind, str, object]]:
@@ -13,10 +11,6 @@ def _sig(fn: object) -> list[tuple[inspect._ParameterKind, str, object]]:
 
 
 def test_semantics_ui_facade_signatures_match() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
-    src_path = str(repo_root / "src")
-    if src_path not in sys.path:
-        sys.path.append(src_path)
     api = import_module("semantic.api")
     expected = {
         "convert_markdown": [

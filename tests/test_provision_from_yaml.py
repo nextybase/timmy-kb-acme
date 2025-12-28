@@ -2,22 +2,14 @@
 # tests/test_provision_from_yaml.py
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
 yaml = pytest.importorskip("yaml")
 
-
-# --- bootstrap: aggiungi src/ al sys.path come fa la UI ---
-ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-from pipeline.exceptions import ConfigError  # noqa: E402
-from pipeline.provision_from_yaml import provision_directories_from_cartelle_raw  # noqa: E402
+from pipeline.exceptions import ConfigError
+from pipeline.provision_from_yaml import provision_directories_from_cartelle_raw
 
 
 class _NoopLogger:

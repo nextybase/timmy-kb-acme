@@ -20,12 +20,11 @@ try:
 except Exception:
     yaml = None  # type: ignore
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SRC_ROOT = REPO_ROOT / "src"
+from pipeline.paths import ensure_src_on_sys_path, get_repo_root
 
-for candidate in (str(REPO_ROOT), str(SRC_ROOT)):
-    if candidate not in sys.path:
-        sys.path.insert(0, candidate)
+REPO_ROOT = get_repo_root()
+# ENTRYPOINT BOOTSTRAP — consentito: rende disponibile <repo>/src per import pipeline/ui/semantic.
+ensure_src_on_sys_path(REPO_ROOT)
 
 
 class _PayloadPaths(TypedDict):
@@ -196,10 +195,6 @@ def _ensure_dependencies() -> None:
     """Carica lazy le dipendenze opzionali e popola i placeholder pubblici."""
     if getattr(_ensure_dependencies, "_done", False):
         return
-
-    for candidate in (str(REPO_ROOT), str(SRC_ROOT)):
-        if candidate not in sys.path:
-            sys.path.insert(0, candidate)
 
     global safe_write_text, safe_write_bytes, _fin_import_csv
     safe_write_text = _safe_write_text  # type: ignore

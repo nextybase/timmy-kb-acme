@@ -6,21 +6,18 @@ import argparse
 import sys
 from pathlib import Path
 
-# Bootstrap identico alla UI: aggiungi SRC al sys.path
-ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
+from pipeline.paths import ensure_src_on_sys_path, get_repo_root
 from semantic.vision_provision import HaltError, provision_from_vision_with_config
 
 
 def main() -> int:
     """Genera gli artefatti Vision Statement richiedendo il modello AI."""
+    # ENTRYPOINT BOOTSTRAP — consentito: garantisce import di pipeline/semantic fuori da venv editable.
+    ensure_src_on_sys_path(get_repo_root())
     parser = argparse.ArgumentParser("gen_vision_yaml")
     parser.add_argument("--slug", required=True, help="Slug cliente (kebab-case)")
     parser.add_argument("--pdf", required=True, help="Percorso al VisionStatement.pdf")

@@ -263,6 +263,7 @@ pip-compile requirements-optional.in
 pre-commit install --hook-type pre-commit --hook-type pre-push
 make qa-safe     # isort/black/ruff/mypy (se presenti)
 make ci-safe     # qa-safe + pytest
+# Ambientesenza install: esegui i test con PYTHONPATH=src pytest -q
 ```
 
 ## Interfacciarsi correttamente agli Assistant OpenAI con l'SDK interno

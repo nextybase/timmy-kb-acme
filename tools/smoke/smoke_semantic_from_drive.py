@@ -23,10 +23,15 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 
-# Aggancia src/ al PYTHONPATH se lanciato da root repo
-SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+_TOOLS_DIR = next(p for p in Path(__file__).resolve().parents if p.name == "tools")
+_REPO_ROOT = _TOOLS_DIR.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from tools._bootstrap import bootstrap_repo_src
+
+# ENTRYPOINT BOOTSTRAP - consentito: abilita import pipeline/semantic/ui senza installazione.
+REPO_ROOT = bootstrap_repo_src()
 
 from pipeline.context import ClientContext  # type: ignore[import]
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for  # type: ignore[import]

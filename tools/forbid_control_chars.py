@@ -8,9 +8,15 @@ from importlib import import_module
 from pathlib import Path
 from typing import List, Sequence
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(_REPO_ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT / "src"))
+_TOOLS_DIR = next(p for p in Path(__file__).resolve().parents if p.name == "tools")
+_REPO_ROOT = _TOOLS_DIR.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from tools._bootstrap import bootstrap_repo_src
+
+# ENTRYPOINT BOOTSTRAP - consentito: abilita import pipeline.* senza installazione.
+REPO_ROOT = bootstrap_repo_src()
 
 # Import dinamici post-bootstrapping per rispettare E402 (niente import dopo codice)
 _file_utils = import_module("pipeline.file_utils")
@@ -66,7 +72,7 @@ def _clean_text(text: str) -> str:
 
 def _process_path(path_str: str, *, fix: bool) -> int:
     try:
-        resolved = ensure_within_and_resolve(_REPO_ROOT, Path(path_str))
+        resolved = ensure_within_and_resolve(REPO_ROOT, Path(path_str))
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.error(
             "forbid-control-chars: path traversal o risoluzione fallita",

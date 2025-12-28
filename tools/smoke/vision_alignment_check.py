@@ -17,33 +17,15 @@ from typing import Any, Dict, List, Optional
 
 from dotenv import find_dotenv, load_dotenv
 
+_TOOLS_DIR = next(p for p in Path(__file__).resolve().parents if p.name == "tools")
+_REPO_ROOT = _TOOLS_DIR.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-# -------------------------------------------------
-# Rilevamento robusto della root del repo
-# -------------------------------------------------
-def _detect_repo_root() -> Path:
-    """
-    Trova la root del repo risalendo le cartelle finchÃ© non vede `src/`.
-    Funziona dal percorso corrente `tools/` (cartella archive rimossa).
-    """
-    here = Path(__file__).resolve()
-    for candidate in here.parents:
-        if (candidate / "src").is_dir():
-            return candidate
+from tools._bootstrap import bootstrap_repo_src
 
-    # Fallback: parent di `tools/`, se presente
-    for candidate in here.parents:
-        if candidate.name == "scripts":
-            return candidate.parent
-
-    # Ultimo fallback: 1 livello sopra il file
-    return here.parents[1]
-
-
-ROOT = _detect_repo_root()
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+# ENTRYPOINT BOOTSTRAP - consentito: abilita import pipeline.* senza installazione.
+ROOT = bootstrap_repo_src()
 
 from pipeline.env_utils import get_env_var  # noqa: E402
 from pipeline.logging_utils import get_structured_logger  # noqa: E402

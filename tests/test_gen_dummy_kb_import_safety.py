@@ -5,8 +5,8 @@ from __future__ import annotations
 import importlib
 import sys
 
-import src.tools.gen_dummy_kb as gen_dummy_mod
-from src.tools.gen_dummy_kb import main as gen_dummy_main
+import tools.gen_dummy_kb as gen_dummy_mod
+from tools.gen_dummy_kb import main as gen_dummy_main
 from ui.utils.workspace import clear_base_cache
 
 
@@ -43,14 +43,13 @@ def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) 
     monkeypatch.setattr(gen_dummy_mod, "safe_write_bytes", lambda *a, **k: None)
     monkeypatch.setenv("REPO_ROOT_DIR", str(base_dir))
     monkeypatch.setattr(gen_dummy_mod, "REPO_ROOT", base_dir)
-    monkeypatch.setattr(gen_dummy_mod, "SRC_ROOT", base_dir / "src")
     monkeypatch.setattr(gen_dummy_mod, "_purge_previous_state", lambda *a, **k: None)
 
 
 def test_module_import_has_no_side_effects(tmp_path):
     """Importare il modulo non deve modificare sys.path né fare I/O."""
     before = list(sys.path)
-    mod = importlib.import_module("src.tools.gen_dummy_kb")
+    mod = importlib.import_module("tools.gen_dummy_kb")
 
     # Nessuna mutazione a import-time
     assert before == sys.path
@@ -62,28 +61,10 @@ def test_module_import_has_no_side_effects(tmp_path):
 
 
 def test_ensure_dependencies_is_idempotent(monkeypatch, tmp_path):
-    """_ensure_dependencies può essere chiamato più volte senza duplicare sys.path."""
-    mod = importlib.import_module("src.tools.gen_dummy_kb")
+    """_ensure_dependencies resta idempotente e non tocca sys.path."""
+    mod = importlib.import_module("tools.gen_dummy_kb")
 
-    # Simula insert su sys.path e traccia le chiamate
-    inserted: list[str] = []
-
-    def insert_once(idx: int, path: str) -> None:  # noqa: ARG001
-        inserted.append(path)
-        if path not in sys.path:
-            sys.path.insert(0, path)
-
-    monkeypatch.setattr(mod, "SRC_ROOT", tmp_path / "src")
-
-    # Usa un proxy list che permette di intercettare insert senza monkeypatchare un metodo built-in
-    class _PathProxy(list):
-        def insert(self, idx: int, path: str) -> None:  # type: ignore[override]
-            # Traccia come nel test e poi chiama l'insert reale senza ricorsione
-            inserted.append(path)
-            if path not in self:
-                super().insert(0, path)
-
-    monkeypatch.setattr(sys, "path", _PathProxy())
+    before = list(sys.path)
 
     # Stub moduli referenziati in _ensure_dependencies (ridotti per rientrare nei 120 char)
     class _PFU:  # pipeline.file_utils
@@ -126,14 +107,14 @@ def test_ensure_dependencies_is_idempotent(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "finance.api", _FA)
 
     mod._ensure_dependencies()
-    first_len = len(sys.path)
-
+    first_path = list(sys.path)
     mod._ensure_dependencies()
-    second_len = len(sys.path)
+    second_path = list(sys.path)
 
-    # Nessun path duplicato e almeno un inserimento eseguito
-    assert first_len == second_len
-    assert inserted
+    # Nessuna mutazione di sys.path e placeholder popolati
+    assert before == first_path == second_path
+    assert mod.safe_write_text is not None
+    assert mod.safe_write_bytes is not None
 
 
 def test_logs_use_namespaced_events(caplog, tmp_path, monkeypatch):

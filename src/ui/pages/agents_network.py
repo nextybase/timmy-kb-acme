@@ -2,7 +2,6 @@
 # src/ui/pages/agents_network.py
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Protocol, Tuple, cast
 
@@ -225,9 +224,6 @@ def _regenerate_agents_matrix() -> None:
     Richiama lo script di rigenerazione della matrice AGENTS.
     """
     repo_root = get_repo_root()
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
     try:
         from tools import gen_agents_matrix
     except Exception as exc:  # pragma: no cover - import fallback

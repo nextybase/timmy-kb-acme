@@ -7,16 +7,18 @@ import json
 import sys
 from pathlib import Path
 
+_TOOLS_DIR = next(p for p in Path(__file__).resolve().parents if p.name == "tools")
+_REPO_ROOT = _TOOLS_DIR.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-def _bootstrap_repo_src() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
-    src_dir = repo_root / "src"
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
+from tools._bootstrap import bootstrap_repo_src
+
+# ENTRYPOINT BOOTSTRAP - consentito: abilita import semantic.* senza installazione.
+REPO_ROOT = bootstrap_repo_src()
 
 
 def main() -> None:
-    _bootstrap_repo_src()
 
     import semantic.vision_provision as vp  # noqa: E402
 

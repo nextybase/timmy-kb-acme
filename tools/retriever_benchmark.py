@@ -24,10 +24,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, List
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+_TOOLS_DIR = next(p for p in Path(__file__).resolve().parents if p.name == "tools")
+_REPO_ROOT = _TOOLS_DIR.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from tools._bootstrap import bootstrap_repo_src
+
+# ENTRYPOINT BOOTSTRAP - consentito: abilita import pipeline/timmy_kb senza installazione.
+REPO_ROOT = bootstrap_repo_src()
 
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.context import ClientContext

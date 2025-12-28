@@ -11,9 +11,7 @@ import uuid
 from pathlib import Path
 from typing import TypeVar
 
-_SRC_ROOT = Path(__file__).resolve().parents[2]
-if str(_SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SRC_ROOT))
+from pipeline.paths import ensure_src_on_sys_path, get_repo_root
 
 _T = TypeVar("_T")
 
@@ -53,6 +51,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    # ENTRYPOINT BOOTSTRAP — consentito: CLI standalone deve risolvere pipeline/semantic.
+    ensure_src_on_sys_path(get_repo_root())
     args = _parse_args()
     slug: str = args.slug
     run_id = uuid.uuid4().hex

@@ -10,8 +10,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS_DIR = ROOT / "tools" / "smoke"
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 _KB_PATH = TOOLS_DIR / "kb_healthcheck.py"
 _spec = importlib.util.spec_from_file_location("kb_healthcheck", _KB_PATH)

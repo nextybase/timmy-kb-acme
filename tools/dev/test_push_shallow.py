@@ -11,6 +11,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+_TOOLS_DIR = next(p for p in Path(__file__).resolve().parents if p.name == "tools")
+_REPO_ROOT = _TOOLS_DIR.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from tools._bootstrap import bootstrap_repo_src
+
+# ENTRYPOINT BOOTSTRAP - consentito: abilita import pipeline.* per test push.
+REPO_ROOT = bootstrap_repo_src()
+
 
 @dataclass
 class _Ctx:
@@ -25,8 +35,6 @@ def _run(cmd: list[str], cwd: Optional[Path] = None) -> None:
 
 
 def main() -> int:
-    # Ensure src/ is importable
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
     # Stub PyGithub to avoid external dependency in this integration
     import sys as _sys
     import types

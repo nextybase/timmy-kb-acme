@@ -3,7 +3,7 @@
 import types
 from pathlib import Path
 
-from src.ui.pages import manage
+from ui.pages import manage
 
 
 def test_manage_shows_single_caption(monkeypatch):

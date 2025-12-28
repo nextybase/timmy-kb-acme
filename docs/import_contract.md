@@ -26,10 +26,11 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
 ## Esempi
 - Corretto:
   - `from pipeline.workspace_layout import WorkspaceLayout`
+  - `import pipeline.workspace_layout as wl`
   - `import semantic.api as semantic_api`
+  - `importlib.import_module("tools.gen_dummy_kb")`
   - `from tools.gen_dummy_kb import build_payload`
 - Errato:
-  - `import src.pipeline.workspace_layout as wl`
   - `importlib.import_module("src.tools.gen_dummy_kb")`
   - `sys.path.insert(0, str(Path(__file__).parents[2] / "src"))` (nei moduli applicativi)
 
