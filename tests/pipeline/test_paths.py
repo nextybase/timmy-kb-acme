@@ -6,15 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.exceptions import ConfigError, InvalidSlug
-from pipeline.paths import (
-    clients_db_paths,
-    ensure_src_on_sys_path,
-    get_repo_root,
-    global_logs_dir,
-    preview_logs_dir,
-    workspace_paths,
-)
+from pipeline.exceptions import ConfigError
+from pipeline.paths import clients_db_paths, ensure_src_on_sys_path, get_repo_root, global_logs_dir, preview_logs_dir
 
 
 def _make_repo(tmp_path: Path) -> Path:
@@ -27,24 +20,36 @@ def _make_repo(tmp_path: Path) -> Path:
 def test_get_repo_root_env_valid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _make_repo(tmp_path)
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo))
+    monkeypatch.chdir(repo)
     found = get_repo_root()
     assert found == repo
 
 
 def test_get_repo_root_env_invalid(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path / "missing"))
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(ConfigError):
         get_repo_root()
 
 
-def test_get_repo_root_env_ignored_when_sentinel_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_repo_root_env_missing_sentinel_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _make_repo(tmp_path)
-    # Simula un path "workspace-like": esiste ma non è una repo root (mancano sentinel).
     workspace_like = repo / "output" / "timmy-kb-dummy"
     workspace_like.mkdir(parents=True)
     monkeypatch.setenv("REPO_ROOT_DIR", str(workspace_like))
     monkeypatch.chdir(repo)
-    found = get_repo_root()
+    with pytest.raises(ConfigError):
+        get_repo_root()
+
+
+def test_get_repo_root_ignores_env_when_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _make_repo(tmp_path)
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / ".git").mkdir()
+    monkeypatch.setenv("REPO_ROOT_DIR", str(other))
+    monkeypatch.chdir(repo)
+    found = get_repo_root(allow_env=False)
     assert found == repo
 
 
@@ -54,24 +59,6 @@ def test_get_repo_root_detects_from_cwd(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.chdir(repo)
     found = get_repo_root()
     assert found == repo
-
-
-def test_workspace_paths_create(tmp_path: Path) -> None:
-    repo = _make_repo(tmp_path)
-    paths = workspace_paths("acme", repo_root=repo, create=True)
-    assert paths.workspace_root == repo / "output" / "timmy-kb-acme"
-    assert paths.raw_dir.exists()
-    assert paths.book_dir.exists()
-    assert paths.semantic_dir.exists()
-    assert paths.config_dir.exists()
-    assert paths.logs_dir.exists()
-    assert paths.preview_logs_dir.exists()
-
-
-def test_workspace_paths_invalid_slug(tmp_path: Path) -> None:
-    repo = _make_repo(tmp_path)
-    with pytest.raises((ConfigError, InvalidSlug)):
-        workspace_paths("INVALID SLUG", repo_root=repo)
 
 
 def test_global_logs_dir(tmp_path: Path) -> None:

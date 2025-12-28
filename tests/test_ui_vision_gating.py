@@ -65,6 +65,11 @@ def test_ui_gating_hash_file_and_block_then_force(
         }
 
     monkeypatch.setattr(VP, "_provision_from_vision_with_config", _stub)
+    monkeypatch.setattr(VP, "_provision_from_vision_yaml_with_config", _stub)
+    monkeypatch.setattr("pipeline.vision_runner._provision_from_vision_with_config", _stub)
+    monkeypatch.setattr("pipeline.vision_runner._provision_from_vision_yaml_with_config", _stub)
+    monkeypatch.setattr("pipeline.vision_runner.resolve_vision_config", lambda ctx, override_model=None: config)
+    monkeypatch.setattr("pipeline.vision_runner.resolve_vision_retention_days", lambda ctx: 7)
     config = AssistantConfig(
         model="test-model",
         assistant_id="test-assistant",

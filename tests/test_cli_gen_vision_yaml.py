@@ -2,43 +2,43 @@
 # tests/test_cli_gen_vision_yaml.py
 from __future__ import annotations
 
+import builtins
+import importlib
 import sys
 from pathlib import Path
 
 import pytest
 
 import tools.gen_vision_yaml as cli
-from ai.types import AssistantConfig
 from pipeline.exceptions import ConfigError
 from semantic.vision_provision import HaltError
 
 
 def _make_pdf(tmp_path: Path, name: str = "vision.pdf") -> Path:
-    p = tmp_path / name
+    base_dir = tmp_path / "output" / "timmy-kb-dummy-srl"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    p = base_dir / name
     # Non serve un PDF valido: il CLI verifica solo l'esistenza del file,
     # la business logic è mockata in questi test.
     p.write_bytes(b"%PDF-FAKE%")
     return p
 
 
-def _stub_assistant_config() -> AssistantConfig:
-    return AssistantConfig(
-        model="vision-model",
-        assistant_id="vision-assistant",
-        assistant_env="VISION_ASSISTANT_ID",
-        use_kb=True,
-        strict_output=True,
-    )
+def test_import_cli_does_not_require_streamlit(monkeypatch: pytest.MonkeyPatch):
+    """
+    Importare il tool non deve tentare di caricare streamlit (headless-safe).
+    """
+    sys.modules.pop("tools.gen_vision_yaml", None)
 
+    real_import = builtins.__import__
 
-def _patch_cli_resolution(
-    monkeypatch: pytest.MonkeyPatch, *, config: AssistantConfig | None = None, retention_days: int = 7
-) -> AssistantConfig:
-    if config is None:
-        config = _stub_assistant_config()
-    monkeypatch.setattr(cli, "resolve_vision_config", lambda ctx: config)
-    monkeypatch.setattr(cli, "resolve_vision_retention_days", lambda ctx: retention_days)
-    return config
+    def guard(name, *args, **kwargs):
+        if name == "streamlit":
+            raise ImportError("streamlit not available in headless mode")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guard)
+    importlib.import_module("tools.gen_vision_yaml")
 
 
 def test_cli_success_returns_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
@@ -47,7 +47,6 @@ def test_cli_success_returns_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     """
     monkeypatch.chdir(tmp_path)
     pdf = _make_pdf(tmp_path)
-    _patch_cli_resolution(monkeypatch)
 
     def _fake_provision(ctx, logger, *, slug: str, pdf_path: Path, **kwargs):
         # Non scriviamo davvero file: al CLI basta il dict di ritorno
@@ -56,7 +55,7 @@ def test_cli_success_returns_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
             "cartelle_raw": str(tmp_path / "cartelle_raw.yaml"),
         }
 
-    monkeypatch.setattr(cli, "provision_from_vision_with_config", _fake_provision)
+    monkeypatch.setattr(cli, "run_vision_with_gating", _fake_provision)
 
     argv_bak = sys.argv[:]
     try:
@@ -81,12 +80,11 @@ def test_cli_halt_returns_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
     """
     monkeypatch.chdir(tmp_path)
     pdf = _make_pdf(tmp_path)
-    _patch_cli_resolution(monkeypatch)
 
     def _raise_halt(ctx, logger, *, slug: str, pdf_path: Path, **kwargs):
         raise HaltError("Integra Mission e Framework etico e riprova.", {"sections": ["Mission", "Framework etico"]})
 
-    monkeypatch.setattr(cli, "provision_from_vision_with_config", _raise_halt)
+    monkeypatch.setattr(cli, "run_vision_with_gating", _raise_halt)
 
     argv_bak = sys.argv[:]
     try:
@@ -113,12 +111,11 @@ def test_cli_config_error_returns_one(tmp_path: Path, monkeypatch: pytest.Monkey
     """
     monkeypatch.chdir(tmp_path)
     pdf = _make_pdf(tmp_path)
-    _patch_cli_resolution(monkeypatch)
 
     def _raise_cfg(ctx, logger, *, slug: str, pdf_path: Path, **kwargs):
         raise ConfigError("Assistant ID non configurato")
 
-    monkeypatch.setattr(cli, "provision_from_vision_with_config", _raise_cfg)
+    monkeypatch.setattr(cli, "run_vision_with_gating", _raise_cfg)
 
     argv_bak = sys.argv[:]
     try:
@@ -145,8 +142,7 @@ def test_cli_missing_pdf_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyP
     PDF non esistente → exit code 1 (il CLI fa il controllo prima di chiamare provision).
     """
     monkeypatch.chdir(tmp_path)
-    missing = tmp_path / "missing.pdf"
-    _patch_cli_resolution(monkeypatch)
+    missing = tmp_path / "output" / "timmy-kb-dummy-srl" / "missing.pdf"
 
     # Anche se patchiamo provision, NON deve essere chiamato quando il file manca
     called = {"value": False}
@@ -155,7 +151,7 @@ def test_cli_missing_pdf_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyP
         called["value"] = True
         return {}
 
-    monkeypatch.setattr(cli, "provision_from_vision_with_config", _should_not_be_called)
+    monkeypatch.setattr(cli, "run_vision_with_gating", _should_not_be_called)
 
     argv_bak = sys.argv[:]
     try:

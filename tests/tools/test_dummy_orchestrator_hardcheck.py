@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.paths import workspace_paths
+from pipeline.context import ClientContext
+from pipeline.workspace_bootstrap import bootstrap_client_workspace
 from tools.dummy.orchestrator import validate_dummy_structure
 
 
@@ -36,22 +37,42 @@ def test_dummy_validate_structure_passes_when_cartelle_yaml_present(tmp_path: Pa
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     slug = "dummy-hc"
-    layout = workspace_paths(slug, repo_root=repo_root, create=True)
+    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
+    context = ClientContext(
+        slug=slug,
+        repo_root_dir=workspace_root,
+        base_dir=workspace_root,
+        raw_dir=workspace_root / "raw",
+        md_dir=workspace_root / "book",
+        config_path=workspace_root / "config" / "config.yaml",
+        output_dir=workspace_root,
+    )
+    layout = bootstrap_client_workspace(context)
 
-    _write_required_dummy_files(layout.workspace_root)
+    _write_required_dummy_files(layout.base_dir)
     (layout.semantic_dir / "cartelle_raw.yaml").write_text("folders: []\n", encoding="utf-8")
 
-    validate_dummy_structure(layout.workspace_root, logger)
+    validate_dummy_structure(layout.base_dir, logger)
 
 
 def test_dummy_validate_structure_fails_when_cartelle_yaml_missing(tmp_path: Path, logger: logging.Logger) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     slug = "dummy-hc"
-    layout = workspace_paths(slug, repo_root=repo_root, create=True)
+    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
+    context = ClientContext(
+        slug=slug,
+        repo_root_dir=workspace_root,
+        base_dir=workspace_root,
+        raw_dir=workspace_root / "raw",
+        md_dir=workspace_root / "book",
+        config_path=workspace_root / "config" / "config.yaml",
+        output_dir=workspace_root,
+    )
+    layout = bootstrap_client_workspace(context)
 
-    _write_required_dummy_files(layout.workspace_root)
+    _write_required_dummy_files(layout.base_dir)
 
     with pytest.raises(RuntimeError) as exc:
-        validate_dummy_structure(layout.workspace_root, logger)
+        validate_dummy_structure(layout.base_dir, logger)
     assert "cartelle_raw" in str(exc.value)

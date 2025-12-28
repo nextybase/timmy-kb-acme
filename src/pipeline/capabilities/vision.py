@@ -32,10 +32,7 @@ class VisionBindings:
     prepare_yaml_with_config: Optional[_PreparePromptYamlFunc]
 
 
-VISION_PROVIDER_CANDIDATES: tuple[str, ...] = (
-    "src.semantic.vision_provision",
-    "semantic.vision_provision",
-)
+VISION_PROVIDER_CANDIDATES: tuple[str, ...] = ("semantic.vision_provision",)
 
 
 def _import_module(name: str) -> Optional[ModuleType]:

@@ -44,6 +44,10 @@ py src/onboarding_full.py --slug acme --non-interactive
 ```
 Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user/user_guide.md).
 
+### Igiene workspace
+- Gli artefatti runtime restano fuori dal controllo versione: `output/`, `logs/`, `.timmy_kb/`, `.streamlit/`, cache pytest/ruff/mypy e `node_modules/` sono ignorati.
+- Se compaiono nel working tree, rimuovili prima di eseguire un commit o spostali fuori dal repository.
+
 ---
 
 ## Dipendenze & QA

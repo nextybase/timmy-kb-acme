@@ -2,57 +2,28 @@ from __future__ import annotations
 
 # SPDX-License-Identifier: GPL-3.0-only
 """
-SSoT per la gestione dei percorsi del repository e dei workspace cliente.
+Helper di percorso centrati sulla root del repository.
 
-Funzioni chiave:
-- get_repo_root: determina la root del repository (env REPO_ROOT_DIR valida o sentinel .git/pyproject).
-- workspace_paths: costruisce i percorsi canonici del workspace output/timmy-kb-<slug>/.
-- global_logs_dir / clients_db_paths / preview_logs_dir: percorsi globali centralizzati.
-- ensure_src_on_sys_path: bootstrap sicuro di <repo_root>/src in sys.path.
+Obiettivi:
+- get_repo_root: trova la root repository usando sentinel (.git/pyproject), opzionale override ENV.
+- global_logs_dir / clients_db_paths / preview_logs_dir: percorsi globali path-safe.
+- ensure_src_on_sys_path: bootstrap sicuro di <repo_root>/src in sys.path senza alternative.
 
-Fail-fast: in caso di layout o env incoerente solleva ConfigError invece di applicare fallback legacy.
+Fail-fast: nessun fallback silenzioso; in caso di layout incoerente solleva ConfigError.
 """
 
 import os
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence, Tuple
 
-from .constants import (
-    BOOK_DIR_NAME,
-    CONFIG_DIR_NAME,
-    CONFIG_FILE_NAME,
-    LOGS_DIR_NAME,
-    OUTPUT_DIR_NAME,
-    RAW_DIR_NAME,
-    REPO_NAME_PREFIX,
-    SEMANTIC_DIR_NAME,
-)
+from .constants import LOGS_DIR_NAME
 from .exceptions import ConfigError, PathTraversalError
 from .logging_utils import get_structured_logger
-from .path_utils import ensure_within, ensure_within_and_resolve, validate_slug
+from .path_utils import ensure_within, ensure_within_and_resolve
 
 LOGGER = get_structured_logger("pipeline.paths")
 _SENTINELS: tuple[str, ...] = (".git", "pyproject.toml")
-
-
-@dataclass(frozen=True, slots=True)
-class WorkspacePaths:
-    """Percorsi canonici per uno slug cliente."""
-
-    slug: str
-    repo_root: Path
-    workspace_root: Path
-    raw_dir: Path
-    book_dir: Path
-    semantic_dir: Path
-    config_dir: Path
-    config_file: Path
-    logs_dir: Path
-    dot_timmy_logs_dir: Path
-    clients_db_dir: Path
-    preview_logs_dir: Path
 
 
 def _has_sentinel(path: Path) -> bool:
@@ -78,7 +49,8 @@ def _detect_repo_root(candidates: Sequence[Path]) -> Path | None:
     return None
 
 
-def _validate_repo_root_env(value: str) -> Path | None:
+def _validate_repo_root_env(value: str) -> Path:
+    """Valida REPO_ROOT_DIR senza applicare override silenziosi."""
     resolved = Path(value).expanduser().resolve()
     if not resolved.exists():
         LOGGER.error(
@@ -86,17 +58,12 @@ def _validate_repo_root_env(value: str) -> Path | None:
             extra={"repo_root_dir": value, "reason": "not_exists"},
         )
         raise ConfigError(f"REPO_ROOT_DIR non esiste: {resolved}")
-
-    has_git = (resolved / ".git").exists()
-    has_pyproject = (resolved / "pyproject.toml").exists()
-    if not (has_git or has_pyproject):
-        # ORA: warning + ignore (fallback detection)
-        LOGGER.warning(
-            "paths.repo_root.env_ignored",
-            extra={"repo_root_dir": value, "resolved": str(resolved), "reason": "sentinel_missing"},
+    if not _has_sentinel(resolved):
+        LOGGER.error(
+            "paths.repo_root.env_invalid",
+            extra={"repo_root_dir": value, "reason": "sentinel_missing"},
         )
-        return None
-
+        raise ConfigError(f"REPO_ROOT_DIR manca di sentinel .git/pyproject: {resolved}")
     return resolved
 
 
@@ -104,18 +71,16 @@ def get_repo_root(*, allow_env: bool = True) -> Path:
     """
     Determina la root del repository.
 
-    Se allow_env è True e REPO_ROOT_DIR è impostato, valida il path
-    (assoluto, esistente, con sentinel).
-    Altrimenti cerca sentinel (.git/pyproject) risalendo da cwd e da questo file.
+    Cerca sentinel (.git/pyproject) risalendo da cwd e da questo file,
+    oppure usa REPO_ROOT_DIR se consentito e valido.
     Fail-fast con ConfigError se non trova una root valida.
     """
-    env_root = os.getenv("REPO_ROOT_DIR") if allow_env else None
-    if env_root:
-        resolved = _validate_repo_root_env(env_root)
-        if resolved is not None:
-            LOGGER.info("paths.repo_root.env", extra={"repo_root": str(resolved)})
-            return resolved
-        # se None: continuiamo col detection standard (no fail-fast)
+    if allow_env:
+        env_root = os.getenv("REPO_ROOT_DIR")
+        if env_root:
+            resolved_env = _validate_repo_root_env(env_root)
+            LOGGER.info("paths.repo_root.env", extra={"repo_root": str(resolved_env)})
+            return resolved_env
 
     this_file = Path(__file__).resolve()
     candidates = [Path.cwd(), this_file.parent]
@@ -129,73 +94,12 @@ def get_repo_root(*, allow_env: bool = True) -> Path:
         "paths.repo_root.not_found",
         extra={"candidates": [str(c) for c in candidates]},
     )
-    raise ConfigError("Impossibile determinare la root del repository " "(.git/pyproject non trovati).")
+    raise ConfigError("Impossibile determinare la root del repository (.git/pyproject non trovati).")
 
 
 def _ensure_dir(base: Path, target: Path) -> None:
     ensure_within(base, target)
     target.mkdir(parents=True, exist_ok=True)
-
-
-def workspace_paths(slug: str, *, repo_root: Path | None = None, create: bool = False) -> WorkspacePaths:
-    """
-    Costruisce i percorsi canonici del workspace output/timmy-kb-<slug>/.
-
-    Args:
-        slug: identificativo cliente (validato).
-        repo_root: root del repository; se None viene rilevata.
-        create: se True crea le directory mancanti in modo path-safe.
-    """
-    root = repo_root or get_repo_root()
-    try:
-        safe_slug = validate_slug(slug)
-    except Exception as exc:  # InvalidSlug o simile
-        LOGGER.error(
-            "paths.workspace.invalid_slug",
-            extra={"slug": slug, "error": str(exc)},
-        )
-        raise ConfigError(f"Slug non valido: {slug}") from exc
-
-    workspace_root = ensure_within_and_resolve(root, root / OUTPUT_DIR_NAME / f"{REPO_NAME_PREFIX}{safe_slug}")
-    raw_dir = ensure_within_and_resolve(workspace_root, workspace_root / RAW_DIR_NAME)
-    book_dir = ensure_within_and_resolve(workspace_root, workspace_root / BOOK_DIR_NAME)
-    semantic_dir = ensure_within_and_resolve(workspace_root, workspace_root / SEMANTIC_DIR_NAME)
-    config_dir = ensure_within_and_resolve(workspace_root, workspace_root / CONFIG_DIR_NAME)
-    config_file = ensure_within_and_resolve(config_dir, config_dir / CONFIG_FILE_NAME)
-    logs_dir = ensure_within_and_resolve(workspace_root, workspace_root / LOGS_DIR_NAME)
-    dot_timmy_logs_dir = ensure_within_and_resolve(root, root / ".timmy_kb" / LOGS_DIR_NAME)
-    clients_db_dir = ensure_within_and_resolve(root, root / "clients_db")
-    preview_logs_dir = ensure_within_and_resolve(root, root / LOGS_DIR_NAME / "preview")
-
-    if create:
-        for base, path in (
-            (root, workspace_root),
-            (workspace_root, raw_dir),
-            (workspace_root, book_dir),
-            (workspace_root, semantic_dir),
-            (workspace_root, config_dir),
-            (workspace_root, logs_dir),
-            (root, dot_timmy_logs_dir),
-            (root, clients_db_dir),
-            (root, preview_logs_dir),
-        ):
-            _ensure_dir(base, path)
-        # config_file non viene creato qui: la responsabilità resta al bootstrap config.
-
-    return WorkspacePaths(
-        slug=safe_slug,
-        repo_root=root,
-        workspace_root=workspace_root,
-        raw_dir=raw_dir,
-        book_dir=book_dir,
-        semantic_dir=semantic_dir,
-        config_dir=config_dir,
-        config_file=config_file,
-        logs_dir=logs_dir,
-        dot_timmy_logs_dir=dot_timmy_logs_dir,
-        clients_db_dir=clients_db_dir,
-        preview_logs_dir=preview_logs_dir,
-    )
 
 
 def global_logs_dir(repo_root: Path) -> Path:
@@ -250,7 +154,7 @@ def ensure_src_on_sys_path(repo_root: Path) -> None:
     """
     Inserisce <repo_root>/src in sys.path in modo idempotente.
 
-    Solleva ConfigError se il path non esiste o non è una directory.
+    Solleva ConfigError se il path non esiste o non Ã¨ una directory.
     """
     try:
         src_dir = ensure_within_and_resolve(repo_root, repo_root / "src")
@@ -282,9 +186,7 @@ def ensure_src_on_sys_path(repo_root: Path) -> None:
 
 
 __all__ = [
-    "WorkspacePaths",
     "get_repo_root",
-    "workspace_paths",
     "global_logs_dir",
     "clients_db_paths",
     "preview_logs_dir",

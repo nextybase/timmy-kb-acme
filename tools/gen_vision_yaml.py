@@ -6,11 +6,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from semantic.vision_provision import HaltError, provision_from_vision_with_config
+from pipeline.vision_runner import HaltError, run_vision_with_gating
 
 
 def main() -> int:
@@ -32,15 +31,11 @@ def main() -> int:
         return 1
 
     try:
-        config = resolve_vision_config(ctx)
-        retention_days = resolve_vision_retention_days(ctx)
-        result = provision_from_vision_with_config(
+        result = run_vision_with_gating(
             ctx,
             logger=log,
             slug=args.slug,
             pdf_path=pdf_path,
-            config=config,
-            retention_days=retention_days,
         )
         log.info("vision_yaml_generated", extra={"slug": args.slug, **result})
         return 0

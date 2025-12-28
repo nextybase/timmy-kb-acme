@@ -6,7 +6,8 @@
 ## [Unreleased]
 
 ### Pending
-- Push intermedio: integrazione UI Vision e adapter OpenAI (vector stores/responses/chat) ancora in debug; modifiche non definitive, seguiranno fix per completare il flusso nuovo cliente.
+- Push intermedio: Vision usa l'adapter Responses API (no vector-store/chat nel percorso Vision); integrazione UI ancora in debug, seguiranno fix per completare il flusso nuovo cliente.
+- Vision: allineato gating UI/CLI (hash/sentinel + requisiti visionstatement) e ripulito import/namespace per tool gen_vision_yaml e binding provider.
 
 ## Import Contract unico + tools/ SSoT (breaking interna)
 - Eliminato il doppio namespace: niente fallback `src.*`, healthcheck Vision senza sys.path hacking, dummy loader su `tools.dummy.*`, gen_vision_yaml come entrypoint tools/.

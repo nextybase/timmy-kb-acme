@@ -55,7 +55,7 @@ from pipeline.logging_utils import (
 from pipeline.metrics import start_metrics_server_once
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_valid_slug, ensure_within, read_text_safe  # STRONG guard SSoT
-from pipeline.paths import get_repo_root, workspace_paths
+from pipeline.paths import get_repo_root
 from pipeline.tracing import start_root_trace
 from pipeline.types import WorkflowResult
 from pipeline.workspace_bootstrap import bootstrap_client_workspace as _pipeline_bootstrap_client_workspace
@@ -164,7 +164,10 @@ def bootstrap_semantic_templates(
         raise WorkspaceNotFound("Contesto incompleto: slug mancante", slug=context.slug)
     if repo_root is None:
         raise WorkspaceNotFound("Contesto incompleto: repo_root_dir mancante", slug=context.slug)
-    semantic_dir = workspace_paths(context.slug, repo_root=repo_root, create=True).semantic_dir
+
+    layout = WorkspaceLayout.from_context(context)
+    semantic_dir = layout.semantic_dir
+    semantic_dir.mkdir(parents=True, exist_ok=True)
 
     cfg_dir = repo_root / "config"
     struct_src = _resolve_yaml_structure_file()
@@ -319,8 +322,7 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
 
     write_client_config_file(context, cfg)
 
-    # Nota: non usare Path(__file__).parents[1] (-> src/timmy_kb) come repo root:
-    # innesca la creazione di output/ sotto src/timmy_kb tramite workspace_paths(..., create=True).
+    # Nota: non usare path relativi a src/timmy_kb come repo root per evitare workspace spurii.
     repo_root = get_repo_root(allow_env=False)
     bootstrap_semantic_templates(repo_root, context, client_name, logger)
 

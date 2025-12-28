@@ -16,6 +16,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.vision_runner import run_vision_with_gating
 from ui.imports import get_streamlit
 
 
@@ -219,80 +220,15 @@ def provision_from_vision_with_config(
     if not base_dir:
         raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
 
-    # Path sicuri entro il workspace
-    pdf_path = Path(pdf_path)
-    safe_pdf = cast(Path, ensure_within_and_resolve(base_dir, pdf_path))
-    if not safe_pdf.exists():
-        raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
-    yaml_path = _vision_yaml_path(base_dir, pdf_path=safe_pdf)
-    if not yaml_path.exists():
-        raise ConfigError(
-            "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
-            slug=slug,
-            file_path=str(yaml_path),
-        )
-
-    digest = _sha256_of_file(base_dir, safe_pdf)
-    last = _load_last_hash(base_dir)
-    last_digest = (last or {}).get("hash")
-
-    # Box artefatti
-    art = _artifacts_paths(base_dir)
-
-    # GATE: se PDF invariato e artefatti presenti → richiedi 'force'
-    gate_hit = (last_digest == digest) and art.mapping_yaml.exists() and art.cartelle_yaml.exists()
-    logger.info("ui.vision.gate", extra={"slug": slug, "hit": gate_hit})
-    if gate_hit and not force:
-        # Blocco esplicito richiesto dai test (“then force”)
-        raise ConfigError(
-            "Vision già eseguito per questo PDF. Usa la modalità 'Forza rigenerazione' per procedere.",
-            slug=slug,
-            file_path=str(_hash_sentinel(base_dir)),
-        )
-
-    resolved_config = resolve_vision_config(ctx, override_model=model)
-    retention_days = resolve_vision_retention_days(ctx)
-
-    # Esecuzione reale (delegata al layer semantic)
-    try:
-        provision_from_semantic_module = getattr(_provision_from_vision_with_config, "__module__", "").endswith(
-            "vision_provision"
-        )
-        if _provision_from_vision_yaml_with_config is not None and provision_from_semantic_module:
-            result = _provision_from_vision_yaml_with_config(
-                ctx=ctx,
-                logger=logger,
-                slug=slug,
-                yaml_path=yaml_path,
-                config=resolved_config,
-                retention_days=retention_days,
-                prepared_prompt=prepared_prompt,
-            )
-        else:
-            result = _provision_from_vision_with_config(
-                ctx=ctx,
-                logger=logger,
-                slug=slug,
-                pdf_path=safe_pdf,
-                config=resolved_config,
-                retention_days=retention_days,
-                prepared_prompt=prepared_prompt,
-            )
-    except HaltError:
-        # Propaga direttamente verso la UI per consentire un messaggio dedicato.
-        raise
-
-    # Aggiorna sentinel JSON (con log utile ai test)
-    _save_hash(base_dir, digest=digest, model=resolved_config.model)
-    logger.info("ui.vision.update_hash", extra={"slug": slug, "file_path": str(_hash_sentinel(base_dir))})
-
-    # Ritorno coerente con la firma documentata
-    return {
-        "skipped": False,
-        "hash": digest,
-        "mapping": cast(str, result.get("mapping", "")),
-        "cartelle_raw": cast(str, result.get("cartelle_raw", "")),
-    }
+    return run_vision_with_gating(
+        ctx,
+        logger,
+        slug=slug,
+        pdf_path=Path(pdf_path),
+        force=force,
+        model=model,
+        prepared_prompt=prepared_prompt,
+    )
 
 
 def run_vision(

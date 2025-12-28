@@ -2,4 +2,3 @@
 from __future__ import annotations
 
 # Package placeholder: mantiene tools come package Python valido senza side-effect.
-
