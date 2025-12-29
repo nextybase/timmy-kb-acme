@@ -41,7 +41,7 @@ sentence-transformers==2.7.0
 scikit-learn==1.7.2
 yake==0.4.8
 torch==2.8.0
-spacy==3.7.4
+spacy==3.8.11
 
 # Utility varie
 typing-extensions==4.12.2
