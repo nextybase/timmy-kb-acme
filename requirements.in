@@ -39,7 +39,7 @@ httpx==0.28.1
 tiktoken==0.7.0
 sentence-transformers==2.7.0
 scikit-learn==1.7.2
-yake==0.4.8
+yake==0.6.0
 torch==2.8.0
 spacy==3.7.4
 
