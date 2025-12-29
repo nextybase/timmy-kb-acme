@@ -227,18 +227,17 @@ pytest -m "e2e" -ra
 ---
 ## Pre-commit  configurazione & comandi rapidi
 
-**Perche**: manteniamo qualita e sicurezza *prima* del push. Gli hook girano su due stadi:
-- `pre-commit`: formattazione, linting, controlli di base (file/UTF-8, policy UI, ingest).
-- `pre-push`: check piu pesanti (typing selettivo, QA degradabile).
+**Perche**: manteniamo qualita e sicurezza su ogni commit. Gli hook girano sullo stadio `pre-commit`:
+- `pre-commit`: formattazione, linting, controlli di base (file/UTF-8, policy UI, ingest) e check pesanti selezionati (typing/QA dove previsto).
 
 **Installazione**
 ```bash
-pre-commit install --hook-type pre-commit --hook-type pre-push
+pre-commit install --hook-type pre-commit
 ```
 
 **Hook principali (sintesi)**
-- *Format/Lint* (**commit + push**): `isort`  `black`  `ruff --fix`.
-- *Typing* (**push**): `mypy` su UI config & driver Drive.
+- *Format/Lint*: `isort`  `black`  `ruff --fix`.
+- *Typing*: `mypy` su UI config & driver Drive (se abilitato nello stage locale).
 - *Safety I/O & API*: `forbid-unsafe-file-reads`, `no-dup-ingest-csv`.
 - *Unicode/UTF-8*: `fix-control-chars` (fix) + `forbid-control-chars` (guard).
 - *UI policy*: `forbid-streamlit-deprecated`, `ui-beta0-compliance`.
@@ -251,7 +250,7 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 # tutto lo stadio commit su tutti i file
 pre-commit run --all-files
 
-# simulare lo stadio push (utile in locale)
+# eseguire tutti gli hook
 pre-commit run --all-files
 
 # un singolo hook su tutti i file

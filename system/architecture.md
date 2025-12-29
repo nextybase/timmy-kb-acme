@@ -98,7 +98,6 @@ VISIONCLI[src/tools/gen_vision_yaml.py]
 
       PLOG[pipeline.logging_utils]
 
-      PGIT[pipeline.github_utils]
 
       PDRIVE[pipeline.drive_utils]
 
@@ -130,7 +129,6 @@ VISIONCLI[src/tools/gen_vision_yaml.py]
 
       HONKIT[Preview (HonKit/Docker)]
 
-      GITHUB[GitHub (push)]
 
       DRIVE[Google Drive]
 
@@ -166,7 +164,6 @@ VISIONCLI[src/tools/gen_vision_yaml.py]
 
     CLI --> SEMCLI
 
-    CLI --> FULL
 
     CLI --> VISIONCLI
 
@@ -199,12 +196,6 @@ VISIONCLI[src/tools/gen_vision_yaml.py]
     SEMANTIC --> FILES
 
     SEMANTIC --> DB
-
-
-
-    FULL --> PGIT
-
-    PGIT --> GITHUB
 
 
 
@@ -312,7 +303,6 @@ sequenceDiagram
 
     UI->>Preview: gitbook_preview (Docker HonKit)
 
-    GH-->>FS: publish book/ to remote repo (branch)
 
 ```
 

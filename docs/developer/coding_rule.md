@@ -169,7 +169,7 @@ Per esempi operativi completi e per seguire il flusso slug â†’ `ClientContext` â
 - Tooling: `ruff`, `black`, `isort`; type-check con `mypy`/`pyright`.
 - Hook:
 ```
-pre-commit install --hook-type pre-commit --hook-type pre-push
+pre-commit install --hook-type pre-commit
 make qa-safe
 make ci-safe
 ```

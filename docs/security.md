@@ -39,7 +39,7 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
 ## Dependency scanning
 
 - Workflow `.github/workflows/dependency-scan.yml` esegue `pip-audit` su `requirements.txt` e `requirements-dev.txt`
-  ad ogni push/PR su `main`/`dev` e settimanalmente (`cron`).
+  ad ogni PR su `main`/`dev` e settimanalmente (`cron`).
 - Il risultato SARIF viene caricato su GitHub Code Scanning; il job fallisce se ci sono CVE non ignorate.
 - Per gestire falsi positivi, usa il file `.pip-audit-ignore` ed aggiorna questa sezione indicando la motivazione della deroga.
 - Esecuzione locale:
@@ -55,7 +55,7 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
 - Installa gli hook una tantum:
   ```bash
   pip install pre-commit
-  pre-commit install --hook-type pre-commit --hook-type pre-push
+pre-commit install --hook-type pre-commit
   ```
 - Per rigenerare la baseline vuota:
   ```bash
@@ -64,7 +64,7 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
 
 ## Docker & container hardening
 
-- Workflow `.github/workflows/docker-lint.yml` esegue `hadolint` su ogni Dockerfile del repo (push/PR + weekly).
+- Workflow `.github/workflows/docker-lint.yml` esegue `hadolint` su ogni Dockerfile del repo (PR + weekly).
   Attualmente il repository non contiene Dockerfile; il job riporta il salto ma resta attivo per future integrazioni.
 - Linee guida per i Dockerfile:
   - usa immagini base minimali (`python:3.11-slim`, distroless dove possibile);
@@ -89,7 +89,7 @@ Configura la regola su `main` (GitHub a Settings a Branches):
    - `CI`
    - `Secret Scan`
 3. **Include administrators** (Enforce for administrators)
-4. **Restrict who can push** (solo bot o release manager)
+4. **Restrict who can write** (solo bot o release manager)
 5. *(Facoltativo)* Require signed commits
 
 Script opzionale (`tools/apply_branch_protection.sh`) mostra i comandi `gh api`

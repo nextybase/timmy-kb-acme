@@ -38,7 +38,7 @@ Core principles:
 
 ## Common Policies
 - **Build:** keep scripts idempotent; avoid global side effects or undeclared state changes.
-- **Test:** run tests locally deterministically; no network dependencies in unit tests. Use markers/filters as needed (e.g., `-m drive`, `-m push`, `-m slow`).
+- **Test:** run tests locally deterministically; no network dependencies in unit tests. Use markers/filters as needed (e.g., `-m drive`, `-m slow`).
 - **Lint & Typecheck:** apply configured formatters/linters (`Ruff`, `Black`, `isort`) and typecheckers (`mypy`/`pyright`) when present. Respect the project's existing standards.
 - **Path-safety & I/O:** every read/write must flow through the SSoT helpers (`ensure_within*`, `safe_write_*`). Never create/delete files outside the customer perimeter.
 - **Documentation & QA:** update documentation when UX/flow changes occur. Keep cSpell clean on tracked paths; only expand dictionaries for domain-specific terms.

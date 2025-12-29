@@ -49,7 +49,7 @@ PR obbligatorie verso `main`. Protezioni:
 - `docs/user/user_guide.md`
 - `docs/developer/developer_guide.md`
 - `docs/developer/coding_rule.md`
-- `policy_push.md`
+- Nessuna policy di deploy esterno attiva.
 - `versioning_policy.md`
 - `CHANGELOG.md`
 
@@ -59,12 +59,12 @@ PR obbligatorie verso `main`. Protezioni:
 2. Aggiorna `CHANGELOG.md`.
 3. Bump versione nei doc.
 4. Merge in `main`.
-5. `git tag vX.Y.Z && git push origin vX.Y.Z`.
+5. Crea il tag `vX.Y.Z` e sincronizzalo con origin.
 
 ## 7) Allineamento orchestratori per v1.2.1
 
 - Facade `semantic.api` (conversione/enrichment/preview) come SSoT; e disponibile un thin wrapper CLI `timmy_kb.cli.semantic_onboarding` che richiama la facade per simmetria con gli altri orchestratori.
-- Ridotto: preview locale (`pipeline.gitbook_preview`) come endpoint finale (nessun push/publish).
+- Ridotto: preview locale (`pipeline.gitbook_preview`) come endpoint finale (nessun deploy esterno).
 - SSoT: `ensure_within` in `pipeline.path_utils`.
 
 Queste modifiche sono retro-compatibili a livello di CLI (MINOR  1.2.x), con breaking nullo lato utente.

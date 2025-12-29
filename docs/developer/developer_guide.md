@@ -259,7 +259,7 @@ pip-compile requirements-optional.in
 - Hook pre-commit: format/lint prima del commit; smoke test in CI.
 
 ```bash
-pre-commit install --hook-type pre-commit --hook-type pre-push
+pre-commit install --hook-type pre-commit
 make qa-safe     # isort/black/ruff/mypy (se presenti)
 make ci-safe     # qa-safe + pytest
 # Ambientesenza install: esegui i test con PYTHONPATH=src pytest -q

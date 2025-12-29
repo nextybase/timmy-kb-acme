@@ -29,7 +29,6 @@ Benvenuto nella documentazione di **Timmy-KB**: sistema di creazione governata c
   - Type checking rapido: `make type` (mypy), `make type-pyright` (pyright/npx)
 - **Policy**
   - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilita'.
-  - [Policy di Push](policy_push.md) - **legacy (push/publish rimossi)**.
   - [Security & Compliance](security.md) - gestione segreti, OIDC, branch protection, hook locali.
 - **ADR - scelte tecniche**
   - [Registro decisioni (ADR)](adr/README.md) - contesto delle scelte tecniche.

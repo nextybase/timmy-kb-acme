@@ -18,7 +18,7 @@
 
 ## 3. Verification & Progression Rules
 - **Evidence required per step:** each prompt response constitutes progression only when Codex delivers a unified diff, a structured report describing the change and QA results, and, when asked, the intermediate QA output (`pytest -q -k "not slow"` or other tests detailed in the prompt). Those artifacts alone prove that Codex performed the requested work.
-- **Push policy:** pushing to `main` is _not_ a default step; it happens only when the chain reaches Prompt N+1 (finalization), the OCP explicitly authorizes a push, or a change affects runtime behavior that cannot stay confined to a reviewable diff/report/QA set. The push is a synchronization event, never an implicit requirement.
+- **Delivery policy:** l'allineamento con `main` non è uno step predefinito; avviene solo quando la chain arriva a Prompt N+1 (finalizzazione), l'OCP autorizza esplicitamente, o una modifica runtime non può restare confinata a diff/report/QA. La sincronizzazione è un evento esplicito, mai implicito.
 - **OCP decision gate:** only the OCP decides whether the evidence is sufficient to advance the chain or request further iterations; Codex waits for the next OCP prompt before moving forward, reporting the artifacts produced and any blockers.
 - **Prompt formatting requirement:** OCP → Codex prompts must be delivered as a single copyable structured block (see `.codex/PROMPTS.md`) to prevent ambiguity and ensure reproducibility.
 

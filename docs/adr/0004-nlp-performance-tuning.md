@@ -9,7 +9,7 @@ Su workspace con centinaia di PDF la fase di tag onboarding soffriva di tempi lu
 - `iter_safe_pdfs` scansionava continuamente `raw/`, duplicando I/O;
 - le query SQLite (doc_terms/folders) venivano ripetute per documento e cartella;
 - l'estrazione NLP (spacy/yake/keybert) era totalmente sequenziale, saturando un solo core;
-- il lock GitHub per i push aveva timeout/poll fissi poco adatti a workspace condivisi.
+- il lock GitHub aveva timeout/poll fissi poco adatti a workspace condivisi.
 
 Serve ridurre la latenza preservando path-safety, idempotenza e HiTL.
 

@@ -108,7 +108,7 @@ Per l'indicizzazione nel DB semantico puoi delegare a
 adottato nel tuo ambiente (es. quello configurato nella UI retriever).
 
 # 4) Preview finale (HonKit locale)
-Avvia la preview Docker/HonKit tramite `pipeline.gitbook_preview` (vedi sezione Preview); non esiste piÙ il ramo push/publish.
+Avvia la preview Docker/HonKit tramite `pipeline.gitbook_preview` (vedi sezione Preview); non esistono step di deployment esterno.
 
 Modalita` **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopra per la parte CLI di onboarding.
 
@@ -154,7 +154,7 @@ output/timmy-kb-<slug>/
 - Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.
 - Log con redazione automatica se `LOG_REDACTION` e` attivo.
 - I pulsanti **Avvia arricchimento semantico**/**Abilita** nella UI rispettano il servizio `ui.services.tags_adapter`: se non e` disponibile vengono disabilitati (salvo `TAGS_MODE=stub`). In modalita` stub lo YAML viene rigenerato con `DEFAULT_TAGS_YAML` e lo stato cliente torna a **pronto** se il DB resta vuoto.
-- La preview finale usa HonKit via Docker (`pipeline.gitbook_preview`) e non effettua push/publish esterni.
+- La preview finale usa HonKit via Docker (`pipeline.gitbook_preview`) e non effettua deploy esterni.
 
 ## Impostazioni retriever (UI)
 La sidebar della UI consente di configurare il retriever, salvando i parametri in `config/config.yaml`:

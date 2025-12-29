@@ -47,7 +47,7 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
 ## Test da eseguire
 - Suite rapida: `pytest -q -k "not slow"`
 - Se tocchi Streamlit/UI: aggiungi `-m "not slow"` con filtri di pagina se servono.
-- Prima del push finale della Prompt Chain: `pre-commit run --all-files` + `pytest -q`.
+- Prima della chiusura finale della Prompt Chain: `pre-commit run --all-files` + `pytest -q`.
 
 ## Note operative
 - Runner/entrypoint (es. CLI Streamlit/pytest) possono toccare `sys.path` solo se non c’è alternativa e devono documentare il motivo; i moduli di libreria non possono farlo.

@@ -257,17 +257,7 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
 
 ---
 
-## 7) Pubblicazione su GitHub -> **CLI / automazioni**
-
-La preview finale usa HonKit via Docker (`pipeline.gitbook_preview`) e non effettua push/publish verso GitHub/GitBook.
-
-- **Cosa sale su GitHub**: solo i file `.md` presenti in `book/` (gli altri artefatti restano locali).
-- - **Sicurezza**: il clone temporaneo vive sotto `output/timmy-kb-<slug>/.push_*` e viene ripulito al termine; `LeaseLock` impedisce push concorrenti sullo stesso workspace.
-- **Troubleshooting rapido**: se il token manca o la remote rifiuta l'operazione, i log espongono un `PushError` con l'ultima voce di stderr (`run_cmd.fail`). Per riprodurre in locale puoi usare il test smoke `pytest tests/pipeline/test_github_push.py::test_push_output_to_github_end_to_end_smoke`.
-
----
-
-## 8) Configurazione avanzata -> **Settings**
+## 7) Configurazione avanzata -> **Settings**
 
 **Semantica (YAML)**
 

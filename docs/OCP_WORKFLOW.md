@@ -1,7 +1,7 @@
 # OCP → Codex Workflow
 
 1. **Scopo**: l’OCP traduce piani in Prompt numerati, Codex applica micro-PR con diff/report/QA, l’umano mantiene il merge gate e non esegue codice.
-2. **Regola base**: `main` riceve modifiche solo via PR; vedere docs/security.md per richieste di branch protection (`CI`, `Secret Scan`, approval). Nessun push diretto su `main`.
+2. **Regola base**: `main` riceve modifiche solo via PR; vedere docs/security.md per richieste di branch protection (`CI`, `Secret Scan`, approval). Nessuna scrittura diretta su `main`.
 3. **Mapping Prompt → Commit**:
    - Prompt 0: analisi read-only, nessun file modificato.
    - Prompt 1..N: ogni prompt genera un micro-PR mirato (1 diff, 1 report, `pytest -q -k "not slow"`).
@@ -13,7 +13,7 @@
    - NO file fuori dallo scope dichiarato.
    - NO refactor non richiesti.
    - NO bypass degli hook o della QA; se fallano, correggere e ripetere fino a max 10 tentativi.
-   - NO push su `main` senza autorizzazione OCP/Senior Reviewer.
+   - NO merge diretto su `main` senza autorizzazione OCP/Senior Reviewer.
 6. **Checklist merge**:
    - QA intermedi eseguiti (`pytest -q -k "not slow"`).
    - QA finale completata (`pre-commit run --all-files`, `pytest -q`).

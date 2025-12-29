@@ -131,7 +131,7 @@ Grafana sfrutta `trace_id`, `span_id`, `slug`, `run_id`, `phase` e `decision_typ
 Ogni volta che l'amministratore UI salva/rigenera `tags_reviewed.yaml` (sia in modalita stub che con il servizio `tags_adapter`), il codice chiama `start_decision_span` con `decision_type=human_override` e `phase=ui.manage.tags_yaml`. Gli span portano sempre:
 
 - `slug`, `run_id`, `trace_kind=onboarding` per trovare la trace primaria.
-- `override_reason` (`manual_publish`, `state_override`, `manual_tags_csv`, `stub_publish`) e l'indicazione di `hilt_involved=true` / `user_role` per ricostruire chi ha preso la decisione.
+- `override_reason` (es. `state_override`, `manual_tags_csv`) e l'indicazione di `hilt_involved=true` / `user_role` per ricostruire chi ha preso la decisione.
 - `previous_value` / `new_value` per mostrare il cambio di stato (`pronto`  `arricchito`).
 - `status` (`success` / `failed`) e `reason` per capire se la modifica ha avuto effetto.
 

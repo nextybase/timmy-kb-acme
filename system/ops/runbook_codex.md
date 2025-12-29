@@ -19,7 +19,7 @@ This repository blends the shared policies (`system/ops/agents_index.md`), area 
 ### Minimal tooling
 - Python **>= 3.11**, pip, pip-tools; optional Docker for HonKit preview.
 - Required credentials: `OPENAI_API_KEY`. Drive access also needs `SERVICE_ACCOUNT_FILE` and `DRIVE_ID`. <!-- pragma: allowlist secret -->
-- Install pre-commit hooks: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
+- Install pre-commit hooks: `pre-commit install --hook-type pre-commit`.
 - Ensure the pipeline modules import from the same repo root as the UI; activate the correct venv and run `pip install -e .` at the repo root if necessary.
 
 ### Environment setup
@@ -142,13 +142,13 @@ References: [Developer Guide → Configuration](../../docs/developer/developer_g
 
 ## 4) Operational flows (UI/CLI)
 
-> Objective: turn PDFs into KB Markdown with coherent frontmatter, README/SUMMARY updates, and a HonKit Docker preview locale (ramo push/publish GitHub/GitBook rimosso).
+> Objective: turn PDFs into KB Markdown with coherent frontmatter, README/SUMMARY updates, and a HonKit Docker preview locale.
 
 ### Standard workflow
 1. **pre_onboarding:** create the workspace (`output/timmy-kb-<slug>/...`), optionally provision Drive, and upload `config.yaml`.
 2. **tag_onboarding:** produce `semantic/tags_raw.csv` and the HiTL checkpoint `tags_reviewed.yaml`.
 3. **semantic_onboarding (via `semantic.api`):** convert PDFs to Markdown in `book/`, arricchire il frontmatter usando `semantic/tags.db` e ricostruire README/SUMMARY.
-4. **gitbook_preview (HonKit preview locale):** avvia la preview Docker su `book/` senza push/publish.
+4. **gitbook_preview (HonKit preview locale):** avvia la preview Docker su `book/`.
 
 ### UI gating
 - Enable the Semantica tab only once local RAW data exists.
@@ -176,15 +176,12 @@ References: [.codex/WORKFLOWS.md](../../.codex/WORKFLOWS.md), [User Guide](../..
 
 ### 5.3 Full Access scenario (exceptional)
 - Restricted to dedicated branches for explicit tasks (scale migrations).
-- Use internal GitHub helpers: `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`, along with `pipeline.github_env_flags`.
 - Delegated semantic pipeline steps call `semantic.convert_service`, `semantic.frontmatter_service`, and `semantic.embedding_service`; the `semantic.api` facade re-exports public helpers.
 - NLP stages such as doc_terms/cluster go through `semantic.nlp_runner.run_doc_terms_pipeline` and `tag_onboarding.run_nlp_to_db`.
 - Log every step; keep PRs/commits atomic and traceable.
 
 ### 5.4 Multi-agent alignment
-- Sync shared flags (`TIMMY_NO_GITHUB`, `GIT_FORCE_ALLOWED_BRANCHES`, `TAGS_MODE`, throttles) across UI, CLI, and agents; update `.env.sample` and docs when they change.
 - Ensure adapters (`ui.services.tags_adapter`, Drive services) load or that the UI shows stub help/fallback.
-- Emit `phase_scope` telemetry for `prepare_repo`, `stage_changes`, and push phases.
 - Reset shared caches (`clients_store`, `safe_pdf_cache`) after atomic writes and log `reset_gating_cache`.
 
 ### 5.5 Prompt Chain execution
@@ -208,7 +205,7 @@ References: [AGENTS Index](agents_index.md), [.codex/AGENTS.md](../../.codex/AGE
 - Reject invalid slugs or normalize them.
 - Deny traversal via symlinks in `raw/`.
 - Maintain UI/backend wrapper parity and parameter pass-through.
-- Keep `book/` invariants: `README.md`/`SUMMARY.md` must exist; `.md.fp` files stay out of pushes.
+- Keep `book/` invariants: `README.md`/`SUMMARY.md` must exist; `.md.fp` files restano fuori dalla build.
 
 References: [Developer Guide → Test](../../docs/developer/developer_guide.md), [Coding Rules → Test & Quality](../../docs/developer/coding_rule.md), [.codex/CHECKLISTS](../../.codex/CHECKLISTS.md).
 
@@ -238,13 +235,7 @@ References: [README → Telemetry & Security](../README.md), [User Guide → Cha
 
 ---
 
-## 9) GitHub operations & rollback (legacy)
-
-Il ramo push/publish GitHub/GitBook è stato rimosso: non esiste più un entrypoint di publishing, né env/flag associati. La pipeline si ferma alla preview Docker locale (`pipeline.gitbook_preview`). I riferimenti storici al push restano solo per archivio e non vanno eseguiti.
-
----
-
-## 10) Governance & AGENTS matrix
+## 9) Governance & AGENTS matrix
 
 - The AGENTS Index (`AGENTS_INDEX.md`) is the SSoT.
 - Local `AGENTS.md` files define overrides and link back to the index.
@@ -290,7 +281,7 @@ References: [User Guide → Vision Statement](../../docs/user/user_guide.md), [D
 - PR/Commit: conventional messages, updated tests, zero cSpell warnings.
 - Security & I/O: path-safe ensures, atomic writes, defined rollback paths.
 - UI/Workflow: gate Semantica, secure Docker preview, maintain `semantic/tags.db`.
-- Drive/Git: credentials ready, push only `.md` from `book/`.
+- Drive: credenziali pronte per provisioning e sync.
 - Documentation (blocking): update Architecture/Developer Guide/User Guide (and `.codex/WORKFLOWS.md` when pipeline changes) and list the updates in the PR's `Docs:` section.
 
 References: [.codex/CHECKLISTS](../../.codex/CHECKLISTS.md).

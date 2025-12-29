@@ -56,7 +56,7 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 - Namespace: i moduli sono importabili direttamente da `src` (es. `from timmy_kb.cli.ingest import ingest_folder`, `from pipeline.context import ClientContext`); gli alias di import legacy sono stati rimossi, usa il namespace attuale.
 - Hook consigliati:
   ```bash
-  pre-commit install --hook-type pre-commit --hook-type pre-push
+  pre-commit install --hook-type pre-commit
   make qa-safe     # lint + typing
   pytest -q        # suite rapida (dataset dummy)
   ```

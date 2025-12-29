@@ -16,7 +16,7 @@
 4. **Observability:** vengono citati log/signals (`ui.semantics.gating_allowed`, `context.step.status`, ecc.) per confermare i passaggi?
 5. **Evidence:** i gate specificano artefatti o log “PASS” o li marcano come “non formalizzato”?
 6. **Retry policy:** la strategia di retry/resume è esplicitata o indicata come gap in instructions/08?
-7. **QA linkage:** è chiaro che `pytest`/`pre-commit` sono prerequisiti per `finito` e/o push?
+7. **QA linkage:** è chiaro che `pytest`/`pre-commit` sono prerequisiti per `finito` e/o merge?
 8. **Decision record:** la segnalazione finale menziona PASS/PASS WITH CONDITIONS/BLOCK e le evidenze collegate?
 
 ## Evidence required for PASS / PASS WITH CONDITIONS / BLOCK
