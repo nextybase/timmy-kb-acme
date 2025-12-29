@@ -178,7 +178,7 @@ Quando usare cosa (regola pratica)
 - **Import tag YAML  SQLite (fallback):** `tests/storage/test_import_tags_yaml_to_db.py` verifica l'import e il log `storage.tags_store.import_yaml.fallback` quando PyYAML non e disponibile.
 
 ### 13) Script e qualita repo
-- **Sanitizzazione file (test):** `tests/tools/test_forbid_control_chars.py`.
+- **sanitizzazione file (test):** `tests/tools/test_forbid_control_chars.py`.
 - **Script CLI correlato:** `tools/forbid_control_chars.py`.
 
 ### 14) Process utils  Esecuzione comandi esterni

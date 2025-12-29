@@ -154,7 +154,7 @@ def ensure_src_on_sys_path(repo_root: Path) -> None:
     """
     Inserisce <repo_root>/src in sys.path in modo idempotente.
 
-    Solleva ConfigError se il path non esiste o non Ã¨ una directory.
+    Solleva ConfigError se il path non esiste o non è una directory.
     """
     try:
         src_dir = ensure_within_and_resolve(repo_root, repo_root / "src")

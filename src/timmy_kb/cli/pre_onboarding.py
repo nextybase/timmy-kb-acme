@@ -4,7 +4,7 @@
 """
 Orchestratore della fase di pre-onboarding per Timmy-KB.
 
-ResponsabilitÃ :
+Responsabilità:
 - Preparare il contesto locale del cliente (`output/timmy-kb-<slug>/...`).
 - Validare/minimizzare la configurazione e generare/aggiornare `config.yaml`.
 - Creare struttura locale e la struttura remota su Google Drive.
@@ -75,7 +75,7 @@ try:
     get_drive_service = _du.get_drive_service
     upload_config_to_drive_folder = _du.upload_config_to_drive_folder
 except Exception:
-    # Import opzionale: in modalitÃ  --dry-run non Ã¨ richiesto googleapiclient
+    # Import opzionale: in modalità --dry-run non è richiesto googleapiclient
     pass
 
 
@@ -85,7 +85,7 @@ def _prompt(msg: str) -> str:
 
 
 def _require_drive_utils() -> None:
-    """Verifica che le utilitÃ  Google Drive siano disponibili e callabili.
+    """Verifica che le utilità Google Drive siano disponibili e callabili.
 
     Solleva ConfigError con istruzioni d'installazione se mancanti.
     """
@@ -214,7 +214,7 @@ def bootstrap_semantic_templates(
             "created_at": _dt.datetime.utcnow().strftime("%Y-%m-%d"),
         }
 
-        # Prepend `context` solo se non giÃ  presente
+        # Prepend `context` solo se non già presente
         if "context" not in data:
             data = {"context": ctx, **data}
             payload = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)

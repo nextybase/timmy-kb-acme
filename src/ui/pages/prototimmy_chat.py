@@ -40,7 +40,7 @@ _PROTO_JSON_SYSTEM_MESSAGE = {
 _PROTO_JSON_RESPONSE_FORMAT = {
     "type": "json_schema",
     "json_schema": {
-        "name": "ProtoTimmyOCPOuput",
+        "name": "ProtoTimmyOCPOutput",
         "schema": {
             "type": "object",
             "properties": {

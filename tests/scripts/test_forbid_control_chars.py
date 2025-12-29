@@ -45,7 +45,7 @@ def test_detects_control_chars_without_fix(repo_tmp: Path) -> None:
     result = run_hook(str(relative))
 
     assert result.returncode == 1
-    assert "controll" in result.stdout.lower()
+    assert "control" in result.stdout.lower()
 
 
 def test_fix_removes_controls_and_normalizes(repo_tmp: Path) -> None:

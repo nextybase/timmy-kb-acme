@@ -309,7 +309,7 @@ def _build_prompt_from_snapshot(snapshot: str, *, slug: str, ctx: Any, logger: "
         global_entities = []
 
     user_block_lines.append(
-        "Entit\u00e0 globali disponibili (non inventare nuove entit\u00e0; seleziona solo quelle rilevanti; "
+        "Entità globali disponibili (non inventare nuove entità; seleziona solo quelle rilevanti; "
         "assegna area e document_code usando i dati sottostanti):"
     )
     user_block_lines.append("[GlobalEntities]")

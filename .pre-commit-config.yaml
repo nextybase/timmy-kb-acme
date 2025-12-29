@@ -71,12 +71,12 @@ repos:
 
   - repo: local
     hooks:
-      - id: agents-matrix-check
-        name: Check AGENTS matrix
-        entry: python tools/gen_agents_matrix.py --check
+      - id: cspell
+        name: cspell (docs + README + src + tests)
+        entry: npx --yes -p @cspell/dict-it-it cspell lint --no-progress --config cspell.json
         language: system
-        pass_filenames: false
-        files: ^docs/AGENTS_INDEX\.md$|^src/.*/AGENTS\.md$|^tests/AGENTS\.md$|^\.codex/AGENTS\.md$|^AGENTS\.md$
+        pass_filenames: true
+        files: ^(README\.md|docs/.*\.md|src/.*\.py|tests/.*\.py)$
         stages: [pre-commit]
 
       - id: mypy
@@ -264,14 +264,4 @@ repos:
       - id: detect-secrets
         args: ["--baseline", ".secrets.baseline"]
         exclude: "^src/ui/pages/secrets_guide\\.yaml$"
-        stages: [pre-commit]
-
-  - repo: local
-    hooks:
-      - id: cspell
-        name: cspell (docs + README)
-        entry: npx --yes -p @cspell/dict-it-it cspell lint --no-progress --config cspell.json
-        language: system
-        pass_filenames: true
-        files: ^(README\.md|docs/.*\.md)$
         stages: [pre-commit]

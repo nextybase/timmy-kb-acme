@@ -4,10 +4,10 @@ from __future__ import annotations
 """
 Runner headless per Vision: condiviso da CLI e UI.
 
-Responsabilitŕ:
+Responsabilità:
 - path-safety e gating hash/sentinel,
 - risoluzione config/retention,
-- invocazione semantic.vision_provision usando PDF o YAML se giŕ presente.
+- invocazione semantic.vision_provision usando PDF o YAML se già presente.
 
 Nota: non importa moduli UI/Streamlit; utilizzabile in ambienti headless.
 """

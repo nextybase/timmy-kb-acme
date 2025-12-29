@@ -53,7 +53,7 @@ class ClientContextProtocol(Protocol):
 class SemanticContextProtocol(ClientContextProtocol, Protocol):
     """Contratto esplicito per i workflow semantici.
 
-    Estende il contesto minimo con i flag UX usati dalla CLI/UI (es. preview, interattivitÇÿ).
+    Estende il contesto minimo con i flag UX usati dalla CLI/UI (es. preview, interattività).
     """
 
     skip_preview: bool

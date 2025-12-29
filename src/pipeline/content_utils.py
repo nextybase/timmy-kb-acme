@@ -415,7 +415,7 @@ def _group_safe_pdfs_by_category(
     raw_root: Path,
     safe_pdfs: list[Path],
 ) -> tuple[list[Path], CategoryGroups]:
-    """Dato un elenco di PDF *giÃƒÂ * validati (risolti dentro raw_root),
+    """Dato un elenco di PDF *già* validati (risolti dentro raw_root),
     restituisce:
       - (root_pdfs, [(cat_dir, pdfs_in_cat), ...]) con cat_dir = directory immediata sotto raw_root.
     """
@@ -732,8 +732,8 @@ def convert_files_to_structured_markdown(
 ) -> None:
     """Converte i PDF in RAW in un set di .md strutturati nella cartella `md_dir`.
 
-    Se `safe_pdfs` ÃƒÂ¨ fornito, **non** esegue alcuna discovery su disco e assume
-    che la lista sia giÃƒÂ  validata e risolta allÃ¢â‚¬â„¢interno di `ctx.raw_dir`.
+    Se `safe_pdfs` è fornito, **non** esegue alcuna discovery su disco e assume
+    che la lista sia già validata e risolta all'interno di `ctx.raw_dir`.
     """
     base = ctx.base_dir
     raw_root = ctx.raw_dir
