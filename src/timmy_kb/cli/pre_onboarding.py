@@ -67,6 +67,7 @@ create_drive_folder = None
 create_drive_minimal_structure = None
 get_drive_service = None
 upload_config_to_drive_folder = None
+_drive_import_error: Optional[str] = None
 try:
     import pipeline.drive_utils as _du
 
@@ -74,9 +75,9 @@ try:
     create_drive_minimal_structure = getattr(_du, "create_drive_minimal_structure", None)
     get_drive_service = _du.get_drive_service
     upload_config_to_drive_folder = _du.upload_config_to_drive_folder
-except Exception:
+except ImportError as exc:
     # Import opzionale: in modalità --dry-run non è richiesto googleapiclient
-    pass
+    _drive_import_error = str(exc).splitlines()[0]
 
 
 def _prompt(msg: str) -> str:
@@ -106,6 +107,8 @@ def _require_drive_utils() -> None:
             "  pip install .[drive]\n"
             "Oppure disattiva il ramo Drive (usa --dry-run o source=local)."
         )
+        if _drive_import_error:
+            msg = f"{msg}\nDettagli import Drive: {_drive_import_error}"
         raise ConfigError(msg)
 
 

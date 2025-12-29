@@ -166,8 +166,29 @@ def onboarding_full_main(
         early_logger.exception("cli.onboarding_full.context_failed", extra={"slug": slug, "error": str(exc)})
         return exit_code_for(exc if isinstance(exc, (ConfigError, PipelineError)) else PipelineError(str(exc)))
 
-    # Preferisci i path dal contesto; fallback deterministico solo se assenti
-    layout = WorkspaceLayout.from_context(context)
+    base_dir = getattr(context, "base_dir", None) or getattr(context, "repo_root_dir", None)
+    if base_dir is None:
+        early_logger.error("cli.onboarding_full.missing_base_dir", extra={"slug": slug})
+        return exit_code_for(ConfigError("context.base_dir non impostato"))
+    try:
+        logs_dir = base_dir / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        early_logger.exception(
+            "cli.onboarding_full.log_dir_failed",
+            extra={"slug": slug, "base_dir": str(base_dir), "error": str(exc)},
+        )
+        return exit_code_for(PipelineError(str(exc)))
+
+    try:
+        layout = WorkspaceLayout.from_context(context)
+    except (ConfigError, PipelineError) as exc:
+        early_logger.exception("cli.onboarding_full.workspace_failed", extra={"slug": slug, "error": str(exc)})
+        return exit_code_for(exc)
+    except Exception as exc:
+        early_logger.exception("cli.onboarding_full.workspace_failed", extra={"slug": slug, "error": str(exc)})
+        return exit_code_for(PipelineError(str(exc)))
+
     layout.logs_dir.mkdir(parents=True, exist_ok=True)
     log_file = layout.log_file
 

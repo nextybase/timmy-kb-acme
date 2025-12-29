@@ -361,6 +361,26 @@ def emit_structure(payload: _DummyPayload | Dict[str, Any], *, stream: TextIO = 
     stream.write("\n")
 
 
+def _ensure_minimum_workspace(workspace_root: Path, logger: logging.Logger) -> None:
+    """Bootstrap minimale richiesto dai test dummy (workspace vuoto ma valido)."""
+    try:
+        workspace_root.mkdir(parents=True, exist_ok=True)
+        for child in ("raw", "semantic", "book", "logs", "config"):
+            (workspace_root / child).mkdir(parents=True, exist_ok=True)
+        template_config = REPO_ROOT / "config" / "config.yaml"
+        config_payload = template_config.read_text(encoding="utf-8")
+        (workspace_root / "config" / "config.yaml").write_text(config_payload, encoding="utf-8")
+        book_dir = workspace_root / "book"
+        (book_dir / "README.md").write_text("# Dummy README\n", encoding="utf-8")
+        (book_dir / "SUMMARY.md").write_text("# Dummy SUMMARY\n", encoding="utf-8")
+    except Exception as exc:
+        logger.error(
+            "tools.gen_dummy_kb.bootstrap_failed",
+            extra={"slug": workspace_root.name, "base_dir": str(workspace_root), "error": str(exc)},
+        )
+        raise
+
+
 # ------------------------------------------------------------
 # Main
 # ------------------------------------------------------------
@@ -411,6 +431,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.info("tools.gen_dummy_kb.mode", extra={"mode": mode_label})
 
         _purge_previous_state(slug, client_name, logger)
+
+        if workspace_override:
+            try:
+                _ensure_minimum_workspace(workspace_override, logger)
+            except Exception as exc:
+                emit_structure({"error": str(exc)}, stream=sys.stderr)
+                return 1
 
         try:
             payload = build_payload(

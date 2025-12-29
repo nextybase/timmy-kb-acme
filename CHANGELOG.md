@@ -3,6 +3,63 @@
 > Formato: **Keep a Changelog** e **SemVer**
 > Nota: elenco condensato ai soli punti chiave che impattano UX, sicurezza, API pubbliche o qualita.
 
+## [Unreleased] – Stabilizzazione determinismo operativo (pre-1.0 Beta)
+
+### Added
+- Logging strutturato e deterministico per i rami di fallback in **metrics** e **tracing**:
+  - emissione esplicita degli eventi `observability.metrics.disabled` e `observability.tracing.disabled`
+  - eliminata la degradazione silenziosa in caso di dipendenze o configurazioni mancanti.
+- Segnalazione esplicita e coerente dei failure nelle **operazioni Drive da UI** tramite evento `ui.drive.failure`.
+
+### Changed
+- **Drive (CLI e UI)**:
+  - rimosso ogni comportamento *warning-and-continue* o *best-effort* nelle operazioni che producono artefatti locali;
+  - gli import delle Drive utils catturano solo `ImportError`, con failure deterministico e messaggio esplicito;
+  - la UI Drive non degrada più a vista vuota: se Drive non è disponibile, l’errore è chiaro e tracciato.
+- **Workspace validation**:
+  - eliminati completamente skip impliciti basati su heuristics o stack inspection;
+  - la validazione è ora fail-fast e può essere disattivata solo tramite policy esplicita in contesti autorizzati (dummy/bootstrap).
+- **Path resolution (CLI)**:
+  - separata la risoluzione dei path dalla validazione del workspace completo;
+  - `_resolve_cli_paths` e `validate_tags_reviewed` operano ora in modalità context-first con guardie di perimetro (`ensure_within*`);
+  - comportamento allineato ai contratti CLI (exit code deterministici).
+- **Dummy / test environment**:
+  - il tool `gen_dummy_kb` esegue un bootstrap esplicito di un workspace minimo e valido;
+  - eliminati hack e mutazioni di flag interni per far passare i test.
+- **Import order / sys.path**:
+  - ridotta la sys.path injection “magica”;
+  - nessuna injection quando i package sono correttamente installati, riducendo il drift tra ambienti.
+
+### Removed
+- Fallback silenziosi e degradazioni implicite in:
+  - operazioni Drive (UI e CLI),
+  - metrics e tracing,
+  - validazione workspace e path resolution.
+- Dipendenza implicita da GitHub per il deploy:
+  - il flusso di trasferimento su GitHub è considerato deprecato e fuori scope (resta solo la preview locale via Docker/HonKit).
+
+### Fixed
+- Divergenze di comportamento tra ambienti (dev/CI/dedicati) dovute a:
+  - dipendenze opzionali non dichiarate,
+  - import catch-all,
+  - validazioni saltate implicitamente.
+- Test E2E e dummy resi coerenti con un modello fail-fast e deterministico.
+
+---
+
+### TODO (prossima sessione)
+- **Vision provisioning**:
+  - eliminare swallow/warning-only che producono artefatti diversi a parità di input;
+  - rendere espliciti e deterministici i casi di fallimento o output incompleto.
+- **Cleanup GitHub**:
+  - rimuovere definitivamente il ramo di deploy/push GitHub dal codice e dalla documentazione;
+  - mantenere solo preview locale (Docker/HonKit).
+- **Prompt N+1**:
+  - QA finale end-to-end;
+  - verifica determinismo operativo complessivo;
+  - push su `main` e tag `1.0 Beta`.
+
+
 ## [Unreleased]
 
 ### Pending

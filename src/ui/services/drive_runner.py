@@ -22,6 +22,8 @@ get_drive_service: Callable[[ClientContext], Any] | None
 upload_config_to_drive_folder: Callable[..., Any] | None
 create_local_base_structure: Callable[..., Any] | None
 
+_drive_import_error: Optional[str] = None
+
 try:
     import pipeline.drive_utils as _du
 
@@ -33,7 +35,8 @@ try:
     get_drive_service = _du.get_drive_service
     upload_config_to_drive_folder = _du.upload_config_to_drive_folder
     create_local_base_structure = _du.create_local_base_structure
-except Exception:  # pragma: no cover
+except ImportError as exc:  # pragma: no cover
+    _drive_import_error = str(exc)
     create_drive_folder = None
     create_drive_minimal_structure = None
     create_drive_raw_children_from_yaml = None
@@ -63,6 +66,11 @@ else:  # pragma: no cover
 def _get_logger(context: Optional[object] = None) -> Any:
     """Ritorna un logger strutturato del modulo pipeline.logging_utils."""
     return get_structured_logger("ui.services.drive_runner", context=context)
+
+
+def _log_drive_failure(reason: str, *, extra: Optional[dict[str, Any]] = None, context: Optional[object] = None) -> None:
+    logger = _get_logger(context)
+    logger.error("ui.drive.failure", extra={"reason": reason, **(extra or {})})
 
 
 def _ui_ensure_dest(base_dir: Path, local_root: Path, rel_parts: Sequence[str], filename: str) -> Path:
@@ -95,10 +103,11 @@ def _require_drive_utils_ui() -> None:
     if not callable(upload_config_to_drive_folder):
         missing.append("upload_config_to_drive_folder")
     if missing:
-        raise RuntimeError(
-            "Funzionalita Google Drive non disponibili nella UI: "
-            f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
-        )
+        reason = f"Funzionalita Google Drive non disponibili nella UI: {', '.join(missing)}."
+        if _drive_import_error:
+            reason = f"{reason} ImportError: {_drive_import_error}"
+        _log_drive_failure("drive_utils_unavailable", extra={"missing": missing, "import_error": _drive_import_error})
+        raise RuntimeError(f"{reason} Installa gli extra con: pip install .[drive]")
 
 
 def _require_drive_minimal_ui() -> None:
@@ -113,10 +122,11 @@ def _require_drive_minimal_ui() -> None:
     if not callable(upload_config_to_drive_folder):
         missing.append("upload_config_to_drive_folder")
     if missing:
-        raise RuntimeError(
-            "Funzionalita Google Drive non disponibili (fase minima): "
-            f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
-        )
+        reason = f"Funzionalita Google Drive non disponibili (fase minima): {', '.join(missing)}."
+        if _drive_import_error:
+            reason = f"{reason} ImportError: {_drive_import_error}"
+        _log_drive_failure("drive_minimal_unavailable", extra={"missing": missing, "import_error": _drive_import_error})
+        raise RuntimeError(f"{reason} Installa gli extra con: pip install .[drive]")
 
 
 def _require_drive_for_raw_only() -> None:
@@ -127,10 +137,11 @@ def _require_drive_for_raw_only() -> None:
     if not callable(create_drive_raw_children_from_yaml):
         missing.append("create_drive_raw_children_from_yaml")
     if missing:
-        raise RuntimeError(
-            "Funzionalità Google Drive non disponibili (RAW da YAML): "
-            f"{', '.join(missing)}. Installa gli extra con: pip install .[drive]"
-        )
+        reason = f"Funzionalità Google Drive non disponibili (RAW da YAML): {', '.join(missing)}."
+        if _drive_import_error:
+            reason = f'{reason} ImportError: {_drive_import_error}'
+        _log_drive_failure("drive_raw_unavailable", extra={"missing": missing, "import_error": _drive_import_error})
+        raise RuntimeError(f"{reason} Installa gli extra con: pip install .[drive]")
 
 
 # =====================================================================
@@ -229,13 +240,17 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
     if progress:
         progress(1, 1, "Struttura RAW su Drive creata/aggiornata")
 
-    if callable(create_local_base_structure):
-        try:
-            create_local_base_structure(context=ctx, yaml_structure_file=yaml_path)
-        except Exception as exc:
-            log.warning("local.structure.create_failed", extra={"error": str(exc)[:200]})
-    else:
-        log.debug("local.structure.skip", extra={"reason": "create_local_base_structure non disponibile"})
+    if not callable(create_local_base_structure):
+        log.error("ui.drive.failure", extra={"reason": "create_local_base_structure_missing"})
+        raise RuntimeError("create_local_base_structure non disponibile. Installa gli extra Drive.")
+    try:
+        create_local_base_structure(context=ctx, yaml_structure_file=yaml_path)
+    except Exception as exc:
+        log.error(
+            "ui.drive.failure",
+            extra={"reason": "create_local_base_structure_failed", "error": str(exc)[:200]},
+        )
+        raise RuntimeError("Creazione della struttura locale RAW fallita; verifica le dipendenze Drive.") from exc
 
     result: Dict[str, str] = {
         "client_folder_id": client_folder_id,

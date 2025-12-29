@@ -15,17 +15,30 @@ funzioni sono no-op per non bloccare il runtime.
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Optional, cast
 
+_log = logging.getLogger("pipeline.metrics")
+
 _PROM_AVAILABLE = False
 _METRICS_STARTED = False
+_METRICS_DISABLED_EMITTED = False
+
+
+def _log_metrics_disabled(reason: str, extra: Optional[dict[str, Any]] = None) -> None:
+    global _METRICS_DISABLED_EMITTED
+    if _METRICS_DISABLED_EMITTED:
+        return
+    _METRICS_DISABLED_EMITTED = True
+    _log.warning("observability.metrics.disabled", extra={"reason": reason, **(extra or {})})
 
 try:
     from prometheus_client import Counter, Histogram, start_http_server
 
     _PROM_AVAILABLE = True
 except Exception:  # pragma: no cover - opzionale
+    _log_metrics_disabled("prometheus_client_missing")
     Counter = cast(Any, None)
     Histogram = cast(Any, None)
     start_http_server = cast(Any, None)
@@ -56,6 +69,8 @@ def start_metrics_server_once(port: Optional[int] = None) -> None:
     """Avvia il server /metrics una sola volta (se prometheus_client è disponibile)."""
     global _METRICS_STARTED
     if _METRICS_STARTED or not _PROM_AVAILABLE or start_http_server is None:
+        if not _PROM_AVAILABLE or start_http_server is None:
+            _log_metrics_disabled("prometheus_client_unavailable")
         return
     try:
         env_port = os.getenv("TIMMY_METRICS_PORT")
@@ -73,6 +88,7 @@ def start_metrics_server_once(port: Optional[int] = None) -> None:
 
 def record_document_processed(slug: Optional[str], count: int = 1) -> None:
     if not _PROM_AVAILABLE or documents_processed_total is None:
+        _log_metrics_disabled("prometheus_client_unavailable")
         return
     try:
         documents_processed_total.labels(slug=slug or "-").inc(count)
@@ -82,6 +98,7 @@ def record_document_processed(slug: Optional[str], count: int = 1) -> None:
 
 def record_phase_failed(slug: Optional[str], phase: str) -> None:
     if not _PROM_AVAILABLE or phase_failed_total is None:
+        _log_metrics_disabled("prometheus_client_unavailable")
         return
     try:
         phase_failed_total.labels(slug=slug or "-", phase=phase).inc()
@@ -91,6 +108,7 @@ def record_phase_failed(slug: Optional[str], phase: str) -> None:
 
 def observe_phase_duration(slug: Optional[str], phase: str, duration_seconds: float) -> None:
     if not _PROM_AVAILABLE or phase_duration_seconds is None:
+        _log_metrics_disabled("prometheus_client_unavailable")
         return
     try:
         phase_duration_seconds.labels(slug=slug or "-", phase=phase).observe(max(0.0, float(duration_seconds)))

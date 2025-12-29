@@ -12,6 +12,7 @@ Obiettivi:
 Fail-fast: nessun fallback silenzioso; in caso di layout incoerente solleva ConfigError.
 """
 
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -173,6 +174,12 @@ def ensure_src_on_sys_path(repo_root: Path) -> None:
         raise ConfigError(f"Directory src non trovata in {repo_root}")
 
     src_str = str(src_dir)
+    # Evita injection se i pacchetti sono già risolvibili (esecuzione da installato)
+    # e la sys.path corrente non è stata azzerata artificialmente.
+    if sys.path and importlib.util.find_spec("pipeline") and importlib.util.find_spec("timmy_kb"):
+        LOGGER.info("paths.sys_path.skip_injection", extra={"reason": "packages_already_importable"})
+        return
+
     if src_str not in sys.path:
         try:
             sys.path.insert(0, src_str)

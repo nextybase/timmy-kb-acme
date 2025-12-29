@@ -4,11 +4,26 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import random
 from typing import Any, ContextManager, Iterator, Literal, Mapping
 
 from pipeline.observability_config import get_tracing_state
+
+_log = logging.getLogger("pipeline.tracing")
+_TRACING_DISABLED_EMITTED: set[str] = set()
+
+
+def _log_tracing_disabled(reason: str, extra: Mapping[str, Any] | None = None) -> None:
+    if reason in _TRACING_DISABLED_EMITTED:
+        return
+    _TRACING_DISABLED_EMITTED.add(reason)
+    payload = {"reason": reason}
+    if extra:
+        payload.update(extra)
+    _log.warning("observability.tracing.disabled", extra=payload)
+
 
 try:
     from opentelemetry import trace as _otel_trace
@@ -20,6 +35,7 @@ try:
     _OTEL_IMPORT_OK = True
 except Exception:  # pragma: no cover
     _OTEL_IMPORT_OK = False
+    _log_tracing_disabled("opentelemetry_missing")
 
 _TRACING_READY = False
 _TRACER_NAME = "timmy_kb"
@@ -32,18 +48,26 @@ except ValueError:
 
 def _is_enabled() -> bool:
     if not _OTEL_IMPORT_OK:
+        _log_tracing_disabled("opentelemetry_missing")
         return False
     state = get_tracing_state()
-    return bool(getattr(state, "effective_enabled", False))
+    enabled = bool(getattr(state, "effective_enabled", False))
+    if not enabled:
+        _log_tracing_disabled("disabled_by_config")
+    return enabled
 
 
 def ensure_tracer(*, context: Mapping[str, Any] | None = None, enable_tracing: bool = True) -> None:
     """Inizializza il tracer globale (idempotente)."""
     global _TRACING_READY
-    if not enable_tracing or _TRACING_READY or not _is_enabled():
+    if not enable_tracing:
+        _log_tracing_disabled("disabled_by_flag", extra={"context_provided": bool(context)})
+        return
+    if _TRACING_READY or not _is_enabled():
         return
     endpoint = os.getenv("TIMMY_OTEL_ENDPOINT")
     if not endpoint:
+        _log_tracing_disabled("missing_endpoint")
         return
     service = os.getenv("TIMMY_SERVICE_NAME", "timmy-kb")
     env = os.getenv("TIMMY_ENV", "dev")
@@ -81,6 +105,7 @@ class _NoopSpan:
 def _span_context(name: str, *, attributes: Mapping[str, Any] | None = None) -> Iterator[_otel_trace.Span | _NoopSpan]:
     ensure_tracer()
     if not _TRACING_READY or not _OTEL_IMPORT_OK:
+        _log_tracing_disabled("tracer_not_ready", extra={"otel_import_ok": _OTEL_IMPORT_OK})
         yield _NoopSpan()
         return
     tracer = _otel_trace.get_tracer(_TRACER_NAME)

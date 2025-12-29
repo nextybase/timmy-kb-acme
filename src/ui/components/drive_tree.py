@@ -11,9 +11,11 @@ try:
 except Exception:  # pragma: no cover
     st = None
 
+_drive_import_error: Optional[str] = None
 try:
     from pipeline.drive_utils import MIME_FOLDER, get_drive_service, list_drive_files
-except Exception:  # pragma: no cover
+except ImportError as exc:  # pragma: no cover
+    _drive_import_error = str(exc)
     MIME_FOLDER = "application/vnd.google-apps.folder"  # fallback literal
     get_drive_service = None
     list_drive_files = None
@@ -115,7 +117,11 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
     if st is None:
         return index
     if not callable(get_drive_service):
-        st.info("Supporto Google Drive non disponibile nella UI.")
+        _LOGGER.error(
+            "ui.drive.failure",
+            extra={"reason": "drive_utils_unavailable", "import_error": _drive_import_error},
+        )
+        st.error("Google Drive non disponibile. Installa gli extra: pip install .[drive]")
         return index
     try:
         ctx = get_client_context(slug, interactive=False, require_env=True)

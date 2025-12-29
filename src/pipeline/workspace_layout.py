@@ -9,8 +9,8 @@ La Workspace Layout Resolution Policy è fail-fast: il resolver solleva
 `WorkspaceLayoutInconsistent` per discrepanze non banali (config/versione/semantic)
 anche quando la struttura fisica è presente."""
 
-import inspect
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -21,6 +21,21 @@ from pipeline.exceptions import WorkspaceLayoutInconsistent, WorkspaceLayoutInva
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, validate_slug
 
 __all__ = ["WorkspaceLayout", "get_workspace_layout"]
+
+_SKIP_VALIDATION = False
+_ALLOW_MISSING_WORKSPACE = False
+
+
+@contextmanager
+def workspace_validation_policy(*, skip_validation: bool = False, allow_missing: bool = False):
+    """Abilita temporaneamente la modalità permissiva per bootstrap/test espliciti."""
+    global _SKIP_VALIDATION, _ALLOW_MISSING_WORKSPACE
+    prev_skip, prev_allow = _SKIP_VALIDATION, _ALLOW_MISSING_WORKSPACE
+    _SKIP_VALIDATION, _ALLOW_MISSING_WORKSPACE = skip_validation, allow_missing
+    try:
+        yield
+    finally:
+        _SKIP_VALIDATION, _ALLOW_MISSING_WORKSPACE = prev_skip, prev_allow
 
 
 def _to_path(value: Any, fallback: Path) -> Path:
@@ -79,7 +94,7 @@ class WorkspaceLayout:
         config_path = ensure_within_and_resolve(root, config_path)
         mapping_path = ensure_within_and_resolve(root, mapping_path)
 
-        if root.exists():
+        if root.exists() and not _ALLOW_MISSING_WORKSPACE:
             _validate_layout_assets(
                 slug=context.slug,
                 workspace_root=root,
@@ -89,6 +104,7 @@ class WorkspaceLayout:
                 config_path=config_path,
                 semantic_dir=semantic_dir,
                 mapping_path=mapping_path,
+                skip_validation=_SKIP_VALIDATION,
             )
 
         log_file = ensure_within_and_resolve(logs_dir, logs_dir / LOG_FILE_NAME)
@@ -128,6 +144,8 @@ class WorkspaceLayout:
         *,
         slug: str | None = None,
         _run_id: str | None = None,
+        skip_validation: bool = False,
+        allow_missing: bool = False,
     ) -> "WorkspaceLayout":
         """Costruisce il layout da una directory workspace già esistente in modo fail-fast.
 
@@ -135,7 +153,7 @@ class WorkspaceLayout:
         sollevato WorkspaceNotFound o WorkspaceLayoutInvalid e le riparazioni
         restano responsabilità dei flussi bootstrap/migrazione."""
         if not workspace.exists():
-            if not _should_allow_missing_workspace():
+            if not (allow_missing or _ALLOW_MISSING_WORKSPACE):
                 raise WorkspaceNotFound("Workspace esplicito non esiste", file_path=workspace)
         repo_root = workspace.resolve()
         resolved_slug = slug or repo_root.name
@@ -166,6 +184,7 @@ class WorkspaceLayout:
             config_path=config_path,
             semantic_dir=semantic_dir,
             mapping_path=mapping_path,
+            skip_validation=skip_validation or _SKIP_VALIDATION,
         )
 
         log_file = ensure_within_and_resolve(logs_dir, logs_dir / LOG_FILE_NAME)
@@ -226,14 +245,15 @@ def _validate_layout_assets(
     config_path: Path,
     semantic_dir: Path,
     mapping_path: Path | None = None,
+    skip_validation: bool = False,
 ) -> None:
     """Fail-fast se gli asset minimi del layout non esistono.
 
     In futuro la logica di validazione di config/version/mapping solleverà
     WorkspaceLayoutInconsistent tramite `_ensure_layout_consistency`.
-    Quando `_should_skip_layout_validation()` segnala un flow bootstrap/dummy/UI la verifica viene
-    saltata; in runtime standard il config è confermato."""
-    if _should_skip_layout_validation():
+    La validazione può essere disattivata solo se esplicitamente richiesto
+    (es. bootstrap/test controllati)."""
+    if skip_validation or _SKIP_VALIDATION:
         return
     _ensure_directory(workspace_root, slug, description="workspace root")
     _ensure_file(config_path, slug, description="config/config.yaml")
@@ -302,44 +322,3 @@ def _ensure_layout_consistency(
         ) from exc
 
 
-def _should_skip_layout_validation() -> bool:
-    """Indica se siamo in un flow di bootstrap/dummy che crea asset."""
-    return _is_running_under_dummy_builder() or _is_running_under_bootstrap_flow() or _is_running_under_ui_test()
-
-
-def _is_running_under_dummy_builder() -> bool:
-    """Rileva se l'esecutore corrente è il builder dummy (`tools/gen_dummy_kb`)."""
-    for frame in inspect.stack():
-        filename = frame.filename.lower()
-        if "gen_dummy_kb.py" in filename and "tools" in filename:
-            return True
-    return False
-
-
-def _is_running_under_bootstrap_flow() -> bool:
-    """Rileva se WorkspaceLayout viene invocato da un orchestratore di bootstrap."""
-    bootstrap_triggers = (
-        "src/timmy_kb/cli/pre_onboarding.py",
-        "src/timmy_kb/cli/tag_onboarding.py",
-        "src/timmy_kb/cli/semantic_onboarding.py",
-        "src/onboarding_full.py",
-    )
-    for frame in inspect.stack():
-        filename = frame.filename.replace("\\", "/").lower()
-        if any(trigger in filename for trigger in bootstrap_triggers):
-            return True
-    return False
-
-
-def _is_running_under_ui_test() -> bool:
-    """Rileva se ci troviamo in un test UI che crea workspace parziali."""
-    for frame in inspect.stack():
-        filename = frame.filename.replace("\\", "/").lower()
-        if "/tests/ui/" in filename:
-            return True
-    return False
-
-
-def _should_allow_missing_workspace() -> bool:
-    """Consente workspace virtuali nei test UI senza fallire immediatamente."""
-    return _is_running_under_ui_test()

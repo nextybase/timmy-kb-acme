@@ -21,7 +21,7 @@ from pipeline.logging_utils import get_structured_logger, log_workflow_summary, 
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import iter_safe_paths
 from pipeline.tracing import start_root_trace
-from pipeline.workspace_layout import WorkspaceLayout
+from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
 from semantic.api import convert_markdown  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import enrich_frontmatter  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
@@ -71,7 +71,8 @@ def main() -> int:
     ctx: SemanticContextProtocol = ClientContext.load(
         slug=slug, interactive=not args.non_interactive, require_env=False, run_id=run_id
     )
-    layout = WorkspaceLayout.from_context(ctx)
+    with workspace_validation_policy(skip_validation=True, allow_missing=True):
+        layout = WorkspaceLayout.from_context(ctx)
 
     # Imposta flag UX nel contesto (contratto esplicito del semantic context)
     ctx.skip_preview = bool(args.no_preview)

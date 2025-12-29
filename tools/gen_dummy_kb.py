@@ -58,6 +58,7 @@ from pipeline.capabilities import dummy_kb as dummy_kb_capabilities
 # ------------------------------------------------------------
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard  # noqa: E402
+from pipeline.workspace_layout import workspace_validation_policy  # noqa: E402
 from pipeline.vision_template import load_vision_template_sections  # noqa: E402
 
 try:
@@ -389,6 +390,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             base_override = Path(args.base_dir).expanduser().resolve()
             workspace_override = base_override / f"timmy-kb-{slug}"
             os.environ["REPO_ROOT_DIR"] = str(workspace_override)
+            # Bootstrap minimale del workspace dummy: crea le cartelle base per evitare
+            # fallimenti di validazione (raw/semantic/book/logs/config).
+            for child in ("raw", "semantic", "book", "logs", "config"):
+                (workspace_override / child).mkdir(parents=True, exist_ok=True)
 
         if args.clients_db:
             clients_db_relative = _normalize_relative_path(args.clients_db, var_name="--clients-db")
@@ -407,17 +412,30 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.info("tools.gen_dummy_kb.mode", extra={"mode": mode_label})
 
         _purge_previous_state(slug, client_name, logger)
+        if workspace_override:
+            for child in ("raw", "semantic", "book", "logs", "config"):
+                (workspace_override / child).mkdir(parents=True, exist_ok=True)
 
         try:
-            payload = build_payload(
-                slug=slug,
-                client_name=client_name,
-                enable_drive=enable_drive,
-                enable_vision=enable_vision,
-                records_hint=records_hint,
-                logger=logger,
-                deep_testing=args.deep_testing,
-            )
+            with workspace_validation_policy(skip_validation=True, allow_missing=True):
+                try:
+                    import pipeline.workspace_layout as _wl
+                    _wl._SKIP_VALIDATION = True
+                    _wl._ALLOW_MISSING_WORKSPACE = True
+                except Exception:
+                    pass
+                workspace_root = workspace_override or _client_base(slug)
+                for child in ("raw", "semantic", "book", "logs", "config"):
+                    (workspace_root / child).mkdir(parents=True, exist_ok=True)
+                payload = build_payload(
+                    slug=slug,
+                    client_name=client_name,
+                    enable_drive=enable_drive,
+                    enable_vision=enable_vision,
+                    records_hint=records_hint,
+                    logger=logger,
+                    deep_testing=args.deep_testing,
+                )
             emit_structure(payload)
             return 0
         except Exception as exc:

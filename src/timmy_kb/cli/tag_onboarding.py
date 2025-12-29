@@ -47,7 +47,7 @@ from typing import Any, Optional, cast
 
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.context import ClientContext
-from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
+from pipeline.exceptions import ConfigError, PathTraversalError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.metrics import start_metrics_server_once
 from pipeline.observability_config import get_observability_settings
@@ -383,8 +383,26 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
         run_id=run_id,
         stage="validate",
     )
-    layout = WorkspaceLayout.from_context(context)
-    semantic_dir = layout.semantic_dir
+    base_dir = Path(getattr(context, "base_dir", None) or getattr(context, "repo_root_dir")).resolve()
+    semantic_candidate = getattr(context, "semantic_dir", base_dir / "semantic")
+    try:
+        semantic_dir = ensure_within_and_resolve(base_dir, semantic_candidate)
+    except PathTraversalError:
+        logs_dir = ensure_within_and_resolve(base_dir, base_dir / "logs")
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        log_file = ensure_within_and_resolve(logs_dir, logs_dir / "tag_onboarding_validate.log")
+        logger = get_structured_logger(
+            "tag_onboarding.validate",
+            log_file=log_file,
+            context=context,
+            run_id=run_id,
+            **_obs_kwargs(),
+        )
+        logger.error(
+            "cli.tag_onboarding.semantic_outside_base",
+            extra={"semantic_dir": str(semantic_candidate)},
+        )
+        return 1
 
     yaml_candidate = semantic_dir / "tags_reviewed.yaml"
     yaml_path = ensure_within_and_resolve(semantic_dir, yaml_candidate)
@@ -392,10 +410,11 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     report_path = ensure_within_and_resolve(semantic_dir, report_candidate)
 
     db_candidate = Path(derive_db_path_from_yaml_path(yaml_path))
-    db_path = ensure_within_and_resolve(layout.base_dir, db_candidate)
+    db_path = ensure_within_and_resolve(base_dir, db_candidate)
 
-    layout.logs_dir.mkdir(parents=True, exist_ok=True)
-    log_file = layout.log_file
+    logs_dir = ensure_within_and_resolve(base_dir, base_dir / "logs")
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = ensure_within_and_resolve(logs_dir, logs_dir / "tag_onboarding_validate.log")
 
     logger = get_structured_logger(
         "tag_onboarding.validate",
@@ -584,11 +603,12 @@ def _resolve_cli_paths(
 ) -> tuple[Path, Path, Path, Path]:
     """Calcola i percorsi CLI garantendo path-safety rispetto al contesto cliente."""
 
-    layout = WorkspaceLayout.from_context(context)
-    base_dir = layout.base_dir
-    raw_candidate = Path(raw_override) if raw_override else layout.raw_dir
+    base_dir = Path(getattr(context, "base_dir", None) or getattr(context, "repo_root_dir")).resolve()
+    raw_base = getattr(context, "raw_dir", None) or (base_dir / "raw")
+    raw_candidate = Path(raw_override) if raw_override else raw_base
     raw_dir = ensure_within_and_resolve(base_dir, raw_candidate)
-    semantic_dir = layout.semantic_dir
+    semantic_base = getattr(context, "semantic_dir", None) or (base_dir / "semantic")
+    semantic_dir = ensure_within_and_resolve(base_dir, semantic_base)
 
     db_candidate = Path(db_override) if db_override else (semantic_dir / "tags.db")
     db_path = ensure_within_and_resolve(base_dir, db_candidate)
