@@ -75,3 +75,20 @@ def test_save_persisted_uses_safe_utils(monkeypatch: pytest.MonkeyPatch, tmp_pat
     # Seconda invocazione con lo stesso valore non deve riscrivere
     slug_utils._save_persisted("dummy")
     assert getattr(fake_safe, "count", 0) == 1
+
+
+def test_save_persisted_logs_and_does_not_raise_on_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    persist_path = tmp_path / "state" / "ui_state.json"
+    monkeypatch.setattr(slug_utils, "get_ui_state_path", lambda: persist_path, raising=False)
+
+    def raise_safe(*_a, **_k):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(slug_utils, "safe_write_text", raise_safe, raising=False)
+
+    with caplog.at_level(logging.ERROR):
+        slug_utils._save_persisted("boom")
+
+    assert any(rec.getMessage() == "ui.slug.persist_failed" for rec in caplog.records)

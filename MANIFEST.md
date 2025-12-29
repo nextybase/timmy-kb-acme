@@ -130,3 +130,12 @@ Non sostituisce l'umano. Lo responsabilizza.
 Questo manifesto non è una dichiarazione d'intenti astratta: è la descrizione del perimetro entro cui il sistema accetta di esistere.
 
 Fuori da questo perimetro, Timmy-KB preferisce non parlare.
+
+---
+
+### 9. Rigor e fallimento esplicito
+Timmy-KB distingue nettamente i domini di tolleranza all'errore:
+- **Prompt Chain / governance agentica:** il non-fatal è ammesso solo qui perché l'errore è cognitivo (interpretazione, piano, template) e viene gestito tramite Evidence Gate + Skeptic Gate nella sequenza Planner → OCP → Codex → OCP → Planner.
+- **Runtime operativo (pipeline, semantic, storage, ui, metrics):** le failure infrastrutturali sono **strict** o devono emettere segnali deterministici e tracciabili; è vietata ogni degradazione silenziosa.
+
+Questa asimmetria protegge l'envelope epistemico: l'incertezza del dialogo agentico resta osservabile e governata, mentre l'operatività pretende fallimenti espliciti e telemetria (log/eventi/exit code) che rendano verificabili cause e impatti.

@@ -320,5 +320,3 @@ def _ensure_layout_consistency(
             slug=slug,
             file_path=mapping_path or config_path,
         ) from exc
-
-

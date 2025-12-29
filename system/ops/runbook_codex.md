@@ -60,6 +60,11 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](../.
 - La governance WHAT della Prompt Chain, del registry Intent/Action e delle escalation HiTL è descritta in `instructions/*`; ProtoTimmy/Timmy (agency) dialogano con Domain Gatekeepers (validazione) e il Control Plane/OCP applica i gate e la consegna ai micro-agent.
 - I micro-agent (Codex incluso) eseguono i task sotto Work Order Envelope (OK / NEED_INPUT / CONTRACT_ERROR) come indicato da `instructions/`; mantengono trace e logging della pipeline senza assumere decisioni operative.
 
+### Governance: non-fatal solo nella Prompt Chain
+- **Perché ammesso:** nel dominio Prompt Chain l’errore è cognitivo (scopo, template, piano) e viene gestito da Evidence Gate + Skeptic Gate: OCP può imporre PASS/PASS WITH CONDITIONS/BLOCK e fermare la sequenza se le evidenze non sono complete.
+- **Perché vietato nel runtime:** pipeline/semantic/storage/ui/metrics operano sul perimetro cliente; qui le failure infrastrutturali devono essere **strict** o almeno emettere segnali deterministici e tracciabili (log/eventi/exit code). La degradazione silenziosa è proibita.
+- **Effetto sullo Skeptic Gate:** OCP tratta qualsiasi violazione di strictness runtime come condizione di BLOCK: la catena si ferma finché non esiste evidenza che l’errore sia gestito in modo esplicito e osservabile. Il non-fatal resta confinato alle fasi agentiche, mai al runtime.
+
 ---
 
 ## 2) Configuration: secrets vs versioned config

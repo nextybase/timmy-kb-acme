@@ -68,7 +68,9 @@ def _get_logger(context: Optional[object] = None) -> Any:
     return get_structured_logger("ui.services.drive_runner", context=context)
 
 
-def _log_drive_failure(reason: str, *, extra: Optional[dict[str, Any]] = None, context: Optional[object] = None) -> None:
+def _log_drive_failure(
+    reason: str, *, extra: Optional[dict[str, Any]] = None, context: Optional[object] = None
+) -> None:
     logger = _get_logger(context)
     logger.error("ui.drive.failure", extra={"reason": reason, **(extra or {})})
 
@@ -139,7 +141,7 @@ def _require_drive_for_raw_only() -> None:
     if missing:
         reason = f"Funzionalità Google Drive non disponibili (RAW da YAML): {', '.join(missing)}."
         if _drive_import_error:
-            reason = f'{reason} ImportError: {_drive_import_error}'
+            reason = f"{reason} ImportError: {_drive_import_error}"
         _log_drive_failure("drive_raw_unavailable", extra={"missing": missing, "import_error": _drive_import_error})
         raise RuntimeError(f"{reason} Installa gli extra con: pip install .[drive]")
 

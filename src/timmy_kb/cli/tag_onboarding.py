@@ -60,7 +60,6 @@ from pipeline.path_utils import (  # STRONG guard SSoT
 )
 from pipeline.tracing import start_root_trace
 from pipeline.types import TaggingPayload
-from pipeline.workspace_layout import WorkspaceLayout
 from semantic import nlp_runner
 from semantic.tags_validator import validate_tags_reviewed as validate_tags_payload
 from semantic.tags_validator import write_validation_report as write_validation_report_payload

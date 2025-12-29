@@ -61,7 +61,7 @@ from pipeline.capabilities import dummy_kb as dummy_kb_capabilities
 # Path bootstrap (repo root + src)
 # ------------------------------------------------------------
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
-from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard  # noqa: E402
+from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard, read_text_safe  # noqa: E402
 from pipeline.vision_template import load_vision_template_sections  # noqa: E402
 
 try:
@@ -367,12 +367,15 @@ def _ensure_minimum_workspace(workspace_root: Path, logger: logging.Logger) -> N
         workspace_root.mkdir(parents=True, exist_ok=True)
         for child in ("raw", "semantic", "book", "logs", "config"):
             (workspace_root / child).mkdir(parents=True, exist_ok=True)
-        template_config = REPO_ROOT / "config" / "config.yaml"
-        config_payload = template_config.read_text(encoding="utf-8")
-        (workspace_root / "config" / "config.yaml").write_text(config_payload, encoding="utf-8")
+        template_config = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "config" / "config.yaml")
+        config_payload = read_text_safe(template_config.parent, template_config)
+        target_config = ensure_within_and_resolve(workspace_root, workspace_root / "config" / "config.yaml")
+        _safe_write_text(target_config, config_payload, encoding="utf-8", atomic=True)
         book_dir = workspace_root / "book"
-        (book_dir / "README.md").write_text("# Dummy README\n", encoding="utf-8")
-        (book_dir / "SUMMARY.md").write_text("# Dummy SUMMARY\n", encoding="utf-8")
+        target_readme = ensure_within_and_resolve(book_dir, book_dir / "README.md")
+        target_summary = ensure_within_and_resolve(book_dir, book_dir / "SUMMARY.md")
+        _safe_write_text(target_readme, "# Dummy README\n", encoding="utf-8", atomic=True)
+        _safe_write_text(target_summary, "# Dummy SUMMARY\n", encoding="utf-8", atomic=True)
     except Exception as exc:
         logger.error(
             "tools.gen_dummy_kb.bootstrap_failed",

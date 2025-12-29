@@ -33,6 +33,7 @@ def _log_metrics_disabled(reason: str, extra: Optional[dict[str, Any]] = None) -
     _METRICS_DISABLED_EMITTED = True
     _log.warning("observability.metrics.disabled", extra={"reason": reason, **(extra or {})})
 
+
 try:
     from prometheus_client import Counter, Histogram, start_http_server
 
@@ -81,9 +82,15 @@ def start_metrics_server_once(port: Optional[int] = None) -> None:
     try:
         start_http_server(eff_port)
         _METRICS_STARTED = True
-    except Exception:
-        # Non bloccare il runtime se il server non parte
+    except Exception as exc:
         _METRICS_STARTED = False
+        _log.error(
+            "observability.metrics.bind_failed",
+            exc_info=exc,
+            extra={"port": eff_port},
+        )
+        raise
+        raise
 
 
 def record_document_processed(slug: Optional[str], count: int = 1) -> None:

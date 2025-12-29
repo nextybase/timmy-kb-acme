@@ -52,18 +52,20 @@ def _sanitize_slug(value: Any) -> Optional[str]:
 def _clear_gating_cache() -> None:
     try:
         from ui.gating import reset_gating_cache as _reset  # lazy import per evitare cicli
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("ui.slug.gating_reset_import_failed", exc_info=exc)
         return
     try:
         _reset()
-    except Exception:
-        pass
+    except Exception as exc:
+        LOGGER.warning("ui.slug.gating_reset_failed", exc_info=exc)
 
 
 def _current_session_slug() -> Optional[str]:
     try:
         return _sanitize_slug(st.session_state.get("__active_slug"))
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("ui.slug.session_read_failed", exc_info=exc)
         return None
 
 
@@ -71,7 +73,8 @@ def _set_session_slug(value: Optional[str]) -> None:
     prev = _current_session_slug()
     try:
         st.session_state["__active_slug"] = value
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("ui.slug.session_write_failed", extra={"prev": prev, "value": value}, exc_info=exc)
         if prev != value:
             _clear_gating_cache()
         return
@@ -82,12 +85,15 @@ def _set_session_slug(value: Optional[str]) -> None:
 def _load_persisted() -> Optional[str]:
     try:
         path = get_ui_state_path()
-        raw: Any = json.loads(read_text_safe(path.parent, path))
+        raw_text = read_text_safe(path.parent, path)
+        raw: Any = json.loads(raw_text)
         if not isinstance(raw, dict):
             return None
         value = raw.get("active_slug")
         return _sanitize_slug(value)  # sanifica anche il persistito
-    except Exception:
+    except Exception as exc:
+        path_str = str(path) if "path" in locals() else None
+        LOGGER.warning("ui.slug.persist_load_failed", extra={"path": path_str}, exc_info=exc)
         return None
 
 
@@ -98,7 +104,8 @@ def _save_persisted(slug: Optional[str]) -> None:
         base_dir.mkdir(parents=True, exist_ok=True)
         try:
             current = st.session_state.get("__persisted_slug")
-        except Exception:
+        except Exception as exc:
+            LOGGER.debug("ui.slug.persist_session_read_failed", exc_info=exc)
             current = None
         if current == slug:
             return
@@ -106,12 +113,13 @@ def _save_persisted(slug: Optional[str]) -> None:
         safe_write_text(path, payload, encoding="utf-8", atomic=True)
         try:
             st.session_state["__persisted_slug"] = slug
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("ui.slug.persist_session_write_failed", extra={"slug": slug}, exc_info=exc)
         LOGGER.info("ui.slug.persisted", extra={"path": str(path)})
-    except Exception:
+    except Exception as exc:
         # la UI non deve rompersi per errori di persistenza
-        pass
+        path_str = str(path) if "path" in locals() else None
+        LOGGER.error("ui.slug.persist_failed", extra={"path": path_str, "slug": slug}, exc_info=exc)
 
 
 def get_active_slug() -> Optional[str]:
