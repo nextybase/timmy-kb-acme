@@ -57,7 +57,7 @@ def _planner_prompt(proto_text: str) -> str:
 def _ocp_prompt(planner_text: str) -> str:
     return (
         "Test di integrazione OCP Executor.\n"
-        "Hai ricevuto questo input dal Planner Assistant:\n"
+        "Hai ricevuto questo input dal Planner Assistant"
         f"{planner_text}\n\n"
         "Aggiungi alla fine della stringa esattamente ' OCP_OK' "
         "e restituisci SOLO la stringa risultante, senza spiegazioni."

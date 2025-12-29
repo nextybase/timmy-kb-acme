@@ -37,4 +37,4 @@ def test_ui_imports_use_only_public_backend_symbols() -> None:
         for path in root.rglob("*.py"):
             offenders.extend(_collect_private_backend_imports(path))
 
-    assert not offenders, "Import privati backend rilevati:\n" + "\n".join(offenders)
+    assert not offenders, "Import privati backend rilevati" + "\n".join(offenders)

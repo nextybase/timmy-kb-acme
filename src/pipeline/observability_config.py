@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # src/pipeline/observability_config.py
 """
-Gestione delle impostazioni globali di osservabilit? / logging.
+Gestione delle impostazioni globali di osservabilità / logging.
 
 Le impostazioni sono salvate in uno YAML globale (default: ~/.timmy_kb/observability.yaml)
 per non legarle a uno specifico workspace cliente.
 
-Campi gestiti (fonte di verit? per il comportamento applicativo del logging):
+Campi gestiti (fonte di verità per il comportamento applicativo del logging):
 - stack_enabled: preferenza uso stack Grafana/Loki
 - tracing_enabled: preferenza uso OpenTelemetry (OTLP)
 - redact_logs: se abilitare i filtri di redazione nei logger strutturati

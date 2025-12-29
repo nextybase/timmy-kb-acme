@@ -61,7 +61,7 @@ def _fsync_file(fd: int, *, path: Optional[Path] = None, strict: bool = False) -
     """
     try:
         os.fsync(fd)
-    except Exception as e:  # pragma: no cover - dipende dall'FS
+    except Exception as e:  # pragma: no cover - dipende da l'FS
         if strict:
             raise ConfigError(f"fsync(file) fallito: {e}", file_path=str(path) if path else None) from e
         _logger.debug(
@@ -83,7 +83,7 @@ def _fsync_dir_best_effort(dir_path: Path) -> None:
             os.fsync(dfd)
         finally:
             os.close(dfd)
-    except Exception:  # pragma: no cover - dipende dall'OS/FS
+    except Exception:  # pragma: no cover - dipende da l'OS/FS
         _logger.debug("file_utils.fsync_dir_failed", extra={"dir_path": str(dir_path)})
 
 

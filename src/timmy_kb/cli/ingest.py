@@ -689,6 +689,6 @@ def get_vision_cfg(cfg: dict | None) -> dict:
         "assistant_id": assistant_id,
         "input_mode": "inline",  # documentativo
         "fs_mode": None,  # rimosso
-        "model": None,  # deciso dall'Assistant
+        "model": None,  # deciso da l'Assistant
         "strict_output": bool(v.get("strict_output", True)),
     }

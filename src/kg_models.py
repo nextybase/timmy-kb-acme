@@ -49,7 +49,7 @@ class TagKnowledgeGraph:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TagKnowledgeGraph":
-        """Costruisce un TagKnowledgeGraph a partire dal JSON prodotto dall'assistant."""
+        """Costruisce un TagKnowledgeGraph a partire dal JSON prodotto da l'assistant."""
         tags_data = data.get("tags", [])
         relations_data = data.get("relations", [])
 
