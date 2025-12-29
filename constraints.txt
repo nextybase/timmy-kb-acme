@@ -4,6 +4,8 @@
 #
 #    pip-compile --output-file=constraints.txt requirements.in
 #
+altair==5.5.0
+    # via streamlit
 annotated-types==0.7.0
     # via
     #   -r requirements.in
@@ -13,11 +15,18 @@ anyio==4.11.0
     #   httpx
     #   openai
 attrs==25.4.0
-    # via hypothesis
+    # via
+    #   hypothesis
+    #   jsonschema
+    #   referencing
+blinker==1.9.0
+    # via streamlit
 blis==0.7.11
     # via thinc
 cachetools==5.5.2
-    # via google-auth
+    # via
+    #   google-auth
+    #   streamlit
 catalogue==2.0.10
     # via
     #   spacy
@@ -38,15 +47,11 @@ charset-normalizer==3.4.4
     #   requests
 click==8.3.0
     # via
+    #   streamlit
     #   typer
     #   yake
 cloudpathlib==0.16.0
     # via weasel
-colorama==0.4.6
-    # via
-    #   click
-    #   tqdm
-    #   wasabi
 confection==0.1.5
     # via
     #   thinc
@@ -75,6 +80,10 @@ fsspec==2025.9.0
     # via
     #   huggingface-hub
     #   torch
+gitdb==4.0.12
+    # via gitpython
+gitpython==3.1.45
+    # via streamlit
 google-api-core==2.27.0
     # via google-api-python-client
 google-api-python-client==2.171.0
@@ -96,6 +105,8 @@ googleapis-common-protos==1.71.0
     # via google-api-core
 h11==0.16.0
     # via httpcore
+hf-xet==1.2.0
+    # via huggingface-hub
 httpcore==1.0.9
     # via httpx
 httplib2==0.22.0
@@ -123,12 +134,18 @@ jellyfish==1.2.1
     # via yake
 jinja2==3.1.6
     # via
+    #   altair
+    #   pydeck
     #   spacy
     #   torch
 jiter==0.11.1
     # via openai
 joblib==1.5.2
     # via scikit-learn
+jsonschema==4.25.1
+    # via altair
+jsonschema-specifications==2025.9.1
+    # via jsonschema
 langcodes==3.5.0
     # via spacy
 language-data==1.3.0
@@ -144,6 +161,8 @@ murmurhash==1.0.13
     #   preshed
     #   spacy
     #   thinc
+narwhals==2.14.0
+    # via altair
 networkx==3.5
     # via
     #   torch
@@ -152,30 +171,75 @@ numpy==2.3.0
     # via
     #   -r requirements.in
     #   blis
+    #   pandas
+    #   pydeck
     #   scikit-learn
     #   scipy
     #   sentence-transformers
     #   spacy
+    #   streamlit
     #   thinc
     #   transformers
     #   yake
+nvidia-cublas-cu12==12.8.4.1
+    # via
+    #   nvidia-cudnn-cu12
+    #   nvidia-cusolver-cu12
+    #   torch
+nvidia-cuda-cupti-cu12==12.8.90
+    # via torch
+nvidia-cuda-nvrtc-cu12==12.8.93
+    # via torch
+nvidia-cuda-runtime-cu12==12.8.90
+    # via torch
+nvidia-cudnn-cu12==9.10.2.21
+    # via torch
+nvidia-cufft-cu12==11.3.3.83
+    # via torch
+nvidia-cufile-cu12==1.13.1.3
+    # via torch
+nvidia-curand-cu12==10.3.9.90
+    # via torch
+nvidia-cusolver-cu12==11.7.3.90
+    # via torch
+nvidia-cusparse-cu12==12.5.8.93
+    # via
+    #   nvidia-cusolver-cu12
+    #   torch
+nvidia-cusparselt-cu12==0.7.1
+    # via torch
+nvidia-nccl-cu12==2.27.3
+    # via torch
+nvidia-nvjitlink-cu12==12.8.93
+    # via
+    #   nvidia-cufft-cu12
+    #   nvidia-cusolver-cu12
+    #   nvidia-cusparse-cu12
+    #   torch
+nvidia-nvtx-cu12==12.8.90
+    # via torch
 oauthlib==3.3.1
     # via requests-oauthlib
 openai==2.3.0
     # via -r requirements.in
 packaging==25.0
     # via
+    #   altair
     #   docker
     #   huggingface-hub
     #   spacy
+    #   streamlit
     #   thinc
     #   transformers
     #   weasel
-pillow==11.1.0
+pandas==2.3.3
+    # via streamlit
+pillow==11.3.0
     # via
     #   -r requirements.in
     #   reportlab
     #   sentence-transformers
+    #   streamlit
 preshed==3.0.10
     # via
     #   spacy
@@ -187,6 +251,9 @@ protobuf==6.33.0
     #   google-api-core
     #   googleapis-common-protos
     #   proto-plus
+    #   streamlit
+pyarrow==22.0.0
+    # via streamlit
 pyasn1==0.6.1
     # via
     #   pyasn1-modules
@@ -208,6 +275,8 @@ pydantic-core==2.18.2
     # via pydantic
 pydantic-settings==2.0.0
     # via -r requirements.in
+pydeck==0.9.1
+    # via streamlit
 pygithub==2.3.0
     # via -r requirements.in
 pyjwt[crypto]==2.10.1
@@ -220,19 +289,25 @@ pyparsing==3.2.5
     # via httplib2
 pypdf==6.4.0
     # via -r requirements.in
+python-dateutil==2.9.0.post0
+    # via pandas
 python-dotenv==1.0.1
     # via
     #   -r requirements.in
     #   pydantic-settings
 python-slugify==8.0.4
     # via -r requirements.in
-pywin32==311
-    # via docker
+pytz==2025.2
+    # via pandas
 pyyaml==6.0.1
     # via
     #   -r requirements.in
     #   huggingface-hub
     #   transformers
+referencing==0.37.0
+    # via
+    #   jsonschema
+    #   jsonschema-specifications
 regex==2025.10.23
     # via
     #   segtok
@@ -249,6 +324,7 @@ requests==2.32.5
     #   pygithub
     #   requests-oauthlib
     #   spacy
+    #   streamlit
     #   tiktoken
     #   transformers
     #   weasel
@@ -256,6 +332,10 @@ requests-oauthlib==2.0.0
     # via
     #   -r requirements.in
     #   google-auth-oauthlib
+rpds-py==0.30.0
+    # via
+    #   jsonschema
+    #   referencing
 rsa==4.9.1
     # via google-auth
 safetensors==0.6.2
@@ -272,10 +352,14 @@ segtok==1.5.11
     # via yake
 sentence-transformers==2.7.0
     # via -r requirements.in
+six==1.17.0
+    # via python-dateutil
 smart-open==6.4.0
     # via
     #   spacy
     #   weasel
+smmap==5.0.2
+    # via gitdb
 sniffio==1.3.1
     # via
     #   anyio
@@ -294,10 +378,14 @@ srsly==2.5.1
     #   spacy
     #   thinc
     #   weasel
+streamlit==1.50.0
+    # via -r requirements.in
 sympy==1.14.0
     # via torch
 tabulate==0.9.0
     # via yake
+tenacity==9.1.2
+    # via streamlit
 text-unidecode==1.3
     # via python-slugify
 thinc==8.2.4
@@ -308,10 +396,14 @@ tiktoken==0.7.0
     # via -r requirements.in
 tokenizers==0.22.1
     # via transformers
+toml==0.10.2
+    # via streamlit
 torch==2.8.0
     # via
     #   -r requirements.in
     #   sentence-transformers
+tornado==6.5.4
+    # via streamlit
 tqdm==4.67.1
     # via
     #   huggingface-hub
@@ -321,6 +413,8 @@ tqdm==4.67.1
     #   transformers
 transformers==4.57.1
     # via sentence-transformers
+triton==3.4.0
+    # via torch
 typer==0.9.4
     # via
     #   spacy
@@ -328,14 +422,19 @@ typer==0.9.4
 typing-extensions==4.12.2
     # via
     #   -r requirements.in
+    #   altair
     #   anyio
     #   huggingface-hub
     #   openai
     #   pydantic
     #   pydantic-core
     #   pygithub
+    #   referencing
+    #   streamlit
     #   torch
     #   typer
+tzdata==2025.3
+    # via pandas
 uritemplate==4.2.0
     # via google-api-python-client
 urllib3==2.6.0
@@ -348,6 +447,8 @@ wasabi==1.1.3
     #   spacy
     #   thinc
     #   weasel
+watchdog==6.0.0
+    # via streamlit
 weasel==0.3.4
     # via spacy
 wrapt==1.17.3
