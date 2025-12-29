@@ -20,7 +20,6 @@ _ENV_DENY_LIST = {
     "PYTHONIOENCODING",
     "GF_SECURITY_ADMIN_PASSWORD",
     "OPENAI_API_KEY",
-    "GITHUB_TOKEN",
     "SERVICE_ACCOUNT_FILE",
     "ACTIONS_ID_TOKEN_REQUEST_URL",
     "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
@@ -719,12 +718,6 @@ class Settings:
                 "name": "ASSISTANT_ID",
                 "required": False,
                 "description": "Assistant fallback (compatibilità).",
-                "doc_url": doc_url,
-            },
-            {
-                "name": "GITHUB_TOKEN",
-                "required": False,
-                "description": "Token GitHub per automazioni (push, API).",
                 "doc_url": doc_url,
             },
             {

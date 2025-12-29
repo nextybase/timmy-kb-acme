@@ -72,8 +72,6 @@ def test_secret(name: str, value: str, context: Dict[str, Any] | None = None) ->
             return _test_openai_api_key(value)
         if name in {"OBNEXT_ASSISTANT_ID", "ASSISTANT_ID"}:
             return _test_openai_assistant_id(value)
-        if name == "GITHUB_TOKEN":
-            return _test_github_token(value)
         if name == "GOOGLE_CLIENT_ID":
             return _test_google_client_id(value)
         if name == "GOOGLE_CLIENT_SECRET":
@@ -220,32 +218,6 @@ def _test_openai_assistant_id(value: str) -> SecretTestResult:
         )
 
     return _success("Formato plausibile per un Assistant ID OpenAI.")
-
-
-def _test_github_token(value: str) -> SecretTestResult:
-    """
-    GITHUB_TOKEN:
-    - PAT classici iniziano con 'ghp_' o 'github_pat_'
-    - deve essere abbastanza lungo.
-    """
-    if value.startswith("ghp_") or value.startswith("github_pat_"):
-        if len(value) < 40:
-            return _warning(
-                "Token GitHub insolitamente corto.",
-                details="Un PAT tipico ha lunghezze maggiori; verifica di averlo copiato per intero.",
-            )
-        return _success("Formato plausibile per un token GitHub personale.")
-
-    if len(value) < 20:
-        return _error(
-            "Valore troppo corto per essere un token GitHub.",
-            details="Verifica di aver copiato il token corretto dalla pagina di GitHub.",
-        )
-
-    return _warning(
-        "Formato non riconosciuto come PAT GitHub standard.",
-        details="Potrebbe comunque essere valido (es. token integrato in CI); verifica nella tua pipeline.",
-    )
 
 
 def _test_google_client_id(value: str) -> SecretTestResult:

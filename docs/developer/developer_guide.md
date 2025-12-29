@@ -70,8 +70,7 @@ model = get_vision_model()  # passa sempre da Settings.load (SSoT)
 
 ### GitBook API
 
-- `GITBOOK_TOKEN` e `GITBOOK_SPACE_ID` servono per pubblicare automaticamente il contenuto `book/` su GitBook. Esporta questi valori in `.env` o nelle secret variables dei runner CI (do not commit them). Il token deve avere permessi di scrittura sullo spazio indicato.
-- Use `tools/gitbook_publish_smoke.py --slug <slug> --dry-run` per validare localmente la summary e i secrets prima di eseguire `py src/onboarding_full.py --slug <slug> --non-interactive`, che ora invia lo ZIP con metadata `layout_summary`.
+- La preview usa HonKit via Docker (`pipeline.gitbook_preview`) e non richiede token GitHub/GitBook.
 
 ---
 

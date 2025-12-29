@@ -1,5 +1,7 @@
 # Policy di Push - Timmy-KB (v1.0 Beta)
 
+> **DEPRECATO:** il ramo push/publish (GitHub/GitBook) è stato rimosso. La pipeline termina con la preview Docker locale (backend HonKit via `pipeline.gitbook_preview`). Questo file resta per riferimento storico e non va seguito per le operazioni correnti.
+
 Questa policy definisce come eseguire il push su GitHub in modo sicuro, tracciabile e riproducibile.
 
 ## 1) Responsabilita e orchestratori

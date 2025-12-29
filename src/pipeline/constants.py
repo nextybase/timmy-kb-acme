@@ -51,8 +51,6 @@ README_MD_NAME = "README.md"
 REPO_NAME_PREFIX = "timmy-kb-"
 GIT_COMMIT_USER_NAME = "Timmy KB"
 GIT_COMMIT_USER_EMAIL = "kb+noreply@local"
-# Chiavi d'ambiente da cui risolvere il branch di default (in ordine di priorità)
-DEFAULT_GIT_BRANCH_ENV_KEYS = ("GIT_DEFAULT_BRANCH", "GITHUB_BRANCH")
 DEFAULT_PREVIEW_PORT = 4000
 
 # 📚 HonKit/GitBook Preview
@@ -92,7 +90,6 @@ __all__ = [
     "REPO_NAME_PREFIX",
     "GIT_COMMIT_USER_NAME",
     "GIT_COMMIT_USER_EMAIL",
-    "DEFAULT_GIT_BRANCH_ENV_KEYS",
     # preview
     "HONKIT_DOCKER_IMAGE",
     "PREVIEW_DEFAULT_PORT",

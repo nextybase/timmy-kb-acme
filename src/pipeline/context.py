@@ -389,7 +389,6 @@ class ClientContext:
 
         # Opzionali utili
         env_vars["DRIVE_PARENT_FOLDER_ID"] = get_env_var("DRIVE_PARENT_FOLDER_ID", default=None)
-        env_vars["GITHUB_TOKEN"] = get_env_var("GITHUB_TOKEN", default=None)
         env_vars["LOG_REDACTION"] = get_env_var("LOG_REDACTION", default=None)
         env_vars["ENV"] = get_env_var("ENV", default=None)
         env_vars["CI"] = get_env_var("CI", default=None)

@@ -15,7 +15,7 @@ Si applica sia all'ambiente locale sia all'esecuzione CI (GitHub Actions).
 | **Cache RAW** | `pipeline.raw_cache.ttl_seconds`, `pipeline.raw_cache.max_entries` |  |
 | **Ops / Logging** | `ops.log_level: INFO` | `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TIMMY_LOG_PROPAGATE` |
 | **Finance** | `finance.import_enabled: false` |  |
-| **Security / OIDC** | riferimenti `*_env` (audience_env, role_env, ...) | `GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, `ACTIONS_ID_TOKEN_REQUEST_*`, ecc. |
+| **Security / OIDC** | riferimenti `*_env` (audience_env, role_env, ...) | `SERVICE_ACCOUNT_FILE`, `ACTIONS_ID_TOKEN_REQUEST_*`, ecc. |
 | **Runtime/Infra** |  | `PYTHONUTF8`, `PYTHONIOENCODING`, `GF_SECURITY_ADMIN_PASSWORD`, `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, `TIMMY_ENV`, `LOG_REDACTION`, `LOG_PATH`, `CI`, ecc. |
 
 ### Accesso runtime (SSoT)
@@ -93,7 +93,7 @@ config classica e da `pipeline.oidc_utils.ensure_oidc` per il wiring OIDC.
 
 ## `.env` e placeholder
 
-`.env.example` elenca le variabili attese: OpenAI, Drive, GitHub push, OIDC/Vault,
+`.env.example` elenca le variabili attese: OpenAI, Drive, OIDC/Vault,
 telemetria. Copia il file in `.env` e valorizza solo cio che ti serve. Alcuni esempi:
 
 ```dotenv

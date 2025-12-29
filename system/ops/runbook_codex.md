@@ -3,7 +3,7 @@
 > This runbook is the operational guide for working safely and effectively on the Timmy KB repository with an agent-first, HiTL approach. It serves as the day-to-day reference for flows; design details live in the supporting documents cited below.
 
 - **Audience:** developers, tech writers, QA, maintainers, and the repo-aware agent Codex.
-- **Scope:** local operations, UI/CLI flows, OpenAI/Drive/GitHub integrations, secure I/O and path safety, rollback, and incident response.
+- **Scope:** local operations, UI/CLI flows, OpenAI/Drive integrations, secure I/O and path safety, rollback, and incident response.
 - **Canonical references:** [Developer Guide](../../docs/developer/developer_guide.md), [Coding Rules](../../docs/developer/coding_rule.md), [Architecture Overview](../architecture.md), [AGENTS Index](agents_index.md), [.codex/WORKFLOWS](../../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../../.codex/CHECKLISTS.md), [User Guide](../../docs/user/user_guide.md), [.codex/USER_DEV_SEPARATION](../../.codex/USER_DEV_SEPARATION.md).
 
 ## Visual summary of the Codex system
@@ -18,7 +18,7 @@ This repository blends the shared policies (`system/ops/agents_index.md`), area 
 
 ### Minimal tooling
 - Python **>= 3.11**, pip, pip-tools; optional Docker for HonKit preview.
-- Required credentials: `OPENAI_API_KEY`, `GITHUB_TOKEN`. Drive access also needs `SERVICE_ACCOUNT_FILE` and `DRIVE_ID`. <!-- pragma: allowlist secret -->
+- Required credentials: `OPENAI_API_KEY`. Drive access also needs `SERVICE_ACCOUNT_FILE` and `DRIVE_ID`. <!-- pragma: allowlist secret -->
 - Install pre-commit hooks: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
 - Ensure the pipeline modules import from the same repo root as the UI; activate the correct venv and run `pip install -e .` at the repo root if necessary.
 
@@ -142,13 +142,13 @@ References: [Developer Guide → Configuration](../../docs/developer/developer_g
 
 ## 4) Operational flows (UI/CLI)
 
-> Objective: turn PDFs into KB Markdown with coherent frontmatter, README/SUMMARY updates, a HonKit Docker preview, and an optional GitHub push.
+> Objective: turn PDFs into KB Markdown with coherent frontmatter, README/SUMMARY updates, and a HonKit Docker preview locale (ramo push/publish GitHub/GitBook rimosso).
 
 ### Standard workflow
 1. **pre_onboarding:** create the workspace (`output/timmy-kb-<slug>/...`), optionally provision Drive, and upload `config.yaml`.
 2. **tag_onboarding:** produce `semantic/tags_raw.csv` and the HiTL checkpoint `tags_reviewed.yaml`.
-3. **semantic_onboarding (via `semantic.api`):** convert PDFs to Markdown in `book/`, enrich frontmatter using `semantic/tags.db`, and rebuild README/SUMMARY with Docker preview orchestration.
-4. **onboarding_full:** run Markdown preflight on `book/` and perform the GitHub push.
+3. **semantic_onboarding (via `semantic.api`):** convert PDFs to Markdown in `book/`, arricchire il frontmatter usando `semantic/tags.db` e ricostruire README/SUMMARY.
+4. **gitbook_preview (HonKit preview locale):** avvia la preview Docker su `book/` senza push/publish.
 
 ### UI gating
 - Enable the Semantica tab only once local RAW data exists.
@@ -238,25 +238,9 @@ References: [README → Telemetry & Security](../README.md), [User Guide → Cha
 
 ---
 
-## 9) GitHub operations & rollback
+## 9) GitHub operations & rollback (legacy)
 
-### Publishing CLI
-```bash
-py src/onboarding_full.py --slug <slug>
-```
-Push only `.md` files from `book/` to the destination branch.
-
-### Orchestration rules
-- Always use the Git helpers `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`.
-- Stub `_prepare_repo`/`_stage_changes` in tests per `tests/pipeline/test_github_push.py`.
-- Configure GitHub locks via env flags (`TIMMY_GITHUB_LOCK_TIMEOUT_S`, etc.).
-
-### Rollback guidance
-- On push failures, `_push_with_retry` retries with backoff while leaving the local state repeatable.
-- For diverging branches, use `_force_push_with_lease` with explanations.
-- Revert invalid content atomically and rerun preflight (Markdown only, no `.md.fp`).
-
-References: [.codex/AGENTS](../../.codex/AGENTS.md).
+Il ramo push/publish GitHub/GitBook è stato rimosso: non esiste più un entrypoint di publishing, né env/flag associati. La pipeline si ferma alla preview Docker locale (`pipeline.gitbook_preview`). I riferimenti storici al push restano solo per archivio e non vanno eseguiti.
 
 ---
 
@@ -355,7 +339,8 @@ python -m timmy_kb.cli.pre_onboarding --slug <slug> --name "<Cliente>" --non-int
 python -m timmy_kb.cli.tag_onboarding --slug <slug> --non-interactive --proceed
 python -m timmy_kb.cli.tag_onboarding --slug <slug> --nlp --nlp-workers 6 --nlp-batch-size 8
 python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive
-py src/onboarding_full.py --slug <slug> --non-interactive
+# Preview locale (HonKit/Docker)
+python -m pipeline.gitbook_preview --slug <slug>
 
 # QA
 make qa-safe

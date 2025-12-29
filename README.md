@@ -20,10 +20,9 @@ Cornice filosofica e di responsabilità: [MANIFEST.md](MANIFEST.md).
 - Python >= 3.11, `pip` e `pip-tools`
 - (Opz.) Docker per la preview HonKit
 - Credenziali Google Drive (Service Account JSON) se usi la sorgente Drive
-- Token GitHub se abiliti il push finale
 - Le credenziali (es. service_account.json, OPENAI_API_KEY) restano fuori dal repo e vanno fornite via `.env`/file locali non tracciati
 
-Variabili d'ambiente principali: `OPENAI_API_KEY`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `LOG_REDACTION`.
+Variabili d'ambiente principali: `OPENAI_API_KEY`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `LOG_REDACTION`.
 Per il logging avanzato usa `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TIMMY_LOG_PROPAGATE`, `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, `TIMMY_ENV`.
 
 ---
@@ -41,9 +40,9 @@ La UI guida l'onboarding end-to-end. Per flussi completi e screenshot consulta l
 python -m timmy_kb.cli.pre_onboarding --slug acme --name "Cliente ACME" --non-interactive
 python -m timmy_kb.cli.tag_onboarding --slug acme --non-interactive --proceed
 python -m timmy_kb.cli.semantic_onboarding --slug acme --non-interactive
-py src/onboarding_full.py --slug acme --non-interactive
 ```
-Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user/user_guide.md).
+```
+Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user/user_guide.md). Il flusso termina con la preview locale via Docker/HonKit (pipeline `gitbook_preview`).
 
 ### Igiene workspace
 - Gli artefatti runtime restano fuori dal controllo versione: `output/`, `logs/`, `.timmy_kb/`, `.streamlit/`, cache pytest/ruff/mypy e `node_modules/` sono ignorati.
@@ -102,10 +101,9 @@ Per i dettagli operativi vedi `.codex/PROMPTS.md`, `system/ops/runbook_codex.md`
 
 ## Telemetria & sicurezza
 - **Workspace slug-based:** Tutti i log operativi (output, ingest, UI, semantic) vivono sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti; ogni componente scrive sotto il proprio slug/workspace e rispetta path-safety e scritture atomiche.
-- **Global UI log guard:** L'handler condiviso dei log UI globali serve al viewer (Log dashboard) ma non ospita dati operativi o fallback di ingest; Promtail è configurato solo per leggere `output/timmy-kb-*/logs/*.log` e i log UI globali per le dashboard di grafana/tempo.
+- **Global UI log guard:** L'handler condiviso dei log UI globali serve al viewer (Log dashboard) ma non ospita dati operativi o fallback di ingest; Promtail ? configurato solo per leggere `output/timmy-kb-*/logs/*.log` e i log UI globali per le dashboard di grafana/tempo.
 - Rotazione file (`RotatingFileHandler`) e tracing OTEL (configurazioni `TIMMY_LOG_*`, `TIMMY_OTEL_*`) sono gestiti come prima, senza introdurre meccanismi legacy.
 - `pre-commit` include CSpell, gitleaks e controlli SPDX per mantenere documentazione e codice coerenti.
-- Il push GitHub (`py src/onboarding_full.py`) usa `pipeline.github_utils.push_output_to_github`: prepara un clone temporaneo `.push_*`, copia solo i Markdown e gestisce retry/force push (`--force-with-lease`) secondo `TIMMY_NO_GITHUB`/`SKIP_GITHUB_PUSH`, `GIT_DEFAULT_BRANCH` e `GIT_FORCE_ALLOWED_BRANCHES` + `force_ack`.
 
 ### Observability stack (Loki + Grafana + Promtail)
 - `observability/docker-compose.yaml` (Loki + Grafana + Promtail) legge solo `output/timmy-kb-*/logs/*.log` e i log UI globali; non usa alcun fallback di storage.

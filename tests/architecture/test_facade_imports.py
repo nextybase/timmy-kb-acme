@@ -10,7 +10,6 @@ FACADES = [
     "src/timmy_kb/cli/pre_onboarding.py",
     "src/timmy_kb/cli/tag_onboarding.py",
     "src/timmy_kb/cli/semantic_onboarding.py",
-    "src/onboarding_full.py",
     "src/tools/gen_vision_yaml.py",
 ]
 FACADES += list(Path("src/ui").rglob("*.py"))
@@ -21,8 +20,6 @@ FACADES += list(Path("src/api").rglob("*.py"))
 BLACKLIST = (
     "pipeline.drive",
     "pipeline.drive_utils",
-    "pipeline.github",
-    "pipeline.github_utils",
     "semantic.vision_provision",
     "semantic.vision_api",
 )

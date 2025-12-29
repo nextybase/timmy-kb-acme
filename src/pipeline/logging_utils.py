@@ -28,7 +28,7 @@ Indice funzioni principali (ruolo):
 
 Linee guida implementative:
 - **Redazione centralizzata**: se `context.redact_logs` e' True, il filtro applica la redazione
-  ai messaggi e a campi extra sensibili (`GITHUB_TOKEN`, `SERVICE_ACCOUNT_FILE`, ecc.).
+  ai messaggi e a campi extra sensibili (`SERVICE_ACCOUNT_FILE`, ecc.).
 - **Idempotenza**: chiamate ripetute a `get_structured_logger` non creano handler duplicati.
 """
 
@@ -52,7 +52,7 @@ try:
 except Exception:
     _otel_trace = None
 
-_SENSITIVE_KEYS = {"GITHUB_TOKEN", "SERVICE_ACCOUNT_FILE", "Authorization", "GIT_HTTP_EXTRAHEADER"}
+_SENSITIVE_KEYS = {"SERVICE_ACCOUNT_FILE", "Authorization", "GIT_HTTP_EXTRAHEADER"}
 GATE_EVENT_NAMES = {
     "evidence_gate_blocked",
     "skeptic_gate_blocked",
@@ -168,7 +168,6 @@ class _RedactFilter(logging.Filter):
                 record.msg = redact_secrets(record.msg)
             # redigi campi extra comuni
             redact_keys = {
-                "GITHUB_TOKEN",
                 "SERVICE_ACCOUNT_FILE",
                 "Authorization",
                 "GIT_HTTP_EXTRAHEADER",

@@ -10,7 +10,7 @@ Benvenuto nella documentazione di **Timmy-KB**: sistema di creazione governata c
 ## Indice
 
 - **Guide**
-  - [User Guide](user/user_guide.md) - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, push).
+  - [User Guide](user/user_guide.md) - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, preview Docker).
   - [Arricchimento semantico](arricchimento.md) - flusso UI/CLI, tag, euristica vs SpaCy.
   - [Architettura del sistema](../system/architecture.md) - componenti, flussi end-to-end, API interne.
   - [Next Core per Assistant](next_core_for_assistants.md) - linee guida NeXT per moduli OpenAI (context operativo Timmy-KB).
@@ -29,7 +29,7 @@ Benvenuto nella documentazione di **Timmy-KB**: sistema di creazione governata c
   - Type checking rapido: `make type` (mypy), `make type-pyright` (pyright/npx)
 - **Policy**
   - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilita'.
-  - [Policy di Push](policy_push.md) - requisiti, protezioni branch, force-with-lease, mascheramento token.
+  - [Policy di Push](policy_push.md) - **legacy (push/publish rimossi)**.
   - [Security & Compliance](security.md) - gestione segreti, OIDC, branch protection, hook locali.
 - **ADR - scelte tecniche**
   - [Registro decisioni (ADR)](adr/README.md) - contesto delle scelte tecniche.

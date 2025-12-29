@@ -19,8 +19,8 @@ python -m timmy_kb.cli.tag_onboarding --slug <slug> --non-interactive --proceed
 # 3) Semantic onboarding (convert ? enrich ? README/SUMMARY)
 python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive
 
-# 4) Push opzionale (GitBook/preview): usa solo il workspace appena creato
-py src/onboarding_full.py --slug <slug> --non-interactive
+# 4) Preview locale (HonKit via Docker): usa solo il workspace appena creato
+# avvia tramite pipeline.gitbook_preview (nessun push/publish esterno)
 ```
 Note: il workspace vive in `output/timmy-kb-<slug>/`; non manipolare YAML/JSON a mano, passa sempre dalle API pipeline/semantic.
 

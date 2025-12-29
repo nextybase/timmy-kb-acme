@@ -259,11 +259,10 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
 
 ## 7) Pubblicazione su GitHub -> **CLI / automazioni**
 
-Al momento il push GitHub viene orchestrato dalla CLI (`py src/onboarding_full.py --slug <slug>`), che invoca `pipeline.github_utils.push_output_to_github`. La sequenza e' idempotente e segue tre fasi (`prepare_repo`, `stage_changes`, `push_with_retry` oppure `force_push`), visibili nei log strutturati.
+La preview finale usa HonKit via Docker (`pipeline.gitbook_preview`) e non effettua push/publish verso GitHub/GitBook.
 
 - **Cosa sale su GitHub**: solo i file `.md` presenti in `book/` (gli altri artefatti restano locali).
-- **Branch e controlli**: il branch di default deriva da `GIT_DEFAULT_BRANCH`/`DEFAULT_GIT_BRANCH`. I flag `TIMMY_NO_GITHUB` o `SKIP_GITHUB_PUSH` disabilitano il push senza modificare la build. Per i force push serve sia `force_ack` sia un pattern consentito in `GIT_FORCE_ALLOWED_BRANCHES`: l'operazione usa `--force-with-lease`.
-- **Sicurezza**: il clone temporaneo vive sotto `output/timmy-kb-<slug>/.push_*` e viene ripulito al termine; `LeaseLock` impedisce push concorrenti sullo stesso workspace.
+- - **Sicurezza**: il clone temporaneo vive sotto `output/timmy-kb-<slug>/.push_*` e viene ripulito al termine; `LeaseLock` impedisce push concorrenti sullo stesso workspace.
 - **Troubleshooting rapido**: se il token manca o la remote rifiuta l'operazione, i log espongono un `PushError` con l'ultima voce di stderr (`run_cmd.fail`). Per riprodurre in locale puoi usare il test smoke `pytest tests/pipeline/test_github_push.py::test_push_output_to_github_end_to_end_smoke`.
 
 ---

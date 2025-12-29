@@ -109,11 +109,11 @@ def test_resolve_env_ref_reads_env(sample_config: Path, monkeypatch: pytest.Monk
 
 
 def test_get_secret_reads_env(sample_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GITHUB_TOKEN", "ghp_dummy")  # pragma: allowlist secret
+    monkeypatch.setenv("SERVICE_ACCOUNT_FILE", "dummy.json")  # noqa: S105  # pragma: allowlist secret
     envu._ENV_LOADED = False
     settings = Settings.load(sample_config.parent.parent, config_path=sample_config)
-    secret = settings.get_secret("GITHUB_TOKEN", required=True)
-    assert secret == "ghp_dummy"  # pragma: allowlist secret  # noqa: S105
+    secret = settings.get_secret("SERVICE_ACCOUNT_FILE", required=True)
+    assert secret == "dummy.json"  # noqa: S105  # pragma: allowlist secret
 
 
 def test_get_secret_missing_required_raises(sample_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:

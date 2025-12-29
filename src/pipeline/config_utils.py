@@ -160,8 +160,6 @@ class ClientEnvSettings(_BaseSettings):
         SERVICE_ACCOUNT_FILE: Path al JSON del Service Account (critico).
         BASE_DRIVE: (opz.) Nome base per Drive.
         DRIVE_ROOT_ID: (opz.) ID della cartella radice cliente su Google Drive.
-        GITHUB_TOKEN: Token GitHub per operazioni di push (critico).
-        GITBOOK_TOKEN: (opz.) Token GitBook.
         slug: Identificativo cliente (necessario a runtime tramite `ClientContext`).
         LOG_LEVEL: Livello di log (default: "INFO").
         DEBUG: Flag di debug (default: False).
@@ -175,13 +173,6 @@ class ClientEnvSettings(_BaseSettings):
         default=None,
         description="ID cartella radice cliente su Google Drive",
         validation_alias=AliasChoices("DRIVE_ROOT_ID"),
-    )
-    GITHUB_TOKEN: str = Field(validation_alias=AliasChoices("GITHUB_TOKEN"))
-    GITBOOK_TOKEN: Optional[str] = Field(default=None, validation_alias=AliasChoices("GITBOOK_TOKEN"))
-    GITBOOK_SPACE_ID: Optional[str] = Field(
-        default=None,
-        validation_alias=AliasChoices("GITBOOK_SPACE_ID"),
-        description="ID dello spazio GitBook dove pubblicare (opzionale).",
     )
     LOG_LEVEL: str = Field(default="INFO", validation_alias=AliasChoices("LOG_LEVEL"))
     DEBUG: bool = Field(default=False, validation_alias=AliasChoices("DEBUG"))
@@ -201,7 +192,7 @@ class ClientEnvSettings(_BaseSettings):
             # compat, nessuna azione se la super non definisce model_post_init
             pass
 
-        for key in ("DRIVE_ID", "SERVICE_ACCOUNT_FILE", "GITHUB_TOKEN"):
+        for key in ("DRIVE_ID", "SERVICE_ACCOUNT_FILE"):
             if not getattr(self, key, None):
                 logger.error(
                     "pipeline.config_utils.missing_required_env",

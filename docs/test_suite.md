@@ -1,6 +1,6 @@
 # Test Suite  v1.0 Beta
 
-> **TL;DR:** panoramica su marker Pytest, dipendenze opzionali e comandi rapidi: usala per scegliere quali test eseguire (drive/push/e2e) e per mantenere la suite verde in CI.
+> **TL;DR:** panoramica su marker Pytest, dipendenze opzionali e comandi rapidi: usala per scegliere quali test eseguire (drive/e2e) e per mantenere la suite verde in CI.
 
 Guida ufficiale alla suite **Pytest** del progetto. Allineata a: logging centralizzato con redazione, dipendenze SSoT (pip-tools), UI import-safe, **stub Streamlit centralizzati** e **helper symlink unificato**. Nessun riferimento a legacy o migrazioni.
 
@@ -15,14 +15,13 @@ make test-vscode     # variante comoda per VS Code
 
 # direttamente con pytest
 pytest -ra                   # esegue la suite rispettando i marker di default
-pytest -ra -m "push"         # include test che richiedono GitHub
 pytest -ra -m "drive"        # include test che richiedono Google Drive
 pytest -ra -m "slow"         # include smoke / end-to-end lenti
 pytest -ra -m "contract"     # verifica i contratti UI/gating
 pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 ```
 > Nota: i test `e2e` richiedono le dipendenze extra (`pip install -r requirements-dev.txt`) e l'installazione del browser con `playwright install chromium`.
-**Default CI:** i test marcati `push`, `drive` e `e2e` sono esclusi per impostazione predefinita.
+**Default CI:** i test marcati `drive` e `e2e` sono esclusi per impostazione predefinita.
 
 >  **Dipendenze opzionali**: oltre a `pyyaml` (UI/semantic; esiste un parser fallback minimale ma raccomandiamo PyYAML per YAML complessi), alcuni test richiedono
 > `google.oauth2.service_account` e `googleapiclient.http` (gating Drive), `fitz`
@@ -33,14 +32,14 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 
 ## Eseguire i test (menu pratico)
 
-Questa sezione evita run pesanti non necessari. I marker ufficiali sono definiti in `pytest.ini` (es. `contract`, `ui`, `pipeline`, `semantic`, `slow`, `e2e`, `push`, `drive`).
+Questa sezione evita run pesanti non necessari. I marker ufficiali sono definiti in `pytest.ini` (es. `contract`, `ui`, `pipeline`, `semantic`, `slow`, `e2e`, `drive`).
 
 ```bash
-# default "smoke locale" (rispetta la selezione di pytest.ini; esclude push/drive/e2e)
+# default "smoke locale" (rispetta la selezione di pytest.ini; esclude drive/e2e)
 pytest -q
 
 # suite "default CI" esplicita (equivalente alla selezione di default in pytest.ini)
-pytest -q -m "not push and not drive and not e2e" --maxfail=1
+pytest -q -m "not drive and not e2e" --maxfail=1
 
 # per area: selezione per cartella (rapida e prevedibile)
 pytest -q tests/pipeline --maxfail=1
@@ -57,7 +56,6 @@ pytest -q -m "semantic" --maxfail=1
 # pesanti (esegui solo quando serve)
 pytest -q -m "slow" --maxfail=1                 # smoke/end-to-end lenti
 pytest -q -m "e2e" --maxfail=1                  # Playwright (vedi ADR-0003)
-pytest -q -m "push" --maxfail=1                 # richiede GITHUB_TOKEN
 pytest -q -m "drive" --maxfail=1                # richiede SERVICE_ACCOUNT_FILE e DRIVE_ID
 ```
 
@@ -71,7 +69,6 @@ Quando usare cosa (regola pratica)
 ## Marker e convenzioni
 
 - `slow`  test lenti/smoke end-to-end.
-- `push`  richiedono `GITHUB_TOKEN`/rete.
 - `drive`  richiedono `SERVICE_ACCOUNT_FILE`/`DRIVE_ID`.
 - `contract`  snapshot contrattuali dell'interfaccia (navigazione/gate).
 - `e2e`  test end-to-end con Streamlit + Playwright.
@@ -82,7 +79,6 @@ Quando usare cosa (regola pratica)
 
 | Marker     | Requisiti principali                         | Note                                   |
 |------------|----------------------------------------------|----------------------------------------|
-| `push`     | `GITHUB_TOKEN`                               | Abilitare esplicitamente - `-m "push"` |
 | `drive`    | `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`           | Richiede deps Google                   |
 | `e2e`      | Playwright + Chromium                        | `playwright install chromium`          |
 | `slow`     |                                             | Test lenti/smoke                       |
@@ -117,7 +113,7 @@ Quando usare cosa (regola pratica)
 
 ### 4) Orchestratori e CLI  Onboarding e flussi operativi
 - **Smoke end-to-end (`slow`):** `tests/test_smoke_e2e.py`, `tests/test_smoke_dummy_e2e.py`, `src/tests/e2e/test_dummy_smoke.py`.
-- **Orchestratori & tag onboarding:** `test_tag_onboarding_cli_smoke.py`, `test_tag_onboarding_helpers.py`, `test_onboarding_full_paths.py`.
+- **Orchestratori & tag onboarding:** `test_tag_onboarding_cli_smoke.py`, `test_tag_onboarding_helpers.py`.
 - **CLI & contratti/exit-codes:** `test_cli_env_missing.py`, `test_cli_gen_vision_yaml.py`, `test_contract_defaults.py`, `test_contract_artifacts.py`.
 - **Dummy KB / fallback Vision:** `tests/tools/test_gen_dummy_kb.py` copre workspace idempotente, fallback YAML senza PyYAML, README locali generati (PDF o TXT) e upload Drive best-effort.
 - **NLP  DB:** `test_run_nlp_to_db.py`.
@@ -256,7 +252,7 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 pre-commit run --all-files
 
 # simulare lo stadio push (utile in locale)
-pre-commit run --hook-stage pre-push --all-files
+pre-commit run --all-files
 
 # un singolo hook su tutti i file
 pre-commit run ruff --all-files

@@ -25,7 +25,7 @@ Nota: la UI e gli orchestratori CLI delegano alle funzioni modulari
 - (Opz.) **Docker** per preview HonKit
 - (Default Drive) **Service Account JSON** e `DRIVE_ID`
 
-Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `GITHUB_TOKEN`, `GIT_DEFAULT_BRANCH`, `LOG_REDACTION`, `YAML_STRUCTURE_FILE`.
+Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `LOG_REDACTION`, `YAML_STRUCTURE_FILE`.
 
 ---
 
@@ -107,11 +107,10 @@ Per l'indicizzazione nel DB semantico puoi delegare a
 `semantic.embedding_service.index_markdown_to_db`, passando il client embeddings
 adottato nel tuo ambiente (es. quello configurato nella UI retriever).
 
-# 4) Push finale (se richiesto)
-py src/onboarding_full.py --slug acme
-```
+# 4) Preview finale (HonKit locale)
+Avvia la preview Docker/HonKit tramite `pipeline.gitbook_preview` (vedi sezione Preview); non esiste piÙ il ramo push/publish.
 
-Modalita` **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopra.
+Modalita` **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopra per la parte CLI di onboarding.
 
 ---
 
@@ -155,7 +154,7 @@ output/timmy-kb-<slug>/
 - Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.
 - Log con redazione automatica se `LOG_REDACTION` e` attivo.
 - I pulsanti **Avvia arricchimento semantico**/**Abilita** nella UI rispettano il servizio `ui.services.tags_adapter`: se non e` disponibile vengono disabilitati (salvo `TAGS_MODE=stub`). In modalita` stub lo YAML viene rigenerato con `DEFAULT_TAGS_YAML` e lo stato cliente torna a **pronto** se il DB resta vuoto.
-- Il push GitHub (`py src/onboarding_full.py`) delega a `pipeline.github_utils.push_output_to_github`, che clona in `.push_*`, copia i Markdown e gestisce retry/force push (`--force-with-lease`). Usa le variabili `TIMMY_NO_GITHUB`/`SKIP_GITHUB_PUSH`, `GIT_DEFAULT_BRANCH` e `GIT_FORCE_ALLOWED_BRANCHES` + `force_ack` per il controllo dell'operazione.
+- La preview finale usa HonKit via Docker (`pipeline.gitbook_preview`) e non effettua push/publish esterni.
 
 ## Impostazioni retriever (UI)
 La sidebar della UI consente di configurare il retriever, salvando i parametri in `config/config.yaml`:
