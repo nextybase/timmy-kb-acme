@@ -17,15 +17,9 @@ from typing import Any, Dict, List, Optional
 
 from dotenv import find_dotenv, load_dotenv
 
-_TOOLS_DIR = next(p for p in Path(__file__).resolve().parents if p.name == "tools")
-_REPO_ROOT = _TOOLS_DIR.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+from pipeline.paths import get_repo_root
 
-from tools._bootstrap import bootstrap_repo_src
-
-# ENTRYPOINT BOOTSTRAP - consentito: abilita import pipeline.* senza installazione.
-ROOT = bootstrap_repo_src()
+ROOT = get_repo_root()
 
 from pipeline.env_utils import get_env_var  # noqa: E402
 from pipeline.logging_utils import get_structured_logger  # noqa: E402

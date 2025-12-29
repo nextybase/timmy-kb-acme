@@ -7,16 +7,6 @@ import json
 import sys
 from pathlib import Path
 
-_TOOLS_DIR = next(p for p in Path(__file__).resolve().parents if p.name == "tools")
-_REPO_ROOT = _TOOLS_DIR.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-from tools._bootstrap import bootstrap_repo_src
-
-# ENTRYPOINT BOOTSTRAP - consentito: abilita import semantic.* senza installazione.
-REPO_ROOT = bootstrap_repo_src()
-
 
 def main() -> None:
 

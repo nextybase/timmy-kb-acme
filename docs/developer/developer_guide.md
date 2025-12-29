@@ -51,9 +51,9 @@ ai:
 
 **Regole:**
 - Le **chiamate dirette** (Responses/Chat Completions) leggono sempre `ai.vision.model`.
-- Il flusso **Assistant** usa l'ID letto da l'env il cui nome Ã¨ in `ai.vision.assistant_id_env`.
+- Il flusso **Assistant** usa l'ID letto dall'ambiente il cui nome è in `ai.vision.assistant_id_env`.
 - Accesso runtime **solo** tramite `pipeline.settings.Settings` / `ClientContext.settings` (UI inclusa); niente letture YAML manuali.
-- Config cliente: API unica `pipeline.config_utils.load_client_settings(context)` â†’ `context.settings` â†’ `.as_dict()` per le UI/CLI.
+- Config cliente: API unica `pipeline.config_utils.load_client_settings(context)` ? `context.settings` ? `.as_dict()` per le UI/CLI.
 
 Getter consigliato lato UI:
 

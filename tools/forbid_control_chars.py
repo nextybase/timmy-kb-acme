@@ -8,15 +8,9 @@ from importlib import import_module
 from pathlib import Path
 from typing import List, Sequence
 
-_TOOLS_DIR = next(p for p in Path(__file__).resolve().parents if p.name == "tools")
-_REPO_ROOT = _TOOLS_DIR.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+from pipeline.paths import get_repo_root
 
-from tools._bootstrap import bootstrap_repo_src
-
-# ENTRYPOINT BOOTSTRAP - consentito: abilita import pipeline.* senza installazione.
-REPO_ROOT = bootstrap_repo_src()
+REPO_ROOT = get_repo_root()
 
 # Import dinamici post-bootstrapping per rispettare E402 (niente import dopo codice)
 _file_utils = import_module("pipeline.file_utils")

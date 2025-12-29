@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Protocol, cast
 
 from ai.types import AssistantConfig
-from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
+from ai.vision_config import resolve_vision_config
+from ai.vision_config import resolve_vision_retention_days as _resolve_vision_retention_days
 from pipeline.capabilities.vision import load_vision_bindings
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
@@ -71,6 +72,11 @@ class VisionArtifacts:
 
     mapping_yaml: Path
     cartelle_yaml: Path
+
+
+def resolve_vision_retention_days(ctx: Any) -> int:
+    """Forward SSoT per il retention dei file Vision lato UI."""
+    return _resolve_vision_retention_days(ctx)
 
 
 # -----------------------------

@@ -6,7 +6,7 @@ from typing import Optional, TypedDict
 
 
 class CapabilityAvailability(TypedDict):
-    """Descrive lo stato di disponibilitÇÿ di una capability."""
+    """Descrive lo stato di disponibilità di una capability."""
 
     available: bool
     reason: Optional[str]

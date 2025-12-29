@@ -223,7 +223,6 @@ def _regenerate_agents_matrix() -> None:
     """
     Richiama lo script di rigenerazione della matrice AGENTS.
     """
-    repo_root = get_repo_root()
     try:
         from tools import gen_agents_matrix
     except Exception as exc:  # pragma: no cover - import fallback

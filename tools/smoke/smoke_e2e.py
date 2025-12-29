@@ -8,17 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve
-_TOOLS_DIR = next(p for p in Path(__file__).resolve().parents if p.name == "tools")
-_REPO_ROOT = _TOOLS_DIR.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-from tools._bootstrap import bootstrap_repo_src
-
-# ENTRYPOINT BOOTSTRAP - consentito: importa moduli pipeline/timmy_kb senza installazione.
-REPO_ROOT = bootstrap_repo_src()
+from pipeline.file_utils import safe_write_text  # noqa: E402
+from pipeline.path_utils import ensure_within_and_resolve  # noqa: E402
 
 
 def _tiny_pdf_bytes() -> bytes:

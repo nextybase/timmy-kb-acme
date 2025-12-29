@@ -104,7 +104,7 @@ def load_client_settings(
 ) -> ContextSettings:
     """API unica per ottenere il `Settings` del cliente a runtime (SSoT).
 
-    - Riusa `context.settings` se giÇÿ presente e typed, a meno di `reload=True`.
+    - Riusa `context.settings` se già presente e typed, a meno di `reload=True`.
     - Carica tramite `Settings.load(...)` usando i path del contesto.
     - Aggiorna `context.settings` per mantenere l'invariante SSoT nel chiamante.
     """
@@ -341,7 +341,7 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
 
 
 # ----------------------------------------------------------
-#  Scrittura sicura di file generici (wrapper legacy) – ATOMICA
+#  Scrittura sicura di file generici (wrapper legacy) - ATOMICA
 # ----------------------------------------------------------
 
 
@@ -448,7 +448,7 @@ def update_config_with_drive_ids(
       - Scrive via `safe_write_text` in modo atomico.
 
     Raises:
-        ConfigError: se la lettura/scrittura del config fallisce o se il file è assente.
+        ConfigError: se la lettura/scrittura del config fallisce o se il file e assente.
     """
     if context.config_path is None or context.base_dir is None:
         raise PipelineError(

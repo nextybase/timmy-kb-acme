@@ -16,46 +16,64 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
+import unicodedata
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
-# Sequenze note -> sostituzioni desiderate
+# Sequenze note -> sostituzioni desiderate.
+# Mappiamo i casi tipici di UTF-8 decodificato come cp1252/latin-1: niente no-op o placeholder.
 REPLACEMENTS: Dict[str, str] = {
-    # Dashes
-    "â€”": "â€”",  # em dash
-    "â€“": "â€“",  # en dash
-    # Quotes/apostrophes
-    "â€™": "â€™",
-    "â€˜": "â€˜",
-    "â€œ": "â€œ",
-    "â€": "\u201d",
-    # Ellipsis & bullets
-    "â€¦": "â€¦",
-    "â€¢": "â€¢",
-    # Degree and middle dot
-    "Â°": "Â°",
-    "Â·": "Â·",
-    # Non-breaking space turned to
-    " ": " ",
-    # Generic stray marker (use sparingly; keep after specific ones)
-    "": "",
-    # BOM rendered mojibake in content
-    "ÃƒÂ¯Â»Â¿": "",
-    # Common Latin-1 vowels broken
-    "Ã ": "Ã ",
-    "Ã¡": "Ã¡",
-    "Ã¨": "Ã¨",
-    "Ã©": "Ã©",
-    "Ã¬": "Ã¬",
-    "Ã²": "Ã²",
-    "Ã³": "Ã³",
-    "Ã¹": "Ã¹",
-    "Ãº": "Ãº",
-    "Ã§": "Ã§",
-    "Ã±": "Ã±",
-    # Capital variants
-    "Ã€": "Ã€",
-    "Ã‰": "Ã‰",
+    # Punteggiatura smart
+    "â€”": "—",
+    "â€“": "–",
+    "â€œ": "“",
+    "â€�": "”",
+    "â€": "”",
+    "â€˜": "‘",
+    "â€™": "’",
+    "â€¦": "…",
+    "â€¢": "•",
+    "â†’": "→",
+    # Simboli comuni
+    "â‚¬": "€",
+    "Â°": "°",
+    "Â·": "·",
+    "Â ": " ",
+    "ï»¿": "",
+    # Vocali/lettere accentate
+    "Ã ": "à",
+    "Ã¡": "á",
+    "Ã¢": "â",
+    "Ã¤": "ä",
+    "Ã£": "ã",
+    "Ã¨": "è",
+    "Ã©": "é",
+    "Ãª": "ê",
+    "Ã«": "ë",
+    "Ã¬": "ì",
+    "Ã­": "í",
+    "Ã®": "î",
+    "Ã¯": "ï",
+    "Ã²": "ò",
+    "Ã³": "ó",
+    "Ã´": "ô",
+    "Ã¶": "ö",
+    "Ãµ": "õ",
+    "Ã¹": "ù",
+    "Ãº": "ú",
+    "Ã»": "û",
+    "Ã¼": "ü",
+    "Ã±": "ñ",
+    "Ã§": "ç",
+    "ÃŸ": "ß",
+    # Maiuscole accentate frequenti
+    "Ã€": "À",
+    "Ã‰": "É",
+    "Ãˆ": "È",
+    "ÃŒ": "Ì",
+    "Ã’": "Ò",
+    "Ã™": "Ù",
 }
 
 
@@ -91,6 +109,25 @@ EXCLUDE_DIRS = {
 }
 
 
+def ensure_within(base: Path, target: Path) -> Path:
+    base_resolved = base.resolve()
+    target_resolved = target.resolve()
+    if os.name == "nt":
+        base_resolved = Path(str(base_resolved).lower())
+        target_resolved = Path(str(target_resolved).lower())
+    if base_resolved not in target_resolved.parents and base_resolved != target_resolved:
+        raise ValueError(f"{target} è fuori dal perimetro {base}")
+    return target_resolved
+
+
+def safe_write_text(path: Path, content: str, *, encoding: str = "utf-8") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", delete=False, encoding=encoding, dir=path.parent) as tmp:
+        tmp.write(content)
+        tmp_path = Path(tmp.name)
+    os.replace(tmp_path, path)
+
+
 def iter_files(root: Path, exts: Iterable[str]) -> Iterable[Path]:
     exts_l = {e.lower() for e in exts}
     for dirpath, dirnames, filenames in os.walk(root):
@@ -110,6 +147,8 @@ def apply_replacements(text: str) -> Tuple[str, List[Tuple[str, int]]]:
             n = out.count(k)
             out = out.replace(k, v)
             counts.append((k, n))
+    if counts:
+        out = unicodedata.normalize("NFC", out)
     return out, counts
 
 
@@ -157,7 +196,8 @@ def main() -> None:
             details.append(f"{fp}: {chg_sum}")
             total_changes += sum(n for _, n in counts)
             if args.apply:
-                fp.write_text(fixed, encoding="utf-8", newline="\n")
+                resolved = ensure_within(root, fp)
+                safe_write_text(resolved, fixed, encoding="utf-8")
 
     print(f"Scansionati: {total_files} file. Modificati: {changed_files}. Sostituzioni: {total_changes}.")
     if details:
