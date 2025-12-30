@@ -120,7 +120,7 @@ La nuova telemetria OTEL e composta da:
 - **Trace root** (`timmy_kb.<journey>`, es. `timmy_kb.onboarding`, `timmy_kb.ingest`, `timmy_kb.reindex`)
   - Attributi: `slug`, `run_id`, `trace_kind`, `env`, `entry_point`, `journey`
 - **Phase span** (`phase:<phase>`, aperto da `phase_scope`)
-  - Attributi: `phase`, `slug`, `run_id`, `trace_kind`, `status`, `artifact_count`, `dataset_area`, `source_type`, `policy_id`, `petrov_action`, `rosetta_quality_score`, `risk_level`, `error_kind`, `error_code`
+  - Attributi: `phase`, `slug`, `run_id`, `trace_kind`, `status`, `artifact_count`, `dataset_area`, `source_type`, `policy_id`, `rosetta_quality_score`, `risk_level`, `error_kind`, `error_code`
 - **Decision span** (`decision:<decision_type>` per filtri/semantica/override umano)
   - Attributi: `decision_type`, `slug`, `run_id`, `trace_kind`, `phase`, `reason`, `policy_id`, `dataset_area`, `er_entity_type`, `er_relation_type`, `model_version`, `ambiguity_score`, `hilt_involved`, `user_role`, `override_reason`, `previous_value`, `new_value`, `status`
 

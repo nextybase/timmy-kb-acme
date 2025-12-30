@@ -189,7 +189,6 @@
     "patchiamo",
     "pdfgen",
     "pdfs",
-    "petrov",
     "pipelineerror",
     "posix",
     "preonboarding",
@@ -316,7 +315,9 @@
     "provisiono",
     "rilevati",
     "retrocompat",
-    "concep"
+    "concep",
+    "petrov",
+    "rosetta"
   ],
   "flagWords": [
     "�",

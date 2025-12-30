@@ -195,7 +195,6 @@ def _filter_safe_pdfs(
                     file_path_relative=_relative_to(raw_root, p),
                     decision_channel="auto",
                     risk_level="high",
-                    petrov_action="block",
                     attributes={
                         "reason": "symlink",
                         "status": "blocked",
@@ -218,7 +217,6 @@ def _filter_safe_pdfs(
                 file_path_relative=_relative_to(raw_root, p),
                 decision_channel="auto",
                 risk_level="high",
-                petrov_action="block",
                 attributes={
                     "reason": "unsafe_path",
                     "status": "blocked",

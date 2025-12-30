@@ -178,7 +178,6 @@ def start_decision_span(
     risk_level: str | None = None,
     hilt_involved: bool | None = None,
     decision_channel: str | None = None,
-    petrov_action: str | None = None,
     model_version: str | None = None,
     attributes: Mapping[str, Any] | None = None,
     extra_attributes: Mapping[str, Any] | None = None,
@@ -209,8 +208,6 @@ def start_decision_span(
         base_attrs["hilt_involved"] = hilt_involved
     if decision_channel:
         base_attrs["decision_channel"] = decision_channel
-    if petrov_action:
-        base_attrs["petrov_action"] = petrov_action
     if model_version:
         base_attrs["model_version"] = model_version
     for extra in (attributes, extra_attributes):
