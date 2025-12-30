@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any, Tuple
 
 import pytest
-from tests.ui.streamlit_stub import StreamlitStub
 
 import ui.utils.workspace
 from pipeline.workspace_layout import WorkspaceLayout
+from tests.ui.streamlit_stub import StreamlitStub
 
 
 def register_streamlit_runtime(monkeypatch: pytest.MonkeyPatch, st_stub: StreamlitStub) -> None:

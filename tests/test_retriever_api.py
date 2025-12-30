@@ -11,9 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
-from tests.conftest import DUMMY_SLUG
-
 import timmy_kb.cli.retriever as retr
+from tests.conftest import DUMMY_SLUG
 from timmy_kb.cli.retriever import QueryParams
 
 

@@ -6,10 +6,10 @@ import sys
 from pathlib import Path
 
 import pytest
-from tests.conftest import DUMMY_SLUG
-from tests.ui.stub_helpers import install_streamlit_stub
 
 from pipeline.exceptions import InvalidSlug
+from tests.conftest import DUMMY_SLUG
+from tests.ui.stub_helpers import install_streamlit_stub
 
 PAGES_DIR = Path(__file__).resolve().parents[2] / "src" / "ui" / "pages"
 MODULE_PREFIX = "ui.pages"

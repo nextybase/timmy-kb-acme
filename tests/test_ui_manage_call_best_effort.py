@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from tests.ui.test_manage_modal_save import _build_streamlit_stub
 
 

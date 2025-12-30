@@ -2,10 +2,10 @@
 from types import SimpleNamespace
 
 import pytest
-from tests.support.contexts import TestClientCtx
 
 from pipeline.exceptions import ConfigError
 from semantic import api as sapi
+from tests.support.contexts import TestClientCtx
 from timmy_kb.cli import semantic_headless as sh
 
 

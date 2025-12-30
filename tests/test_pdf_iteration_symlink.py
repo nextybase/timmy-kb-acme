@@ -4,13 +4,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tests.utils.symlink import make_symlink
 
 from pipeline.exceptions import ConfigError, ConversionError
 from semantic import api as sapi
 from semantic import convert_service
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig
+from tests.utils.symlink import make_symlink
 
 
 class _Ctx:

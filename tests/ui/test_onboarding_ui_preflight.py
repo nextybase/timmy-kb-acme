@@ -5,9 +5,9 @@ import logging
 from contextlib import nullcontext
 
 import pytest
+
 from tests.ui.streamlit_like_adapter import StreamlitStubAdapter
 from tests.ui.streamlit_stub import StreamlitStub
-
 from timmy_kb.ui import onboarding_ui
 
 

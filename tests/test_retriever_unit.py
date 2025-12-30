@@ -11,9 +11,9 @@ from collections import deque
 from typing import Iterable
 
 import pytest
-from tests.conftest import DUMMY_SLUG
 
 import timmy_kb.cli.retriever as retriever
+from tests.conftest import DUMMY_SLUG
 from timmy_kb.cli.retriever import (
     QueryParams,
     cosine,

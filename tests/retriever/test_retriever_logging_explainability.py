@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any, List
 
 import pytest
-from tests.conftest import DUMMY_SLUG
 
+from tests.conftest import DUMMY_SLUG
 from timmy_kb.cli.retriever import QueryParams, search
 
 

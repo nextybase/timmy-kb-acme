@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from tests.conftest import DUMMY_SLUG
 
 from pipeline.exceptions import RetrieverError
 from security.throttle import reset_token_buckets, throttle_token_bucket
+from tests.conftest import DUMMY_SLUG
 from timmy_kb.cli.retriever import QueryParams, search
 
 

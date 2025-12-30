@@ -8,12 +8,12 @@ from pathlib import Path
 from typing import Any, Optional, cast
 
 import pytest
-from tests.conftest import build_vocab_db
 
 import semantic.core as se
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from semantic.core import _list_markdown_files, extract_semantic_concepts
+from tests.conftest import build_vocab_db
 
 
 @dataclass

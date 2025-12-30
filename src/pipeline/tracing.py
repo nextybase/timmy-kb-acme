@@ -179,7 +179,6 @@ def start_decision_span(
     hilt_involved: bool | None = None,
     decision_channel: str | None = None,
     petrov_action: str | None = None,
-    rosetta_quality_score: float | None = None,
     model_version: str | None = None,
     attributes: Mapping[str, Any] | None = None,
     extra_attributes: Mapping[str, Any] | None = None,
@@ -212,8 +211,6 @@ def start_decision_span(
         base_attrs["decision_channel"] = decision_channel
     if petrov_action:
         base_attrs["petrov_action"] = petrov_action
-    if rosetta_quality_score is not None:
-        base_attrs["rosetta_quality_score"] = rosetta_quality_score
     if model_version:
         base_attrs["model_version"] = model_version
     for extra in (attributes, extra_attributes):

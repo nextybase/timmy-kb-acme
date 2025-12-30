@@ -2,10 +2,9 @@
 # tests/test_semantic_index_markdown_partial_mismatch.py
 import logging
 
-from tests.support.contexts import TestClientCtx
-
 from semantic import embedding_service
 from semantic.api import index_markdown_to_db
+from tests.support.contexts import TestClientCtx
 
 
 class FakeEmbClient:

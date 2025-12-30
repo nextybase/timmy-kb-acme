@@ -7,9 +7,9 @@ from io import StringIO
 from types import SimpleNamespace
 
 import pytest
-from tests.conftest import DUMMY_SLUG
 
 from pipeline.logging_utils import get_structured_logger, redact_secrets
+from tests.conftest import DUMMY_SLUG
 
 
 def test_redact_secrets_masks_bearer_and_basic():

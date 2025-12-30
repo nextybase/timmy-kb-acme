@@ -5,8 +5,8 @@ import logging
 from typing import Any
 
 import pytest
-from tests.conftest import DUMMY_SLUG
 
+from tests.conftest import DUMMY_SLUG
 from timmy_kb.cli.retriever import QueryParams, search
 
 

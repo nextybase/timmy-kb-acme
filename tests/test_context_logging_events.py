@@ -5,11 +5,11 @@ import logging
 from pathlib import Path
 
 import pytest
-from tests.conftest import DUMMY_SLUG
 
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
+from tests.conftest import DUMMY_SLUG
 
 
 class _Mem(logging.Handler):

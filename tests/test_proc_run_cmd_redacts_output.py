@@ -6,10 +6,10 @@ import logging
 from typing import Any
 
 import pytest
-from tests.conftest import DUMMY_SLUG
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.proc_utils import CmdError, run_cmd
+from tests.conftest import DUMMY_SLUG
 
 
 def test_run_cmd_redacts_output_in_fail_logs(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture):

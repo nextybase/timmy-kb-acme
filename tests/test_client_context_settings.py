@@ -7,10 +7,10 @@ import logging
 from pathlib import Path
 
 import pytest
-from tests.conftest import DUMMY_SLUG
 
 from pipeline.context import ClientContext
 from pipeline.settings import Settings
+from tests.conftest import DUMMY_SLUG
 
 pytestmark = pytest.mark.pipeline
 

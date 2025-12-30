@@ -5,11 +5,11 @@ import logging
 from pathlib import Path
 
 import pytest
-from tests.support.contexts import TestClientCtx
 
 from pipeline.exceptions import ConversionError
 from semantic import api as sapi
 from semantic import convert_service
+from tests.support.contexts import TestClientCtx
 
 
 def _make_ctx(base_dir: Path, raw_dir: Path, md_dir: Path) -> TestClientCtx:

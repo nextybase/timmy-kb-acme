@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any, Iterator
 
 import pytest
-from tests.ui.streamlit_stub import StreamlitStub
-from tests.ui.test_manage_probe_raw import register_streamlit_runtime
 
 from pipeline.workspace_layout import WorkspaceLayout
+from tests.ui.streamlit_stub import StreamlitStub
+from tests.ui.test_manage_probe_raw import register_streamlit_runtime
 
 
 @contextmanager

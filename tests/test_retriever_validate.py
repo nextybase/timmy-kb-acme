@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Sequence
 
 import pytest
-from tests.conftest import DUMMY_SLUG
 
 import timmy_kb.cli.retriever as r
+from tests.conftest import DUMMY_SLUG
 from timmy_kb.cli.retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
 
 

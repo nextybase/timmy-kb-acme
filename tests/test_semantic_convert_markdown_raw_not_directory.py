@@ -3,9 +3,9 @@
 import logging
 
 import pytest
-from tests.support.contexts import TestClientCtx
 
 from semantic.api import ConfigError, convert_markdown
+from tests.support.contexts import TestClientCtx
 
 
 def test_convert_markdown_raw_not_directory_raises(tmp_path, caplog):

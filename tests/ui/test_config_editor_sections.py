@@ -5,6 +5,7 @@ import types
 from typing import Any, Dict
 
 import pytest
+
 from tests.ui.stub_helpers import install_streamlit_stub
 
 

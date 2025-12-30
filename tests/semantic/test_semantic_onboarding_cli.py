@@ -5,10 +5,10 @@ import argparse
 from pathlib import Path
 
 import pytest
-from tests.support.contexts import TestClientCtx
 
 import semantic.api as sapi
 from pipeline.exceptions import ConfigError, exit_code_for
+from tests.support.contexts import TestClientCtx
 from timmy_kb.cli import semantic_onboarding as cli
 
 
