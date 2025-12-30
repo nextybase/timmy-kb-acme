@@ -67,8 +67,6 @@ pipeline:
       sleep_ms_between_calls: 25
 ops:
   log_level: DEBUG
-finance:
-  import_enabled: true
 """,
         encoding="utf-8",
     )
@@ -97,7 +95,6 @@ def test_settings_loads_config(sample_config: Path) -> None:
     assert settings.retriever_throttle.candidate_limit == 2000
     assert settings.retriever_throttle.parallelism == 2
     assert settings.ops_log_level == "DEBUG"
-    assert settings.finance_import_enabled is True
 
 
 def test_resolve_env_ref_reads_env(sample_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:

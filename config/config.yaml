@@ -76,5 +76,3 @@ integrations:
     config_folder_id: ''
 ops:
   log_level: DEBUG
-finance:
-  import_enabled: false

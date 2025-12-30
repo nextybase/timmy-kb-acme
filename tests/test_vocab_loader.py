@@ -52,8 +52,8 @@ def test_load_vocab_valid_info(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
 
     data = {
         "tags": [
-            {"name": "finance", "action": "keep", "synonyms": ["finanza"]},
-            {"name": "fatturato", "action": "merge_into:finance", "synonyms": ["revenues"]},
+            {"name": "analytics", "action": "keep", "synonyms": ["analisi"]},
+            {"name": "fatturato", "action": "merge_into:analytics", "synonyms": ["revenues"]},
         ]
     }
     import semantic.vocab_loader as vl
@@ -63,7 +63,7 @@ def test_load_vocab_valid_info(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
     logger = get_structured_logger("test.vocab.ok")
     vocab = load_reviewed_vocab(base, logger)
 
-    assert "finance" in vocab and "aliases" in vocab["finance"]
+    assert "analytics" in vocab and "aliases" in vocab["analytics"]
     out = capsys.readouterr().out
     assert "semantic.vocab.loaded" in out
     assert f"slug={base.name}" in out

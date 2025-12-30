@@ -53,10 +53,6 @@ _SECTION_META: Dict[str, Tuple[str, str]] = {
         "Operatività e logging",
         "Log level e opzioni operative per l'istanza di Timmy KB.",
     ),
-    "finance": (
-        "Costi e budget",
-        "Parametri per il controllo dei costi e la gestione del budget.",
-    ),
 }
 
 

@@ -162,9 +162,8 @@ Quando usare cosa (regola pratica)
 ### 10) Prompting e layout  Prompt builder, suggerimenti
 - **Layout enricher:** `test_layout_enricher.py` (+ eventuale variante parametrizzata).
 
-### 11) Adapter e IO esterni  Drive, finanza, client
+### 11) Adapter e IO esterni  Drive, client
 - **Drive:** `test_drive_guards.py`, `test_drive_runner_pagination.py`, `test_drive_runner_progress.py`, `test_tag_onboarding_drive_guard_main.py`.
-- **Finance tab (IO safety):** `test_finance_tab_io_safety.py`.
 - **Client OpenAI (fallback/config):** `test_client_factory.py`.
 - **ClientContext settings (richiede PyYAML):** `test_client_context_settings.py` usa `pytest.importorskip("yaml")` per saltare l'integrazione se la libreria non e installata.
 

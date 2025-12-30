@@ -147,7 +147,6 @@ def _make_settings(use_kb: bool) -> Settings:
             "ui": {},
             "retriever": {"throttle": {}},
             "ops": {},
-            "finance": {},
         },
     )
 

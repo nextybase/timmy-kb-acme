@@ -33,8 +33,8 @@ def test_validate_duplicates_and_illegal_chars():
         "reviewed_at": "2025-08-27",
         "keep_only_listed": True,
         "tags": [
-            {"name": "Finance", "action": "keep"},
-            {"name": "finance", "action": "keep"},  # duplicato case-insensitive
+            {"name": "Analytics", "action": "keep"},
+            {"name": "analytics", "action": "keep"},  # duplicato case-insensitive
             {"name": "bad/name", "action": "drop"},  # caratteri non permessi
             {"name": "merge-no-target", "action": "merge_into:"},  # merge senza target
         ],

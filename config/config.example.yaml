@@ -58,6 +58,3 @@ integrations:
 
 ops:
   log_level: INFO
-
-finance:
-  import_enabled: false

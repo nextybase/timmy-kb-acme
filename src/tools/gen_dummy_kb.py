@@ -183,7 +183,6 @@ except Exception:
 # Compat: test_gen_dummy_kb_import_safety si aspetta che gli attributi pubblici siano None finché non si esegue il tool.
 safe_write_text = None  # type: ignore
 safe_write_bytes = None  # type: ignore
-_fin_import_csv = None  # type: ignore
 
 try:
     from storage import tags_store as _tags_store  # type: ignore
@@ -196,15 +195,9 @@ def _ensure_dependencies() -> None:
     if getattr(_ensure_dependencies, "_done", False):
         return
 
-    global safe_write_text, safe_write_bytes, _fin_import_csv
+    global safe_write_text, safe_write_bytes
     safe_write_text = _safe_write_text  # type: ignore
     safe_write_bytes = _safe_write_bytes  # type: ignore
-
-    try:
-        from finance.api import import_csv as fin_import_csv  # type: ignore
-    except Exception:
-        fin_import_csv = None
-    _fin_import_csv = fin_import_csv  # type: ignore
 
     _ensure_dependencies._done = True  # type: ignore[attr-defined]
 

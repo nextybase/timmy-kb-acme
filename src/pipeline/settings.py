@@ -397,22 +397,6 @@ class OpsSection:
         return cls(log_level=value or cls.log_level)
 
 
-@dataclass(frozen=True)
-class FinanceSection:
-    import_enabled: bool = False
-
-    @classmethod
-    def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "FinanceSection":
-        return cls(
-            import_enabled=_extract_bool(
-                data.get("import_enabled"),
-                "finance.import_enabled",
-                config_path=config_path,
-                default=cls.import_enabled,
-            )
-        )
-
-
 @dataclass
 class Settings:
     """Wrapper typed attorno alla configurazione YAML del progetto."""
@@ -544,13 +528,6 @@ class Settings:
             config_path=self.config_path,
         )
 
-    @cached_property
-    def finance_settings(self) -> FinanceSection:
-        return FinanceSection.from_mapping(
-            self._section_mapping("finance", required=True),
-            config_path=self.config_path,
-        )
-
     # ----------------------------- Typed accessors -----------------------------
 
     @property
@@ -596,10 +573,6 @@ class Settings:
     @property
     def ops_log_level(self) -> str:
         return self.ops_settings.log_level
-
-    @property
-    def finance_import_enabled(self) -> bool:
-        return self.finance_settings.import_enabled
 
     # ----------------------------- Helper metodi ------------------------------
 

@@ -57,8 +57,6 @@ pipeline:
       sleep_ms_between_calls: 0
 ops:
   log_level: DEBUG
-finance:
-  import_enabled: false
 """,
         encoding="utf-8",
     )

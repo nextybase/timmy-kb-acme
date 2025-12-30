@@ -57,7 +57,6 @@ def test_module_import_has_no_side_effects(tmp_path):
     # Placeholders non risolti finché non si chiama _ensure_dependencies()
     assert getattr(mod, "safe_write_text") is None
     assert getattr(mod, "safe_write_bytes") is None
-    assert getattr(mod, "_fin_import_csv") is None
 
 
 def test_ensure_dependencies_is_idempotent(monkeypatch, tmp_path):
@@ -94,9 +93,6 @@ def test_ensure_dependencies_is_idempotent(monkeypatch, tmp_path):
         write_tagging_readme = object()
         write_tags_review_stub_from_csv = object()
 
-    class _FA:  # finance.api (opzionale)
-        import_csv = object()
-
     monkeypatch.setitem(sys.modules, "pipeline.file_utils", _PFU)
     monkeypatch.setitem(sys.modules, "pipeline.logging_utils", _PLU)
     monkeypatch.setitem(sys.modules, "pipeline.path_utils", _PPU)
@@ -104,7 +100,6 @@ def test_ensure_dependencies_is_idempotent(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "semantic.config", _SC)
     monkeypatch.setitem(sys.modules, "semantic.normalizer", _SN)
     monkeypatch.setitem(sys.modules, "semantic.tags_io", _STIO)
-    monkeypatch.setitem(sys.modules, "finance.api", _FA)
 
     mod._ensure_dependencies()
     first_path = list(sys.path)

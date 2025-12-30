@@ -14,7 +14,6 @@ Si applica sia all'ambiente locale sia all'esecuzione CI (GitHub Actions).
 | **Retriever** | `pipeline.retriever.auto_by_budget`, `pipeline.retriever.throttle.latency_budget_ms`, `candidate_limit`, `parallelism`, `sleep_ms_between_calls` |  |
 | **Cache RAW** | `pipeline.raw_cache.ttl_seconds`, `pipeline.raw_cache.max_entries` |  |
 | **Ops / Logging** | `ops.log_level: INFO` | `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TIMMY_LOG_PROPAGATE` |
-| **Finance** | `finance.import_enabled: false` |  |
 | **Security / OIDC** | riferimenti `*_env` (audience_env, role_env, ...) | `SERVICE_ACCOUNT_FILE`, `ACTIONS_ID_TOKEN_REQUEST_*`, ecc. |
 | **Runtime/Infra** |  | `PYTHONUTF8`, `PYTHONIOENCODING`, `GF_SECURITY_ADMIN_PASSWORD`, `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, `TIMMY_ENV`, `LOG_REDACTION`, `LOG_PATH`, `CI`, ecc. |
 
@@ -60,7 +59,6 @@ ai:
 - `pipeline.retriever.throttle`: `candidate_limit`, `latency_budget_ms`, `parallelism`, `sleep_ms_between_calls`; flag `auto_by_budget`.
 - `pipeline.raw_cache`: `ttl_seconds`, `max_entries`.
 - `ops`: `log_level` per i logger applicativi.
-- `finance`: `import_enabled` per attivare il flusso Finance.
 - `integrations`: sezione mostrata in UI Configurazione (valori operativi per integrazioni esterne).
 - `rosetta`: flag `rosetta.enabled` e `rosetta.provider` letti dal client Rosetta.
 - `slug_regex`: regex opzionale per validare gli slug (fallback: `^[a-z0-9-]+$`).

@@ -52,8 +52,6 @@ ui:
   admin_local_mode: false
 ops:
   log_level: INFO
-finance:
-  import_enabled: false
 """,
         encoding="utf-8",
     )
