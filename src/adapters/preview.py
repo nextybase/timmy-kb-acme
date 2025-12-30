@@ -24,7 +24,7 @@ import re
 from typing import Optional, Protocol, runtime_checkable
 
 from pipeline.exceptions import ConfigError
-from pipeline.gitbook_preview import run_gitbook_docker_preview, stop_container_safely
+from pipeline.honkit_preview import run_gitbook_docker_preview, stop_container_safely
 
 __all__ = ["start_preview", "stop_preview"]
 

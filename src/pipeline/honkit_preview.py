@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# src/pipeline/gitbook_preview.py
+# src/pipeline/honkit_preview.py
 """Preview GitBook/HonKit tramite Docker (no interattività nel modulo).
 
 Cosa fa:
@@ -36,7 +36,7 @@ from pipeline.settings import Settings
 _DEFAULT_HOST_PREVIEW_PORT = 4000
 _DEFAULT_HONKIT_INTERNAL_PORT = 4000
 
-logger = get_structured_logger("pipeline.gitbook_preview")
+logger = get_structured_logger("pipeline.honkit_preview")
 
 
 def _maybe_redact(text: str, redact: bool) -> str:
@@ -76,7 +76,7 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
                 host_port = int(env_val)
             except ValueError:
                 logger.warning(
-                    "pipeline.gitbook_preview.invalid_port",
+                    "pipeline.honkit_preview.invalid_port",
                     extra={"key": "PREVIEW_PORT", "value": env_val},
                 )
     cfg = _context_settings_map(context)
@@ -87,7 +87,7 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
                 host_port = int(cfg_val)
             except Exception:
                 logger.warning(
-                    "pipeline.gitbook_preview.invalid_port",
+                    "pipeline.honkit_preview.invalid_port",
                     extra={"key": "settings.preview_port", "value": cfg_val},
                 )
     if host_port is None:
@@ -101,7 +101,7 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
             container_port = int(env_c)
         except ValueError:
             logger.warning(
-                "pipeline.gitbook_preview.invalid_port",
+                "pipeline.honkit_preview.invalid_port",
                 extra={"key": "HONKIT_PORT", "value": env_c},
             )
     if container_port is None:
@@ -111,7 +111,7 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
                 container_port = int(cfg_val)
             except Exception:
                 logger.warning(
-                    "pipeline.gitbook_preview.invalid_port",
+                    "pipeline.honkit_preview.invalid_port",
                     extra={"key": "settings.honkit_port", "value": cfg_val},
                 )
     if container_port is None:

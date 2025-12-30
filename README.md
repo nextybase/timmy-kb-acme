@@ -42,7 +42,7 @@ python -m timmy_kb.cli.tag_onboarding --slug acme --non-interactive --proceed
 python -m timmy_kb.cli.semantic_onboarding --slug acme --non-interactive
 ```
 ```
-Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user/user_guide.md). Il flusso termina con la preview locale via Docker/HonKit (pipeline `gitbook_preview`).
+Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user/user_guide.md). Il flusso termina con la preview locale via Docker/HonKit (pipeline `honkit_preview`).
 
 ### Igiene workspace
 - Gli artefatti runtime restano fuori dal controllo versione: `output/`, `logs/`, `.timmy_kb/`, `.streamlit/`, cache pytest/ruff/mypy e `node_modules/` sono ignorati.

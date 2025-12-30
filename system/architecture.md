@@ -80,7 +80,7 @@ flowchart LR
 
       SEMCLI[timmy_kb.cli.semantic_onboarding (wrapper for semantic.* services)]
 
-      PREVIEW[gitbook_preview.py]
+      PREVIEW[honkit_preview.py]
 
 VISIONCLI[src/tools/gen_vision_yaml.py]
 
@@ -221,7 +221,7 @@ Vision provisioning now relies on the single `ai.vision_config` resolver and the
 
 - **Agency layer (WHAT):** ProtoTimmy governs the foundation pipeline, Timmy assumes agency once the foundation is complete (semantically enriched markdown + knowledge graph validated), Domain Gatekeepers validate policies, and the Control Plane / OCP applies HiTL while Codex/micro-agents execute under Work Order Envelope.
 
-- **Foundation tools & execution surfaces (HOW):** pipeline.* helpers (context, workspace_layout, path_utils, logging_utils, drive_utils), CLI orchestrators (pre_onboarding, tag_onboarding, semantic_onboarding, gitbook_preview, kg_build.py, src/tools/gen_vision_yaml.py), Streamlit UI (onboarding_ui.py, src/ui/*), and semantic services (semantic.*) produce the artifacts but do not make orchestration decisions.
+- **Foundation tools & execution surfaces (HOW):** pipeline.* helpers (context, workspace_layout, path_utils, logging_utils, drive_utils), CLI orchestrators (pre_onboarding, tag_onboarding, semantic_onboarding, honkit_preview, kg_build.py, src/tools/gen_vision_yaml.py), Streamlit UI (onboarding_ui.py, src/ui/*), and semantic services (semantic.*) produce the artifacts but do not make orchestration decisions.
 
 - **Workspace/storage:** output/timmy-kb-<slug>/raw/book/semantic/config/logs, semantic/tags.db, and WorkspaceLayout form the artifact SSoT.
 
@@ -301,7 +301,7 @@ sequenceDiagram
 
 
 
-    UI->>Preview: gitbook_preview (Docker HonKit)
+    UI->>Preview: honkit_preview (Docker HonKit)
 
 
 ```

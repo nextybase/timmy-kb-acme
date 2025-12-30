@@ -20,7 +20,7 @@ python -m timmy_kb.cli.tag_onboarding --slug <slug> --non-interactive --proceed
 python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive
 
 # 4) Preview locale (HonKit via Docker): usa solo il workspace appena creato
-# avvia tramite pipeline.gitbook_preview (solo preview locale)
+# avvia tramite pipeline.honkit_preview (solo preview locale)
 ```
 Note: il workspace vive in `output/timmy-kb-<slug>/`; non manipolare YAML/JSON a mano, passa sempre dalle API pipeline/semantic.
 

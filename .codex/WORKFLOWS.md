@@ -38,7 +38,7 @@
 2) **tag_onboarding** generates `semantic/tags_raw.csv` (heuristic filenames/paths) and the HiTL checkpoint `tags_reviewed.yaml` for manual review.
 3) **Tag KG Builder** (`kg_build.py` / UI Knowledge Graph) reads `semantic/tags_raw.json`, calls the OpenAI assistant `build_tag_kg`, saves `semantic/kg.tags.json` + `semantic/kg.tags.md`, and keeps a human-first inspection layer (watch namespaces).
 4) **semantic_onboarding** (via `semantic.api` or CLI) converts PDFs to Markdown in `book/`, enriches front matter via the canonical `tags.db`, rebuilds README/SUMMARY, and prepares the Docker preview.
-5) **gitbook_preview** prepara e serve la preview Docker/HonKit di `book/`.
+5) **honkit_preview** prepara e serve la preview Docker/HonKit di `book/`.
 
 ### UI Gating
 - The Semantica tab appears only after the local RAW data (`raw/`) is downloaded.

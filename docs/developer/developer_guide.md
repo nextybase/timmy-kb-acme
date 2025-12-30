@@ -70,7 +70,7 @@ model = get_vision_model()  # passa sempre da Settings.load (SSoT)
 
 ### GitBook API
 
-- La preview usa HonKit via Docker (`pipeline.gitbook_preview`) e non richiede token GitHub/GitBook.
+- La preview usa HonKit via Docker (`pipeline.honkit_preview`) e non richiede token GitHub/GitBook.
 
 ---
 

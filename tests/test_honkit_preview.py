@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.gitbook_preview import _log_layout_summary
+from pipeline.honkit_preview import _log_layout_summary
 
 
 def test_log_layout_summary_records_entries(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:

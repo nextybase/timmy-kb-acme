@@ -148,7 +148,7 @@ References: [Developer Guide → Configuration](../../docs/developer/developer_g
 1. **pre_onboarding:** create the workspace (`output/timmy-kb-<slug>/...`), optionally provision Drive, and upload `config.yaml`.
 2. **tag_onboarding:** produce `semantic/tags_raw.csv` and the HiTL checkpoint `tags_reviewed.yaml`.
 3. **semantic_onboarding (via `semantic.api`):** convert PDFs to Markdown in `book/`, arricchire il frontmatter usando `semantic/tags.db` e ricostruire README/SUMMARY.
-4. **gitbook_preview (HonKit preview locale):** avvia la preview Docker su `book/`.
+4. **honkit_preview (HonKit preview locale):** avvia la preview Docker su `book/`.
 
 ### UI gating
 - Enable the Semantica tab only once local RAW data exists.
@@ -331,7 +331,7 @@ python -m timmy_kb.cli.tag_onboarding --slug <slug> --non-interactive --proceed
 python -m timmy_kb.cli.tag_onboarding --slug <slug> --nlp --nlp-workers 6 --nlp-batch-size 8
 python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive
 # Preview locale (HonKit/Docker)
-python -m pipeline.gitbook_preview --slug <slug>
+# La preview è gestita via adapter/UI (vedi `src/adapters/preview.py`); non esiste un entrypoint `python -m pipeline.honkit_preview`.
 
 # QA
 make qa-safe
