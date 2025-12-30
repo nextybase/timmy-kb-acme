@@ -19,11 +19,11 @@ L’idea di base:
    - Ricorda a Codex di leggere gli SSoT chiave: `.github/codex-instructions.md`, `system/specs/promptchain_spec.md`, `system/ops/agents_index.md`, gli `AGENTS.md` di area e `.codex/PROMPTS.md`.
    - Definisce l’obiettivo della catena (es. refactor, feature, hardening QA) e conferma il piano operativo con risposta in italiano.
 
-2. **Prompt 1/2 – Analisi e allineamento (Phase 0)**
+2. **Prompt 0x - Analisi e allineamento (Phase 0)**
    - Codex lavora in sola lettura, mappa dipendenze/rischi e non produce diff né lancia QA.
    - L’OCP mostra il riepilogo all’utente (HiTL) per confermare o restringere lo scope prima di passare ai prompt operativi.
 
-3. **Prompt operativi (3..N) – Phase 1..N**
+3. **Prompt operativi (1..N) - Phase 1..N**
    - Ogni prompt ha uno scope ristretto: una modifica singola, un refactor piccolo, un fix mirato.
    - I prompt operativi iniziano con il memo Active Rules (path safety, micro-PR, zero side effects, QA intermedia `pytest -q -k "not slow"`, lingua italiana) definito in `.codex/PROMPTS.md`.
    - Prima di qualsiasi altra sezione, ogni prompt — anche quelli di Phase 0 o di finalizzazione — deve presentare il blocco canonico (`ROLE: Codex`, `PHASE`, `SCOPE`, `ACTIVE RULES MEMO`, `EXPECTED OUTPUTS`, `TESTS`, `CONSTRAINTS`, `STOP RULE`): il `ROLE` deve essere il primo elemento e indicare espressamente `Codex`, così da evitare confusione di ruolo.
@@ -143,7 +143,7 @@ Un flusso “sano” e ripetibile può essere:
 
 2. **Avvia la Prompt Chain tramite Onboarding**
    - Usa il Prompt 0 (Onboarding) per fissare contesto, regole e obiettivi.
-   - Lascia che Codex faccia l’analisi iniziale (Prompt 1/2) e poi intervieni HiTL per confermare o correggere il piano.
+   - Lascia che Codex faccia l'analisi iniziale (Prompt 0x) e poi intervieni HiTL per confermare o correggere il piano.
 
 3. **Lascia lavorare Codex a micro-PR**
    - Ogni step modifica poco, con QA intermedia.

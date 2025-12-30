@@ -74,6 +74,11 @@ STOP RULE: <fermo dopo la risposta>
 - Push requirement: explicitly declare in the structured block whether a push to `main` is requested by the OCP; without that statement, Codex assumes no push occurs (pushes are reserved for Prompt N+1 or when OCP explicitly authorizes them).
 - **Diff requirement:** the structured block must always request and include a unified diff for files touched in this step.
 
+### EVIDENCE FORMAT (MUST) — Prompt 1..N e N+1
+- Output obbligatori (ordine fisso): 1) `git status --porcelain=v1`; 2) diff unificato con marker `diff --git` + `index` + `---/+++` + `@@`; 3) report strutturato; 4) output QA con almeno il riepilogo finale PASS/skip ed exit status.
+- Working tree sporco: dichiarare in apertura report `working tree dirty outside scope: SI/NO` e usare solo `git diff -- <paths nello scope>`; vietati diff repo-wide quando esistono modifiche fuori scope.
+- Evidence Gate aggiuntivo: verificare che il diff riportato sia davvero un unified diff (marker presenti) e che `git status --porcelain=v1` compaia in ogni micro-PR operativo.
+
 ### Template: Prompt N+1
 - Purpose: conclude the chain via final QA and a closing narrative.
 - Mandatory content: QA results for `pre-commit run --all-files` and `pytest -q`, documentation of retries/micro-fixes (up to ten attempts), full summary of the chain’s work, and the one-line closing commit message in Italian (unless otherwise specified).

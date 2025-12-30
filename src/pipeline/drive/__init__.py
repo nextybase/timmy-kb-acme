@@ -1,19 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Package interno 'drive' (client/download/upload).
+"""Package interno `drive` (client/download/upload).
 
-⚠️ Nota:
-- L'API pubblica resta esposta da `pipeline.drive_utils` (facade/shim).
-- I moduli qui dentro NON devono essere importati dagli orchestratori.
-- Questo file è safe-to-push anche senza gli altri moduli: non importa
-  sottopacchetti per evitare ImportError finché non vengono creati.
+Nota:
+- Il package non re-esporta API pubbliche: usare `pipeline.drive_utils` come facciata
+  ufficiale oppure importare i moduli specifici (`download`, `upload`, `client`).
+- I moduli qui dentro non devono essere importati dagli orchestratori.
+- Nessun import implicito di sottopacchetti per evitare side effect o ImportError.
 
 Struttura prevista:
-- pipeline/drive/client.py    → bootstrap client GDrive + retry/metriche + primitive read
-- pipeline/drive/download.py  → BFS sottocartelle RAW, download PDF, idempotenza/integrità
-- pipeline/drive/upload.py    → creazione albero da YAML, upload config, delete
+- pipeline/drive/client.py    -> bootstrap client GDrive + retry/metriche + primitive read
+- pipeline/drive/download.py  -> BFS sottocartelle RAW, download PDF, idempotenza/integrità
+- pipeline/drive/upload.py    -> creazione albero da YAML, upload config, delete
 """
-
-# Espone i sotto-moduli previsti; l'import effettivo è gestito dalla facade `drive_utils`.
-from typing import List
-
-__all__: List[str] = []

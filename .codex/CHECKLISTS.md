@@ -13,6 +13,7 @@
   - Push behavior is coherent with the spec “push is not default” (`system/specs/promptchain_spec.md`) and with Prompt 0 `DELIVERY STRATEGY` (push only in N+1, only with explicit OCP authorization in N+1, only after QA PASS). Skeptic Gate N+1′ PASS closes the chain post N+1.
 - Skeptic Gate MUST presente (Evidence/Scope/Risk/Decision e Decision=PASS) prima di avanzare al prompt successivo; PASS WITH CONDITIONS richiede vincoli, BLOCK ferma la chain (SSoT: `system/specs/promptchain_spec.md`).
 - Evidence Gate reminder: se manca memo/diff/report/QA non si avanza con Prompt 1..N; il prossimo prompt rimane bloccato finché l’evidenza non ritorna completa (SSoT: `system/specs/promptchain_spec.md`).
+- Evidence format (Prompt 1..N, N+1): riportare `git status --porcelain=v1`; diff unificato con marker `diff --git` + `index` + `---/+++` + `@@`; dichiarare `working tree dirty outside scope: SI/NO` e, se sporco, usare solo `git diff -- <paths nello scope>` (vietati diff repo-wide con modifiche fuori perimetro).
 - Skeptic Gate reminder: dopo ogni risposta operativa Codex l’OCP valuta rischi/limiti e decide se proseguire; Codex può annotare problemi ma non autorizza il passaggio.
 - Codex answers must be in Italian for every Prompt Chain turn; documentation and templates remain English.
 

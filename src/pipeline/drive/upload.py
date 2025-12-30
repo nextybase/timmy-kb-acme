@@ -100,8 +100,6 @@ def _delete_file_hard(service: Any, file_id: str) -> None:
 
 def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
     if isinstance(data, dict):
-        if "root_folders" in data:
-            raise ConfigError("Formato legacy 'root_folders' non supportato.")
         return data
     raise ConfigError("Struttura YAML non valida: atteso un dict.")
 

@@ -9,7 +9,7 @@ from googleapiclient.errors import HttpError
 """
 Client e primitive di lettura per Google Drive (v3).
 
-Superficie pubblica (usata tramite il facade `pipeline.drive_utils`):
+Superficie pubblica (accessibile anche tramite `pipeline.drive_utils`):
 - get_drive_service(context)
     Costruisce un client Drive v3 autenticato con Service Account (scope: Drive).
     Applica il logging strutturato con slug/run_id e redazione delegata ai filtri globali.
@@ -359,15 +359,3 @@ def get_file_metadata(
         return service.files().get(fileId=file_id, fields=fields, supportsAllDrives=True).execute()
 
     return cast(Dict[str, Any], _retry(_call, op_name="files.get"))
-
-
-# ------------------------------- Esportazioni modulo -------------------------------
-
-__all__ = [
-    "get_drive_service",
-    "list_drive_files",
-    "get_file_metadata",
-    "_retry",  # riuso intra-pacchetto (download/upload)
-    "drive_metrics_scope",  # attiva/gestisce metriche nel blocco corrente
-    "get_retry_metrics",  # snapshot metriche correnti (dict)
-]
