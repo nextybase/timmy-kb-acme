@@ -6,7 +6,7 @@ Operational rules for the Codex agent acting within `.codex/`, focusing on path 
 
 # Rules (overrides)
 
-- Path-safety: write only within `src/`, `tests/`, `docs/`, `.codex/`; never touch `config/**`, `.env*`, `output/**`; scrivo solo in italiano per le conversazioni when referencing this perimeter.
+- Path-safety: write only within `src/`, `tests/`, `docs/`, `.codex/`; never touch `config/**`, `.env*`, `output/**`; scrivo solo in italiano salvo eccezione control-mode OCP ↔ Codex in inglese.
 - Atomic I/O via SSoT helpers (`ensure_within*`, `safe_write_*`), no import-time side effects.
 - Standard QA pipeline: `isort`, `black`, `ruff --fix`, `mypy`, `pytest -q -k 'not slow'`.
 - Use only the helper Git workflows `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease` for pushes (stubs used in `tests/pipeline/test_github_push.py`).
@@ -14,7 +14,7 @@ Operational rules for the Codex agent acting within `.codex/`, focusing on path 
 - Work with the Senior Reviewer via single-scope micro-PRs, summarizing changes with references to `.codex/CONSTITUTION.md` and `system/ops/agents_index.md`, documenting QA and any open questions.
 - Codex operates under the Prompt Chain defined by the OCP: every prompt is a micro-PR respecting AGENT-first/HiTL, path safety, QA, and the SSoT `system/ops/agents_index.md`. The OCP orchestrates but does not modify the repository. Refer to `system/specs/promptchain_spec.md` and `.codex/PROMPTS.md` for the full chain definition, the phase model (Phase 0 analytical/read-only, Phase 1..N operational micro-PRs, Prompt N+1 final QA), and the template requirements.
 - Prompt Chain behavior: stop after each response, wait for the next OCP prompt, and do not invent future prompts; Phase 0 prompts never change files or launch QA, Phase 1..N prompts are the only ones allowed to produce diffs and run `pytest -q -k "not slow"`, and Prompt N+1 runs `pre-commit run --all-files` + `pytest -q` before finalizing the chain.
-- Language policy: all conversational exchanges between Codex, the OCP, and the user must occur in Italian for every chain turn; technical documentation may remain in English.
+- Language policy: conversazioni in italiano per default; quando l’OCP dichiara control-mode, OCP ↔ Codex passa in inglese; Timmy/ProtoTimmy ↔ User resta italiano. La documentazione tecnica può restare in inglese.
 
 
 

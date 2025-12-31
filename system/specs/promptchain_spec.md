@@ -73,25 +73,28 @@ Once the operational phase starts (Prompt 1), the emergence of new structural un
 
 ### 4.2 Phase 1..N – Operational micro-PR prompts
 - Purpose: implement scoped changes defined by the OCP while honoring path safety, template structure, and the Active Rules memo.
-- Each prompt must emit a unified diff, a structured report, and at least `pytest -q -k "not slow"` (or a justified alternative) before moving forward.
+- Each prompt must emit a unified diff, a structured report, a DoD section, and at least `pytest -q -k "not slow"` (or a justified alternative) before moving forward.
 - Codex must apply changes only to the files declared in the prompt, document assumptions, and run targeted tests when requested.
+- Changes under `tests/**` are permitted only as a consequence of scoped changes outside `tests/**`, and any test touch must include a Test Impact Map in the report.
+- If the DoD is not met, follow-on prompts must be numbered as sub-iterations (e.g., 1a/1b/1c or Na/Nb/Nc) until the DoD is satisfied.
 - **Skeptic Gate template (MUST):** Evidence check (memo/diff/report/QA presenti?) [YES/NO]; Scope check (file autorizzati?) [YES/NO]; Risk check (nuovi rischi/edge cases?) [OK/NOTED/BLOCK]; Decision: PASS / PASS WITH CONDITIONS / BLOCK.
 - Dopo ogni risposta operativa Codex, lo **Skeptic Gate** viene attivato da l’OCP: il gate è un atto di governance, non un task operativo di Codex. OCP valuta rischi e limiti, annota osservazioni e decide se emettere il prompt successivo; Codex può indicare problemi ma non può autorizzare autonomamente il passaggio di fase.
 
-### 4.3 Prompt N+1 – Final QA and chain closure
-- Purpose: verify the entire change set with the full QA stack (`pre-commit run --all-files`, `pytest -q`), summarize the chain, and emit a one-line closing commit message in Italian (unless explicitly instructed otherwise).
+### 4.3 Prompt N+1 - Final QA and chain closure
+- Purpose: verify the entire change set with the full QA stack (`pre-commit run --all-files`, `pytest -q`), summarize the chain, emit a one-line closing commit message in Italian (unless explicitly instructed otherwise), and record the Retrospective.
 - Codex may apply up to ten micro-fixes to satisfy QA; each rerun is documented in the report.
-- Only after both QA commands pass and the closing summary is issued may the chain be considered complete.
+- Only after both QA commands pass, the closing summary is issued, and the Retrospective is logged as PASS (notes/TODO facoltativi) may the chain be considered complete.
 
 ## 5. Mandatory Language Policy
 - All canonical documentation, templates, and artifacts referenced by the Prompt Chain are maintained in English, preserving the SSoT character.
-- Codex must respond exclusively in Italian in every prompt of the chain, including embedded reports and QA summaries, unless a prompt explicitly authorizes another language.
-- Conversations between Planner, OCP, and Codex must remain Italian to keep the human-in-the-loop flow consistent with this policy.
+- Default conversational rule: Codex replies in Italian for the chain, except when the OCP explicitly enters control mode (OCP ↔ Codex exchanges) which are English-only; Timmy/ProtoTimmy ↔ User stays Italian-only. Treat this as the sole approved override to the Italian default.
+- When not under the OCP control exception, conversations between Planner, OCP, and Codex must remain Italian to keep the human-in-the-loop flow consistent with this policy.
 
 ## 6. Prompt Template Expectations
 - Templates for Prompt 0, Prompt 0x, Prompt 1..N, and Prompt N+1 live in `.codex/PROMPTS.md` and define the mandatory sections that each prompt must declare (purpose, allowed files, Active Rules memo, phase constraints, tests, etc.).
 - Operational prompts (Phase 1..N) are the only ones authorized to generate diffs, touch files, and execute the intermediate QA mentioned above; Phase 0 prompts remain analytical, and Prompt N+1 focuses on final QA plus narrative closure.
 - Every prompt must embed the Active Rules memo at the start of the response to remind all stakeholders of path safety, micro-PR scope, QA requirements, and the language policy.
+- SPIKE prompts are permitted as read-only analytical follow-ups (no edits, no QA) and must use the naming convention `SPIKE PRE PROMPT N` / `SPIKE POST PROMPT N` with optional variants (`SPIKE A/B/...`); see `.codex/PROMPTS.md` for the short template.
 
   ### 6.1 Canonical Prompt Header
   - Il template canonico richiede che ogni prompt inizi con il blocco:
@@ -115,6 +118,7 @@ STOP RULE: ...
 - Responding in any language other than Italian when not explicitly allowed.
 - Touching files that lie outside the scope declared by the active prompt or the SSoT.
 - Omitting the Active Rules memo or failing to document QA attempts and retries.
+- Adding unsolicited end-of-task questions or prompts for extra checks not requested by the OCP.
 
 ## 8. Part A – Governance (Planner + OCP)
 
@@ -136,7 +140,7 @@ STOP RULE: ...
 ### 8.4 Prompt Chain lifecycle
 - **Kick-off:** Planner decides on the chain; Onboarding Task codifies the plan and loads the SSoT; only after this may the OCP issue Prompt 0.
 - **Execution:** OCP issues prompts sequentially; Codex responds with one micro-PR (diff + report + intermediate QA), then waits for the next prompt. Each operational response includes the memo from section 6 and confirms compliance with the turn-based protocol.
-- **Closure:** OCP issues Prompt N+1 with final QA requirements; Codex runs `pytest -q` and `pre-commit run --all-files` (repeating up to ten times if needed), documents every rerun, summarizes the entire chain, and ends with a one-line Italian commit message.
+- **Closure:** OCP issues Prompt N+1 with final QA requirements; Codex runs `pytest -q` and `pre-commit run --all-files` (repeating up to ten times if needed), documents every rerun, summarizes the entire chain, records the Retrospective PASS (notes/TODO facoltativi), and ends with a one-line Italian commit message.
 - If QA fails more than twice per prompt, Codex rewrites the patch and retries; after the third failure, Codex explicitly requests guidance from the OCP.
 
 ## 9. Part B – Operational Contract for Codex
@@ -149,7 +153,7 @@ STOP RULE: ...
 - Respect path safety, atomic writes, the AGENTS matrices, this spec, and the QA pipeline (intermediate `pytest -q -k "not slow"`, final `pytest -q` + `pre-commit run --all-files`).
 - Run the static pre-check described in `.codex/PROMPTS.md` before generating a patch; failing pre-checks halt QA and require corrective action.
 - Handle retries cleanly, document them in each report, and stop to ask the OCP if the same issue persists after two autocorrections.
-- All conversational exchanges with OCP and Planner must stay Italian.
+- Conversational exchanges stay Italian unless the OCP invokes the control-mode exception (OCP ↔ Codex English-only); Timmy/ProtoTimmy ↔ User remains Italian-only.
 - **Trial window:** lo Skeptic Gate è MUST per le prossime due Prompt Chain complete; dopo il secondo ciclo l’OCP guida una retrospettiva obbligatoria per decidere se mantenerlo o ritararlo.
 
 ### 9.3 Prompt format

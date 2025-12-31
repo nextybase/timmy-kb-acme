@@ -10,16 +10,17 @@
 
 ## Language Policy for Codex
 - All codified documents and templates stay in English to preserve the SSoT grammar.
-- Codex responses must always be written in Italian within every prompt of the chain unless an explicit exception is granted in a prompt.
-- This policy covers narrative reports, QA summaries, and communication with Planner/OCP.
+- Default: Codex responses are in Italian. Exception: when the OCP is in control mode, OCP ↔ Codex exchanges are English-only; Timmy/ProtoTimmy ↔ User remains Italian-only. Treat this as the only authorized override.
+- This policy covers narrative reports, QA summaries, and communication with Planner/OCP unless the control-mode exception is invoked.
 
 ## Prompt Template Requirements
 - Templates below are the only structures permitted; every prompt must state its purpose, phase, allowed files, Active Rules memo, and expected outputs.
 - Operational prompts (1..N) exclusively produce diffs, touch files, and run intermediate QA (`pytest -q -k "not slow"`). Phase 0 prompts stay analytical and perform no edits, while prompt N+1 runs the full QA suite plus final narration.
 - Every prompt must be supplied as a single copyable block listing Role, Phase, Scope (allowed/prohibited files), Active Rules memo, Expected Outputs (diff + structured report + QA), Tests executed, Constraints, and Stop Rules to keep instructions unambiguous.
-- **If a prompt expects any file change, it must explicitly request a unified diff and a structured report in the “Expected Outputs” section.** Codex must not treat a change as “done” without those artifacts.
-- **Skeptic Gate MUST:** l’OCP documenta subito dopo ogni risposta operativa Codex che ha condotto il gate obbligatorio (Evidence/Scope/Risk/Decision) e solo Decision=PASS abilita il prompt successivo. PASS WITH CONDITIONS impone vincoli da rispettare e BLOCK ferma la catena (vedi `system/specs/promptchain_spec.md`).
-- **Tooling change reminder:** modifiche a file di configurazione o tooling (es. `cspell.json`) devono essere esplicitamente autorizzate dall’OCP nel prompt corrente oppure posticipate a un prompt dedicato; non sono implicite nel solo superamento della QA.
+- **If a prompt expects any file change, it must explicitly request a unified diff and a structured report in the "Expected Outputs" section.** Codex must not treat a change as "done" without those artifacts.
+- **Skeptic Gate MUST:** l'OCP documenta subito dopo ogni risposta operativa Codex che ha condotto il gate obbligatorio (Evidence/Scope/Risk/Decision) e solo Decision=PASS abilita il prompt successivo. PASS WITH CONDITIONS impone vincoli da rispettare e BLOCK ferma la catena (vedi `system/specs/promptchain_spec.md`).
+- **Tooling change reminder:** modifiche a file di configurazione o tooling (es. `cspell.json`) devono essere esplicitamente autorizzate dall'OCP nel prompt corrente oppure posticipate a un prompt dedicato; non sono implicite nel solo superamento della QA.
+- **No-fluff constraint:** non inserire domande generiche di chiusura o richieste di ulteriori check se il prompt non le prevede.
 
 ## Canonical Prompt Header
 - Ogni prompt deve iniziare con un blocco header canonico che precede qualsiasi contenuto operativo:
@@ -65,12 +66,20 @@ STOP RULE: <fermo dopo la risposta>
     - **Non-return rule:** once the operational phase starts (`Prompt 1`), new structural uncertainties must not be resolved via new `Prompt 0x` prompts; this is a BLOCK condition for the chain.
   - Read-only inspection commands are permitted only if explicitly whitelisted by the OCP in the prompt itself (Prompt 0 or Prompt 0x), under `OPS AUTHORIZATION (READ-ONLY)`.
 
+### Template: SPIKE (read-only)
+- Naming: `SPIKE PRE PROMPT N` / `SPIKE POST PROMPT N` with optional variants `SPIKE A/B/...` when iterating.
+- Purpose: post-Phase-0 analytical deep-dive without edits; only inspections already authorized by the OCP.
+- Mode: read-only (no patch/diff, no build, no QA runs).
+- Output: concise findings/risks/open questions; confirm no files or tests were touched.
+
 ### Template: Prompt 1..N
 - Purpose: deliver operational micro-PRs that implement the scoped changes declared by the OCP.
-- Mandatory sections: purpose statement, phase identifier, allowed/prohibited files, Active Rules memo (with path safety, micro-PR scope, intermediate QA requirements, Italian language reminder), expected outputs (diff + structured report + intermediate QA results), dependencies, and tests executed.
+- Mandatory sections: purpose statement, phase identifier, allowed/prohibited files, Active Rules memo (with path safety, micro-PR scope, intermediate QA requirements, Italian language reminder), expected outputs (diff + structured report + intermediate QA results), dependencies, DoD checklist, and tests executed.
 - Action: apply a diff, document the behavior change in the report, run `pytest -q -k "not slow"` (or a justified substitute) and describe the result; mention whether additional linters/types were run.
+- **Tests coupling rule:** modifiche sotto `tests/**` sono ammesse solo come conseguenza di cambi nello scope extra-`tests/**`; ogni modifica ai test richiede nel report una Test Impact Map.
+- **DoD iteration rule:** if the DoD is not met, subsequent prompts must be numbered as sub-iterations (1a/1b/1c or Na/Nb/Nc) until satisfied.
 - **Skeptic Gate reminder:** dopo la risposta operativa Codex l’OCP esercita lo Skeptic Gate, valuta rischi/limiti e decide se avanzare; Codex può menzionare problemi ma non autorizza il passaggio.
-- Language: the entire response must be in Italian.
+- Language: the entire response must be in Italian, salvo eccezione control-mode in inglese quando esplicitata dall'OCP.
 - Push requirement: explicitly declare in the structured block whether a push to `main` is requested by the OCP; without that statement, Codex assumes no push occurs (pushes are reserved for Prompt N+1 or when OCP explicitly authorizes them).
 - **Diff requirement:** the structured block must always request and include a unified diff for files touched in this step.
 
@@ -81,8 +90,8 @@ STOP RULE: <fermo dopo la risposta>
 
 ### Template: Prompt N+1
 - Purpose: conclude the chain via final QA and a closing narrative.
-- Mandatory content: QA results for `pre-commit run --all-files` and `pytest -q`, documentation of retries/micro-fixes (up to ten attempts), full summary of the chain’s work, and the one-line closing commit message in Italian (unless otherwise specified).
-- Action: only after both QA commands succeed may the chain be considered complete; Codex must report any remaining issues before ending.
+- Mandatory content: QA results for `pre-commit run --all-files` and `pytest -q`, documentation of retries/micro-fixes (up to ten attempts), full summary of the chain’s work, the one-line closing commit message in Italian (unless otherwise specified), and the Retrospective outcome (always PASS, with optional note/TODO) logged after the N+1 Gate.
+- Action: only after both QA commands succeed and the Retrospective PASS is recorded may the chain be considered complete; Codex must report any remaining issues before ending.
 
 ## Active Rules Memo
 - Begin every operational response (Prompt 1..N) with the Active Rules memo that reminds the team about path safety ON, micro-PR focus, zero side effects, documentation updates, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Italian language policy referenced in `system/specs/promptchain_spec.md`.
@@ -305,5 +314,5 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 - Avoid ignoring entire files.
 
 ## Senior Reviewer request
-- Deliver: concise title, context, files touched + changes, QA results (formatter/linter/type/test), missing tests/known issues, and 2-3 questions for the Senior.
+- Deliver: concise title, context, files touched + changes, QA results (formatter/linter/type/test), missing tests/known issues, and optional questions for the Senior only when explicitly requested by the OCP in the current prompt or when a blocking ambiguity prevents progress.
 - Respect `.codex/CONSTITUTION.md`, `.codex/AGENTS.md`, and `system/ops/agents_index.md`; keep the scope to a micro-PR.

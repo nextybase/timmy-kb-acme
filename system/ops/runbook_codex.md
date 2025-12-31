@@ -50,7 +50,7 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](../.
 - Phase 0 prompts (Prompt 0, 0a..0x) are analytical/read-only and must confirm the SSoT documents before any diff is produced.
 - Phase 1..N prompts are operational micro-PRs that touch files declared by the OCP, include the Active Rules memo, and run at least `pytest -q -k "not slow"` before proceeding.
 - Prompt N+1 runs the final QA (`pre-commit run --all-files` + `pytest -q`), documents retries (up to ten), and ends with an Italian one-line closing commit summary.
-- Codex responses must be in Italian on every prompt; documentation and templates remain in English to preserve the SSoT.
+- Codex responses are in Italian by default; when the OCP dichiara control-mode, OCP ↔ Codex exchanges switch to English, mentre Timmy/ProtoTimmy ↔ User resta in italiano; documentation and templates remain in English to preserve the SSoT.
 - The OCP issues one prompt at a time, Codex replies with a diff/report and waits, and no prompt may skip a phase or bypass the final QA.
 - Evidence Gate e Skeptic Gate seguono il testo canonico in `system/specs/promptchain_spec.md`; questo runbook è supporto operativo.
 - Every prompt must preserve the canonical header defined in `.codex/PROMPTS.md`, starting with `ROLE: Codex` and continuing with `PHASE`, `SCOPE`, `ACTIVE RULES MEMO`, `EXPECTED OUTPUTS`, `TESTS`, `CONSTRAINTS`, and `STOP RULE`. Codex and OCP rely on this structure to detect malformed prompts: absence or misassignment of the `ROLE` line halts the chain until corrected.

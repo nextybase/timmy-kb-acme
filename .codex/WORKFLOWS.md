@@ -20,7 +20,7 @@
 - Every intermediate Prompt Chain step must execute the filtered QA `pytest -q -k "not slow"` plus the mandated formatter/linter suite; the final prompt runs the full `pytest -q` and `pre-commit run --all-files` for closure.
 
 ### Language Policy
-- All conversational interactions between Codex, the OCP, and the user must proceed in Italian unless the prompt explicitly requests another language; technical files and documentation may remain in English as required.
+- All conversational interactions between Codex, the OCP, and the user proceed in Italian by default; when the OCP dichiara control-mode, OCP ↔ Codex switches to English while Timmy/ProtoTimmy ↔ User stays Italian. Technical files and documentation may remain in English as required.
 
 ### Codex Smoke Chain - Diagnostic Test
 - **Objective:** simulate a micro-cycle to confirm that turn-taking, memo awareness, QA interpretation, retry escalation, Italian-language policy, and pre-check validation all function without writing files.
