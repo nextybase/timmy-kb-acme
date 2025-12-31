@@ -19,23 +19,29 @@ def _semantics_visible(groups: dict[str, list[gating.PageSpec]]) -> bool:
 
 
 @pytest.mark.parametrize(
-    ("slug", "raw_ready", "expected"),
+    ("slug", "raw_ready", "tagging_ready", "expected"),
     [
-        ("dummy", True, True),
-        ("dummy", False, False),
-        (None, False, False),
+        ("dummy", True, True, True),
+        ("dummy", False, True, False),
+        ("dummy", True, False, False),
+        (None, False, False, False),
     ],
 )
-def test_visible_page_specs_hides_semantics_without_raw(
-    slug: Optional[str], raw_ready: bool, expected: bool, monkeypatch: pytest.MonkeyPatch
+def test_visible_page_specs_hides_semantics_without_raw_or_tagging(
+    slug: Optional[str], raw_ready: bool, tagging_ready: bool, expected: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(gating, "get_active_slug", lambda: slug, raising=False)
 
-    def _fake_has_raw(slug_value: str) -> tuple[bool, Optional[str]]:
+    def _fake_raw_ready(slug_value: str) -> tuple[bool, Optional[str]]:
         assert slug_value == (slug or slug_value)
         return raw_ready, None
 
-    monkeypatch.setattr(gating, "has_raw_pdfs", _fake_has_raw, raising=False)
+    def _fake_tagging_ready(slug_value: str) -> tuple[bool, Optional[str]]:
+        assert slug_value == (slug or slug_value)
+        return tagging_ready, None
+
+    monkeypatch.setattr(gating, "raw_ready", _fake_raw_ready, raising=False)
+    monkeypatch.setattr(gating, "tagging_ready", _fake_tagging_ready, raising=False)
 
     gates = GateState(drive=True, vision=True, tags=True)
     groups = visible_page_specs(gates)
@@ -53,7 +59,8 @@ def test_semantics_hidden_logs_once(monkeypatch: pytest.MonkeyPatch) -> None:
     dummy_logger = DummyLogger()
     monkeypatch.setattr(gating, "_LOGGER", dummy_logger, raising=False)
     monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
-    monkeypatch.setattr(gating, "has_raw_pdfs", lambda _slug: (False, None), raising=False)
+    monkeypatch.setattr(gating, "raw_ready", lambda _slug: (False, None), raising=False)
+    monkeypatch.setattr(gating, "tagging_ready", lambda _slug: (False, None), raising=False)
 
     gates = GateState(drive=True, vision=True, tags=True)
     visible_page_specs(gates)

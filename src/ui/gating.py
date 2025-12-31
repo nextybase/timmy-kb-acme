@@ -16,7 +16,7 @@ from ui.constants import SEMANTIC_READY_STATES
 from ui.navigation_spec import PagePaths, requirements_for
 from ui.pages.registry import PageSpec, page_specs
 from ui.utils import get_active_slug
-from ui.utils.workspace import has_raw_pdfs
+from ui.utils.workspace import raw_ready, tagging_ready
 
 _DISABLE_VALUES = {"0", "false", "off", "no", ""}
 
@@ -108,8 +108,9 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     """
     groups: dict[str, list[PageSpec]] = {}
     slug: str | None
-    raw_ready = False
+    raw_ready_flag = False
     semantic_ready = False
+    tagging_ready_flag = False
     state_norm = ""
     try:
         slug = get_active_slug()
@@ -117,10 +118,12 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
         slug = None
     if slug:
         try:
-            ready, _path = has_raw_pdfs(slug)
-            raw_ready = bool(ready)
+            ready, _path = raw_ready(slug)
+            raw_ready_flag = bool(ready)
+            tagging_ready_flag, _ = tagging_ready(slug)
         except Exception:
-            raw_ready = False
+            raw_ready_flag = False
+            tagging_ready_flag = False
         try:
             state_value = get_state(slug) or ""
             state_norm = state_value.strip().lower()
@@ -129,17 +132,22 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
             semantic_ready = False
     slug_key = slug or "<none>"
     last_state = _LAST_RAW_READY.get(slug_key)
-    if not raw_ready and last_state is not False:
+    if not raw_ready_flag and last_state is not False:
         try:
-            _LOGGER.info("ui.gating.sem_hidden", extra={"slug": slug or "", "raw_ready": raw_ready})
+            _LOGGER.info(
+                "ui.gating.sem_hidden",
+                extra={"slug": slug or "", "raw_ready": raw_ready_flag, "tagging_ready": tagging_ready_flag},
+            )
         except Exception:
             pass
-    _LAST_RAW_READY[slug_key] = raw_ready
+    _LAST_RAW_READY[slug_key] = raw_ready_flag
     last_preview = _LAST_PREVIEW_READY.get(slug_key)
     for group, specs in page_specs().items():
         allowed = [spec for spec in specs if _satisfied(_requires(spec), gates)]
-        if not raw_ready:
+        if not raw_ready_flag:
             allowed = [spec for spec in allowed if spec.path not in {PagePaths.SEMANTICS, PagePaths.PREVIEW}]
+        elif not tagging_ready_flag:
+            allowed = [spec for spec in allowed if spec.path != PagePaths.SEMANTICS]
         elif not semantic_ready:
             allowed = [spec for spec in allowed if spec.path != PagePaths.PREVIEW]
         if allowed:
@@ -151,7 +159,8 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
                 "ui.gating.preview_hidden",
                 extra={
                     "slug": slug or "",
-                    "raw_ready": raw_ready,
+                    "raw_ready": raw_ready_flag,
+                    "tagging_ready": tagging_ready_flag,
                     "semantic_ready": semantic_ready,
                     "state": state_norm,
                 },

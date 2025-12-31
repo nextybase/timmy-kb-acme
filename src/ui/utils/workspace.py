@@ -172,3 +172,47 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
                 pass
 
     return has_pdf, raw_dir
+
+
+def raw_ready(slug: Optional[str]) -> tuple[bool, Optional[Path]]:
+    """
+    Predicate canonico per raw_ready: richiede layout/config validi e almeno un PDF in raw/.
+    Ritorna (ready, raw_dir) per logging/gating.
+    """
+    try:
+        layout = get_ui_workspace_layout(slug or "", require_env=False)
+    except Exception:
+        return False, None
+    ready, raw_dir = has_raw_pdfs(slug)
+    # `has_raw_pdfs` giù verifica slug/layout; il controllo su config/layout è quindi implicito.
+    if not ready:
+        return False, raw_dir or layout.raw_dir
+    return True, raw_dir or layout.raw_dir
+
+
+def tagging_ready(slug: Optional[str]) -> tuple[bool, Optional[Path]]:
+    """
+    Predicate canonico per tagging_ready:
+    - richiede raw_ready
+    - richiede semantic/tags.db presente
+    - richiede semantic/tags_reviewed.yaml presente e non vuoto
+    Ritorna (ready, semantic_dir) per logging/gating.
+    """
+    raw_ok, raw_dir = raw_ready(slug)
+    if not raw_ok:
+        return False, raw_dir
+    try:
+        layout = get_ui_workspace_layout(slug or "", require_env=False)
+    except Exception:
+        return False, None
+    semantic_dir = layout.semantic_dir
+    tags_db = layout.tags_db or (semantic_dir / "tags.db")
+    tags_yaml = semantic_dir / "tags_reviewed.yaml"
+    try:
+        db_ok = tags_db.exists()
+        yaml_ok = tags_yaml.exists() and tags_yaml.stat().st_size > 0
+    except Exception:
+        return False, semantic_dir
+    if db_ok and yaml_ok:
+        return True, semantic_dir
+    return False, semantic_dir

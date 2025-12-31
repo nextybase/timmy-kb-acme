@@ -54,6 +54,7 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
     import ui.pages.semantics as sem
 
     _patch_streamlit_semantics(monkeypatch, sem)
+    sem._ACTION_RUNS.clear()
 
     state_log: list[str] = []
     state = {"value": "pronto"}
@@ -72,15 +73,16 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
     ready_calls: list[bool] = []
     reset_flag = {"pending": False}
 
-    def _has_raw(slug: str, *, layout=None):
+    def _raw_ready(slug: str):
         if not reset_flag["pending"] and ready_calls:
-            raise AssertionError("has_raw_pdfs chiamato senza reset gating precedente")
+            raise AssertionError("raw_ready chiamato senza reset gating precedente")
         reset_flag["pending"] = False
         value = readiness.pop(0)
         ready_calls.append(value)
         return value, tmp_path / "raw"
 
-    monkeypatch.setattr(sem, "has_raw_pdfs", _has_raw)
+    monkeypatch.setattr(sem, "raw_ready", _raw_ready)
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
 
     log_records: list[tuple[str, dict]] = []
 
@@ -109,9 +111,13 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sem, "write_summary_and_readme", _write_summary)
 
+    qa_dir = tmp_path / "logs"
+    qa_dir.mkdir(parents=True, exist_ok=True)
+    (qa_dir / sem.QA_EVIDENCE_FILENAME).write_text("pytest ok\npre-commit ok", encoding="utf-8")
+
     def _ctx_logger(_slug: str):
         logger = SimpleNamespace(info=_logger_info, warning=_logger_warning)
-        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book")
+        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
         return SimpleNamespace(base_dir=tmp_path), logger, layout
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _ctx_logger)
@@ -125,19 +131,20 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
     sem._client_state = "pronto"  # type: ignore[attr-defined]
     sem._raw_ready = True  # type: ignore[attr-defined]
 
-    sem.has_raw_pdfs("dummy")
+    sem.raw_ready("dummy")
 
     for runner in (sem._run_convert, sem._run_enrich, sem._run_summary):
         reset_flag["pending"] = True
         runner("dummy")
-        sem.has_raw_pdfs("dummy")
+        sem.raw_ready("dummy")
 
     assert state["value"] == "finito"
     assert reset_calls == ["dummy", "dummy", "dummy"]
     assert state_log == ["pronto", "arricchito", "finito"]
     assert ready_calls == [True, True, False, True, True, True, True]
-    assert {msg for msg, _ in log_records} == {"convert", "enrich", "summary"}
-    assert all(record[1].get("extra", {}).get("slug") == "dummy" for record in log_records)
+    # Promozioni e azioni loggate
+    assert {"convert", "enrich", "summary", "ui.semantics.state_promoted"} <= {msg for msg, _ in log_records}
+    assert all(record[1].get("extra", {}).get("slug") == "dummy" for record in log_records if record[1].get("extra"))
 
 
 def test_semantics_message_string_matches_docs():
@@ -154,7 +161,8 @@ def test_semantic_gating_helper_blocks_without_raw(monkeypatch):
     import ui.pages.semantics as sem
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug, *, layout=None: (False, None))
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (False, None))
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, None))
 
     with pytest.raises(ConfigError, match="Semantica non disponibile"):
         sem._require_semantic_gating("dummy")
@@ -164,7 +172,8 @@ def test_run_actions_honor_headless_gating(monkeypatch):
     import ui.pages.semantics as sem
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "nuovo")
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug, *, layout=None: (False, None))
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (False, None))
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, None))
 
     for runner in (sem._run_convert, sem._run_enrich, sem._run_summary):
         with pytest.raises(ConfigError, match="Semantica non disponibile"):
@@ -190,12 +199,13 @@ def test_gate_cache_reuses_result(monkeypatch):
 
     calls = {"count": 0}
 
-    def _has_raw(slug: str, *, layout=None):
+    def _raw_ready(slug: str):
         calls["count"] += 1
         return True, Path("raw")
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "has_raw_pdfs", _has_raw)
+    monkeypatch.setattr(sem, "raw_ready", _raw_ready)
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, Path("semantic")))
     sem._GATE_CACHE.clear()
 
     # First call should populate cache (calls==1)
@@ -211,11 +221,12 @@ def test_gate_cache_rechecks_raw_if_removed(monkeypatch, tmp_path):
 
     states: list[tuple[bool, Path | None]] = [(True, tmp_path / "raw"), (False, None)]
 
-    def _has_raw(slug: str, *, layout=None):
+    def _raw(slug: str):
         return states.pop(0)
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "has_raw_pdfs", _has_raw)
+    monkeypatch.setattr(sem, "raw_ready", _raw)
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
     sem._GATE_CACHE.clear()
 
     sem._require_semantic_gating("dummy")
@@ -232,11 +243,12 @@ def test_gate_cache_updates_raw_path(monkeypatch, tmp_path):
         (True, tmp_path / "raw-v2"),
     ]
 
-    def _has_raw(slug: str, *, layout=None):
+    def _raw(slug: str):
         return responses.pop(0)
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "has_raw_pdfs", _has_raw)
+    monkeypatch.setattr(sem, "raw_ready", _raw)
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
     sem._GATE_CACHE.clear()
 
     sem._require_semantic_gating("dummy")
@@ -244,7 +256,7 @@ def test_gate_cache_updates_raw_path(monkeypatch, tmp_path):
 
     cache_key = "dummy"
     assert cache_key in sem._GATE_CACHE
-    assert sem._GATE_CACHE[cache_key][2] == tmp_path / "raw-v2"
+    assert sem._GATE_CACHE[cache_key][3] == tmp_path / "raw-v2"
     sem._GATE_CACHE.clear()
 
 
@@ -262,7 +274,8 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
 
     # gating helper
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug, *, layout=None: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
 
     # ctx/logger minimi
     def _mk_ctx_and_logger(slug: str):
@@ -333,7 +346,8 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug, *, layout=None: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
     monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {})
 
     sem._run_enrich("dummy-srl")
@@ -351,20 +365,26 @@ def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
     import ui.pages.semantics as sem
 
     _patch_streamlit_semantics(monkeypatch, sem)
+    sem._ACTION_RUNS.clear()
 
     # cattura delle promozioni di stato
     state_calls: list[tuple[str, str]] = []
     monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
 
     # ctx/logger minimi
+    qa_dir = tmp_path / "logs"
+    qa_dir.mkdir(parents=True, exist_ok=True)
+    (qa_dir / sem.QA_EVIDENCE_FILENAME).write_text("ok", encoding="utf-8")
+
     def _mk_ctx_and_logger(slug: str):
-        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book")
+        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
         return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(name="test-logger"), layout
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
-    monkeypatch.setattr(sem, "has_raw_pdfs", lambda slug, *, layout=None: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
 
     # writer simulato
     monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)
@@ -373,3 +393,180 @@ def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
 
     assert state_calls, "set_state non è stato chiamato"
     assert state_calls[-1] == ("dummy-srl", "finito")
+
+
+def test_run_enrich_blocks_when_tagging_not_ready(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    _patch_streamlit_semantics(monkeypatch, sem)
+
+    errors: list[str] = []
+    captions: list[str] = []
+    monkeypatch.setattr(sem.st, "error", lambda msg, **_: errors.append(msg), raising=False)
+    monkeypatch.setattr(sem.st, "caption", lambda msg, **_: captions.append(msg), raising=False)
+    state_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
+
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (False, tmp_path / "semantic"))
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
+
+    sem._run_enrich("dummy")
+
+    assert errors and "bloccato" in errors[0].lower()
+    assert state_calls == []
+
+
+def test_run_summary_blocks_without_prerequisites(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    _patch_streamlit_semantics(monkeypatch, sem)
+    errors: list[str] = []
+    captions: list[str] = []
+    monkeypatch.setattr(sem.st, "error", lambda msg, **_: errors.append(msg), raising=False)
+    monkeypatch.setattr(sem.st, "caption", lambda msg, **_: captions.append(msg), raising=False)
+    state_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
+
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (False, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (False, tmp_path / "semantic"))
+    monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
+
+    sem._run_summary("dummy")
+
+    assert errors and "bloccata" in errors[0].lower()
+    assert state_calls == []
+
+
+def test_update_client_state_emits_pass_event(monkeypatch):
+    import ui.pages.semantics as sem
+
+    events: list[str] = []
+
+    class _Logger:
+        def info(self, msg: str, *, extra: dict | None = None) -> None:  # type: ignore[override]
+            events.append(msg)
+
+    monkeypatch.setattr(sem, "set_state", lambda slug, state: None)
+    sem._update_client_state("dummy", "pronto", _Logger())
+
+    assert "ui.semantics.state_promoted" in events
+
+
+def test_run_summary_requires_qa_marker(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    _patch_streamlit_semantics(monkeypatch, sem)
+    sem._ACTION_RUNS.clear()
+
+    errors: list[str] = []
+    captions: list[str] = []
+    monkeypatch.setattr(sem.st, "error", lambda msg, **_: errors.append(msg), raising=False)
+    monkeypatch.setattr(sem.st, "caption", lambda msg, **_: captions.append(msg), raising=False)
+
+    state_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
+
+    qa_dir = tmp_path / "logs"
+    qa_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(sem, "_qa_evidence_path", lambda layout: qa_dir / sem.QA_EVIDENCE_FILENAME)
+
+    events: list[tuple[str, dict | None]] = []
+    monkeypatch.setattr(
+        sem, "log_gate_event", lambda logger, event_name, *, fields=None: events.append((event_name, fields))
+    )
+
+    def _mk_ctx(slug: str):
+        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
+        return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(set_step_status=lambda *a, **k: None), layout
+
+    monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx)
+    monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
+
+    called: list[str] = []
+    monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: called.append(slug))
+
+    sem._run_summary("dummy")
+
+    assert called == []
+    assert state_calls == []
+    assert errors and "QA Gate" in errors[0]
+    assert events and events[-1][0] == "qa_gate_failed"
+
+
+def test_retry_logged_and_gates_checked(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    _patch_streamlit_semantics(monkeypatch, sem)
+    sem._ACTION_RUNS.clear()
+
+    gate_calls = {"raw": 0}
+    monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
+
+    def _raw_ready(slug: str):
+        gate_calls["raw"] += 1
+        return True, tmp_path / "raw"
+
+    monkeypatch.setattr(sem, "raw_ready", _raw_ready)
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
+
+    events: list[tuple[str, dict | None]] = []
+    monkeypatch.setattr(
+        sem, "log_gate_event", lambda logger, event_name, *, fields=None: events.append((event_name, fields))
+    )
+
+    def _mk_ctx(slug: str):
+        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=tmp_path / "logs")
+        return SimpleNamespace(base_dir=tmp_path, set_step_status=lambda *a, **k: None), SimpleNamespace(), layout
+
+    monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx)
+    monkeypatch.setattr(sem, "enrich_frontmatter", lambda ctx, logger, vocab, slug, **kwargs: [])
+    monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {"tag": True})
+
+    sem._run_enrich("dummy")
+    sem._run_enrich("dummy")
+
+    assert gate_calls["raw"] == 2
+    assert any(evt[0] == "qa_gate_retry" and evt[1].get("action_id") == "enrich" for evt in events if evt[1])
+
+
+def test_gating_failure_reasons_are_deterministic(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    sem._ACTION_RUNS.clear()
+    events: list[tuple[str, dict | None]] = []
+    monkeypatch.setattr(
+        sem, "log_gate_event", lambda logger, event_name, *, fields=None: events.append((event_name, fields))
+    )
+
+    monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (False, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
+
+    with pytest.raises(ConfigError):
+        sem._require_semantic_gating("dummy")
+
+    assert any(evt[0] == "evidence_gate_blocked" and evt[1].get("reason") == "raw_missing" for evt in events if evt[1])
+
+    events.clear()
+
+    _patch_streamlit_semantics(monkeypatch, sem)
+    qa_dir = tmp_path / "logs"
+    qa_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(sem, "_qa_evidence_path", lambda layout: qa_dir / sem.QA_EVIDENCE_FILENAME)
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
+    monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
+
+    def _mk_ctx(slug: str):
+        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
+        return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(set_step_status=lambda *a, **k: None), layout
+
+    monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx)
+    monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)
+
+    sem._run_summary("dummy")
+
+    assert any(evt[0] == "qa_gate_failed" and evt[1].get("reason") == "qa_evidence_missing" for evt in events if evt[1])

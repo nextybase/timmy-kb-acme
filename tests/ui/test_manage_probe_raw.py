@@ -74,7 +74,7 @@ def _load_manage_module(
     raw_result_path = Path(has_raw_result[1]) if has_raw_result[1] is not None else layout.raw_dir
     monkeypatch.setattr(
         ui.utils.workspace,
-        "has_raw_pdfs",
+        "raw_ready",
         lambda _slug: (has_raw_result[0], raw_result_path),
     )
     monkeypatch.setattr(

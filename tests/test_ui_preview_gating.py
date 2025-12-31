@@ -27,13 +27,15 @@ def _fake_page_specs() -> dict[str, Sequence[PageSpec]]:
 @dataclass
 class _Env:
     raw_ready: bool
+    tagging_ready: bool
     state: str
 
 
 def _setup_environment(monkeypatch: pytest.MonkeyPatch, env: _Env) -> None:
     slug = "dummy"
     monkeypatch.setattr("ui.gating.get_active_slug", lambda: slug, raising=False)
-    monkeypatch.setattr("ui.gating.has_raw_pdfs", lambda _slug: (env.raw_ready, None), raising=False)
+    monkeypatch.setattr("ui.gating.raw_ready", lambda _slug: (env.raw_ready, None), raising=False)
+    monkeypatch.setattr("ui.gating.tagging_ready", lambda _slug: (env.tagging_ready, None), raising=False)
     monkeypatch.setattr("ui.gating.get_state", lambda _slug: env.state, raising=False)
     monkeypatch.setattr("ui.gating.page_specs", _fake_page_specs, raising=False)
 
@@ -43,20 +45,20 @@ def _collect_paths(result: dict[str, Sequence[PageSpec]]) -> set[str]:
 
 
 def test_preview_hidden_when_raw_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    _setup_environment(monkeypatch, _Env(raw_ready=False, state="semantic_pending"))
+    _setup_environment(monkeypatch, _Env(raw_ready=False, tagging_ready=False, state="semantic_pending"))
     paths = _collect_paths(visible_page_specs(GateState(True, True, True)))
     assert PagePaths.SEMANTICS not in paths
     assert PagePaths.PREVIEW not in paths
 
 
 def test_preview_hidden_until_state_ready(monkeypatch: pytest.MonkeyPatch) -> None:
-    _setup_environment(monkeypatch, _Env(raw_ready=True, state="in-progress"))
+    _setup_environment(monkeypatch, _Env(raw_ready=True, tagging_ready=True, state="in-progress"))
     paths = _collect_paths(visible_page_specs(GateState(True, True, True)))
     assert PagePaths.SEMANTICS in paths
     assert PagePaths.PREVIEW not in paths
 
 
 def test_preview_visible_when_raw_and_state_ready(monkeypatch: pytest.MonkeyPatch) -> None:
-    _setup_environment(monkeypatch, _Env(raw_ready=True, state="arricchito"))
+    _setup_environment(monkeypatch, _Env(raw_ready=True, tagging_ready=True, state="arricchito"))
     paths = _collect_paths(visible_page_specs(GateState(True, True, True)))
     assert {PagePaths.SEMANTICS, PagePaths.PREVIEW}.issubset(paths)

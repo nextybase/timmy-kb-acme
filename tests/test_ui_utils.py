@@ -8,6 +8,7 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 from ui.utils import ensure_within_and_resolve
+from ui.utils import workspace as ws
 
 
 def test_wrapper_resolves_within_base(tmp_path: Path):
@@ -57,3 +58,34 @@ def test_ui_raw_ready_respects_context_paths(tmp_path: Path):
 
     assert has_pdfs is True
     assert has_csv is True
+
+
+def test_raw_ready_false_on_layout_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ws, "get_ui_workspace_layout", lambda *_a, **_k: (_ for _ in ()).throw(ConfigError("boom")))
+    ready, path = ws.raw_ready("dummy")
+    assert ready is False
+    assert path is None
+
+
+def test_tagging_ready_requires_db_and_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sem_dir = tmp_path / "semantic"
+    sem_dir.mkdir(parents=True)
+    tags_db = sem_dir / "tags.db"
+    tags_db.write_text("db", encoding="utf-8")
+    tags_yaml = sem_dir / "tags_reviewed.yaml"
+    tags_yaml.write_text("yaml", encoding="utf-8")
+
+    monkeypatch.setattr(
+        ws,
+        "get_ui_workspace_layout",
+        lambda *_a, **_k: SimpleNamespace(semantic_dir=sem_dir, tags_db=tags_db, raw_dir=tmp_path / "raw"),
+    )
+    monkeypatch.setattr(ws, "raw_ready", lambda _slug: (True, tmp_path / "raw"))
+
+    ready, path = ws.tagging_ready("dummy")
+    assert ready is True
+    assert path == sem_dir
+
+    tags_yaml.unlink()
+    ready_missing, _ = ws.tagging_ready("dummy")
+    assert ready_missing is False
