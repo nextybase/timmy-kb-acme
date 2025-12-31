@@ -184,9 +184,13 @@ def pytest_runtest_setup(item):  # type: ignore[no-untyped-def]
 from pipeline.file_utils import safe_write_text
 
 # Reindirizza di default il registry clienti verso una copia interna usata solo dai test
-_DEFAULT_TEST_CLIENTS_DB_DIR = Path(".pytest_clients_db")
+_DEFAULT_TEST_CLIENTS_DB_DIR = Path("clients_db") / ".pytest_clients_db"
 _DEFAULT_TEST_CLIENTS_DB_FILE = _DEFAULT_TEST_CLIENTS_DB_DIR / "clients.yaml"
 (REPO_ROOT / _DEFAULT_TEST_CLIENTS_DB_DIR).mkdir(parents=True, exist_ok=True)
+_DEFAULT_TEST_UI_STATE = _DEFAULT_TEST_CLIENTS_DB_DIR / "ui_state.json"
+_DEFAULT_TEST_UI_STATE_FULL = REPO_ROOT / _DEFAULT_TEST_UI_STATE
+if not _DEFAULT_TEST_UI_STATE_FULL.exists():
+    safe_write_text(_DEFAULT_TEST_UI_STATE_FULL, "{}\n", encoding="utf-8")
 if "CLIENTS_DB_DIR" not in os.environ:
     os.environ["CLIENTS_DB_DIR"] = str(_DEFAULT_TEST_CLIENTS_DB_DIR)
 if "CLIENTS_DB_FILE" not in os.environ:

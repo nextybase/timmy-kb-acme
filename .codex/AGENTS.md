@@ -14,7 +14,7 @@ Operational rules for the Codex agent acting within `.codex/`, focusing on path 
 - Work with the Senior Reviewer via single-scope micro-PRs, summarizing changes with references to `.codex/CONSTITUTION.md` and `system/ops/agents_index.md`, documenting QA and any open questions.
 - Codex operates under the Prompt Chain defined by the OCP: every prompt is a micro-PR respecting AGENT-first/HiTL, path safety, QA, and the SSoT `system/ops/agents_index.md`. The OCP orchestrates but does not modify the repository. Refer to `system/specs/promptchain_spec.md` and `.codex/PROMPTS.md` for the full chain definition, the phase model (Phase 0 analytical/read-only, Phase 1..N operational micro-PRs, Prompt N+1 final QA), and the template requirements.
 - Prompt Chain behavior: stop after each response, wait for the next OCP prompt, and do not invent future prompts; Phase 0 prompts never change files or launch QA, Phase 1..N prompts are the only ones allowed to produce diffs and run `pytest -q -k "not slow"`, and Prompt N+1 runs `pre-commit run --all-files` + `pytest -q` before finalizing the chain.
-- Language policy: conversazioni in italiano per default; quando l’OCP dichiara control-mode, OCP ↔ Codex passa in inglese; Timmy/ProtoTimmy ↔ User resta italiano. La documentazione tecnica può restare in inglese.
+- Language policy: conversations are Italian by default; when the OCP declares control-mode, OCP ↔ Codex switches to English; Timmy/ProtoTimmy ↔ User remains Italian. Technical documentation may remain in English.
 
 
 

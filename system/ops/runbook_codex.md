@@ -8,9 +8,9 @@
 
 ## Visual summary of the Codex system
 
-This repository blends the shared policies (`system/ops/agents_index.md`), area overrides (`AGENTS.md`), prompt APIs (`.codex/PROMPTS.md`), the runbook, and workflow documentation. Codex follows the integration guidelines (`system/specs/guida_codex.md`) and uses the Onboarding Task as the entry point. The flow is: AGENTS → Onboarding prompt → micro-PR + QA → matrix updates.
+This repository blends the shared policies (`system/ops/agents_index.md`), area overrides (`AGENTS.md`), prompt APIs (`.codex/PROMPTS.md`), the runbook, and workflow documentation. Codex follows the integration manual (`docs/guida_codex.md`) and uses the Onboarding Task as the entry point. The flow is: AGENTS → Onboarding prompt → micro-PR + QA → matrix updates.
 
-> Note: `system/specs/guida_codex.md` describes the mental model for the Codex + Repo-aware workflow (v2) and mandates the three SSoT documents (AGENTS index, area AGENTS, `~/.codex/AGENTS.md`). The runbook remains the practical flow guide.
+> Note: the Prompt Chain governance SSoT is `system/specs/promptchain_spec.md`. The Codex integration manual lives in `docs/guida_codex.md` and references the three SSoT documents (AGENTS index, area AGENTS, `~/.codex/AGENTS.md`). The runbook remains the practical flow guide.
 
 ---
 
@@ -37,7 +37,7 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](../.
 - Before any work, the Codex agent loads the three SSoT documents (`system/ops/agents_index.md`, the relevant `AGENTS.md`, and `~/.codex/AGENTS.md`) and uses `.codex/PROMPTS.md` as the API.
 - The recommended entry point is the Onboarding Task Codex; it inflicts a plan-first, micro-PR, QA-compliant workflow and insists on updating the documentation and AGENTS matrix when touched.
 - Codex flows must remain consistent with the policies in this runbook and the AGENTS matrix.
-- Poiché il workstream finisce solo con un Prompt Closure, ogni Prompt Chain viene chiusa solo dopo il **Closure Protocol** (`.codex/CLOSURE_AND_SKEPTIC.md`), che lega Prompt N+1 (Codex) e Skeptic Gate N+1′ (OCP).
+- Poiché il workstream finisce solo con un Prompt Closure, ogni Prompt Chain viene chiusa solo dopo il **Closure Protocol** (`.codex/CLOSURE_AND_SKEPTIC.md`), che lega Prompt N+1 (Codex) e lo Skeptic Gate post N+1 (OCP), talvolta indicato come “N+1′” senza essere una fase distinta.
 - Per la separazione Netta tra canale User e Dev, consultare `.codex/USER_DEV_SEPARATION.md` e rispettare i guardrail `tests/architecture/test_facade_imports.py` e `tests/architecture/test_dev_does_not_import_ui.py` prima di chiudere la catena.
 
 ### Codex integration
@@ -47,6 +47,7 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](../.
 
 ### Prompt Chain governance
 - The Prompt Chain follows the turn-based protocol in `system/specs/promptchain_spec.md`: Planner → OCP → Codex → OCP → Planner with exactly one action per prompt.
+- Governance split: Human decides and authorizes, OCP applies gates within that authorization, Codex executes without decision agency.
 - Phase 0 prompts (Prompt 0, 0a..0x) are analytical/read-only and must confirm the SSoT documents before any diff is produced.
 - Phase 1..N prompts are operational micro-PRs that touch files declared by the OCP, include the Active Rules memo, and run at least `pytest -q -k "not slow"` before proceeding.
 - Prompt N+1 runs the final QA (`pre-commit run --all-files` + `pytest -q`), documents retries (up to ten), and ends with an Italian one-line closing commit summary.
@@ -54,7 +55,7 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](../.
 - The OCP issues one prompt at a time, Codex replies with a diff/report and waits, and no prompt may skip a phase or bypass the final QA.
 - Evidence Gate e Skeptic Gate seguono il testo canonico in `system/specs/promptchain_spec.md`; questo runbook è supporto operativo.
 - Every prompt must preserve the canonical header defined in `.codex/PROMPTS.md`, starting with `ROLE: Codex` and continuing with `PHASE`, `SCOPE`, `ACTIVE RULES MEMO`, `EXPECTED OUTPUTS`, `TESTS`, `CONSTRAINTS`, and `STOP RULE`. Codex and OCP rely on this structure to detect malformed prompts: absence or misassignment of the `ROLE` line halts the chain until corrected.
-- L’OCP ha inoltre la prerogativa esclusiva di approvare i prompt OPS/RUN (Phase 1..N e Prompt N+1) prima di inoltrarli a Codex: la decisione umana deve essere già registrata quando il prompt arriva nell’Active Rules memo. Codex non deve richiedere conferme, né gestire questo gate; esegue la micro-PR solo dopo aver ricevuto il prompt autorizzato e mantiene reporting completo (memo + diff/report/QA) per il gate successivo.
+- L’OCP registra l’approvazione umana dei prompt OPS/RUN (Phase 1..N e Prompt N+1) prima di inoltrarli a Codex e applica i gate di governance all’interno di tale autorizzazione: la decisione umana deve essere già registrata quando il prompt arriva nell’Active Rules memo. Codex non deve richiedere conferme, né gestire questo gate; esegue la micro-PR solo dopo aver ricevuto il prompt autorizzato e mantiene reporting completo (memo + diff/report/QA) per il gate successivo.
 -## Agency, Control Plane e ruolo dei micro-agent
 - I riferimenti al flusso CLI o agli helper `pipeline.*` delineano gli strumenti della foundation: producono markdown semanticamente arricchiti e validano il knowledge graph ma NON orchestrano né decidono.
 - La governance WHAT della Prompt Chain, del registry Intent/Action e delle escalation HiTL è descritta in `instructions/*`; ProtoTimmy/Timmy (agency) dialogano con Domain Gatekeepers (validazione) e il Control Plane/OCP applica i gate e la consegna ai micro-agent.
@@ -163,7 +164,7 @@ References: [.codex/WORKFLOWS.md](../../.codex/WORKFLOWS.md), [User Guide](../..
 
 ### 5.0 Common operating principles (v2)
 - The default scenario is Agent mode with path safety, atomic writes, and doc/test updates.
-- All activities follow Codex v2 (see `system/specs/guida_codex.md`), the AGENTS perimeter, and explicit micro-PR + QA.
+- All activities follow Codex v2 (see `docs/guida_codex.md`), the AGENTS perimeter, and explicit micro-PR + QA.
 - Select prompts from `.codex/PROMPTS.md`; the Onboarding Task Codex is mandatory.
 - Collaboration between developer, Codex, and Senior Reviewer guides sensitive tasks.
 

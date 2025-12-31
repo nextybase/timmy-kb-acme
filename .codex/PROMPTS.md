@@ -5,8 +5,8 @@
 - OCP issues prompt numbers in order; after Codex replies, the cycle pauses until the next OCP instruction (no autopilot beyond the current prompt).
 - Prompts 0/0a..0x remain analytical/read-only, prompts 1..N are operational micro-PRs, and prompt N+1 finalizes the chain with full QA.
 - The Onboarding Task Codex sets this protocol before any edits can happen, so its acknowledgement is mandatory in Prompt 0.
-- **Evidence Gate reminder:** nessun prompt 1..N avanza se l’ultima risposta di Codex manca di memo Active Rules, diff, report o QA; l’OCP trattiene il prompt successivo finché l’evidenza non è completa.
-- **Fonte canonica:** `system/specs/promptchain_spec.md` (SSoT); questo documento è l’API operativa dei prompt.
+- **Evidence Gate reminder:** no Prompt 1..N advances if the latest Codex response lacks the Active Rules memo, diff, report, or QA; the OCP holds the next prompt until the evidence is complete.
+- **Canonical source:** `system/specs/promptchain_spec.md` (SSoT); this document is the operational API for prompts.
 
 ## Language Policy for Codex
 - All codified documents and templates stay in English to preserve the SSoT grammar.
@@ -18,12 +18,12 @@
 - Operational prompts (1..N) exclusively produce diffs, touch files, and run intermediate QA (`pytest -q -k "not slow"`). Phase 0 prompts stay analytical and perform no edits, while prompt N+1 runs the full QA suite plus final narration.
 - Every prompt must be supplied as a single copyable block listing Role, Phase, Scope (allowed/prohibited files), Active Rules memo, Expected Outputs (diff + structured report + QA), Tests executed, Constraints, and Stop Rules to keep instructions unambiguous.
 - **If a prompt expects any file change, it must explicitly request a unified diff and a structured report in the "Expected Outputs" section.** Codex must not treat a change as "done" without those artifacts.
-- **Skeptic Gate MUST:** l'OCP documenta subito dopo ogni risposta operativa Codex che ha condotto il gate obbligatorio (Evidence/Scope/Risk/Decision) e solo Decision=PASS abilita il prompt successivo. PASS WITH CONDITIONS impone vincoli da rispettare e BLOCK ferma la catena (vedi `system/specs/promptchain_spec.md`).
+- **Skeptic Gate MUST:** the OCP documents immediately after each operational Codex response that it conducted the mandatory gate (Evidence/Scope/Risk/Decision), and only Decision=PASS enables the next prompt. PASS WITH CONDITIONS imposes constraints to respect and BLOCK stops the chain (see `system/specs/promptchain_spec.md`).
 - **Tooling change reminder:** modifiche a file di configurazione o tooling (es. `cspell.json`) devono essere esplicitamente autorizzate dall'OCP nel prompt corrente oppure posticipate a un prompt dedicato; non sono implicite nel solo superamento della QA.
 - **No-fluff constraint:** non inserire domande generiche di chiusura o richieste di ulteriori check se il prompt non le prevede.
 
 ## Canonical Prompt Header
-- Ogni prompt deve iniziare con un blocco header canonico che precede qualsiasi contenuto operativo:
+- Every prompt must start with a canonical header block that precedes any operational content:
 
 ```
 ROLE: Codex
@@ -36,8 +36,8 @@ CONSTRAINTS: <vincoli imposti>
 STOP RULE: <fermo dopo la risposta>
 ```
 
-- Il campo `ROLE` deve esplicitamente contenere la voce `Codex`; qualunque prompt che omette tale riga o la sostituisce con `ROLE: OCP` è formalmente incompleto e deve essere corretto prima che OCP emetta il prompt successivo. Il template consente di evidenziare automaticamente, tramite regex o controllo manuale, i prompt che mancano del `ROLE` obbligatorio o che assegnano impropriamente autorità ad altri attori.
-- Questo header garantisce che Codex non si trovi a eseguire istruzioni nate per OCP: la sintassi obbligatoria dei blocchi consente allo Skeptic Gate di validare già la forma del prompt prima di valutare contenuti tecnici e rischi. Nessun prompt può avanzare senza il blocco completo e la conferma del `ROLE: Codex`.
+- The `ROLE` field must explicitly contain `Codex`; any prompt that omits that line or replaces it with `ROLE: OCP` is formally incomplete and must be corrected before the OCP issues the next prompt. The template enables automatic detection, via regex or manual checks, of prompts missing the mandatory `ROLE` or improperly assigning authority to other actors.
+- This header ensures Codex does not execute instructions meant for OCP: the mandatory block syntax allows the Skeptic Gate to validate prompt form before evaluating technical content and risks. No prompt may advance without the complete block and confirmation of `ROLE: Codex`.
 
 ### Template: Prompt 0
 - Purpose: define the final goal of the Prompt Chain, the high-level plan, and instruct Codex to ingest the SSoT.
@@ -53,7 +53,7 @@ STOP RULE: <fermo dopo la risposta>
 - `target`: `main` | `branch`
 - `target_branch`: required iff `target=branch`
 - `push_policy`: `N+1_only`
-- `push_gate`: `OCP_explicit_authorization` + `SkepticGate_N+1′_PASS`
+- `push_gate`: `OCP_explicit_authorization` + `SkepticGate_N+1′_PASS` (N+1′ indicates the post‑N+1 Skeptic Gate, not a distinct phase)
 
 ### Template: Prompt 0a..0x
 - Purpose: refine the plan with deeper analysis, file-by-file mapping, and sequencing of upcoming prompts.
@@ -78,14 +78,14 @@ STOP RULE: <fermo dopo la risposta>
 - Action: apply a diff, document the behavior change in the report, run `pytest -q -k "not slow"` (or a justified substitute) and describe the result; mention whether additional linters/types were run.
 - **Tests coupling rule:** modifiche sotto `tests/**` sono ammesse solo come conseguenza di cambi nello scope extra-`tests/**`; ogni modifica ai test richiede nel report una Test Impact Map.
 - **DoD iteration rule:** if the DoD is not met, subsequent prompts must be numbered as sub-iterations (1a/1b/1c or Na/Nb/Nc) until satisfied.
-- **Skeptic Gate reminder:** dopo la risposta operativa Codex l’OCP esercita lo Skeptic Gate, valuta rischi/limiti e decide se avanzare; Codex può menzionare problemi ma non autorizza il passaggio.
+- **Skeptic Gate reminder:** after an operational Codex response the OCP runs the Skeptic Gate, evaluates risks/limits, and decides whether to advance; Codex may mention problems but does not authorize progression.
 - Language: the entire response must be in Italian, salvo eccezione control-mode in inglese quando esplicitata dall'OCP.
 - Push requirement: explicitly declare in the structured block whether a push to `main` is requested by the OCP; without that statement, Codex assumes no push occurs (pushes are reserved for Prompt N+1 or when OCP explicitly authorizes them).
 - **Diff requirement:** the structured block must always request and include a unified diff for files touched in this step.
 
 ### EVIDENCE FORMAT (MUST) — Prompt 1..N e N+1
-- Output obbligatori (ordine fisso): 1) `git status --porcelain=v1`; 2) diff unificato con marker `diff --git` + `index` + `---/+++` + `@@`; 3) report strutturato; 4) output QA con almeno il riepilogo finale PASS/skip ed exit status.
-- Working tree sporco: dichiarare in apertura report `working tree dirty outside scope: SI/NO` e usare solo `git diff -- <paths nello scope>`; vietati diff repo-wide quando esistono modifiche fuori scope.
+- Mandatory outputs (fixed order): 1) `git status --porcelain=v1`; 2) unified diff with `diff --git` + `index` + `---/+++` + `@@`; 3) structured report; 4) QA output with at least the final PASS/skip summary and exit status.
+- Dirty working tree: declare `working tree dirty outside scope: YES/NO` at the start of the report and use only `git diff -- <paths in scope>`; repo-wide diffs are forbidden when there are out-of-scope changes.
 - Evidence Gate aggiuntivo: verificare che il diff riportato sia davvero un unified diff (marker presenti) e che `git status --porcelain=v1` compaia in ogni micro-PR operativo.
 
 ### Template: Prompt N+1
@@ -99,6 +99,7 @@ STOP RULE: <fermo dopo la risposta>
 
 ## Prompt Chain Operational Contract
 The Prompt Chain operational contract spells out the dialogue model between the OCP and Codex and requires Codex to act idempotently, attentively, and aligned with the policies documented in `system/ops/runbook_codex.md`, `docs/codex_integrazione.md`, and `system/specs/promptchain_spec.md`. Every prompt must be treated as an independent micro-PR with a fixed scope and no unauthorized creative deviations.
+- Governance split: Human authorizes OPS/RUN prompts, OCP applies gates within that authorization, Codex executes without decision agency.
 - Always answer only one prompt at a time: after you reply, halt execution, wait for the next OCP prompt, and never invent additional prompts.
 - Do not design new architectures, refactors, or self-initiatives beyond the OCP's explicit requirements; stay within the provided scope.
 - Observe the "idempotent micro-PR" rule: keep changes minimal, mentally reversible, and free of import-time side effects.

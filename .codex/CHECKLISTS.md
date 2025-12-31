@@ -10,11 +10,11 @@
 - Prompt Chain checklist: confirm Phase 0 stayed analytical/read-only with no diff/QA, each prompt 1..N produced a diff, included the Active Rules memo, executed (or justified) `pytest -q -k "not slow"`, and responded in Italian; Prompt N+1 must run `pytest -q` + `pre-commit run --all-files` and finish with an Italian one-line closing summary.
   - Prompt 0 contains **OPS AUTHORIZATION (READ-ONLY)** (whitelist + explicit forbidden actions) and **DELIVERY STRATEGY (PLANNING DECISION)** (target + push policy/gate).
   - Prompt N+1 contains commit subject (ITA) + commit id corto + commit SHA completo + SHA effettivamente pushato.
-  - Push behavior is coherent with the spec “push is not default” (`system/specs/promptchain_spec.md`) and with Prompt 0 `DELIVERY STRATEGY` (push only in N+1, only with explicit OCP authorization in N+1, only after QA PASS). Skeptic Gate N+1′ PASS closes the chain post N+1.
-- Skeptic Gate MUST presente (Evidence/Scope/Risk/Decision e Decision=PASS) prima di avanzare al prompt successivo; PASS WITH CONDITIONS richiede vincoli, BLOCK ferma la chain (SSoT: `system/specs/promptchain_spec.md`).
-- Evidence Gate reminder: se manca memo/diff/report/QA non si avanza con Prompt 1..N; il prossimo prompt rimane bloccato finché l’evidenza non ritorna completa (SSoT: `system/specs/promptchain_spec.md`).
-- Evidence format (Prompt 1..N, N+1): riportare `git status --porcelain=v1`; diff unificato con marker `diff --git` + `index` + `---/+++` + `@@`; dichiarare `working tree dirty outside scope: SI/NO` e, se sporco, usare solo `git diff -- <paths nello scope>` (vietati diff repo-wide con modifiche fuori perimetro).
-- Skeptic Gate reminder: dopo ogni risposta operativa Codex l’OCP valuta rischi/limiti e decide se proseguire; Codex può annotare problemi ma non autorizza il passaggio.
+  - Push behavior is coherent with the spec “push is not default” (`system/specs/promptchain_spec.md`) and with Prompt 0 `DELIVERY STRATEGY` (push only in N+1, only with explicit OCP authorization in N+1, only after QA PASS). Skeptic Gate N+1′ PASS closes the chain post N+1 (N+1′ indicates the post‑N+1 gate, not a phase).
+- Skeptic Gate MUST be present (Evidence/Scope/Risk/Decision with Decision=PASS) before advancing to the next prompt; PASS WITH CONDITIONS requires constraints, BLOCK stops the chain (SSoT: `system/specs/promptchain_spec.md`).
+- Evidence Gate reminder: if memo/diff/report/QA are missing, Prompt 1..N does not advance; the next prompt remains blocked until evidence is complete (SSoT: `system/specs/promptchain_spec.md`).
+- Evidence format (Prompt 1..N, N+1): report `git status --porcelain=v1`; unified diff with `diff --git` + `index` + `---/+++` + `@@`; declare `working tree dirty outside scope: YES/NO` and, if dirty, use only `git diff -- <paths in scope>` (repo‑wide diffs are forbidden when out‑of‑scope changes exist).
+- Skeptic Gate reminder: after each operational Codex response the OCP evaluates risks/limits and decides whether to proceed; Codex may note issues but does not authorize progression.
 - Codex answers must be in Italian for every Prompt Chain turn; documentation and templates remain English.
 
 ### Senior Reviewer Checklist
@@ -27,8 +27,8 @@
 ## Security & I/O
 - Validate every path via `ensure_within*`; avoid ad hoc writes.
 - Write atomically and define rollback procedures for failures.
-- Trial window note: mantenere lo Skeptic Gate come MUST per le prossime due Prompt Chain complete prima della retrospettiva OCP.
-- Tooling/QA note: modifiche a file di tooling o configurazione devono essere autorizzate esplicitamente nel prompt che le richiede; la sola necessità di far passare la QA non basta per toccare `cspell.json`, `.pre-commit-config.yaml`, etc.
+- Trial window note: keep the Skeptic Gate as MUST for the next two complete Prompt Chains before the OCP retrospective.
+- Tooling/QA note: changes to tooling or configuration files must be explicitly authorized in the prompt that requests them; the need to pass QA alone is not sufficient to touch `cspell.json`, `.pre-commit-config.yaml`, etc.
 
 
 ## Pre-commit Policies
