@@ -417,11 +417,10 @@ def main(argv: Optional[list[str]] = None) -> int:
                 (workspace_override / child).mkdir(parents=True, exist_ok=True)
 
         try:
-            with workspace_validation_policy(skip_validation=True, allow_missing=True):
+            with workspace_validation_policy(skip_validation=True):
                 try:
                     import pipeline.workspace_layout as _wl
                     _wl._SKIP_VALIDATION = True
-                    _wl._ALLOW_MISSING_WORKSPACE = True
                 except Exception:
                     pass
                 workspace_root = workspace_override or _client_base(slug)

@@ -54,6 +54,7 @@ class _StreamlitStub:
         self.slider_return: int = 500
         self.multiselect_return: List[str] | None = None
         self.text_input_return: str = ""
+        self.toggle_return: bool = True
 
     def subheader(self, text: str) -> None:
         self.subheaders.append(text)
@@ -72,6 +73,12 @@ class _StreamlitStub:
 
     def warning(self, message: Any) -> None:
         self.warnings.append(str(message))
+
+    def toggle(self, *_args: Any, value: bool = False, **_kwargs: Any) -> bool:
+        return self.toggle_return if self.toggle_return is not None else value
+
+    def button(self, *_args: Any, **_kwargs: Any) -> bool:
+        return False
 
     def expander(self, *_args: Any, **_kwargs: Any) -> _Expander:
         return _Expander()

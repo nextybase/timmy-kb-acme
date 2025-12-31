@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Protocol, Tuple, cast
 
+from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
@@ -54,23 +55,23 @@ class MarkdownSection:
 def _read_markdown(rel_path: str) -> str:
     """
     Lettura sicura e cacheata di un file Markdown relativo alla root del repo.
-    Ritorna un messaggio di warning in caso di errore.
+    In caso di errore solleva ConfigError (hard cut, niente fallback silenzioso).
     """
     try:
         repo_root = get_repo_root()
         return cast(str, load_markdown(repo_root / rel_path))
-    except Exception as exc:  # pragma: no cover - degradazione di sicurezza
-        LOGGER.warning(
+    except Exception as exc:
+        LOGGER.error(
             "ui.agents_network.read_markdown_failed",
             extra={"rel_path": rel_path, "error": str(exc)},
         )
-        return f"Impossibile leggere `{rel_path}`.\n\nDettagli: {exc}"
+        raise ConfigError(f"Impossibile leggere {rel_path}") from exc
 
 
 def _extract_matrix_block(md: str) -> List[str]:
     """
     Estrae il blocco della matrice AGENTS tra <!-- MATRIX:BEGIN --> e <!-- MATRIX:END -->.
-    Se i marker non sono presenti, ritorna tutte le righe come fallback.
+    Se i marker non sono presenti, fallisce esplicitamente (hard cut 1.0 Beta).
     """
     lines = md.splitlines()
     in_block = False
@@ -87,7 +88,9 @@ def _extract_matrix_block(md: str) -> List[str]:
         if in_block:
             block.append(line)
 
-    return block or lines
+    if not block:
+        raise ConfigError("Marker MATRIX mancanti in system/ops/agents_index.md")
+    return block
 
 
 def _normalise_rel_path(cell: str) -> str:

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai.vision_config import _load_settings_cached, _resolve_vision_strict_output, resolve_vision_config
+from ai.vision_config import _resolve_vision_strict_output, resolve_vision_config
 from pipeline.exceptions import ConfigError
 
 
@@ -80,31 +80,26 @@ def test_model_from_settings_avoids_make(monkeypatch):
 def test_strict_output_logs_settings_load_failure(monkeypatch, caplog, tmp_path):
     caplog.set_level("WARNING", logger="ai.vision_config")
 
-    monkeypatch.setattr(
-        "ai.vision_config.Settings.load",
-        lambda base_dir: (_ for _ in ()).throw(RuntimeError("can not read settings")),
-    )
-
     result = _resolve_vision_strict_output(None, {}, tmp_path)
     assert result is True
-    assert any("settings_load_failed" in rec.getMessage() for rec in caplog.records)
+    warnings = [rec for rec in caplog.records if "settings_load_failed" in rec.getMessage()]
+    assert len(warnings) == 1
 
 
 def test_strict_output_load_cached(monkeypatch, caplog, tmp_path):
     caplog.set_level("WARNING", logger="ai.vision_config")
-    calls = 0
+    called = 0
 
     def fake_load(base_dir):
-        nonlocal calls
-        calls += 1
+        nonlocal called
+        called += 1
         raise RuntimeError("boom")
 
     monkeypatch.setattr("ai.vision_config.Settings.load", fake_load)
-    _load_settings_cached.cache_clear()
 
     _resolve_vision_strict_output(None, {}, tmp_path)
     _resolve_vision_strict_output(None, {}, tmp_path)
 
-    assert calls == 1
+    assert called == 1
     warnings = [rec for rec in caplog.records if "settings_load_failed" in rec.getMessage()]
     assert len(warnings) == 1

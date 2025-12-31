@@ -488,6 +488,19 @@ def test_parse_required_sections_empty_raises():
     assert "sezioni vuote" in str(excinfo.value)
 
 
+def test_load_vision_yaml_requires_full_text(tmp_path: Path):
+    yaml_path = tmp_path / "visionstatement.yaml"
+    yaml_path.write_text(
+        "version: 1\ncontent:\n  pages:\n    - Solo pagina senza full_text\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError) as excinfo:
+        vp._load_vision_yaml_text(tmp_path, yaml_path, slug="demo")
+
+    assert "full_text" in str(excinfo.value)
+
+
 def test_analyze_vision_sections_realistic_text():
     text = (
         "Vision Statement di NeXT\n"

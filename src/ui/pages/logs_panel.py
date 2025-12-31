@@ -314,12 +314,13 @@ def _render_observability_controls() -> None:
 
     col1, col2 = st.columns([1, 1])
 
-    def _fallback_toggle(*_args: Any, value: bool = False, **_kwargs: Any) -> bool:
-        return value
-
-    toggle = getattr(st, "toggle", None) or getattr(st, "checkbox", None) or _fallback_toggle
-    success = getattr(st, "success", None) or (lambda *_args, **_kwargs: None)
-    action_button = getattr(st, "button", None) or (lambda *_args, **_kwargs: False)
+    toggle = getattr(st, "toggle", None)
+    if not callable(toggle):
+        raise RuntimeError("Streamlit toggle mancante: aggiorna Streamlit per usare il pannello log/observability.")
+    success = getattr(st, "success", None)
+    action_button = getattr(st, "button", None)
+    if not callable(action_button):
+        raise RuntimeError("Streamlit button mancante: aggiorna Streamlit per usare il pannello log/observability.")
 
     with col1:
         stack_enabled, docker_available, reachable, docker_cmd = _render_grafana_block(

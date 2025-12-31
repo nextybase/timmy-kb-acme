@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.ownership import ensure_ownership_file, load_ownership
 
@@ -39,13 +40,13 @@ def test_ensure_ownership_file_keeps_existing(tmp_path):
     assert target.read_text(encoding="utf-8").strip().startswith("schema_version")
 
 
-def test_load_ownership_legacy_path_used(tmp_path, caplog: pytest.LogCaptureFixture):
+def test_load_ownership_does_not_use_legacy_path(tmp_path, caplog: pytest.LogCaptureFixture):
     slug = "legacy"
     legacy_path = tmp_path / "clients" / slug / "ownership.yaml"
     safe_write_text(legacy_path, 'schema_version: "1"\nowners: {}\n', encoding="utf-8")
 
-    with caplog.at_level(logging.WARNING):
-        cfg = load_ownership(slug, tmp_path)
+    with pytest.raises(ConfigError) as exc, caplog.at_level(logging.WARNING):
+        load_ownership(slug, tmp_path)
 
-    assert cfg["slug"] == slug
-    assert any("ownership.legacy_path_used" in rec.getMessage() for rec in caplog.records)
+    assert exc.value.code == "ownership.missing"
+    assert not any("ownership.legacy_path_used" in rec.getMessage() for rec in caplog.records)

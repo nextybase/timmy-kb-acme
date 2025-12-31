@@ -23,19 +23,21 @@ from pipeline.path_utils import ensure_within, ensure_within_and_resolve, valida
 __all__ = ["WorkspaceLayout", "get_workspace_layout"]
 
 _SKIP_VALIDATION = False
-_ALLOW_MISSING_WORKSPACE = False
 
 
 @contextmanager
-def workspace_validation_policy(*, skip_validation: bool = False, allow_missing: bool = False):
-    """Abilita temporaneamente la modalità permissiva per bootstrap/test espliciti."""
-    global _SKIP_VALIDATION, _ALLOW_MISSING_WORKSPACE
-    prev_skip, prev_allow = _SKIP_VALIDATION, _ALLOW_MISSING_WORKSPACE
-    _SKIP_VALIDATION, _ALLOW_MISSING_WORKSPACE = skip_validation, allow_missing
+def workspace_validation_policy(*, skip_validation: bool = False):
+    """
+    Policy di validazione.
+    - skip_validation: solo per bootstrap/test controllati (nessun silent fix).
+    """
+    global _SKIP_VALIDATION
+    prev_skip = _SKIP_VALIDATION
+    _SKIP_VALIDATION = skip_validation
     try:
         yield
     finally:
-        _SKIP_VALIDATION, _ALLOW_MISSING_WORKSPACE = prev_skip, prev_allow
+        _SKIP_VALIDATION = prev_skip
 
 
 def _to_path(value: Any, fallback: Path) -> Path:
@@ -94,18 +96,17 @@ class WorkspaceLayout:
         config_path = ensure_within_and_resolve(root, config_path)
         mapping_path = ensure_within_and_resolve(root, mapping_path)
 
-        if root.exists() and not _ALLOW_MISSING_WORKSPACE:
-            _validate_layout_assets(
-                slug=context.slug,
-                workspace_root=root,
-                raw_dir=raw_dir,
-                book_dir=book_dir,
-                logs_dir=logs_dir,
-                config_path=config_path,
-                semantic_dir=semantic_dir,
-                mapping_path=mapping_path,
-                skip_validation=_SKIP_VALIDATION,
-            )
+        _validate_layout_assets(
+            slug=context.slug,
+            workspace_root=root,
+            raw_dir=raw_dir,
+            book_dir=book_dir,
+            logs_dir=logs_dir,
+            config_path=config_path,
+            semantic_dir=semantic_dir,
+            mapping_path=mapping_path,
+            skip_validation=_SKIP_VALIDATION,
+        )
 
         log_file = ensure_within_and_resolve(logs_dir, logs_dir / LOG_FILE_NAME)
         tags_db = _derive_child_path(semantic_dir, "tags.db")
@@ -145,7 +146,6 @@ class WorkspaceLayout:
         slug: str | None = None,
         _run_id: str | None = None,
         skip_validation: bool = False,
-        allow_missing: bool = False,
     ) -> "WorkspaceLayout":
         """Costruisce il layout da una directory workspace già esistente in modo fail-fast.
 
@@ -153,8 +153,7 @@ class WorkspaceLayout:
         sollevato WorkspaceNotFound o WorkspaceLayoutInvalid e le riparazioni
         restano responsabilità dei flussi bootstrap/migrazione."""
         if not workspace.exists():
-            if not (allow_missing or _ALLOW_MISSING_WORKSPACE):
-                raise WorkspaceNotFound("Workspace esplicito non esiste", file_path=workspace)
+            raise WorkspaceNotFound("Workspace esplicito non esiste", file_path=workspace)
         repo_root = workspace.resolve()
         resolved_slug = slug or repo_root.name
         validate_slug(resolved_slug)

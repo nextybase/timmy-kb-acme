@@ -363,7 +363,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
 def _load_vision_yaml_text(base_dir: Path, yaml_path: Path, *, slug: str) -> str:
     """
     Carica il testo Vision dal file YAML generato a monte (visionstatement.yaml).
-    Preferisce content.full_text, fallback concatenazione pages[].
+    Richiede content.full_text presente e non vuoto (hard cut: niente fallback su pages[]).
     """
     try:
         safe_yaml = ensure_within_and_resolve(base_dir, yaml_path)
@@ -393,24 +393,21 @@ def _load_vision_yaml_text(base_dir: Path, yaml_path: Path, *, slug: str) -> str
             slug=slug,
             file_path=str(safe_yaml),
         )
-    content = data.get("content")
-    text: str = ""
-    if isinstance(content, Mapping):
-        full_text = content.get("full_text")
-        if isinstance(full_text, str) and full_text.strip():
-            text = full_text.strip()
-        if not text:
-            pages = content.get("pages")
-            if isinstance(pages, list):
-                chunks = [str(p or "").strip() for p in pages if str(p or "").strip()]
-                text = "\n\n".join(chunks).strip()
-    if not text:
+    content = data.get("content") if isinstance(data, Mapping) else None
+    if not isinstance(content, Mapping):
         raise ConfigError(
-            "visionstatement.yaml mancante o non leggibile: nessun contenuto testuale in content",
+            "visionstatement.yaml mancante o non leggibile: sezione content assente",
             slug=slug,
             file_path=str(safe_yaml),
         )
-    return text
+    full_text = content.get("full_text")
+    if not isinstance(full_text, str) or not full_text.strip():
+        raise ConfigError(
+            "visionstatement.yaml mancante o non leggibile: content.full_text assente o vuoto",
+            slug=slug,
+            file_path=str(safe_yaml),
+        )
+    return full_text.strip()
 
 
 def _write_audit_line(base_dir: Path, record: Dict[str, Any]) -> None:
@@ -522,20 +519,9 @@ def _raise_for_section_reports(reports: List[VisionSectionReport]) -> None:
 def debug_analyze_vision_sections_from_yaml(yaml_path: Path) -> Tuple[str, List[VisionSectionReport]]:
     """
     Carica visionstatement.yaml, estrae il testo come farebbe il runtime e ritorna testo+report.
-    Non solleva ConfigError: eventuali errori IO/parsing vengono propagati nudi.
+    In caso di file invalido solleva ConfigError (hard cut: nessun fallback).
     """
-    raw = read_text_safe(yaml_path.parent, yaml_path, encoding="utf-8")
-    data = yaml.safe_load(raw)
-    text: str = ""
-    if isinstance(data, Mapping):
-        content = data.get("content")
-        if isinstance(content, Mapping):
-            full_text = content.get("full_text")
-            if isinstance(full_text, str) and full_text.strip():
-                text = full_text.strip()
-            elif isinstance(content.get("pages"), list):
-                pages = [str(p or "").strip() for p in content["pages"] if str(p or "").strip()]
-                text = "\n\n".join(pages).strip()
+    text = _load_vision_yaml_text(yaml_path.parent, yaml_path, slug=yaml_path.parent.name or "vision")
     reports = analyze_vision_sections(text)
     return text, reports
 

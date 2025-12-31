@@ -71,7 +71,7 @@ def main() -> int:
     ctx: SemanticContextProtocol = ClientContext.load(
         slug=slug, interactive=not args.non_interactive, require_env=False, run_id=run_id
     )
-    with workspace_validation_policy(skip_validation=True, allow_missing=True):
+    with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(ctx)
 
     # Imposta flag UX nel contesto (contratto esplicito del semantic context)

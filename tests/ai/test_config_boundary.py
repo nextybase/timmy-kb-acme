@@ -34,7 +34,7 @@ def _fake_env_factory(mapping: dict[str, str]) -> Callable[[str, bool], str]:
 
 
 def test_resolve_vision_config_prefers_env(monkeypatch):
-    ctx = _DummyCtx(settings={"vision": {"assistant_id_env": "VISION_OVERRIDE_ENV", "model": "config-model"}})
+    ctx = _DummyCtx(settings={"ai": {"vision": {"assistant_id_env": "VISION_OVERRIDE_ENV", "model": "config-model"}}})
 
     def fake_env(name: str, required: bool = False) -> str:
         if name == "VISION_OVERRIDE_ENV":
@@ -74,14 +74,14 @@ def test_assistant_env_precedence_settings(monkeypatch):
     class _StubSettings:
         vision_assistant_env = "settings-env"
 
-    payload = {"vision": {"assistant_id_env": "payload-env"}}
+    payload = {"ai": {"vision": {"assistant_id_env": "payload-env"}}}
     monkeypatch.setattr(config, "Settings", _StubSettings)
     result = config._resolve_assistant_env(_StubSettings(), payload, default_env="DEFAULT_ENV")
     assert result == "settings-env"
 
 
 def test_vision_assistant_env_payload_over_default():
-    payload = {"vision": {"assistant_id_env": "PAYLOAD_ENV"}}
+    payload = {"ai": {"vision": {"assistant_id_env": "PAYLOAD_ENV"}}}
     env_name = config._resolve_assistant_env(None, payload, default_env="DEFAULT_ENV")
     assert env_name == "PAYLOAD_ENV"
 

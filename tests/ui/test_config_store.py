@@ -28,14 +28,16 @@ class _StubContext:
 
 def test_get_retriever_settings_prefers_client_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo_cfg = {
-        "retriever": {
-            "auto_by_budget": False,
-            "throttle": {
-                "candidate_limit": 8000,
-                "latency_budget_ms": 150,
-                "parallelism": 1,
-                "sleep_ms_between_calls": 0,
-            },
+        "pipeline": {
+            "retriever": {
+                "auto_by_budget": False,
+                "throttle": {
+                    "candidate_limit": 8000,
+                    "latency_budget_ms": 150,
+                    "parallelism": 1,
+                    "sleep_ms_between_calls": 0,
+                },
+            }
         }
     }
     repo_config_path = _setup_repo_config(tmp_path, repo_cfg)
@@ -43,14 +45,16 @@ def test_get_retriever_settings_prefers_client_config(tmp_path: Path, monkeypatc
     client_config_path = tmp_path / "output" / "timmy-kb-dummy" / "config" / "config.yaml"
     client_config_path.parent.mkdir(parents=True)
     client_cfg = {
-        "retriever": {
-            "auto_by_budget": True,
-            "throttle": {
-                "candidate_limit": 300,  # clamp -> MIN_CANDIDATE_LIMIT
-                "latency_budget_ms": 2500,  # clamp -> 2000
-                "parallelism": 4,
-                "sleep_ms_between_calls": 10,
-            },
+        "pipeline": {
+            "retriever": {
+                "auto_by_budget": True,
+                "throttle": {
+                    "candidate_limit": 300,  # clamp -> MIN_CANDIDATE_LIMIT
+                    "latency_budget_ms": 2500,  # clamp -> 2000
+                    "parallelism": 4,
+                    "sleep_ms_between_calls": 10,
+                },
+            }
         }
     }
     client_config_path.write_text(yaml.safe_dump(client_cfg, sort_keys=False), encoding="utf-8")
@@ -72,14 +76,16 @@ def test_get_retriever_settings_prefers_client_config(tmp_path: Path, monkeypatc
 
 def test_set_retriever_settings_updates_only_client_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo_cfg = {
-        "retriever": {
-            "auto_by_budget": False,
-            "throttle": {
-                "candidate_limit": 6000,
-                "latency_budget_ms": 100,
-                "parallelism": 1,
-                "sleep_ms_between_calls": 0,
-            },
+        "pipeline": {
+            "retriever": {
+                "auto_by_budget": False,
+                "throttle": {
+                    "candidate_limit": 6000,
+                    "latency_budget_ms": 100,
+                    "parallelism": 1,
+                    "sleep_ms_between_calls": 0,
+                },
+            }
         },
         "meta": {"version": 1},
     }
@@ -89,14 +95,16 @@ def test_set_retriever_settings_updates_only_client_yaml(tmp_path: Path, monkeyp
     client_config_path = tmp_path / "output" / "timmy-kb-dummy" / "config" / "config.yaml"
     client_config_path.parent.mkdir(parents=True)
     client_cfg = {
-        "retriever": {
-            "auto_by_budget": False,
-            "throttle": {
-                "candidate_limit": 500,
-                "latency_budget_ms": 50,
-                "parallelism": 2,
-                "sleep_ms_between_calls": 5,
-            },
+        "pipeline": {
+            "retriever": {
+                "auto_by_budget": False,
+                "throttle": {
+                    "candidate_limit": 500,
+                    "latency_budget_ms": 50,
+                    "parallelism": 2,
+                    "sleep_ms_between_calls": 5,
+                },
+            }
         },
         "other": {"keep": "me"},
     }
@@ -113,7 +121,7 @@ def test_set_retriever_settings_updates_only_client_yaml(tmp_path: Path, monkeyp
     config_store.set_retriever_settings(1234, 1800, True, slug="timmy-kb-dummy")
 
     updated_client = yaml.safe_load(client_config_path.read_text(encoding="utf-8"))
-    assert updated_client["retriever"] == {
+    assert updated_client["pipeline"]["retriever"] == {
         "auto_by_budget": True,
         "throttle": {
             "candidate_limit": 1234,
@@ -130,14 +138,16 @@ def test_get_retriever_settings_fallback_on_configerror(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     repo_cfg = {
-        "retriever": {
-            "auto_by_budget": False,
-            "throttle": {
-                "candidate_limit": 250,  # clamp -> MIN_CANDIDATE_LIMIT
-                "latency_budget_ms": -5,  # clamp -> 0
-                "parallelism": 1,
-                "sleep_ms_between_calls": 0,
-            },
+        "pipeline": {
+            "retriever": {
+                "auto_by_budget": False,
+                "throttle": {
+                    "candidate_limit": 250,  # clamp -> MIN_CANDIDATE_LIMIT
+                    "latency_budget_ms": -5,  # clamp -> 0
+                    "parallelism": 1,
+                    "sleep_ms_between_calls": 0,
+                },
+            }
         }
     }
     repo_config_path = _setup_repo_config(tmp_path, repo_cfg)

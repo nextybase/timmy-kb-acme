@@ -65,8 +65,6 @@ class GlobalConfig(TypedDict, total=False):
     pipeline: dict[str, Any]
     security: dict[str, Any]
     integrations: dict[str, Any]
-    retriever: dict[str, Any]  # legacy fallback
-    raw_cache: dict[str, Any]  # legacy fallback
 
 
 def _load_client_config(slug: str) -> tuple[Path, GlobalConfig]:
@@ -154,8 +152,8 @@ def _save_config(cfg: GlobalConfig) -> None:
 
 
 # ------------------- UI flags (config globale repo) -------------------
-def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
-    """Restituisce ai.vision.model dal config UI (fallback sul default)."""
+def get_vision_model(default: str | None = None) -> str:
+    """Restituisce ai.vision.model dal config UI (contratto unico ai.vision.*)."""
     cfg = _load_config()
     ai_section = cfg.get("ai")
     if isinstance(ai_section, dict):
@@ -164,7 +162,9 @@ def get_vision_model(default: str = "gpt-4o-mini-2024-07-18") -> str:
             model = vision.get("model")
             if isinstance(model, str) and model.strip():
                 return model.strip()
-    return default
+    if default is not None:
+        return default
+    raise ConfigError("Modello Vision mancante in ai.vision.model", file_path=str(CONFIG_FILE))
 
 
 def get_skip_preflight() -> bool:
@@ -216,10 +216,11 @@ def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:
 
     # Atteso: pipeline.retriever.throttle.* + pipeline.retriever.auto_by_budget.
     pipeline_section: Any = source_cfg.get("pipeline") if isinstance(source_cfg, dict) else {}
-    raw_section: Any = (
-        pipeline_section.get("retriever") if isinstance(pipeline_section, dict) else source_cfg.get("retriever")
-    )
-    section: RetrieverConfig = cast(RetrieverConfig, raw_section) if isinstance(raw_section, dict) else {}
+    section: RetrieverConfig = {}
+    if isinstance(pipeline_section, dict):
+        raw_section = pipeline_section.get("retriever")
+        if isinstance(raw_section, dict):
+            section = cast(RetrieverConfig, raw_section)
 
     throttle = section.get("throttle")
     throttle_section: dict[str, Any] = throttle if isinstance(throttle, dict) else {}
@@ -273,11 +274,12 @@ def set_retriever_settings(
             )
             target_cfg = cfg
 
-    pipeline_section: dict[str, Any] = (
-        cast(dict[str, Any], target_cfg.get("pipeline")) if isinstance(target_cfg.get("pipeline"), dict) else {}
-    )
-    raw_section: Any = pipeline_section.get("retriever") if pipeline_section else target_cfg.get("retriever")
-    section: RetrieverConfig = cast(RetrieverConfig, raw_section) if isinstance(raw_section, dict) else {}
+    pipeline_section: dict[str, Any] = {}
+    if isinstance(target_cfg.get("pipeline"), dict):
+        pipeline_section = cast(dict[str, Any], target_cfg.get("pipeline"))
+    section: RetrieverConfig = {}
+    if isinstance(pipeline_section.get("retriever"), dict):
+        section = cast(RetrieverConfig, pipeline_section.get("retriever"))
 
     throttle = section.get("throttle")
     throttle_section: dict[str, Any] = throttle if isinstance(throttle, dict) else {}

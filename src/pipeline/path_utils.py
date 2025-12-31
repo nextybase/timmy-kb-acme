@@ -59,7 +59,6 @@ from typing import (
 
 from .exceptions import ConfigError, InvalidSlug, PathTraversalError
 from .logging_utils import get_structured_logger
-from .yaml_utils import yaml_read
 
 if TYPE_CHECKING:
     from .settings import Settings
@@ -125,11 +124,10 @@ def _load_global_settings(repo_root: Path | None = None, config_path: Path | Non
     try:
         return Settings.load(root, config_path=config_path)
     except Exception as exc:
-        _logger.debug(
-            "path_utils.settings_load_failed",
-            extra={"error": str(exc), "root": str(root), "config_path": str(config_path) if config_path else None},
-        )
-        return None
+        raise ConfigError(
+            f"Impossibile caricare le impostazioni di progetto da {root}: {exc}",
+            file_path=str(config_path or root),
+        ) from exc
 
 
 def _load_raw_cache_defaults(loader: Callable[[], Mapping[str, Any]] | None = None) -> None:
@@ -151,25 +149,17 @@ def _load_raw_cache_defaults(loader: Callable[[], Mapping[str, Any]] | None = No
             )
     else:
         settings = _load_global_settings()
-        if settings:
-            if hasattr(settings, "as_dict"):
-                cfg_source = cast(Mapping[str, Any], settings.as_dict())
-            elif isinstance(settings, Mapping):
-                cfg_source = dict(settings)
-            else:
-                try:
-                    cfg_source = dict(vars(settings))
-                except Exception:
-                    cfg_source = {}
+        if hasattr(settings, "as_dict"):
+            cfg_source = cast(Mapping[str, Any], settings.as_dict())
+        elif isinstance(settings, Mapping):
+            cfg_source = dict(settings)
         else:
-            config_path = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
             try:
-                cfg_source = yaml_read(config_path.parent, config_path, use_cache=True) or {}
-            except Exception as exc:
-                _logger.warning(
-                    "pipeline.raw_cache.defaults_invalid",
-                    extra={"error": str(exc), "config_path": str(config_path)},
-                )
+                cfg_source = dict(vars(settings))
+            except Exception as exc:  # pragma: no cover
+                raise ConfigError(
+                    "Formato impostazioni non valido per raw_cache defaults", file_path=str(settings)
+                ) from exc
 
     raw_cfg: dict[str, Any] = {}
     if isinstance(cfg_source, Mapping):
@@ -551,35 +541,20 @@ def _load_slug_regex() -> str:
 
     Strategia:
     - Usa `Settings` (SSoT) del progetto.
-    - Fallback su `./config/config.yaml` se esistente.
-    - Fallback: `^[a-z0-9-]+$`.
+    - Fallback interno minimo: `^[a-z0-9-]+$`.
     """
     default_regex = r"^[a-z0-9-]+$"
     settings = _load_global_settings()
-    if settings:
-        try:
-            if hasattr(settings, "get_value"):
-                candidate = cast(Any, settings).get_value("slug_regex", default=default_regex)
-            else:
-                candidate = getattr(settings, "slug_regex", default_regex)
-        except Exception:
-            candidate = default_regex
-        if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
+    try:
+        if hasattr(settings, "get_value"):
+            candidate = cast(Any, settings).get_value("slug_regex", default=default_regex)
+        else:
+            candidate = getattr(settings, "slug_regex", default_regex)
+    except Exception as e:
+        raise ConfigError("Impossibile ottenere slug_regex da Settings", file_path=str(settings)) from e
 
-    # Fallback a un eventuale config locale in cwd
-    fallback_cfg = Path("config") / "config.yaml"
-    if fallback_cfg.exists():
-        try:
-            cfg = yaml_read(fallback_cfg.parent, fallback_cfg) or {}
-            pattern = cfg.get("slug_regex", default_regex)
-            if isinstance(pattern, str) and pattern.strip():
-                return pattern.strip()
-        except Exception as e:
-            _logger.error(
-                "path_utils.slug_regex_load_error",
-                extra={"error": str(e), "file_path": str(fallback_cfg)},
-            )
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
     return default_regex
 
 
@@ -618,14 +593,12 @@ def validate_slug(slug: str) -> str:
 def normalize_path(path: Path) -> Path:
     """Restituisce il path normalizzato/risolto.
 
-    In caso di errore, ritorna il path originale senza interrompere il flusso e registra l'errore
-    sul logger.
+    In caso di errore alza ConfigError: comportamento fail-fast (hard cut 1.0 Beta).
     """
     try:
         return Path(path).resolve()
     except Exception as e:
-        _logger.error("path_utils.normalize_error", extra={"error": str(e)})
-        return Path(path)
+        raise ConfigError("Impossibile normalizzare il path", file_path=str(path)) from e
 
 
 def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_") -> str:

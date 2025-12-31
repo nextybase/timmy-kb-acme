@@ -35,7 +35,7 @@ def render_client_header(
         slug: identificativo cliente corrente (se presente).
         state: eventuale stato/phase normalizzato (se presente).
     """
-    del repo_root  # parametro non usato qui, mantenuto per compatibilità
+    del repo_root  # non usato: la root va ottenuta dai layout canonici a monte
 
     # Ancorina sicura per skiplink
     try:
@@ -62,7 +62,7 @@ def render_sidebar_branding(
     """
     Sezione "branding" nella sidebar. Mantiene un profilo minimale e robusto.
     """
-    del repo_root  # parametro riservato per uniformità delle firme
+    del repo_root  # non usato: la root proviene dal chiamante canonico
 
     with st_module.sidebar:
         st_module.subheader("Onboarding")

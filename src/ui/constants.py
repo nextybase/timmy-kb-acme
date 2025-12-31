@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 """
-Costanti condivise per lo stato cliente (persistito) e note sulle fasi UI.
+Costanti condivise per lo stato cliente (persistito) e le fasi UI (contratto unico 1.0 Beta).
 
 - Lo **stato cliente** è salvato nel registry (SSoT) gestito da `ui.clients_store`
   nel campo `stato` e usa SOLO valori in italiano.
-- Le **fasi UI** (es. wizard "Nuovo cliente") sono stati effimeri di interfaccia,
-  NON vengono persistiti e possono restare in inglese senza impattare la logica.
+- Le **fasi UI** (wizard "Nuovo cliente") sono stati effimeri di interfaccia e restano in italiano.
 
 Usa SEMANTIC_ENTRY_STATES per il gating della scheda "Semantica"
 e SEMANTIC_READY_STATES per le funzioni disponibili solo a stato arricchito/finito (es. preview).
@@ -28,9 +27,9 @@ SEMANTIC_GATING_MESSAGE = "La semantica è disponibile da stato 'pronto' in poi 
 KNOWN_CLIENT_STATES = {"nuovo", "pronto", "arricchito", "finito"}
 
 # Nota: le fasi UI NON sono persistite nel registry clienti.
-# Esempi (solo UI): {"init", "ready_to_open", "provisioned"}
+# Esempi (solo UI): {"iniziale", "pronto_apertura", "predisposto"}
 
-# Fasi UI (wizard Nuovo cliente) -- restano stringhe inglesi per compatibilita
-UI_PHASE_INIT = "init"
-UI_PHASE_READY_TO_OPEN = "ready_to_open"
-UI_PHASE_PROVISIONED = "provisioned"
+# Fasi UI (wizard Nuovo cliente) in italiano (contratto unico)
+UI_PHASE_INIT = "iniziale"
+UI_PHASE_READY_TO_OPEN = "pronto_apertura"
+UI_PHASE_PROVISIONED = "predisposto"

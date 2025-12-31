@@ -42,19 +42,8 @@ def _clients_root(base_dir: Path) -> Path:
     return ensure_within_and_resolve(base, base / "clients_db" / "clients")
 
 
-def _legacy_clients_root(base_dir: Path) -> Path:
-    base = Path(base_dir)
-    return ensure_within_and_resolve(base, base / "clients")
-
-
 def _ownership_file(base_dir: Path, slug: str) -> Path:
     clients_root = _clients_root(base_dir)
-    slug_dir = ensure_within_and_resolve(clients_root, clients_root / slug)
-    return ensure_within_and_resolve(slug_dir, slug_dir / OWNERSHIP_FILENAME)
-
-
-def _legacy_ownership_file(base_dir: Path, slug: str) -> Path:
-    clients_root = _legacy_clients_root(base_dir)
     slug_dir = ensure_within_and_resolve(clients_root, clients_root / slug)
     return ensure_within_and_resolve(slug_dir, slug_dir / OWNERSHIP_FILENAME)
 
@@ -63,21 +52,13 @@ def load_ownership(slug: str, base_dir: Path | str) -> OwnershipConfig:
     base_path = Path(base_dir)
     path = _ownership_file(base_path, slug)
     if not path.exists():
-        legacy_path = _legacy_ownership_file(base_path, slug)
-        if legacy_path.exists():
-            LOGGER.warning(
-                "ownership.legacy_path_used",
-                extra={"slug": slug, "path": str(legacy_path)},
-            )
-            path = legacy_path
-        else:
-            raise ConfigError(
-                "Ownership non configurata",
-                slug=slug,
-                file_path=str(path),
-                code="ownership.missing",
-                component=CODE_COMPONENT,
-            )
+        raise ConfigError(
+            "Ownership non configurata (percorso canonico mancante)",
+            slug=slug,
+            file_path=str(path),
+            code="ownership.missing",
+            component=CODE_COMPONENT,
+        )
     try:
         text = read_text_safe(path.parent, path, encoding="utf-8")
         payload = yaml.safe_load(text) or {}
