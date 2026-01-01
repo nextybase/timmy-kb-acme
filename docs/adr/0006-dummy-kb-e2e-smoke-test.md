@@ -27,22 +27,30 @@ ma il suo comportamento attuale è limitato.
 
 Per rafforzare la resilienza del sistema, si decide di trasformare la Dummy KB in un **E2E Smoke Test ufficiale**, cancellabile e rigenerabile con un singolo comando/azione.
 
+Questo ADR è subordinato ad ADR-0007 (Dummy Manifesto), che governa il Dummy come "first-class architectural fixture"
+e definisce i vincoli "same entrypoints as real clients", "smoke vs deep modes" e "health contract". Questo documento
+descrive l'applicazione smoke/deep nel rispetto di tali vincoli, senza introdurre regole globali.
+
 ## Decisione
 
 Viene adottata la seguente decisione architetturale:
 
 > **La Dummy KB diventa un cliente reale, cancellabile e rigenerabile, usato ufficialmente come Smoke Test End-to-End dell’intero ecosistema Timmy KB.**
 
+Questa applicazione è subordinata ad ADR-0007 e non modifica le regole di governance del Dummy.
+
 La decisione si articola in sei punti:
 
 1. **Registrazione Cliente Dummy**
    - Dopo la generazione del workspace, la dummy viene registrata nel registry UI tramite `upsert_client()` da
      [`src/ui/clients_store.py`](../../src/ui/clients_store.py).
+   - La registrazione usa gli stessi entrypoints dei client reali ("same entrypoints as real clients").
 
 2. **Rigenerabilità Completa**
    - La dummy viene progettata per essere cancellata e rigenerata senza lasciare residui.
    - La UI mantiene l'opzione “Cancella dummy (locale + Drive)” già presente in
      [`src/ui/chrome.py`](../../src/ui/chrome.py).
+   - Nel rispetto dell'idempotenza del Manifesto, senza reset globali.
 
 3. **Validazione strutturale (Smoke Test)**
    - Il tool esegue un insieme di verifiche obbligatorie su file e directory fondamentali:
@@ -64,8 +72,10 @@ La decisione si articola in sei punti:
      - presenza di SUMMARY.md,
      - conteggio README generati,
      - eventuali warning.
+   - Il report health costituisce il "health contract" del Dummy.
 
 5. **UI arricchita con Smoke Report**
+   - La UI orchestra il flusso senza reimplementare logica e senza bypassare i contratti CLI/pipeline.
    - Il modal Dummy KB visualizza un pannello diagnostico basato sullo struct `"health"` ricevuto dal tool CLI.
    - Il template UI è definito in
      [`src/ui/chrome.py`](../../src/ui/chrome.py).
@@ -75,14 +85,18 @@ La decisione si articola in sei punti:
      `python tools/gen_dummy_kb.py --slug dummy --reset`.
    - La generazione della dummy non avviene automaticamente all’avvio della UI, ma è uno strumento operativo a disposizione di sviluppatori e pipeline CI.
 
+   - In CI si esegue solo smoke mode; il deep è manuale e diagnostico.
+
 ### Contratto deep testing
 
 La modalità deep testing descrive lo stesso flusso controllato della Dummy KB smoke, ma con vincoli operativi più stringenti:
+Questa sezione applica i "smoke vs deep modes" del Manifesto e non introduce regole globali.
 
 - **Smoke** è l'esecuzione cablata: genera un workspace fittizio, valida la struttura e produce l’health report senza Vision/Drive reali quando disabilitati.
 - **Deep** è la stessa pipeline con Vision e Drive attivi, senza fallback: ogni chiamata reale viene osservata, i controlli falliscono duramente (health.status="failed") e viene chiesto all’utente di riprovare solo quando i secrets/permessi sono adeguati.
 - In deep non si ignora mai un errore Vision o Drive; una failure viene trasformata in `HardCheckError` e il payload health espone `errors`, `checks` ed `external_checks` con messaggi che collegano direttamente all’esito della Secrets Healthcheck UI.
 - Il flag CLI `--deep-testing` (e la checkbox "Attiva testing profondo") attivano questa modalità e scrivono `health.mode="deep"` nel payload finale, insieme a un’entry `golden_pdf` con path, sha256 e dimensione (solo in deep).
+- La step selectability del Manifesto resta valida: passi disabilitati non eseguono e non modificano artefatti.
 
 ### Schema health (deep vs smoke)
 
@@ -213,6 +227,7 @@ Il refactor viene implementato nei seguenti file:
 
 ### Riferimenti
 
+- ADR-0007: Dummy Manifesto (SSoT).
 - Strumento CLI originale:
 [`tools/gen_dummy_kb.py`](../../tools/gen_dummy_kb.py)
 
@@ -237,4 +252,4 @@ Il refactor viene implementato nei seguenti file:
 Nessuna alternativa esplicitata nel testo originale.
 
 ## Revisione
-Nessuna revisione esplicitata nel testo originale.
+Questo ADR resta subordinato ad ADR-0007.
