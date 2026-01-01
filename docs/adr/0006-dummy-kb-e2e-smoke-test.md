@@ -75,7 +75,7 @@ La decisione si articola in sei punti:
    - Il report health costituisce il "health contract" del Dummy.
 
 5. **UI arricchita con Smoke Report**
-   - La UI orchestra il flusso senza reimplementare logica e senza bypassare i contratti CLI/pipeline.
+  - La UI orchestra il flusso senza implementare di nuovo la logica e senza bypassare i contratti CLI/pipeline.
    - Il modal Dummy KB visualizza un pannello diagnostico basato sullo struct `"health"` ricevuto dal tool CLI.
    - Il template UI è definito in
      [`src/ui/chrome.py`](../../src/ui/chrome.py).
@@ -96,7 +96,7 @@ Questa sezione applica i "smoke vs deep modes" del Manifesto e non introduce reg
 - **Deep** è la stessa pipeline con Vision e Drive attivi, senza fallback: ogni chiamata reale viene osservata, i controlli falliscono duramente (health.status="failed") e viene chiesto all’utente di riprovare solo quando i secrets/permessi sono adeguati.
 - In deep non si ignora mai un errore Vision o Drive; una failure viene trasformata in `HardCheckError` e il payload health espone `errors`, `checks` ed `external_checks` con messaggi che collegano direttamente all’esito della Secrets Healthcheck UI.
 - Il flag CLI `--deep-testing` (e la checkbox "Attiva testing profondo") attivano questa modalità e scrivono `health.mode="deep"` nel payload finale, insieme a un’entry `golden_pdf` con path, sha256 e dimensione (solo in deep).
-- La step selectability del Manifesto resta valida: passi disabilitati non eseguono e non modificano artefatti.
+- La selezione dei passi del Manifesto resta valida: passi disabilitati non eseguono e non modificano artefatti.
 
 ### Schema health (deep vs smoke)
 

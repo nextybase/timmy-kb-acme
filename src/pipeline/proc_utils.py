@@ -2,7 +2,7 @@
 # src/pipeline/proc_utils.py
 """Utility robuste e riutilizzabili per eseguire comandi di sistema con timeout, retry, backoff ed
 eventi di logging strutturato. Sostituisce l'uso diretto di `subprocess.run` nei moduli della
-pipeline (es. preview HonKit via Docker, git push, ecc.).
+pipeline (es. preview HonKit via Docker, comandi SCM, ecc.).
 
 Funzionalità principali
 -----------------------
@@ -124,7 +124,7 @@ def _default_timeout_for(op: Optional[str]) -> int:
     """
     if op and "docker" in op:
         return int(get_int("DOCKER_CMD_TIMEOUT", 90) or 90)
-    if op and ("git" in op or op in {"push", "commit", "add"}):
+    if op and ("git" in op or op in {"commit", "add"}):
         return int(get_int("GIT_CMD_TIMEOUT", 120) or 120)
     return int(get_int("PROC_CMD_TIMEOUT", 60) or 60)
 
@@ -300,7 +300,7 @@ def run_cmd(
         capture: se True, cattura stdout/stderr (text mode).
         redactor: funzione per redigere segreti nei log (default: `logging_utils.redact_secrets`).
         logger: logger strutturato per log diagnostici (opzionale).
-        op: etichetta operativa (es. "docker build", "git push") per log e default timeout.
+        op: etichetta operativa (es. "docker build", "git status") per log e default timeout.
 
     Restituisce:
         subprocess.CompletedProcess in caso di successo (returncode == 0).

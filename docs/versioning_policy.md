@@ -49,7 +49,7 @@ PR obbligatorie verso `main`. Protezioni:
 - `docs/user/user_guide.md`
 - `docs/developer/developer_guide.md`
 - `docs/developer/coding_rule.md`
-- Nessuna policy di deploy esterno attiva.
+- Nessuna policy di rilascio esterno attiva.
 - `versioning_policy.md`
 - `CHANGELOG.md`
 

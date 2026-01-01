@@ -37,6 +37,12 @@ def main() -> int:
             slug=args.slug,
             pdf_path=pdf_path,
         )
+        if result.get("skipped"):
+            log.info(
+                "vision_yaml_skipped",
+                extra={"slug": args.slug, "mode": result.get("mode", "SMOKE")},
+            )
+            return 0
         log.info("vision_yaml_generated", extra={"slug": args.slug, **result})
         return 0
     except HaltError as err:

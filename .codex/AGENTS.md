@@ -1,6 +1,6 @@
 # Purpose
 
-Operational rules for the Codex agent acting within `.codex/`, focusing on path safety, atomic writes, QA, and GitHub orchestration.
+Operational rules for the Codex agent acting within `.codex/`, focusing on path safety, atomic writes, and QA.
 
 
 
@@ -9,7 +9,6 @@ Operational rules for the Codex agent acting within `.codex/`, focusing on path 
 - Path-safety: write only within `src/`, `tests/`, `docs/`, `.codex/`; never touch `config/**`, `.env*`, `output/**`; scrivo solo in italiano salvo eccezione control-mode OCP ↔ Codex in inglese.
 - Atomic I/O via SSoT helpers (`ensure_within*`, `safe_write_*`), no import-time side effects.
 - Standard QA pipeline: `isort`, `black`, `ruff --fix`, `mypy`, `pytest -q -k 'not slow'`.
-- Use only the helper Git workflows `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease` for pushes (stubs used in `tests/pipeline/test_github_push.py`).
 - Reuse vision/UI helpers `_is_gate_error` (`ui.pages.tools_check`) and the `build_payload/emit_structure` builders from `tools.gen_dummy_kb`.
 - Work with the Senior Reviewer via single-scope micro-PRs, summarizing changes with references to `.codex/CONSTITUTION.md` and `system/ops/agents_index.md`, documenting QA and any open questions.
 - Codex operates under the Prompt Chain defined by the OCP: every prompt is a micro-PR respecting AGENT-first/HiTL, path safety, QA, and the SSoT `system/ops/agents_index.md`. The OCP orchestrates but does not modify the repository. Refer to `system/specs/promptchain_spec.md` and `.codex/PROMPTS.md` for the full chain definition, the phase model (Phase 0 analytical/read-only, Phase 1..N operational micro-PRs, Prompt N+1 final QA), and the template requirements.

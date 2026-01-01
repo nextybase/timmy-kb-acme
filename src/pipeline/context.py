@@ -144,7 +144,6 @@ class ClientContext:
 
     # Flag esecuzione
     no_interactive: bool = False
-    auto_push: bool = False
     skip_preview: bool = False
     log_level: str = "INFO"
     dry_run: bool = False

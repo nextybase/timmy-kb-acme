@@ -648,8 +648,6 @@ PHASE_ARTIFACT_SCHEMA: dict[str, str] = {
     "require_reviewed_vocab": "presenza vocabolario reviewed (bool via artifact_count 0/1)",
     "enrich_frontmatter": "numero di file markdown arricchiti",
     "write_summary_and_readme": "numero file SUMMARY/README scritti/validati (tipicamente 2)",
-    # git push
-    "git_push": "esito push GitHub (artifact_count=1 se push eseguito, 0 se skipped)",
     # kg/tag builder
     "semantic.tag_kg_builder": "numero di nodi/tag arricchiti (se disponibile)",
     # ingest

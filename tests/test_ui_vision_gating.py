@@ -134,3 +134,74 @@ def test_ui_gating_hash_file_and_block_then_force(
             hash_path.write_text(original_hash, encoding="utf-8")
         mapping_path.write_text(original_mapping, encoding="utf-8")
         cartelle_path.write_text(original_cartelle, encoding="utf-8")
+
+
+def test_vision_mode_smoke_skips_without_touching_hash(
+    monkeypatch: pytest.MonkeyPatch,
+    dummy_workspace,
+    dummy_ctx,
+    dummy_logger,
+):
+    import pipeline.vision_runner as runner
+
+    monkeypatch.setenv("VISION_MODE", "SMOKE")
+
+    def _boom(*_: object, **__: object) -> None:
+        raise AssertionError("Vision non dovrebbe essere invocata in SMOKE.")
+
+    monkeypatch.setattr(runner, "_provision_from_vision_with_config", _boom)
+    monkeypatch.setattr(runner, "_provision_from_vision_yaml_with_config", _boom)
+
+    base = dummy_workspace["base"]
+    pdf = dummy_workspace["vision_pdf"]
+    slug = dummy_workspace["slug"]
+    hash_path = base / "semantic" / ".vision_hash"
+    original = hash_path.read_text(encoding="utf-8") if hash_path.exists() else None
+
+    result = runner.run_vision_with_gating(
+        dummy_ctx,
+        logger=dummy_logger,
+        slug=slug,
+        pdf_path=pdf,
+    )
+
+    assert result.get("skipped") is True
+    assert result.get("mode") == "SMOKE"
+    if original is None:
+        assert not hash_path.exists()
+    else:
+        assert hash_path.read_text(encoding="utf-8") == original
+
+
+def test_vision_mode_deep_propagates_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    dummy_workspace,
+    dummy_ctx,
+    dummy_logger,
+):
+    import pipeline.vision_runner as runner
+
+    monkeypatch.setenv("VISION_MODE", "DEEP")
+
+    def _raise(*_: object, **__: object) -> None:
+        raise ConfigError("boom")
+
+    monkeypatch.setattr(runner, "_provision_from_vision_with_config", _raise)
+    monkeypatch.setattr(runner, "_provision_from_vision_yaml_with_config", _raise)
+    config = AssistantConfig(
+        model="test-model",
+        assistant_id="test-assistant",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
+    monkeypatch.setattr(runner, "resolve_vision_config", lambda ctx, override_model=None: config)
+    monkeypatch.setattr(runner, "resolve_vision_retention_days", lambda ctx: 7)
+
+    with pytest.raises(ConfigError):
+        runner.run_vision_with_gating(
+            dummy_ctx,
+            logger=dummy_logger,
+            slug=dummy_workspace["slug"],
+            pdf_path=dummy_workspace["vision_pdf"],
+        )

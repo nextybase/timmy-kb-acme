@@ -38,7 +38,7 @@ def test_run_cmd_redacts_output_in_fail_logs(monkeypatch: pytest.MonkeyPatch, ca
     # Catturiamo i log WARNING del nostro logger
     with caplog.at_level(logging.WARNING, logger="tests.proc"):
         with pytest.raises(CmdError):
-            run_cmd(["dummy"], retries=0, capture=True, logger=lg, op="git push")
+            run_cmd(["dummy"], retries=0, capture=True, logger=lg, op="git fetch")
 
     # Cerchiamo il record 'run_cmd.fail' e verifichiamo i tail redatti
     fail_records = [r for r in caplog.records if r.name == "tests.proc" and r.getMessage() == "run_cmd.fail"]

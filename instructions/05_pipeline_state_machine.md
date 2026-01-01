@@ -14,14 +14,14 @@
 | `WORKSPACE_BOOTSTRAP` | intent registered, prompt includes workspace slug | raw/, config/, semantic/ directories created via WorkspaceLayout | `REGISTER_*`, `VALIDATE_*` (config/schema checks) | Gatekeepers confirm workspace, move to `SEMANTIC_INGEST` |
 | `SEMANTIC_INGEST` | workspace present, raw artefacts available | raw PDFs, `config/config.yaml`, `tags_reviewed.yaml` (if advisory) | `VALIDATE_*`, `GENERATE_*` (metadata export) | Tag/semantic Gatekeepers confirm `tags.db` updates, proceed to `FRONTMATTER_ENRICH` |
 | `FRONTMATTER_ENRICH` | `tags.db` / semantic mapping exists | enriched frontmatter (`book/*.md`), `README.md`, `SUMMARY.md` drafts | `VALIDATE_*` (frontmatter, semantic index checks) | Gatekeepers verify frontmatter/embedding logs, move to `VISUALIZATION_REFRESH` |
-| `VISUALIZATION_REFRESH` | frontmatter validated | final README/SUMMARY + preview artefacts (`semantic/kg.tags.*`) | `GENERATE_*` (preview docs, vision statements) | Gatekeepers/OCP verify `semantic/kg.tags.*`, proceed to `PUBLISH_PREP` |
-| `PUBLISH_PREP` | previews approved, GitHub/Drive configuration ready | `book/`, `semantic/` artefacts staged | `EXECUTE_*` (push, publish) under Work Order Envelope | Stop or complete; upon success (validated artifacts + KG) pipeline complete |
+| `VISUALIZATION_REFRESH` | frontmatter validated | final README/SUMMARY + preview artefacts (`semantic/kg.tags.*`) | `GENERATE_*` (preview docs, vision statements) | Gatekeepers/OCP verify `semantic/kg.tags.*`, proceed to `PREVIEW_READY` |
+| `PREVIEW_READY` | preview locale pronta, requisiti QA soddisfatti | `book/`, `semantic/` artefacts pronti | `VALIDATE_*` (check finali) | Stop or complete; upon success (validated artifacts + KG) pipeline complete |
 
 ## State Transitions
 - `WORKSPACE_BOOTSTRAP` → `SEMANTIC_INGEST`: triggered when raw+config artefacts exist and Gatekeepers log `semantic.book.frontmatter` start.
 - `SEMANTIC_INGEST` → `FRONTMATTER_ENRICH`: occurs when `semantic/tags.db` and mapping pass validation; evidence: `semantic.index` events + `semantic.book.frontmatter`.
 - `FRONTMATTER_ENRICH` → `VISUALIZATION_REFRESH`: requires `SUMMARY.md`, `README.md` drafts plus `semantic/kg.tags.*`.
-- `VISUALIZATION_REFRESH` → `PUBLISH_PREP`: Gatekeeper/OCP confirmation that vision mapping + artifact logs match expected outputs.
+- `VISUALIZATION_REFRESH` → `PREVIEW_READY`: Gatekeeper/OCP confirmation that vision mapping + artifact logs match expected outputs.
 - Transition to `COMPLETE` (ProtoTimmy → Timmy): pipeline complete once enriched markdown + validated KG exist.
 
 ## Stop Conditions & Resume Rules
@@ -42,5 +42,5 @@
 - [ ] Raw + config directories created (`WORKSPACE_BOOTSTRAP`).
 - [ ] Semantic artefacts validated (`SEMANTIC_INGEST`, `FRONTMATTER_ENRICH`).
 - [ ] Vision/document preview artefacts produced (`VISUALIZATION_REFRESH`).
-- [ ] Push/artifact publication executed under Work Order Envelope (`PUBLISH_PREP`).
+- [ ] Preview locale validata (`PREVIEW_READY`).
 - [ ] Enriched markdown + validated KG exist, enabling ProtoTimmy → Timmy transition.

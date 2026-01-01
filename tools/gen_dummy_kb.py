@@ -83,7 +83,7 @@ _ensure_local_readmes = _dummy_helpers.ensure_local_readmes
 _ensure_minimal_tags_db = _dummy_helpers.ensure_minimal_tags_db
 _ensure_raw_pdfs = _dummy_helpers.ensure_raw_pdfs
 _load_mapping_categories = _dummy_helpers.load_mapping_categories
-_write_basic_semantic_yaml = _dummy_helpers.write_basic_semantic_yaml
+_write_basic_semantic_yaml = getattr(_dummy_helpers, "write_basic_semantic_yaml", None)
 _run_vision_with_timeout = _dummy_helpers.run_vision_with_timeout
 
 _call_drive_build_from_mapping = _drive_helpers.call_drive_build_from_mapping
@@ -280,7 +280,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     ap.add_argument("--slug", default="dummy", help="Slug del cliente (default: dummy)")
     ap.add_argument("--name", default=None, help='Nome visuale del cliente (default: "Dummy <slug>")')
     ap.add_argument("--no-drive", action="store_true", help="Disabilita tutti i passi Drive")
-    ap.add_argument("--no-vision", action="store_true", help="Non invocare Vision: genera YAML basici")
+    ap.add_argument("--no-vision", action="store_true", help="Non invocare Vision (nessun artefatto alternativo)")
     ap.add_argument("--with-drive", action="store_true", help="Abilita Drive se possibile (compat)")
     ap.add_argument(
         "--base-dir",
@@ -340,7 +340,6 @@ def build_payload(
         build_drive_from_mapping=build_drive_from_mapping,
         emit_readmes_for_raw=emit_readmes_for_raw,
         run_vision_with_timeout_fn=_run_vision_with_timeout,
-        write_basic_semantic_yaml_fn=_write_basic_semantic_yaml,
         load_mapping_categories_fn=_load_mapping_categories,
         ensure_minimal_tags_db_fn=_ensure_minimal_tags_db,
         ensure_raw_pdfs_fn=_ensure_raw_pdfs,
@@ -382,10 +381,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             enable_vision = False
 
     prev_repo_root_dir = os.environ.get("REPO_ROOT_DIR")
+    prev_vision_mode = os.environ.get("VISION_MODE")
     prev_clients_db_dir = os.environ.get("CLIENTS_DB_DIR")
     prev_clients_db_file = os.environ.get("CLIENTS_DB_FILE")
     workspace_override: Optional[Path] = None
     try:
+        if not enable_vision and prev_vision_mode is None:
+            os.environ["VISION_MODE"] = "SMOKE"
         if args.base_dir:
             base_override = Path(args.base_dir).expanduser().resolve()
             workspace_override = base_override / f"timmy-kb-{slug}"
@@ -468,6 +470,10 @@ def main(argv: Optional[list[str]] = None) -> int:
                 os.environ.pop("REPO_ROOT_DIR", None)
             else:
                 os.environ["REPO_ROOT_DIR"] = prev_repo_root_dir
+        if prev_vision_mode is None:
+            os.environ.pop("VISION_MODE", None)
+        else:
+            os.environ["VISION_MODE"] = prev_vision_mode
         if args.clients_db:
             if prev_clients_db_dir is None:
                 os.environ.pop("CLIENTS_DB_DIR", None)

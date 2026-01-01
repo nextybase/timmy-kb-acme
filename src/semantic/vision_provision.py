@@ -301,12 +301,11 @@ def _build_prompt_from_snapshot(snapshot: str, *, slug: str, ctx: Any, logger: "
 
     try:
         global_entities = ontology.get_all_entities()
-    except Exception as exc:  # pragma: no cover - fallback safe
-        logger.warning(
-            _evt("entities.load_failed"),
-            extra={"slug": slug, "error": str(exc)},
-        )
-        global_entities = []
+    except Exception as exc:
+        raise ConfigError(
+            f"Ontology load failed: {exc}",
+            slug=slug,
+        ) from exc
 
     user_block_lines.append(
         "Entità globali disponibili (non inventare nuove entità; seleziona solo quelle rilevanti; "

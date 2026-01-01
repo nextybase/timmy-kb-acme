@@ -226,7 +226,7 @@ def _sig(fn):  # rappresentazione semplice della firma
     return tuple((p.kind, p.name, p.default is not inspect._empty) for p in inspect.signature(fn).parameters.values())
 
 def test_safe_write_text_signature_matches_backend():
-    ui = importlib.import_module('src.ui.utils.core')
+    ui = importlib.import_module('ui.utils.core')
     be = importlib.import_module('pipeline.file_utils')
     assert _sig(ui.safe_write_text) == _sig(be.safe_write_text)
 ```

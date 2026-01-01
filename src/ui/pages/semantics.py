@@ -308,7 +308,7 @@ _GATING_LOG = get_structured_logger("ui.semantics.gating")
 _PROGRESS = {
     "pronto": "[1/3] Conversione completata. Procedi con arricchimento e README/SUMMARY.",
     "arricchito": "[2/3] Conversione + arricchimento completati. Genera README/SUMMARY.",
-    "finito": "[3/3] Tutti gli step completati: pronta per preview/push.",
+    "finito": "[3/3] Tutti gli step completati: pronta per la preview locale.",
 }
 
 

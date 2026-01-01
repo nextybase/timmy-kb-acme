@@ -1,9 +1,9 @@
 # Import Contract (namespace unico)
 
-Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitivamente il doppio percorso `src.*` e fissa le regole di import per il runtime e per i tool.
+Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitivamente il doppio percorso legacy e fissa le regole di import per il runtime e per i tool.
 
 ## Scopo
-- Definire i package legittimi e vietare il ricorso a `src.*` in qualsiasi forma.
+- Definire i package legittimi e vietare il ricorso al namespace legacy in qualsiasi forma.
 - Impedire giochi di `sys.path` nei moduli applicativi.
 - Chiarire che `tools/` è la SSoT e non esistono fallback al vecchio namespace.
 
@@ -14,7 +14,7 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
 - `tools.*` (tooling ufficiale: smoke, generatori, diagnostica) — **unico SSoT**.
 
 ## Divieti
-- Vietato importare o risolvere stringhe `src.*` in qualsiasi modulo (inclusi `importlib`, loader custom, plugin).
+- Vietato importare o risolvere stringhe del namespace legacy in qualsiasi modulo (inclusi `importlib`, loader custom, plugin).
 - Vietato manipolare `sys.path` nei moduli applicativi. Consentito solo nei runner/entrypoint **se strettamente indispensabile** e con commento che spiega il motivo.
 - Vietato usare shim o alias verso namespace legacy o percorsi legacy.
 
@@ -31,18 +31,17 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
   - `importlib.import_module("tools.gen_dummy_kb")`
   - `from tools.gen_dummy_kb import build_payload`
 - Errato:
-  - `importlib.import_module("tools.gen_dummy_kb")`
-  - `sys.path.insert(0, str(Path(__file__).parents[2] / "src"))` (nei moduli applicativi)
+  - `importlib.import_module("legacy_ns.tools.gen_dummy_kb")`
+  - hacking di `sys.path` nei moduli applicativi
 
 ## Enforcement rapido
-- Trova violazioni `src.` negli import:
-  - `rg 'from\\s+src\\.|import\\s+src\\.'`
-  - `rg 'importlib\\.import_module\\(\"src\\.'`
+- Trova violazioni del namespace legacy negli import:
+  - `rg 'from\\s+legacy_ns\\.|import\\s+legacy_ns\\.'`
+  - `rg 'importlib\\.import_module\\(\"legacy_ns\\.'`
 - Trova path hacking:
-  - `rg 'sys\\.path\\.insert' src tools`
-  - `rg 'sys\\.path\\.append' src tools`
+  - `rg 'sys\\.path' src tools`
 - Conferma SSoT tools:
-  - `rg 'src\\.tools'`
+  - `rg 'legacy_ns\\.tools'`
 
 ## Test da eseguire
 - Suite rapida: `pytest -q -k "not slow"`

@@ -1,13 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
 from pipeline.exceptions import ConfigError
-from pipeline.paths import clients_db_paths, ensure_src_on_sys_path, get_repo_root, global_logs_dir, preview_logs_dir
+from pipeline.paths import clients_db_paths, get_repo_root, global_logs_dir, preview_logs_dir
 
 
 def _make_repo(tmp_path: Path) -> Path:
@@ -88,16 +87,3 @@ def test_preview_logs_dir_invalid_relative(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path)
     with pytest.raises(ConfigError):
         preview_logs_dir(repo, override=Path("..") / "outside")
-
-
-def test_ensure_src_on_sys_path_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    repo = _make_repo(tmp_path)
-    src_dir = repo / "src"
-    src_dir.mkdir()
-    original = list(sys.path)
-    monkeypatch.setattr(sys, "path", [])
-    ensure_src_on_sys_path(repo)
-    assert str(src_dir) in sys.path
-    ensure_src_on_sys_path(repo)
-    assert sys.path.count(str(src_dir)) == 1
-    monkeypatch.setattr(sys, "path", original)

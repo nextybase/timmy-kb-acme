@@ -23,7 +23,6 @@ DOC_OPTIONS: list[tuple[str, str]] = [
     ("Guide - Interfaccia Streamlit", "docs/streamlit_ui.md"),
     ("Guide - Test suite", "docs/test_suite.md"),
     ("Policy - Policy di Versioning", "docs/versioning_policy.md"),
-    ("Policy - Policy di Push", "docs/policy_push.md"),
     ("Policy - Security & Compliance", "docs/security.md"),
     ("ADR - Registro decisioni (ADR)", "docs/adr/README.md"),
     ("ADR - ADR 0001 - SQLite SSOT dei tag", "docs/adr/0001-sqlite-ssot-tags.md"),

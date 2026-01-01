@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
+from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -30,6 +31,21 @@ from semantic.vision_provision import provision_from_vision_yaml_with_config as 
 # Alias patchabili per test/dummy
 _provision_from_vision_with_config = _provision_from_pdf
 _provision_from_vision_yaml_with_config = _provision_from_yaml
+
+
+def _resolve_vision_mode(ctx: Any) -> str:
+    raw = None
+    settings = getattr(ctx, "settings", None)
+    try:
+        raw = getattr(settings, "vision_mode", None)
+    except Exception:
+        raw = None
+    if not raw:
+        raw = get_env_var("VISION_MODE", default="DEEP")
+    mode = str(raw or "DEEP").strip().lower()
+    if mode in {"smoke", "deep"}:
+        return mode
+    raise ConfigError(f"VISION_MODE non valido: {raw!r}. Usa 'SMOKE' o 'DEEP'.")
 
 
 def _semantic_dir(base_dir: Path) -> Path:
@@ -113,6 +129,20 @@ def run_vision_with_gating(
     """
     Esegue Vision con gating hash/sentinel condiviso (headless-safe).
     """
+    mode = _resolve_vision_mode(ctx)
+    if mode == "smoke":
+        logger.info(
+            "vision_runner.skipped",
+            extra={"slug": slug, "mode": "SMOKE", "reason": "Vision skipped: SMOKE mode"},
+        )
+        return {
+            "skipped": True,
+            "hash": "",
+            "mapping": "",
+            "cartelle_raw": "",
+            "mode": "SMOKE",
+        }
+
     base_dir = getattr(ctx, "base_dir", None)
     if not base_dir:
         raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)

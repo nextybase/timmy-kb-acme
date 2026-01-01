@@ -13,13 +13,9 @@ Purpose: formalize the closure packet (Prompt N+1) and the subsequent Skeptic Ga
      - commit subject (ITA)
      - short commit id
      - full commit SHA
-     - SHA actually pushed
   5. closing note “Chain closed” in Italian.
 
-### Push policy (parameterized)
-- Push (branch or `main`) is governed by `DELIVERY STRATEGY` declared in Prompt 0.
-- Push is **not default**: it happens only in Prompt N+1, only with explicit OCP authorization in Prompt N+1, and only if final QA is PASS.
-- PASS of Skeptic Gate N+1′ formally closes the chain (post N+1); it is not a runtime prerequisite to execute the push within N+1.
+- PASS of Skeptic Gate N+1′ formally closes the chain (post N+1).
 
 ## Skeptic Gate N+1′
 - role: `OCP`

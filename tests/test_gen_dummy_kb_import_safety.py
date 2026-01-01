@@ -131,10 +131,22 @@ def test_logs_namespaced_on_failure(caplog, tmp_path, monkeypatch):
         raise RuntimeError("boom")
 
     _stub_minimal_environment(monkeypatch, tmp_path, run_vision_return=_boom)
+    monkeypatch.setenv("VISION_MODE", "DEEP")
+    base_dir = tmp_path / "timmy-kb-dummy"
+    sentinel_path = base_dir / "semantic" / ".vision_hash"
+    mapping_path = base_dir / "semantic" / "semantic_mapping.yaml"
+    cartelle_path = base_dir / "semantic" / "cartelle_raw.yaml"
+    if sentinel_path.exists():
+        sentinel_path.unlink()
+    if mapping_path.exists():
+        mapping_path.unlink()
+    if cartelle_path.exists():
+        cartelle_path.unlink()
     args = ["--slug", "dummy", "--name", "Dummy", "--no-drive"]
     try:
         exit_code = gen_dummy_main(args)
     finally:
         clear_base_cache()
-    assert exit_code == 0
-    assert any(rec.message == "tools.gen_dummy_kb.vision_fallback_error" for rec in caplog.records)
+    assert exit_code == 1
+    assert any(rec.message == "tools.gen_dummy_kb.vision_hardcheck.failed" for rec in caplog.records)
+    assert any(rec.message == "tools.gen_dummy_kb.hardcheck.failed" for rec in caplog.records)

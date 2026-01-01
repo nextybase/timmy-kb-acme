@@ -2,7 +2,7 @@
 
 ## Scope & Primary Reader
 - Folder scope: system-facing documentation, specs, and operational runbooks under `system/`.
-- Primary reader: agents, operators, and developers automating deployments or reviewing architecture flows.
+- Primary reader: agents, operators, and developers operating environments or reviewing architecture flows.
 
 ## Authority & Precedence
 - Governance contracts live in `instructions/*`; system docs describe HOW, tools, and operational checks.

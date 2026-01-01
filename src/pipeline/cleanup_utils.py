@@ -4,8 +4,8 @@
 
 Ruolo:
 - Fornire funzioni *pure* di cleanup senza interazione utente né terminazioni del processo.
-- Limitarsi a rimuovere in sicurezza eventuali artefatti locali creati dai flussi di push
-  legacy (es. una `.git` annidata in `book/`) o run precedenti.
+- Limitarsi a rimuovere in sicurezza eventuali artefatti locali legacy
+  (es. una `.git` annidata in `book/`) o run precedenti.
 
 ⚠️ Niente input()/print()/sys.exit(): i prompt stanno negli orchestratori.
 """
@@ -47,12 +47,12 @@ def _rmtree_safe(target: Path, *, log: logging.Logger) -> bool:
         return False
 
 
-def clean_push_leftovers(
+def clean_legacy_artifacts(
     context: _Ctx,
     *,
     logger_name: str = "pipeline.cleanup_utils",
 ) -> Dict[str, Any]:
-    """Rimuove in modo *idempotente* e *sicuro* eventuali artefatti locali di push.
+    """Rimuove in modo *idempotente* e *sicuro* eventuali artefatti locali legacy.
 
     Attualmente:
     - elimina `.git` eventualmente presente sotto `context.md_dir` (book/),

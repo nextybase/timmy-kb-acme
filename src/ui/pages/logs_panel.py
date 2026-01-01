@@ -167,7 +167,7 @@ def _render_grafana_block(
         help=(
             "Indica che vuoi usare lo stack di osservabilità esterno. "
             "Questa preferenza può essere letta dalla pagina Admin o dagli "
-            "script di deploy per avviare lo stack Grafana/Loki."
+            "script di avvio per lo stack Grafana/Loki."
         ),
     )
     grafana_url = get_grafana_url()

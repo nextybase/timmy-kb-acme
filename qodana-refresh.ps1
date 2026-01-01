@@ -104,15 +104,14 @@ if (-not (Test-Path $sarifSrc)) { Die "SARIF non trovato: $sarifSrc" }
 Copy-Item $sarifSrc "qodana.sarif.json" -Force
 Info "Baseline aggiornato: ./qodana.sarif.json"
 
-# 6) Commit & push (solo se ci sono cambiamenti)
+# 6) Commit (solo se ci sono cambiamenti)
 & git add qodana.sarif.json qodana.yaml
 & git diff --cached --quiet
 $hasChanges = $LASTEXITCODE -ne 0
 if ($hasChanges) {
   & git commit -m "ci(qodana): refresh baseline (native scan)"
   if ($LASTEXITCODE -eq 0) {
-    Info "Commit creato. Eseguo push…"
-    & git push
+    Info "Commit creato."
   } else {
     Die "Commit fallito."
   }

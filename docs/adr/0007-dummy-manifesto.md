@@ -27,11 +27,11 @@ Define the Dummy as a first-class architectural fixture.
 
 ### Idempotency and Cleanup
 
-- Dummy generation MUST be rerunnable without global resets.
+- Dummy generation MUST be repeatable without global resets.
 - Each step cleans only the artifacts it regenerates.
 - No global workspace resets are permitted.
 
-### Step Selectability
+### Step Selection
 
 - Each major step (Drive, Vision, Semantic, Enrichment, Preview) can be enabled or disabled.
 - Disabled steps MUST NOT execute and MUST NOT modify artifacts.

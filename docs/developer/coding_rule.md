@@ -143,7 +143,7 @@ Per esempi operativi completi e per seguire il flusso slug → `ClientContext` �
 ---
 
 ## 6) Error handling
-- Usa eccezioni **specifiche** del dominio quando presenti (es. `ConfigError`, `PreviewError`, `PushError`).
+- Usa eccezioni **specifiche** del dominio quando presenti (es. `ConfigError`, `PreviewError`).
 - Per i problemi sui workspace utilizza `WorkspaceNotFound`, `WorkspaceLayoutInvalid` e `WorkspaceLayoutInconsistent`: i runtime in RUNTIME o in modalità standard devono lasciarli propagare, mentre `bootstrap_client_workspace`, `bootstrap_dummy_workspace` e `migrate_or_repair_workspace` sono gli unici flussi autorizzati a rilevare l’errore e intervenire per riparare o ricreare il workspace.
 - Non catturare eccezioni generiche senza rilanciarle/loggarle.
 - Nei moduli interni e vietato usare `sys.exit()`/`input()`; solo gli orchestratori CLI gestiscono il processo.

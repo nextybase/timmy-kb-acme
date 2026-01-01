@@ -320,7 +320,7 @@ def _build_minimal_workspace(base_parent: Path, clients_db_relative: Path) -> di
     config_dir = base / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     cfg = config_dir / "config.yaml"
-    safe_write_text(cfg, "client_name: Dummy\nauto_push: false\n", encoding="utf-8")
+    safe_write_text(cfg, "client_name: Dummy\n", encoding="utf-8")
     pdf = config_dir / "VisionStatement.pdf"
     pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
 

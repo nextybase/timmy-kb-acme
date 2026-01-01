@@ -47,13 +47,11 @@ STOP RULE: <fermo dopo la risposta>
 
 #### OPS AUTHORIZATION (READ-ONLY) — REQUIRED
 - Allowed (inspection only): `ls`/`dir`/`tree`/`find`/`Get-ChildItem`, `cat`/`less`/`head`/`tail`/`sed -n`/`Get-Content`, `rg`/`grep`, `git grep`/`git ls-files`/`git status`/`git diff`/`git log`.
-- Forbidden: any write/modify command, `apply_patch`, any formatter or tool that writes files, any test/build execution (`pytest`, `pre-commit`, etc.), any `git commit`/`git push`.
+- Forbidden: any write/modify command, `apply_patch`, any formatter or tool that writes files, any test/build execution (`pytest`, `pre-commit`, etc.), any `git commit`.
 
 #### DELIVERY STRATEGY (PLANNING DECISION) — REQUIRED
 - `target`: `main` | `branch`
 - `target_branch`: required iff `target=branch`
-- `push_policy`: `N+1_only`
-- `push_gate`: `OCP_explicit_authorization` + `SkepticGate_N+1′_PASS` (N+1′ indicates the post‑N+1 Skeptic Gate, not a distinct phase)
 
 ### Template: Prompt 0a..0x
 - Purpose: refine the plan with deeper analysis, file-by-file mapping, and sequencing of upcoming prompts.
@@ -80,7 +78,6 @@ STOP RULE: <fermo dopo la risposta>
 - **DoD iteration rule:** if the DoD is not met, subsequent prompts must be numbered as sub-iterations (1a/1b/1c or Na/Nb/Nc) until satisfied.
 - **Skeptic Gate reminder:** after an operational Codex response the OCP runs the Skeptic Gate, evaluates risks/limits, and decides whether to advance; Codex may mention problems but does not authorize progression.
 - Language: the entire response must be in Italian, salvo eccezione control-mode in inglese quando esplicitata dall'OCP.
-- Push requirement: explicitly declare in the structured block whether a push to `main` is requested by the OCP; without that statement, Codex assumes no push occurs (pushes are reserved for Prompt N+1 or when OCP explicitly authorizes them).
 - **Diff requirement:** the structured block must always request and include a unified diff for files touched in this step.
 
 ### EVIDENCE FORMAT (MUST) — Prompt 1..N e N+1
@@ -113,11 +110,6 @@ The Prompt Chain operational contract spells out the dialogue model between the 
 - Replace manual joins with `ensure_within_and_resolve`.
 - Apply atomic `safe_write_text/bytes` calls with slug/perimeter guards.
 - Add unit tests for traversal/symlink handling and out-of-perimeter paths.
-
-## GitHub Orchestration (required helpers)
-- Use `_prepare_repo`, `_stage_changes`, `_push_with_retry`, `_force_push_with_lease`.
-- Stub `_prepare_repo`/`_stage_changes` in tests as shown in `tests/pipeline/test_github_push.py`.
-- Emit structured logs for the flow (`prepare_repo`, `stage_changes`, `push`).
 
 ## Micro-PR Template
 Title: <brief, imperative>
@@ -233,10 +225,9 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 - The closing prompt always runs `pytest -q` and `pre-commit run --all-files` (per `system/specs/promptchain_spec.md` and `system/ops/runbook_codex.md`); if they fail, apply minimal fixes and rerun until both succeed.
 - Document failed tests or repeated retries in your final reply, specifying the fixes and the number of attempts.
 
-## Commits and Pushes in the Prompt Chain
-- Codex proposes patches, waits for confirmation, and never pushes autonomously: the final commit must follow the semantics in `system/specs/promptchain_spec.md`.
-- Present the diff, request human/OCP confirmation, and do not perform commit/push before full validation.
-- Pushes happen only after QA completes (`pytest -q`, `pre-commit run --all-files`) and with explicit approval from the OCP or responsible human.
+## Commits in the Prompt Chain
+- Codex proposes patches, waits for confirmation, and never commits autonomously: the final commit must follow the semantics in `system/specs/promptchain_spec.md`.
+- Present the diff, request human/OCP confirmation, and do not perform commit before full validation.
 - The closing Prompt Chain commit must state that the chain is sealed, summarize QA/tests, and notify the OCP of next steps or outstanding issues.
 
 ## Turn-Based Prompt Chain (OCP→Codex Cycle)

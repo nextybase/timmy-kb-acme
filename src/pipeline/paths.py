@@ -7,14 +7,11 @@ Helper di percorso centrati sulla root del repository.
 Obiettivi:
 - get_repo_root: trova la root repository usando sentinel (.git/pyproject), opzionale override ENV.
 - global_logs_dir / clients_db_paths / preview_logs_dir: percorsi globali path-safe.
-- ensure_src_on_sys_path: bootstrap sicuro di <repo_root>/src in sys.path senza alternative.
 
 Fail-fast: nessun fallback silenzioso; in caso di layout incoerente solleva ConfigError.
 """
 
-import importlib.util
 import os
-import sys
 from pathlib import Path
 from typing import Sequence, Tuple
 
@@ -151,51 +148,9 @@ def preview_logs_dir(repo_root: Path, *, override: Path | None = None) -> Path:
     return path
 
 
-def ensure_src_on_sys_path(repo_root: Path) -> None:
-    """
-    Inserisce <repo_root>/src in sys.path in modo idempotente.
-
-    Solleva ConfigError se il path non esiste o non è una directory.
-    """
-    try:
-        src_dir = ensure_within_and_resolve(repo_root, repo_root / "src")
-    except Exception as exc:
-        LOGGER.error(
-            "paths.sys_path.invalid",
-            extra={"repo_root": str(repo_root), "error": str(exc)},
-        )
-        raise ConfigError(f"Percorso src non valido sotto {repo_root}") from exc
-
-    if not src_dir.exists() or not src_dir.is_dir():
-        LOGGER.error(
-            "paths.sys_path.missing",
-            extra={"repo_root": str(repo_root), "src_dir": str(src_dir)},
-        )
-        raise ConfigError(f"Directory src non trovata in {repo_root}")
-
-    src_str = str(src_dir)
-    # Evita injection se i pacchetti sono già risolvibili (esecuzione da installato)
-    # e la sys.path corrente non è stata azzerata artificialmente.
-    if sys.path and importlib.util.find_spec("pipeline") and importlib.util.find_spec("timmy_kb"):
-        LOGGER.info("paths.sys_path.skip_injection", extra={"reason": "packages_already_importable"})
-        return
-
-    if src_str not in sys.path:
-        try:
-            sys.path.insert(0, src_str)
-        except Exception as exc:
-            LOGGER.error(
-                "paths.sys_path.bootstrap_failed",
-                extra={"repo_root": str(repo_root), "src_dir": src_str, "error": str(exc)},
-            )
-            raise ConfigError(f"Impossibile aggiungere {src_str} a sys.path") from exc
-        LOGGER.info("paths.sys_path.added", extra={"src_dir": src_str})
-
-
 __all__ = [
     "get_repo_root",
     "global_logs_dir",
     "clients_db_paths",
     "preview_logs_dir",
-    "ensure_src_on_sys_path",
 ]

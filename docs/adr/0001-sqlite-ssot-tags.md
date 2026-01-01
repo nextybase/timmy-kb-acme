@@ -12,7 +12,7 @@ Adottiamo **SQLite (`semantic/tags.db`) come Single Source of Truth runtime** pe
 ## Alternative considerate
 - **YAML esclusivo**: semplice da versionare, ma non supporta query efficienti ne garantisce l'atomicita richiesta da UI e NLP incrementale.
 - **JSON/CSV + cache in memoria**: facile da manipolare ma richiede logica custom per stati consistenti e lock.
-- **Servizio esterno (es. Postgres)**: offre robustezza, ma introduce dipendenza infrastrutturale non necessaria per il deployment on-premise del cliente.
+- **Servizio esterno (es. Postgres)**: offre robustezza, ma introduce dipendenza infrastrutturale non necessaria per l'installazione on-premise del cliente.
 
 ## Revisione
 - Rivalutare se la mole di tag supera i limiti di SQLite o se diventa necessario sharding/multi-tenant avanzato.

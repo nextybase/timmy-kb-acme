@@ -303,8 +303,8 @@ def enable_tags_stub(
             logger.error("ui.manage.state.update_failed", extra={"slug": slug, "target": target_state})
             return False
 
-        with _human_override_span(logger, slug, st, phase="ui.manage.tags_yaml", reason="stub_publish"):
-            logger.info("ui.manage.tags_yaml.published_stub", extra={"slug": slug, "path": str(yaml_path)})
+        with _human_override_span(logger, slug, st, phase="ui.manage.tags_yaml", reason="stub_emit"):
+            logger.info("ui.manage.tags_yaml.emitted_stub", extra={"slug": slug, "path": str(yaml_path)})
         return True
     except Exception as exc:
         st.error(f"Abilitazione (stub) non riuscita: {exc}")
@@ -359,7 +359,7 @@ def enable_tags_service(
                 slug,
                 st,
                 phase="ui.manage.tags_yaml",
-                reason="manual_publish",
+                reason="manual_emit",
                 attributes=decision_attrs,
             ) as decision_span_value:
                 updated = set_client_state(slug, "arricchito")
@@ -377,12 +377,12 @@ def enable_tags_service(
             st.error("Abilitazione semantica riuscita ma aggiornamento stato fallito.")
             logger.error("ui.manage.state.update_failed", extra={"slug": slug, "target": "arricchito"})
             return False
-        with _human_override_span(logger, slug, st, phase="ui.manage.tags_yaml", reason="manual_publish"):
-            logger.info("ui.manage.tags_yaml.published", extra={"slug": slug, "path": str(yaml_path)})
+        with _human_override_span(logger, slug, st, phase="ui.manage.tags_yaml", reason="manual_emit"):
+            logger.info("ui.manage.tags_yaml.emitted", extra={"slug": slug, "path": str(yaml_path)})
         return True
     except Exception as exc:
         st.error(f"Abilitazione non riuscita: {exc}")
-        logger.warning("ui.manage.tags_yaml.publish.error", extra={"slug": slug, "error": str(exc)})
+        logger.warning("ui.manage.tags_yaml.emit.error", extra={"slug": slug, "error": str(exc)})
         return False
 
 

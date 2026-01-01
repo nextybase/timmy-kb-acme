@@ -11,9 +11,8 @@ Eccezioni SSoT per NeXT/Timmy.
 Ruoli principali:
 - `TimmyError`: base per errori applicativi “generici” fuori pipeline (es. retriever).
 - `PipelineError`: base per eccezioni di dominio della pipeline (no I/O, no exit).
-- Sottoclassi tipizzate per aree funzionali: Drive*, ConversionError, PushError,
-  ForcePushError (governance), ConfigError, PreviewError, EnrichmentError,
-  SemanticMappingError, PreOnboardingValidationError, ecc.
+- Sottoclassi tipizzate per aree funzionali: Drive*, ConversionError, ConfigError,
+  PreviewError, EnrichmentError, SemanticMappingError, PreOnboardingValidationError, ecc.
 - Quick win input/slug: InputDirectoryMissing, InputFileMissing, InvalidSlug.
 - `EXIT_CODES` + `exit_code_for`: tabella centralizzata per orchestratori.
 
@@ -130,18 +129,6 @@ class ConversionError(PipelineError):
     pass
 
 
-class PushError(PipelineError):
-    """Errore durante il push su GitHub."""
-
-    pass
-
-
-class ForcePushError(PipelineError):
-    """Violazioni della policy di force push (richiede flag + ACK)."""
-
-    pass
-
-
 class ConfigError(PipelineError):
     """Errore di caricamento o validazione della configurazione."""
 
@@ -250,8 +237,6 @@ EXIT_CODES = {
     "DriveDownloadError": 21,
     "DriveUploadError": 22,
     "PreviewError": 30,
-    "PushError": 40,
-    "ForcePushError": 41,
     "CleanupError": 50,
     "EnrichmentError": 60,
     "SemanticMappingError": 61,
@@ -273,8 +258,6 @@ __all__ = [
     "DriveDownloadError",
     "DriveUploadError",
     "ConversionError",
-    "PushError",
-    "ForcePushError",
     "ConfigError",
     "PathTraversalError",
     "WorkspaceNotFound",

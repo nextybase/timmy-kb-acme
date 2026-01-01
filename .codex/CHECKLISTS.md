@@ -8,9 +8,8 @@
 - Respect the turn-based OCP ? Codex model defined in `system/specs/promptchain_spec.md`: process prompts in order, cite the specification as the SSoT, and never skip or reorder prompts.
 - Document final QA in the closing prompt: `pytest -q` plus `pre-commit run --all-files`.
 - Prompt Chain checklist: confirm Phase 0 stayed analytical/read-only with no diff/QA, each prompt 1..N produced a diff, included the Active Rules memo, executed (or justified) `pytest -q -k "not slow"`, and responded in Italian; Prompt N+1 must run `pytest -q` + `pre-commit run --all-files` and finish with an Italian one-line closing summary.
-  - Prompt 0 contains **OPS AUTHORIZATION (READ-ONLY)** (whitelist + explicit forbidden actions) and **DELIVERY STRATEGY (PLANNING DECISION)** (target + push policy/gate).
-  - Prompt N+1 contains commit subject (ITA) + commit id corto + commit SHA completo + SHA effettivamente pushato.
-  - Push behavior is coherent with the spec “push is not default” (`system/specs/promptchain_spec.md`) and with Prompt 0 `DELIVERY STRATEGY` (push only in N+1, only with explicit OCP authorization in N+1, only after QA PASS). Skeptic Gate N+1′ PASS closes the chain post N+1 (N+1′ indicates the post‑N+1 gate, not a phase).
+  - Prompt 0 contains **OPS AUTHORIZATION (READ-ONLY)** (whitelist + explicit forbidden actions) and **DELIVERY STRATEGY (PLANNING DECISION)** (target).
+  - Prompt N+1 contains commit subject (ITA) + commit id corto + commit SHA completo.
 - Skeptic Gate MUST be present (Evidence/Scope/Risk/Decision with Decision=PASS) before advancing to the next prompt; PASS WITH CONDITIONS requires constraints, BLOCK stops the chain (SSoT: `system/specs/promptchain_spec.md`).
 - Evidence Gate reminder: if memo/diff/report/QA are missing, Prompt 1..N does not advance; the next prompt remains blocked until evidence is complete (SSoT: `system/specs/promptchain_spec.md`).
 - Evidence format (Prompt 1..N, N+1): report `git status --porcelain=v1`; unified diff with `diff --git` + `index` + `---/+++` + `@@`; declare `working tree dirty outside scope: YES/NO` and, if dirty, use only `git diff -- <paths in scope>` (repo‑wide diffs are forbidden when out‑of‑scope changes exist).
@@ -45,13 +44,13 @@
 
 ## Drive & Git
 - Ensure Drive credentials/IDs are present before running the pipeline.
-- Push only `.md` files from `book/`; exclude `.md.fp` and binaries.
+- Solo `.md` in `book/` per preview locale; escludi `.md.fp` e binari.
 
 
 ## Multi-agent alignment
 - Synchronize shared flags (`GIT_DEFAULT_BRANCH`, `TAGS_MODE`, `ui.skip_preflight`) across CLI, UI, and agents; update `.env.sample`/docs when they change.
 - Confirm UI services (`ui.services.tags_adapter`, Drive runners) load; if an adapter is missing, the UI must present help/fallback (stub mode).
-- Ensure structural telemetry emits consistent `phase_scope` values (prepare_repo/stage_changes/push workflows) and respects `LeaseLock`.
+- Ensure structural telemetry emits consistent `phase_scope` values (prepare_repo/stage_changes workflows) and respects `LeaseLock`.
 - Monitor throttling/cache settings (`NLP_THREADS`, `TIMMY_SAFE_PDF_CACHE_TTL`, clients_db cache); avoid divergent forks between agents and orchestrators.
 
 

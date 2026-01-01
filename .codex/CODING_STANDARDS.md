@@ -6,7 +6,7 @@
 - Perform I/O via `pipeline.file_utils.safe_write_text/bytes` for atomic writes (no direct `open()` calls in callers).
 - Keep import-time free of side effects; execute I/O only inside functions or a `main`.
 - Orchestrators handle user input and exit codes; internal modules must not call `sys.exit()` or `input()`.
-- Tests run with pytest, deterministic fixtures, and no network access; mock or bypass Drive/Git. Only `.md` files in `book/` are eligible for pushes (`.md.fp` files exist but remain excluded).
+- Tests run with pytest, deterministic fixtures, and no network access; mock or bypass Drive/Git. Per la preview locale usa solo `.md` in `book/` (escludi `.md.fp`).
 - Align `ruff` and `mypy` with `pyproject.toml`, respecting the defined line length and existing rules.
 
 ## Additional Policy (pre-commit)

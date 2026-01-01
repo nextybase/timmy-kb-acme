@@ -1,6 +1,6 @@
 # Summary
 
-> Navigazione principale del repository TimmyKB. Questo file segue la sintassi compatibile con GitBook/HonKit e funge da indice anche su GitHub.
+> Navigazione principale del repository TimmyKB. Questo file segue la sintassi compatibile con GitBook/HonKit e funge da indice del progetto.
 
 * [Home](README.md)
 * Documentazione
@@ -10,11 +10,9 @@
   * [Guida sviluppatore](docs/developer/developer_guide.md)
   * [Regole di codifica](docs/developer/coding_rule.md)
   * [Architettura tecnica](system/architecture.md)
-  * [Policy di push](docs/policy_push.md)
   * [Versioning policy](docs/versioning_policy.md)
 * Rilasci & manutenzione
   * [CHANGELOG](CHANGELOG.md)
-  * [Versioni / Tag](https://github.com/nextybase/timmy-kb-acme/releases)
 * Contributi & governance
   * [CONTRIBUTING](CONTRIBUTING.md)
   * [CODE OF CONDUCT](CODE_OF_CONDUCT.md)
@@ -24,5 +22,4 @@
 
 ## Note
 - I link a `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` e `LICENSE` sono opzionali ma **consigliati** per progetti pubblici/aziendali.
-- Aggiorna l'URL delle *Releases* con l'organizzazione/repo corretti.
 - Mantieni questo indice sincronizzato con le sezioni presenti in `docs/` e con il `CHANGELOG.md` ad ogni rilascio.

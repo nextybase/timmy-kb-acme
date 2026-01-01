@@ -10,6 +10,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Callable, Dict, Optional
 
+from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_bytes
 from pipeline.path_utils import ensure_within_and_resolve
 from semantic.core import compile_document_to_vision_yaml
@@ -22,8 +23,6 @@ from .semantic import (
     ensure_minimal_tags_db,
     ensure_raw_pdfs,
     load_mapping_categories,
-    write_basic_semantic_yaml,
-    write_dummy_vision_yaml,
     write_minimal_tags_raw,
 )
 from .vision import run_vision_with_timeout
@@ -46,6 +45,18 @@ def _hardcheck_health(name: str, message: str, latency_ms: int | None = None) ->
         "checks": [name],
         "external_checks": {name: details},
     }
+
+
+def _resolve_vision_mode(get_env_var: Callable[[str, str | None], str | None]) -> str:
+    raw = None
+    try:
+        raw = get_env_var("VISION_MODE", None)
+    except Exception:
+        raw = None
+    mode = str(raw or "DEEP").strip().lower()
+    if mode in {"smoke", "deep"}:
+        return mode
+    raise ConfigError(f"VISION_MODE non valido: {raw!r}. Usa 'SMOKE' o 'DEEP'.")
 
 
 def _record_external_check(
@@ -176,7 +187,6 @@ def build_dummy_payload(
     build_drive_from_mapping: Callable[..., Any] | None,
     emit_readmes_for_raw: Callable[..., Any] | None,
     run_vision_with_timeout_fn: Callable[..., tuple[bool, Optional[dict[str, Any]]]] = run_vision_with_timeout,
-    write_basic_semantic_yaml_fn: Callable[..., Dict[str, Any]] = write_basic_semantic_yaml,
     load_mapping_categories_fn: Callable[[Path], Dict[str, Dict[str, Any]]] = load_mapping_categories,
     ensure_minimal_tags_db_fn: Callable[..., Any] = ensure_minimal_tags_db,
     ensure_raw_pdfs_fn: Callable[..., Any] = ensure_raw_pdfs,
@@ -188,6 +198,21 @@ def build_dummy_payload(
     call_drive_build_from_mapping_fn: Callable[..., Optional[dict[str, Any]]] = call_drive_build_from_mapping,
     call_drive_emit_readmes_fn: Callable[..., Optional[dict[str, Any]]] = call_drive_emit_readmes,
 ) -> Dict[str, Any]:
+    vision_mode = _resolve_vision_mode(get_env_var)
+    if vision_mode == "smoke":
+        enable_vision = False
+        logger.info(
+            "tools.gen_dummy_kb.vision_skipped",
+            extra={"slug": slug, "mode": "smoke"},
+        )
+    elif not enable_vision:
+        msg = "VISION_MODE=DEEP richiede Vision abilitata"
+        logger.error(
+            "tools.gen_dummy_kb.vision_required",
+            extra={"slug": slug, "mode": "deep"},
+        )
+        raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg))
+
     if records_hint:
         try:
             _ = int(records_hint)
@@ -220,8 +245,38 @@ def build_dummy_payload(
     register_client_fn(slug, client_name)
 
     base_dir = client_base(slug)
+    semantic_dir = base_dir / "semantic"
+    sentinel_path = semantic_dir / ".vision_hash"
+    mapping_path = semantic_dir / "semantic_mapping.yaml"
+    cartelle_path = semantic_dir / "cartelle_raw.yaml"
+
+    categories_for_readmes: Dict[str, Dict[str, Any]] = {}
+    vision_completed = False
+    vision_status = "skipped" if vision_mode == "smoke" else "error"
+    hard_check_results: dict[str, tuple[bool, str, int | None]] = {}
+
+    vision_already_completed = False
+    if enable_vision and (sentinel_path.exists() or (mapping_path.exists() and cartelle_path.exists())):
+        vision_already_completed = True
+        vision_completed = True
+        vision_status = "ok"
+        categories_for_readmes = load_mapping_categories_fn(base_dir)
+        if not categories_for_readmes:
+            warn_msg = "Vision marked completed but mapping missing or empty"
+            logger.warning(
+                "tools.gen_dummy_kb.vision_already_completed_missing_mapping",
+                extra={"slug": slug},
+            )
+            hard_check_results["vision_hardcheck"] = (False, warn_msg, None)
+        else:
+            hard_check_results["vision_hardcheck"] = (
+                True,
+                "Vision hard check succeeded (already completed)",
+                None,
+            )
+
     pdf_path_resolved = pdf_path(slug)
-    if not pdf_path_resolved.exists():
+    if enable_vision and not vision_already_completed and not pdf_path_resolved.exists():
         try:
             pdf_path_resolved.parent.mkdir(parents=True, exist_ok=True)
             if safe_write_bytes:
@@ -250,54 +305,10 @@ def build_dummy_payload(
                 extra={"slug": slug, "reason": "drive disabled"},
             )
             raise HardCheckError(msg, _hardcheck_health("drive_hardcheck", msg))
-    yaml_target = ensure_within_and_resolve(base_dir, base_dir / "config" / "visionstatement.yaml")
-    try:
-        compile_document_to_vision_yaml(pdf_path_resolved, yaml_target)
-    except Exception as exc:
-        if enable_vision:
-            logger.error(
-                "tools.gen_dummy_kb.vision_yaml_generation_failed",
-                extra={"slug": slug, "error": str(exc), "pdf": str(pdf_path_resolved)},
-            )
-        else:
-            logger.warning(
-                "tools.gen_dummy_kb.vision_yaml_generation_skipped",
-                extra={"slug": slug, "error": str(exc), "pdf": str(pdf_path_resolved)},
-            )
-        # Fallback: YAML dummy strutturato per superare il validator
-        try:
-            yaml_target = write_dummy_vision_yaml(base_dir)
-            logger.info(
-                "tools.gen_dummy_kb.vision_yaml_dummy_written",
-                extra={"slug": slug, "file_path": str(yaml_target)},
-            )
-        except Exception as inner_exc:  # pragma: no cover - fallback estrema
-            logger.error(
-                "tools.gen_dummy_kb.vision_yaml_dummy_failed",
-                extra={"slug": slug, "error": str(inner_exc)},
-            )
-
     drive_min_info: Dict[str, Any] | None = None
     drive_build_info: Dict[str, Any] | None = None
     drive_readmes_info: Dict[str, Any] | None = None
-    categories_for_readmes: Dict[str, Dict[str, Any]] = {}
-    fallback_info: Optional[Dict[str, Any]] = None
-    vision_completed = False
-    vision_status = "error"
-    hard_check_results: dict[str, tuple[bool, str, int | None]] = {}
-
-    def _apply_semantic_fallback(reason_tag: str) -> None:
-        nonlocal fallback_info, categories_for_readmes
-        if fallback_info and categories_for_readmes:
-            return
-        fallback_info = write_basic_semantic_yaml_fn(base_dir, slug=slug, client_name=client_name)
-        categories_for_readmes = fallback_info.get("categories", {})
-        logger.warning(
-            "tools.gen_dummy_kb.vision_fallback_applied",
-            extra={"slug": slug, "reason": reason_tag},
-        )
-
-    if enable_vision:
+    if enable_vision and not vision_already_completed:
         start = perf_counter()
         success, vision_meta = run_vision_with_timeout_fn(
             base_dir=base_dir,
@@ -308,100 +319,88 @@ def build_dummy_payload(
             run_vision=run_vision,
         )
         latency_ms = int((perf_counter() - start) * 1000)
-        if deep_testing and not success:
-            reason = vision_meta or {}
-            message = str(reason.get("error") or "Vision run failed")
-            sentinel = str(reason.get("file_path") or "")
-            details = message
-            if sentinel:
-                details = f"{details} | sentinel={sentinel}"
-            err_msg = f"Vision hard check failed; verifica secrets/permessi: {details}"
-            logger.error(
-                "tools.gen_dummy_kb.vision_hardcheck.failed",
-                extra={"slug": slug, "error": message, "sentinel": sentinel or None},
-            )
-            raise HardCheckError(err_msg, _hardcheck_health("vision_hardcheck", err_msg, latency_ms))
-        if success:
-            vision_completed = True
-            vision_status = "ok"
-            categories_for_readmes = load_mapping_categories_fn(base_dir)
-            if deep_testing:
-                if not categories_for_readmes:
-                    err_msg = "Vision hard check fallito: nessuna categoria disponibile dopo Vision"
-                    logger.error(
-                        "tools.gen_dummy_kb.vision_hardcheck.failed",
-                        extra={"slug": slug, "error": err_msg},
-                    )
-                    raise HardCheckError(err_msg, _hardcheck_health("vision_hardcheck", err_msg, latency_ms))
-                hard_check_results["vision_hardcheck"] = (
-                    True,
-                    "Vision hard check succeeded",
-                    latency_ms,
-                )
-        else:
+        if not success:
             reason = vision_meta or {}
             message = str(reason.get("error") or "")
             sentinel = str(reason.get("file_path") or "")
-            normalized = message.casefold().replace("à", "a")
-            if reason.get("reason") == "timeout":
-                vision_status = "timeout"
-                logger.warning(
-                    "tools.gen_dummy_kb.vision_fallback_no_vision",
-                    extra={"slug": slug, "mode": "timeout"},
-                )
-                _apply_semantic_fallback("timeout")
-            elif ".vision_hash" in sentinel or "vision gia eseguito" in normalized:
+            normalized = message.casefold().replace("اے", "a")
+            if ".vision_hash" in sentinel or "vision gia eseguito" in normalized:
                 logger.info(
                     "tools.gen_dummy_kb.vision_already_completed",
                     extra={"slug": slug, "sentinel": sentinel or ".vision_hash"},
                 )
+                vision_already_completed = True
                 vision_completed = True
                 vision_status = "ok"
                 categories_for_readmes = load_mapping_categories_fn(base_dir)
+                if not categories_for_readmes:
+                    warn_msg = "Vision marked completed but mapping missing or empty"
+                    logger.warning(
+                        "tools.gen_dummy_kb.vision_already_completed_missing_mapping",
+                        extra={"slug": slug},
+                    )
+                    hard_check_results["vision_hardcheck"] = (False, warn_msg, None)
+                else:
+                    hard_check_results["vision_hardcheck"] = (
+                        True,
+                        "Vision hard check succeeded (already completed)",
+                        None,
+                    )
             else:
+                details = message or "Vision run failed"
+                if sentinel:
+                    details = f"{details} | sentinel={sentinel}"
+                err_msg = f"Vision hard check failed; verifica secrets/permessi: {details}"
                 logger.error(
-                    "tools.gen_dummy_kb.vision_fallback_error",
-                    extra={
-                        "slug": slug,
-                        "error": message,
-                        "file_path": sentinel or None,
-                        "meta": reason or {},
-                    },
+                    "tools.gen_dummy_kb.vision_hardcheck.failed",
+                    extra={"slug": slug, "error": message, "sentinel": sentinel or None},
                 )
-                _apply_semantic_fallback("error")
-    else:
-        fallback_info = write_basic_semantic_yaml_fn(base_dir, slug=slug, client_name=client_name)
-        categories_for_readmes = fallback_info.get("categories", {})
-
-    try:
-        yaml_target = write_dummy_vision_yaml(base_dir)
-        logger.info(
-            "tools.gen_dummy_kb.vision_dummy_yaml_written",
-            extra={"slug": slug, "file_path": str(yaml_target)},
-        )
-    except Exception as exc:
-        logger.warning(
-            "tools.gen_dummy_kb.vision_dummy_yaml_failed",
-            extra={"slug": slug, "error": str(exc)},
-        )
-
-    if not categories_for_readmes:
+                raise HardCheckError(err_msg, _hardcheck_health("vision_hardcheck", err_msg, latency_ms))
+        if not vision_already_completed:
+            vision_completed = True
+            vision_status = "ok"
+            categories_for_readmes = load_mapping_categories_fn(base_dir)
+            if not categories_for_readmes:
+                err_msg = "Vision hard check fallito: nessuna categoria disponibile dopo Vision"
+                logger.error(
+                    "tools.gen_dummy_kb.vision_hardcheck.failed",
+                    extra={"slug": slug, "error": err_msg},
+                )
+                raise HardCheckError(err_msg, _hardcheck_health("vision_hardcheck", err_msg, latency_ms))
+            hard_check_results["vision_hardcheck"] = (
+                True,
+                "Vision hard check succeeded",
+                latency_ms,
+            )
+            yaml_target = ensure_within_and_resolve(base_dir, base_dir / "config" / "visionstatement.yaml")
+            try:
+                compile_document_to_vision_yaml(pdf_path_resolved, yaml_target)
+            except Exception as exc:
+                logger.error(
+                    "tools.gen_dummy_kb.vision_yaml_generation_failed",
+                    extra={"slug": slug, "error": str(exc), "pdf": str(pdf_path_resolved)},
+                )
+                msg = f"Vision YAML generation failed: {exc}"
+                raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg)) from exc
+    elif not vision_already_completed:
         categories_for_readmes = load_mapping_categories_fn(base_dir)
 
-    ensure_minimal_tags_db_fn(base_dir, categories_for_readmes, logger=logger)
-    ensure_raw_pdfs_fn(base_dir, categories_for_readmes)
-
-    local_readmes = ensure_local_readmes_fn(base_dir, categories_for_readmes)
+    local_readmes: list[str] = []
     ensure_book_skeleton_fn(base_dir)
-    try:
-        write_minimal_tags_raw_fn(base_dir)
-    except Exception as exc:
-        logger.warning(
-            "tools.gen_dummy_kb.tags_raw_seed_failed",
-            extra={"slug": slug, "error": str(exc)},
-        )
+    if categories_for_readmes:
+        ensure_minimal_tags_db_fn(base_dir, categories_for_readmes, logger=logger)
+        ensure_raw_pdfs_fn(base_dir, categories_for_readmes)
 
-    if validate_dummy_structure_fn:
+        local_readmes = ensure_local_readmes_fn(base_dir, categories_for_readmes)
+        try:
+            write_minimal_tags_raw_fn(base_dir)
+        except Exception as exc:
+            logger.warning(
+                "tools.gen_dummy_kb.tags_raw_seed_failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
+
+    if categories_for_readmes and validate_dummy_structure_fn:
         validate_dummy_structure_fn(base_dir, logger)
 
     if enable_drive:
@@ -449,7 +448,7 @@ def build_dummy_payload(
                     latency_ms,
                 )
 
-    fallback_used = bool(fallback_info)
+    fallback_used = False
 
     cfg_out: dict[str, Any] = {}
     if callable(get_client_config) and ClientContext:

@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from typing import TypeVar
 
-from pipeline.paths import ensure_src_on_sys_path, get_repo_root
+from pipeline.paths import get_repo_root
 
 _T = TypeVar("_T")
 
@@ -50,8 +50,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    # ENTRYPOINT BOOTSTRAP — consentito: CLI standalone deve risolvere pipeline/semantic.
-    ensure_src_on_sys_path(get_repo_root())
+    # ENTRYPOINT BOOTSTRAP — consentito: CLI standalone usa la repo root per il workspace.
+    get_repo_root()
     args = _parse_args()
     slug: str = args.slug
     run_id = uuid.uuid4().hex

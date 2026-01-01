@@ -71,7 +71,7 @@ pre-commit install --hook-type pre-commit
   - aggiungi `USER app` o equivalente per evitare l'esecuzione come `root`;
   - elimina tool di build al termine (`apt-get purge`, `rm -rf /var/lib/apt/lists/*`);
   - leggi i secret esclusivamente da variabili a runtime (non `ENV`/`ARG` hardcoded).
-- Per i `docker-compose`/deployment assicurati che i secret provengano da GitHub Secrets o Secret Manager esterni.
+- Per i `docker-compose`/stack assicurati che i secret provengano da GitHub Secrets o Secret Manager esterni.
 - Esecuzione locale di `hadolint`:
   ```bash
   hadolint path/to/Dockerfile

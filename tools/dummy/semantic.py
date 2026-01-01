@@ -504,6 +504,8 @@ def ensure_book_skeleton(base_dir: Path) -> None:
     book_dir = base_dir / "book"
     book_dir.mkdir(parents=True, exist_ok=True)
     defaults = {
+        "alpha.md": "# Alpha\n",
+        "beta.md": "# Beta\n",
         "README.md": "# Dummy KB\n",
         "SUMMARY.md": "* [Alpha](alpha.md)\n* [Beta](beta.md)\n",
     }
