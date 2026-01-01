@@ -1,7 +1,8 @@
-# 0002  Separare segreti da configurazione applicativa
+# ADR-0002: Separare segreti da configurazione applicativa
 
-## Stato
-Accepted  25/10/2025
+- Stato: Accepted
+- Data: 2025-10-25
+- Responsabili: n/d
 
 ## Contesto
 - Le pipeline Timmy-KB richiedono sia **valori sensibili** (token, API key, ID assistant) sia **parametri di business/UX** (modello da usare, soglie retriever, preferenze UI).
@@ -21,18 +22,24 @@ Accepted  25/10/2025
    - **Config Editor** (solo impostazioni applicative);
    - **Secrets Healthcheck** (stato delle ENV senza mostrare i valori).
 
-## Trade-off
+### Trade-off
 -  **Sicurezza**: niente segreti nel repository, verifica automatica in CI.
 -  **DX**: `Settings` uniforma l'accesso a config/env; i test possono usare marker dedicati.
 -  **Overhead**: chi modifica parametri deve aggiornare sia YAML sia `.env` (ma con tooling guidato).
 -  **Compatibilita**: i consumer legacy devono passare dal wrapper (`ClientContext.settings`), pena failure dei nuovi test.
 
-## Conseguenze
+### Conseguenze
 - Nuova documentazione: [docs/configurazione.md](../configurazione.md) e sezione "Settings & guard segreti" nella test suite.
 - Test mirati (`pytest -m "settings or pipeline or ui or semantic"`) garantiscono che pipeline/semantic/UI usino `Settings`.
 - Il comando `pre-commit run no-secrets-in-yaml --all-files` diventa parte del flusso locale; la CI fallisce se trova valori inline.
 - Miglior DX Streamlit: gli operatori possono diagnosticare le ENV mancanti senza vedere i segreti.
 
-## Collegamenti
+### Collegamenti
 - Hook e script: `tools/dev/check_yaml_secrets.py`, `.pre-commit-config.yaml`.
 - UI: `src/ui/pages/config_editor.py`, `src/ui/pages/secrets_healthcheck.py`.
+
+## Alternative considerate
+Non specificate nel testo originale.
+
+## Revisione
+Non specificata nel testo originale.

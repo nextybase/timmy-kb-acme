@@ -1,15 +1,9 @@
----
-adr: 002
-title: "Dummy KB as End-to-End Smoke Test"
-status: "Accepted"
-date: 2025-12-05
-authors:
-  - "Timmy KB Architecture Group"
-  - "Franco Mennella"
-  - "ChatGPT"
----
+# ADR-0006: Dummy KB as End-to-End Smoke Test
+- Stato: Accepted
+- Data: 2025-12-05
+- Responsabili: Timmy KB Architecture Group; Franco Mennella; ChatGPT
 
-# 1. Contesto
+## Contesto
 
 Timmy KB richiede un meccanismo affidabile per verificare rapidamente:
 
@@ -33,9 +27,7 @@ ma il suo comportamento attuale è limitato.
 
 Per rafforzare la resilienza del sistema, si decide di trasformare la Dummy KB in un **E2E Smoke Test ufficiale**, cancellabile e rigenerabile con un singolo comando/azione.
 
----
-
-# 2. Decisione
+## Decisione
 
 Viene adottata la seguente decisione architetturale:
 
@@ -83,9 +75,7 @@ La decisione si articola in sei punti:
      `python tools/gen_dummy_kb.py --slug dummy --reset`.
    - La generazione della dummy non avviene automaticamente all’avvio della UI, ma è uno strumento operativo a disposizione di sviluppatori e pipeline CI.
 
----
-
-# 3. Contratto deep testing
+### Contratto deep testing
 
 La modalità deep testing descrive lo stesso flusso controllato della Dummy KB smoke, ma con vincoli operativi più stringenti:
 
@@ -148,20 +138,20 @@ La modalità deep testing descrive lo stesso flusso controllato della Dummy KB s
 
 Deep testing funge da segnale diagnostico: se fallisce, il messaggio riporta che i secrets/permessi non sono pronti e rimanda alla pagina Secrets Healthcheck. La modalità è "contract only": non introduce stati side effect e può essere ripetuta all’infinito.
 
-# 4. Motivazioni (Rationale)
+### Motivazioni (Rationale)
 
-### 4.1 Integrità del sistema
+#### Integrità del sistema
 La pipeline Timmy KB è composta da numerosi componenti interdipendenti (Vision, YAML, semantic mapping, tags DB, Drive, registry).
 La Dummy KB offre un contesto controllato per verificare l’intero flusso in pochi secondi.
 
-### 4.2 Early Detection delle regressioni
+#### Early Detection delle regressioni
 La rigenerazione della Dummy KB intercetta rapidamente:
 - errori introdotti da refactor,
 - incompatibilità di configurazione,
 - anomalie nel parsing YAML,
 - comportamenti imprevisti della Vision pipeline.
 
-### 4.3 Cliente reale ma isolato
+#### Cliente reale ma isolato
 La dummy viene registrata nel registry UI come cliente vero, rendendo testabili tutte le pagine:
 - pannelli semantici,
 - mapping,
@@ -169,36 +159,32 @@ La dummy viene registrata nel registry UI come cliente vero, rendendo testabili 
 - tagging,
 - gestione dei PDF.
 
-### 4.4 Semplicità di integrazione
+#### Semplicità di integrazione
 La UI possiede già un pulsante per generarla; l’estensione è naturale.
 Il tool è già completo: necessita solo di modularizzazione, validazione e registrazione.
 
-### 4.5 Rispetto del metodo NeXT
+#### Rispetto del metodo NeXT
 Questa scelta è coerente con:
 - modello probabilistico (controllo continuo di anomalie),
 - approccio Human-in-the-Loop (l’utente vede subito problemi),
 - controllo dell’entropia (rigenerazione ripetuta che riporta il sistema allo stato base),
 - design adattivo.
 
----
+### Conseguenze
 
-# 5. Conseguenze
-
-### Positive
+#### Positive
 - Maggiore affidabilità e prevedibilità del sistema.
 - Rilevamento precoce di regressioni strutturali.
 - Possibilità di testing completo della UI su un cliente fittizio.
 - Aumento della qualità dei rilasci (CI con smoke test automatico).
 - Log molto più chiari e strutturati in caso di errore.
 
-### Negative / Trade-offs
+#### Negative / Trade-offs
 - Aumento complessità del tool (mitigata da modularizzazione).
 - Possibile confusione con clienti reali (mitigata con campo `dummy: true`).
 - Necessità di manutenzione minima per mantenere aggiornato lo smoke test quando cambia la pipeline.
 
----
-
-# 6. Stato finale
+### Stato finale
 
 Il refactor viene implementato nei seguenti file:
 
@@ -223,11 +209,9 @@ Il refactor viene implementato nei seguenti file:
 - Documentazione aggiornata:
 - `docs/developer/developer_guide.md`
 - `docs/streamlit_ui.md`
-- `docs/adr/ADR-002-dummy-kb-e2e-smoke-test.md`
+- `docs/adr/0006-dummy-kb-e2e-smoke-test.md`
 
----
-
-# 7. Riferimenti
+### Riferimenti
 
 - Strumento CLI originale:
 [`tools/gen_dummy_kb.py`](../../tools/gen_dummy_kb.py)
@@ -249,4 +233,8 @@ Il refactor viene implementato nei seguenti file:
 `docs/guida_codex.md`,
 `docs/streamlit_ui.md`.
 
----
+## Alternative considerate
+Nessuna alternativa esplicitata nel testo originale.
+
+## Revisione
+Nessuna revisione esplicitata nel testo originale.

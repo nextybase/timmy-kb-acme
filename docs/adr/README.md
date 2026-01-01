@@ -36,6 +36,9 @@ Questo directory raccoglie le **Architecture / Technical Decision Records** del 
 
 ## ADR disponibili
 
-- [ADR-0001: SQLite come SSoT per i tag runtime](0001-sqlite-ssot-tags.md)
-- [ADR-0003: Playwright per i test end-to-end UI](0003-playwright-e2e-ui.md)
-- [ADR-0004: Ottimizzazione performance pipeline NLP e cache RAW](0004-nlp-performance-tuning.md)
+- [0001: SQLite come SSoT per i tag runtime](0001-sqlite-ssot-tags.md)
+- [0002  Separare segreti da configurazione applicativa](0002-separation-secrets-config.md)
+- [0003: Playwright per i test end-to-end UI](0003-playwright-e2e-ui.md)
+- [0004: Ottimizzazione performance pipeline NLP e cache RAW](0004-nlp-performance-tuning.md)
+- [0005: Refactor tagging con build_tags_csv in semantic.tagging_service](0005-refactor-tagging-build-tags-csv.md)
+- [0006: Smoke test - Cliente Dummy](0006-dummy-kb-e2e-smoke-test.md)
