@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# src/tools/gen_dummy_kb.py
+# tools/gen_dummy_kb.py
 # Genera una KB "dummy" passando dalle stesse funzioni usate dalla UI:
 # pre_onboarding + Vision (+ Drive opzionale). Con flag per disabilitare Drive/Vision.
 

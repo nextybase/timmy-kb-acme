@@ -5,7 +5,7 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
 ## Scopo
 - Definire i package legittimi e vietare il ricorso a `src.*` in qualsiasi forma.
 - Impedire giochi di `sys.path` nei moduli applicativi.
-- Chiarire che `tools/` è la SSoT e non esistono fallback a `src/tools`.
+- Chiarire che `tools/` è la SSoT e non esistono fallback al vecchio namespace.
 
 ## Package ammessi (runtime)
 - `pipeline.*` (helper core: context, workspace, path safety, logging, drive/github).
@@ -16,11 +16,11 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
 ## Divieti
 - Vietato importare o risolvere stringhe `src.*` in qualsiasi modulo (inclusi `importlib`, loader custom, plugin).
 - Vietato manipolare `sys.path` nei moduli applicativi. Consentito solo nei runner/entrypoint **se strettamente indispensabile** e con commento che spiega il motivo.
-- Vietato usare shim o alias verso `src/tools` o percorsi legacy.
+- Vietato usare shim o alias verso namespace legacy o percorsi legacy.
 
 ## Tools: Single Source of Truth
 - `tools/` è l’unica sorgente runtime per `tools.*`.
-- `src/tools` non è più sorgente: nessun import, nessun fallback, nessun loader.
+- Il vecchio namespace non è più sorgente: nessun import, nessun fallback, nessun loader.
 - Le dipendenze interne tra tool devono usare import espliciti `from tools...` senza path hacking.
 
 ## Esempi
@@ -31,7 +31,7 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
   - `importlib.import_module("tools.gen_dummy_kb")`
   - `from tools.gen_dummy_kb import build_payload`
 - Errato:
-  - `importlib.import_module("src.tools.gen_dummy_kb")`
+  - `importlib.import_module("tools.gen_dummy_kb")`
   - `sys.path.insert(0, str(Path(__file__).parents[2] / "src"))` (nei moduli applicativi)
 
 ## Enforcement rapido

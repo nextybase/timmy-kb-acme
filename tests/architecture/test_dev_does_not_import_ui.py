@@ -5,7 +5,7 @@ import ast
 from pathlib import Path
 from typing import Iterable
 
-TARGET_DIRS = ("src/timmy_kb/cli", "src/tools", "src/api")
+TARGET_DIRS = ("src/timmy_kb/cli", "src/api")
 FORBIDDEN_PREFIXES = ("ui", "ui.pages", "ui.services")
 
 

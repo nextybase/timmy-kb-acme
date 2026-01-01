@@ -16,7 +16,7 @@
   | Artifact | Significato attuale | Produttore | Fonte |
   |---|---|---|---|
   | `output/timmy-kb-<slug>/raw/` | sorgente PDF per conversione | `pipeline.workspace_bootstrap` + Drive provisioning/`tag_onboarding` | `pipeline.workspace_bootstrap.py`, `docs/user/user_guide.md` |
-  | `semantic/semantic_mapping.yaml` | mapping Vision generato da `src/tools/gen_vision_yaml.py` | Vision statement workflow | `docs/user/user_guide.md` |
+  | `semantic/semantic_mapping.yaml` | mapping Vision generato da `tools/gen_vision_yaml.py` | Vision statement workflow | `docs/user/user_guide.md` |
   | `semantic/tags.db` | SSoT tag per enrichment | `tag_onboarding`, `ui.services.tags_adapter` | `docs/user/user_guide.md`, `_run_enrich` |
   | `semantic/tags_raw.csv`, `tags_reviewed.yaml` | checkpoint HiTL | `tag_onboarding` | `docs/user/user_guide.md` |
   | `book/README.md`, `SUMMARY.md`, `.md` | artefatti finali | `semantic_onboarding`, `write_summary_and_readme` | `docs/user/user_guide.md`, `_run_summary` |

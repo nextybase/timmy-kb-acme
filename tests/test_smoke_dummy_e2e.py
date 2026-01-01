@@ -19,10 +19,11 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
     clients_db_relative = Path("clients_db/clients.yaml")
 
     # Esegui lo script con base dir forzata al tmp_path del test
-    script = Path(__file__).resolve().parents[1] / "src" / "tools" / "gen_dummy_kb.py"
+    repo_root = Path(__file__).resolve().parents[1]
     cmd = [
         sys.executable,
-        str(script),
+        "-m",
+        "tools.gen_dummy_kb",
         "--slug",
         slug,
         "--base-dir",
@@ -30,7 +31,7 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
         "--clients-db",
         clients_db_relative.as_posix(),
     ]
-    ret = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    ret = subprocess.run(cmd, check=False, capture_output=True, text=True, cwd=repo_root)
     assert ret.returncode == 0, f"CLI fallita (rc={ret.returncode}). stdout:\n{ret.stdout}\nstderr:\n{ret.stderr}"
 
     # Verifica che la generazione sia avvenuta *solo* sotto tmp_path

@@ -19,7 +19,7 @@ Timmy KB richiede un meccanismo affidabile per verificare rapidamente:
 - la correttezza del workflow end-to-end senza utilizzare dati reali.
 
 Attualmente esiste lo strumento CLI
-[`src/tools/gen_dummy_kb.py`](../../src/tools/gen_dummy_kb.py)
+[`tools/gen_dummy_kb.py`](../../tools/gen_dummy_kb.py)
 che genera una Knowledge Base “dummy”, ma:
 
 - non registra un cliente reale nel registry della UI,
@@ -80,7 +80,7 @@ La decisione si articola in sei punti:
 
 6. **Integrazione nei flussi di sviluppo e CI**
    - Viene introdotto un comando dedicato (`make dummy-smoke`) che invoca
-     `python src/tools/gen_dummy_kb.py --slug dummy --reset`.
+     `python tools/gen_dummy_kb.py --slug dummy --reset`.
    - La generazione della dummy non avviene automaticamente all’avvio della UI, ma è uno strumento operativo a disposizione di sviluppatori e pipeline CI.
 
 ---
@@ -203,14 +203,14 @@ Questa scelta è coerente con:
 Il refactor viene implementato nei seguenti file:
 
 - CLI principale:
-  [`src/tools/gen_dummy_kb.py`](../../src/tools/gen_dummy_kb.py)
+  [`tools/gen_dummy_kb.py`](../../tools/gen_dummy_kb.py)
 
 - Nuovi moduli dummy (post-refactor):
- - src/tools/dummy/bootstrap.py
- - src/tools/dummy/semantic.py
- - src/tools/dummy/vision.py
- - src/tools/dummy/drive.py
- - src/tools/dummy/orchestrator.py
+ - tools/dummy/bootstrap.py
+ - tools/dummy/semantic.py
+ - tools/dummy/vision.py
+ - tools/dummy/drive.py
+ - tools/dummy/orchestrator.py
 
 
 - UI (modal Dummy KB e toolbar):
@@ -230,7 +230,7 @@ Il refactor viene implementato nei seguenti file:
 # 7. Riferimenti
 
 - Strumento CLI originale:
-[`src/tools/gen_dummy_kb.py`](../../src/tools/gen_dummy_kb.py)
+[`tools/gen_dummy_kb.py`](../../tools/gen_dummy_kb.py)
 
 - UI Dummy KB:
 [`src/ui/chrome.py`](../../src/ui/chrome.py)

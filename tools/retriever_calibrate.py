@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# src/tools/retriever_calibrate.py
+# tools/retriever_calibrate.py
 from __future__ import annotations
 
 import argparse
@@ -301,6 +301,6 @@ def main() -> int:
 if __name__ == "__main__":
     raise SystemExit(main())
 
-# Nota: genera prima il dummy ("py src/tools/gen_dummy_kb.py --slug dummy"), poi esegui
-# "py src/tools/retriever_calibrate.py --slug dummy --scope book" e aggiungi
+# Nota: genera prima il dummy ("py tools/gen_dummy_kb.py --slug dummy"), poi esegui
+# "py tools/retriever_calibrate.py --slug dummy --scope book" e aggiungi
 # "--queries tests/data/retriever_queries.jsonl --limits 500:3000:500" come da docs/test_suite.md.

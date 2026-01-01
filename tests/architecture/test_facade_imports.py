@@ -10,7 +10,7 @@ FACADES = [
     "src/timmy_kb/cli/pre_onboarding.py",
     "src/timmy_kb/cli/tag_onboarding.py",
     "src/timmy_kb/cli/semantic_onboarding.py",
-    "src/tools/gen_vision_yaml.py",
+    "tools/gen_vision_yaml.py",
 ]
 FACADES += list(Path("src/ui").rglob("*.py"))
 FACADES += list(Path("src/api").rglob("*.py"))

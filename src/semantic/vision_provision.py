@@ -199,7 +199,7 @@ def _vision_schema_path() -> Path:
     Restituisce il path assoluto allo schema VisionOutput, validando che resti nel repo.
     """
     repo_root = Path(__file__).resolve().parents[2]
-    schema_path = (repo_root / "schemas" / "VisionOutput.schema.json").resolve()
+    schema_path = (repo_root / "src" / "ai" / "schemas" / "VisionOutput.schema.json").resolve()
     try:
         schema_path.relative_to(repo_root)
     except ValueError as exc:

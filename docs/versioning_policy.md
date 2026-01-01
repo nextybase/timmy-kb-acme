@@ -64,7 +64,7 @@ PR obbligatorie verso `main`. Protezioni:
 ## 7) Allineamento orchestratori per v1.2.1
 
 - Facade `semantic.api` (conversione/enrichment/preview) come SSoT; e disponibile un thin wrapper CLI `timmy_kb.cli.semantic_onboarding` che richiama la facade per simmetria con gli altri orchestratori.
-- Ridotto: preview locale (`pipeline.honkit_preview`) come endpoint finale (nessun deploy esterno).
+- Ridotto: preview locale gestita via adapter/UI; non esiste un entrypoint `python -m pipeline.honkit_preview` (vedi runbook).
 - SSoT: `ensure_within` in `pipeline.path_utils`.
 
 Queste modifiche sono retro-compatibili a livello di CLI (MINOR  1.2.x), con breaking nullo lato utente.

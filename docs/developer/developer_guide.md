@@ -70,7 +70,7 @@ model = get_vision_model()  # passa sempre da Settings.load (SSoT)
 
 ### GitBook API
 
-- La preview usa HonKit via Docker (`pipeline.honkit_preview`) e non richiede token GitHub/GitBook.
+- La preview usa HonKit via Docker ed e gestita via adapter/UI; non esiste un entrypoint `python -m pipeline.honkit_preview` (vedi runbook).
 
 ---
 
@@ -364,7 +364,7 @@ logger.info("debug.raw_output", extra={"sample": text[:500]})
   - Invarianti su `book/` (presenza `README.md`/`SUMMARY.md` dopo onboarding).
 
 ### Dummy KB (smoke E2E)
-- CLI: `python src/tools/gen_dummy_kb.py --slug dummy --no-drive` (usa workspace in `output/` o `--base-dir <tmp>`; nessuna dipendenza Drive).
+- CLI: `python tools/gen_dummy_kb.py --slug dummy --no-drive` (usa workspace in `output/` o `--base-dir <tmp>`; nessuna dipendenza Drive).
 - Pipeline: **Vision → Semantic → Tags → RAW → Registry UI** (registro opzionale in `clients_db/clients.yaml`, rispettando gli override `CLIENTS_DB_*`/`REPO_ROOT_DIR`).
 - Health report nel payload JSON (`health`): `vision_status` (`ok`/`error`/`timeout`), `fallback_used`, `raw_pdf_count`, `tags_count`, `mapping_valid`, `summary_exists`, `readmes_count`.
 - Struttura minima generata: `config/config.yaml`, `semantic/{semantic_mapping.yaml,cartelle_raw.yaml,tags.db}`, `book/{README.md,SUMMARY.md}`, almeno un PDF valido in `raw/`.
@@ -434,7 +434,7 @@ Esempio - deep FAILED:
 `mypy --config-file mypy.ini src/pipeline src/semantic src/ui` deve essere pulito in CI (`strict` per namespace). I blocchi ancora esclusi dalla copertura formale sono:
 
 - `src/adapters/**`  integrazioni esterne e client API da rifinire con TypedDict/Protocol.
-- `src/tools/**`  script CLI con forte uso di `googleapiclient`; serve incapsulare le chiamate e aggiungere annotazioni pubbliche.
+- `tools/**`  script CLI con forte uso di `googleapiclient`; serve incapsulare le chiamate e aggiungere annotazioni pubbliche.
 - `tools/**`  tooling operativo legacy; va consolidato in moduli riusabili prima della tipizzazione.
 
 Checklist per le PR che riducono il debito:

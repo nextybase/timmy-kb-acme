@@ -19,7 +19,7 @@ SENSITIVE_PATHS: tuple[str, ...] = (
     "src/ai/responses.py",
     "src/ai/providers/",
     ".codex/",
-    "src/tools/gen_vision_yaml.py",
+    "tools/gen_vision_yaml.py",
 )
 
 

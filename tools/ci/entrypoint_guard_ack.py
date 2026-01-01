@@ -10,7 +10,7 @@ from typing import Sequence
 ENTRYPOINT_PREFIXES = (
     "src/ui/",
     "src/timmy_kb/cli/",
-    "src/tools/",
+    "tools/",
     "src/api/",
 )
 

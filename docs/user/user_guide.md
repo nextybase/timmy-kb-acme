@@ -43,7 +43,7 @@ Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `LOG_REDACTION`, `YAML_STRU
 Note Drive nella UI:
 - La generazione dei README usa la variante che assicura la struttura delle cartelle.
 - E' presente il pulsante "Rileva PDF in raw/" per aggiornare lo stato senza rifare il download (scansione locale di PDF/CSV).
-- Dopo l'upload di `config/VisionStatement.pdf`, il tool `src/tools/gen_vision_yaml.py` genera `semantic/semantic_mapping.yaml` via OpenAI usando il modello risolto da `ai.vision_config.resolve_vision_config`.
+- Dopo l'upload di `config/VisionStatement.pdf`, il tool `tools/gen_vision_yaml.py` genera `semantic/semantic_mapping.yaml` via OpenAI usando il modello risolto da `ai.vision_config.resolve_vision_config`.
 
 Guida completa: [guida_ui.md](guida_ui.md).
 
@@ -108,7 +108,7 @@ Per l'indicizzazione nel DB semantico puoi delegare a
 adottato nel tuo ambiente (es. quello configurato nella UI retriever).
 
 # 4) Preview finale (HonKit locale)
-Avvia la preview Docker/HonKit tramite `pipeline.honkit_preview` (vedi sezione Preview); non esistono step di deployment esterno.
+La preview Docker/HonKit è gestita via adapter/UI; non esiste un entrypoint `python -m pipeline.honkit_preview` (vedi runbook).
 
 Modalita` **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopra per la parte CLI di onboarding.
 
@@ -117,7 +117,7 @@ Modalita` **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopr
 ## Vision Statement (CLI)
 1. Copia `VisionStatement.pdf` in `output/timmy-kb-<slug>/config/` oppure in `raw/`.
 2. Assicurati che `.env` contenga `OPENAI_API_KEY` (token valido per il modello Vision).
-3. Esegui `py src/tools/gen_vision_yaml.py --slug <slug>`: il tool carica l'ambiente, risolve i path e genera
+3. Esegui `py tools/gen_vision_yaml.py --slug <slug>`: il tool carica l'ambiente, risolve i path e genera
    `semantic/semantic_mapping.yaml`.
 4. Errori (PDF mancante, risposta vuota, rifiuto modello) sono riportati come `ConfigError` senza stack trace.
 
@@ -154,7 +154,7 @@ output/timmy-kb-<slug>/
 - Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.
 - Log con redazione automatica se `LOG_REDACTION` e` attivo.
 - I pulsanti **Avvia arricchimento semantico**/**Abilita** nella UI rispettano il servizio `ui.services.tags_adapter`: se non e` disponibile vengono disabilitati (salvo `TAGS_MODE=stub`). In modalita` stub lo YAML viene rigenerato con `DEFAULT_TAGS_YAML` e lo stato cliente torna a **pronto** se il DB resta vuoto.
-- La preview finale usa HonKit via Docker (`pipeline.honkit_preview`) e non effettua deploy esterni.
+- La preview finale usa HonKit via Docker ed è gestita via adapter/UI; non esiste un entrypoint `python -m pipeline.honkit_preview` (vedi runbook).
 
 ## Impostazioni retriever (UI)
 La sidebar della UI consente di configurare il retriever, salvando i parametri in `config/config.yaml`:

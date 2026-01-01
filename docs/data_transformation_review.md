@@ -8,7 +8,7 @@ Nel contesto di Timmy-KB come ambiente di creazione e governo, questa review des
 - **Pipeline unificata libro**: `semantic.api.build_markdown_book` esegue conversione, arricchimento frontmatter, README/SUMMARY e, aggiunta di questa iterazione, scrive un file `semantic/layout_proposal.yaml` derivato da `layout_enricher`.
 - **Frontmatter & layout**: i `.md` ora includono il campo `layout_section` dedotto dalla proposta ER, e la UI documenta i top-level suggeriti aggiungendo una nota nel README generato.
 - **Pubblicazione GitBook/Drive**: ora scriviamo anche `book/layout_summary.md` con i top-level suggeriti, cosi la preview GitBook/Drive puo leggere direttamente la proposta ER e infrastruttura di cartelle.
-- **Preview HonKit Docker**: la preview locale usa `pipeline.honkit_preview` su `book/` senza deploy esterno e senza token GitHub/GitBook.
+- **Preview HonKit Docker**: la preview locale è gestita via adapter/UI; non esiste un entrypoint `python -m pipeline.honkit_preview` (vedi runbook).
 - **Codici documentali**: i prefissi (PRJ-, ORG-, CTR-, DEC-, ...) sono parte del layer semantico; il mapping `entity_to_document_type` vive in `semantic/semantic_mapping.yaml` e guida layout, frontmatter ed embedding.
 
 ## Gap mitigati

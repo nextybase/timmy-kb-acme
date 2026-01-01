@@ -467,7 +467,7 @@ def choose_limit_for_budget(budget_ms: int) -> int:
     - >  420ms  -> 8000
 
     Nota: valori iniziali; verificare su dataset reali. Vedi
-    `src/tools/retriever_calibrate.py` per calibrazione futura.
+    `tools/retriever_calibrate.py` per calibrazione futura.
     """
     try:
         b = int(budget_ms)

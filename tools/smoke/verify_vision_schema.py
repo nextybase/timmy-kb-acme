@@ -6,7 +6,7 @@ Tool rapido per validare lo schema VisionOutput e confermare la presenza dei log
 
 Usalo da repo root:
   pip install -r requirements-dev.txt    # se serve
-  python tools/verify_vision_schema.py --schema schemas/VisionOutput.schema.json
+  python tools/verify_vision_schema.py --schema src/ai/schemas/VisionOutput.schema.json
   python tools/verify_vision_schema.py --logs output/timmy-kb-*/logs/onboarding.log
 """
 

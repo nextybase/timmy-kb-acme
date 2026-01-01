@@ -129,7 +129,10 @@ def _has_openai_key() -> bool:
 
 def _vision_schema_ok() -> tuple[bool, str]:
     def _resolve_schema_path(repo_root: Path) -> Path:
-        return cast(Path, ensure_within_and_resolve(repo_root, repo_root / "schemas" / "VisionOutput.schema.json"))
+        return cast(
+            Path,
+            ensure_within_and_resolve(repo_root, repo_root / "src" / "ai" / "schemas" / "VisionOutput.schema.json"),
+        )
 
     def _load_schema_text(repo_root: Path, schema_path: Path) -> tuple[bool, str]:
         if not schema_path.exists():

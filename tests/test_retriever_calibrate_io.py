@@ -126,8 +126,8 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
         SimpleNamespace(safe_write_text=_safe_write_text),
     )
 
-    sys.modules.pop("src.tools.retriever_calibrate", None)
-    mod = importlib.import_module("src.tools.retriever_calibrate")
+    sys.modules.pop("tools.retriever_calibrate", None)
+    mod = importlib.import_module("tools.retriever_calibrate")
 
     dump_path = Path("tmp_calibrate_io") / "dump.jsonl"
     sys.argv = [
