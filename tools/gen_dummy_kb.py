@@ -20,7 +20,9 @@ try:
 except Exception:
     yaml = None  # type: ignore
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+from pipeline.paths import get_repo_root
+
+REPO_ROOT = get_repo_root()
 
 
 class _PayloadPaths(TypedDict):
@@ -273,6 +275,16 @@ def _purge_previous_state(slug: str, client_name: str, logger: logging.Logger) -
         )
 
 
+def _brute_reset_dummy(*, logger: logging.Logger) -> Path:
+    target = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "output" / "timmy-kb-dummy")
+    if target.exists():
+        shutil.rmtree(target)
+        logger.info("tools.gen_dummy_kb.brute_reset.deleted", extra={"path": str(target)})
+    else:
+        logger.info("tools.gen_dummy_kb.brute_reset.not_found", extra={"path": str(target)})
+    return target
+
+
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         description="Genera una KB dummy usando gli entry-point della UI (pre_onboarding + Vision + (Drive opz.))."
@@ -303,6 +315,44 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Attiva la modalità deep testing (modo log only).",
     )
+    ap.add_argument(
+        "--brute-reset",
+        action="store_true",
+        help="Reset manuale: elimina output/timmy-kb-dummy e termina (solo slug dummy).",
+    )
+    semantic_group = ap.add_mutually_exclusive_group()
+    semantic_group.add_argument(
+        "--semantic",
+        action="store_true",
+        help="Abilita esplicitamente il passo Semantic (default: attivo).",
+    )
+    semantic_group.add_argument(
+        "--no-semantic",
+        action="store_true",
+        help="Disabilita il passo Semantic.",
+    )
+    enrich_group = ap.add_mutually_exclusive_group()
+    enrich_group.add_argument(
+        "--enrichment",
+        action="store_true",
+        help="Abilita esplicitamente il passo Enrichment (default: attivo).",
+    )
+    enrich_group.add_argument(
+        "--no-enrichment",
+        action="store_true",
+        help="Disabilita il passo Enrichment.",
+    )
+    preview_group = ap.add_mutually_exclusive_group()
+    preview_group.add_argument(
+        "--preview",
+        action="store_true",
+        help="Abilita esplicitamente il passo Preview (default: attivo).",
+    )
+    preview_group.add_argument(
+        "--no-preview",
+        action="store_true",
+        help="Disabilita il passo Preview.",
+    )
     return ap.parse_args(argv)
 
 
@@ -312,6 +362,9 @@ def build_payload(
     client_name: str,
     enable_drive: bool,
     enable_vision: bool,
+    enable_semantic: bool = True,
+    enable_enrichment: bool = True,
+    enable_preview: bool = True,
     records_hint: Optional[str],
     deep_testing: bool = False,
     logger: logging.Logger,
@@ -321,6 +374,9 @@ def build_payload(
         client_name=client_name,
         enable_drive=enable_drive,
         enable_vision=enable_vision,
+        enable_semantic=enable_semantic,
+        enable_enrichment=enable_enrichment,
+        enable_preview=enable_preview,
         records_hint=records_hint,
         deep_testing=deep_testing,
         logger=logger,
@@ -369,7 +425,20 @@ def main(argv: Optional[list[str]] = None) -> int:
     client_name = (args.name or f"Dummy {slug}").strip()
     enable_drive = (not args.no_drive) or args.with_drive
     enable_vision = not args.no_vision
+    enable_semantic = not args.no_semantic
+    enable_enrichment = not args.no_enrichment
+    enable_preview = not args.no_preview
     records_hint = args.records
+    if args.brute_reset:
+        if slug != "dummy":
+            raise SystemExit("--brute-reset consentito solo con slug 'dummy'")
+        if args.base_dir or args.clients_db or args.records:
+            raise SystemExit("--brute-reset non accetta --base-dir/--clients-db/--records")
+        logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
+        logger.setLevel(logging.INFO)
+        target = _brute_reset_dummy(logger=logger)
+        emit_structure({"slug": slug, "brute_reset": True, "deleted_path": str(target)})
+        return 0
 
     if records_hint is not None and not args.no_vision:
         enable_vision = False
@@ -413,7 +482,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.setLevel(logging.INFO)
         logger.info("tools.gen_dummy_kb.mode", extra={"mode": mode_label})
 
-        _purge_previous_state(slug, client_name, logger)
         if workspace_override:
             for child in ("raw", "semantic", "book", "logs", "config"):
                 (workspace_override / child).mkdir(parents=True, exist_ok=True)
@@ -433,6 +501,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                     client_name=client_name,
                     enable_drive=enable_drive,
                     enable_vision=enable_vision,
+                    enable_semantic=enable_semantic,
+                    enable_enrichment=enable_enrichment,
+                    enable_preview=enable_preview,
                     records_hint=records_hint,
                     logger=logger,
                     deep_testing=args.deep_testing,

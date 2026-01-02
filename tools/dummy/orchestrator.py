@@ -23,6 +23,7 @@ from .semantic import (
     ensure_minimal_tags_db,
     ensure_raw_pdfs,
     load_mapping_categories,
+    write_basic_semantic_yaml,
     write_minimal_tags_raw,
 )
 from .vision import run_vision_with_timeout
@@ -168,6 +169,9 @@ def build_dummy_payload(
     client_name: str,
     enable_drive: bool,
     enable_vision: bool,
+    enable_semantic: bool = True,
+    enable_enrichment: bool = True,
+    enable_preview: bool = True,
     records_hint: Optional[str],
     deep_testing: bool = False,
     logger: logging.Logger,
@@ -192,6 +196,7 @@ def build_dummy_payload(
     ensure_raw_pdfs_fn: Callable[..., Any] = ensure_raw_pdfs,
     ensure_local_readmes_fn: Callable[..., Any] = ensure_local_readmes,
     ensure_book_skeleton_fn: Callable[[Path], None] = ensure_book_skeleton,
+    write_basic_semantic_yaml_fn: Callable[..., dict[str, Any]] | None = write_basic_semantic_yaml,
     write_minimal_tags_raw_fn: Callable[[Path], Path] = write_minimal_tags_raw,
     validate_dummy_structure_fn: Callable[[Path, logging.Logger], None] | None = validate_dummy_structure,
     call_drive_min_fn: Callable[..., Optional[dict[str, Any]]] = call_drive_min,
@@ -290,6 +295,29 @@ def build_dummy_payload(
                 extra={"slug": slug, "file_path": str(pdf_path_resolved)},
             )
             raise
+    yaml_target: Path | None = None
+    if enable_vision and not vision_already_completed:
+        yaml_target = ensure_within_and_resolve_fn(base_dir, base_dir / "config" / "visionstatement.yaml")
+        if not yaml_target.exists():
+            try:
+                yaml_target.parent.mkdir(parents=True, exist_ok=True)
+                compile_document_to_vision_yaml(pdf_path_resolved, yaml_target)
+                logger.info(
+                    "tools.gen_dummy_kb.vision_yaml.created",
+                    extra={"slug": slug, "path": str(yaml_target)},
+                )
+            except Exception as exc:
+                msg = f"Vision YAML generation failed: {exc}"
+                if vision_mode == "deep":
+                    logger.error(
+                        "tools.gen_dummy_kb.vision_yaml.failed",
+                        extra={"slug": slug, "error": str(exc)},
+                    )
+                    raise HardCheckError(msg, _hardcheck_health("vision_yaml_hardcheck", msg)) from exc
+                logger.warning(
+                    "tools.gen_dummy_kb.vision_yaml.failed",
+                    extra={"slug": slug, "error": str(exc)},
+                )
     if deep_testing:
         if not enable_vision:
             msg = "Deep testing requires Vision enabled (secrets/permessi non pronti)"
@@ -372,36 +400,68 @@ def build_dummy_payload(
                 "Vision hard check succeeded",
                 latency_ms,
             )
-            yaml_target = ensure_within_and_resolve(base_dir, base_dir / "config" / "visionstatement.yaml")
-            try:
-                compile_document_to_vision_yaml(pdf_path_resolved, yaml_target)
-            except Exception as exc:
-                logger.error(
-                    "tools.gen_dummy_kb.vision_yaml_generation_failed",
-                    extra={"slug": slug, "error": str(exc), "pdf": str(pdf_path_resolved)},
-                )
-                msg = f"Vision YAML generation failed: {exc}"
-                raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg)) from exc
-    elif not vision_already_completed:
+            if yaml_target is None:
+                yaml_target = ensure_within_and_resolve_fn(base_dir, base_dir / "config" / "visionstatement.yaml")
+            if not yaml_target.exists():
+                try:
+                    compile_document_to_vision_yaml(pdf_path_resolved, yaml_target)
+                except Exception as exc:
+                    logger.error(
+                        "tools.gen_dummy_kb.vision_yaml_generation_failed",
+                        extra={"slug": slug, "error": str(exc), "pdf": str(pdf_path_resolved)},
+                    )
+                    msg = f"Vision YAML generation failed: {exc}"
+                    raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg)) from exc
+    elif not vision_already_completed and enable_semantic:
         categories_for_readmes = load_mapping_categories_fn(base_dir)
+
+    if vision_mode == "smoke" and enable_semantic:
+        if write_basic_semantic_yaml_fn and (not mapping_path.exists() or not cartelle_path.exists()):
+            try:
+                basic_payload = write_basic_semantic_yaml_fn(base_dir, slug=slug, client_name=client_name)
+                if not categories_for_readmes and isinstance(basic_payload, dict):
+                    basic_categories = basic_payload.get("categories")
+                    if isinstance(basic_categories, dict):
+                        categories_for_readmes = basic_categories
+            except Exception as exc:
+                logger.warning(
+                    "tools.gen_dummy_kb.semantic_basic_failed",
+                    extra={"slug": slug, "error": str(exc)},
+                )
+        if not categories_for_readmes:
+            categories_for_readmes = load_mapping_categories_fn(base_dir)
 
     local_readmes: list[str] = []
     ensure_book_skeleton_fn(base_dir)
-    if categories_for_readmes:
-        ensure_minimal_tags_db_fn(base_dir, categories_for_readmes, logger=logger)
-        ensure_raw_pdfs_fn(base_dir, categories_for_readmes)
+    if enable_semantic:
+        if categories_for_readmes:
+            ensure_minimal_tags_db_fn(base_dir, categories_for_readmes, logger=logger)
+            ensure_raw_pdfs_fn(base_dir, categories_for_readmes)
 
-        local_readmes = ensure_local_readmes_fn(base_dir, categories_for_readmes)
-        try:
-            write_minimal_tags_raw_fn(base_dir)
-        except Exception as exc:
-            logger.warning(
-                "tools.gen_dummy_kb.tags_raw_seed_failed",
-                extra={"slug": slug, "error": str(exc)},
-            )
+            local_readmes = ensure_local_readmes_fn(base_dir, categories_for_readmes)
+            try:
+                write_minimal_tags_raw_fn(base_dir)
+            except Exception as exc:
+                logger.warning(
+                    "tools.gen_dummy_kb.tags_raw_seed_failed",
+                    extra={"slug": slug, "error": str(exc)},
+                )
+        elif vision_mode == "smoke":
+            ensure_minimal_tags_db_fn(base_dir, None, logger=logger)
+            ensure_raw_pdfs_fn(base_dir, None)
 
-    if categories_for_readmes and validate_dummy_structure_fn:
-        validate_dummy_structure_fn(base_dir, logger)
+        if vision_mode == "smoke" and validate_dummy_structure_fn:
+            validate_dummy_structure_fn(base_dir, logger)
+        elif categories_for_readmes and validate_dummy_structure_fn:
+            validate_dummy_structure_fn(base_dir, logger)
+    else:
+        logger.info("tools.gen_dummy_kb.semantic_skipped", extra={"slug": slug})
+
+    if not enable_enrichment:
+        logger.info("tools.gen_dummy_kb.enrichment_skipped", extra={"slug": slug})
+
+    if not enable_preview:
+        logger.info("tools.gen_dummy_kb.preview_skipped", extra={"slug": slug})
 
     if enable_drive:
         drive_start = perf_counter()

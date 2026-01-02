@@ -205,7 +205,15 @@ def upsert_client(entry: ClientEntry) -> None:
 
     slug_norm = entry.slug.strip()
     validate_slug(slug_norm)
-    out.append(ClientEntry(slug=slug_norm, nome=entry.nome, stato=entry.stato))
+    out.append(
+        ClientEntry(
+            slug=slug_norm,
+            nome=entry.nome,
+            stato=entry.stato,
+            created_at=entry.created_at,
+            dummy=entry.dummy,
+        )
+    )
     seen.add(slug_norm)
 
     for e in entries:

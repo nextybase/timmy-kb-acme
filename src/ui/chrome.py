@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import signal
@@ -112,12 +113,23 @@ def _on_dummy_kb() -> None:
                 st.error(f"Impossibile avviare lo script: {exc}")
                 return
 
+            payload = None
+            payload_error = None
             if result.stdout:
+                try:
+                    payload = _extract_json_payload(result.stdout)
+                except Exception as exc:
+                    payload_error = str(exc)
                 with st.expander("Output CLI", expanded=False):
                     st.text(result.stdout)
             if result.stderr:
                 with st.expander("Errori CLI", expanded=False):
                     st.text(result.stderr)
+
+            if payload_error:
+                st.error(f"Health payload non valido: {payload_error}")
+            else:
+                _render_health_panel(payload)
 
             if result.returncode == 0:
                 status_widget.update(label="Dummy generato correttamente.", state="complete")
@@ -165,6 +177,62 @@ def _on_dummy_kb() -> None:
     runner = open_modal(_render_modal_body)
     if callable(runner):
         runner()
+
+
+def _extract_json_payload(text: str) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    for idx, ch in enumerate(text):
+        if ch != "{":
+            continue
+        payload, _ = decoder.raw_decode(text[idx:])
+        if isinstance(payload, dict):
+            return payload
+        break
+    raise RuntimeError("payload JSON non trovato")
+
+
+def _render_health_panel(payload: dict[str, Any] | None) -> None:
+    if not payload or not isinstance(payload, dict):
+        st.error("Health payload mancante o non valido.")
+        return
+    health = payload.get("health")
+    if not isinstance(health, dict):
+        st.error("Health payload mancante o non valido.")
+        return
+
+    st.subheader("Health report")
+
+    fields = {
+        "status": health.get("status"),
+        "mode": health.get("mode"),
+        "vision_status": health.get("vision_status"),
+        "fallback_used": health.get("fallback_used"),
+        "raw_pdf_count": health.get("raw_pdf_count"),
+        "tags_count": health.get("tags_count"),
+        "mapping_valid": health.get("mapping_valid"),
+        "readmes_count": health.get("readmes_count"),
+    }
+    st.table({k: [v] for k, v in fields.items() if v is not None})
+
+    errors = health.get("errors")
+    if isinstance(errors, list) and errors:
+        st.error("Errori:")
+        st.write(errors)
+
+    checks = health.get("checks")
+    if isinstance(checks, list) and checks:
+        st.write("Checks:")
+        st.write(checks)
+
+    external_checks = health.get("external_checks")
+    if isinstance(external_checks, dict) and external_checks:
+        st.write("External checks:")
+        st.json(external_checks)
+
+    golden_pdf = health.get("golden_pdf")
+    if isinstance(golden_pdf, dict) and golden_pdf:
+        st.write("Golden PDF:")
+        st.json(golden_pdf)
 
 
 def _on_exit() -> None:

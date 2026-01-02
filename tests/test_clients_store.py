@@ -85,6 +85,14 @@ def test_upsert_preserves_order_and_deduplicates(store):
     assert entries[0].stato == "finito"
 
 
+def test_upsert_preserves_dummy_flag(store):
+    store.ensure_db()
+    store.upsert_client(store.ClientEntry(slug="dummy", nome="Dummy", stato="active", dummy=True))
+    entries = store.load_clients()
+    assert entries[0].slug == "dummy"
+    assert entries[0].dummy is True
+
+
 def test_set_state_updates_existing_only(store):
     store.ensure_db()
     store.upsert_client(store.ClientEntry(slug="gamma", nome="Gamma", stato="nuovo"))

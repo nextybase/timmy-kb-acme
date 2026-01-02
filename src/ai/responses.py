@@ -197,6 +197,19 @@ def run_json_model(
     `messages` segue il formato chat role/content e viene convertito in input_text.
     """
     client = client or make_openai_client()
+    # Paranoid guard: fail fast if Responses API is not available or callable.
+    resp_api = getattr(client, "responses", None)
+    create_fn = getattr(resp_api, "create", None) if resp_api is not None else None
+    if not callable(create_fn):
+        LOGGER.error(
+            "ai.responses.unsupported",
+            extra={"error": "responses.create missing_or_not_callable"},
+        )
+        raise ConfigError(
+            "Client OpenAI non supporta l'API Responses.",
+            code="responses.unsupported",
+            component="responses",
+        )
     input_payload = _to_input_blocks(messages)
     rf_payload = response_format or {"type": "json_object"}
     normalized_metadata = _normalize_metadata(metadata)
@@ -220,39 +233,85 @@ def run_json_model(
         ),
     )
 
+    resp: Any | None = None
+
     try:
-        resp = client.responses.create(
-            model=model,
-            input=input_payload,
-            metadata=normalized_metadata,
-            response_format=rf_payload,
-        )
-    except AttributeError as exc:  # pragma: no cover
-        LOGGER.error("ai.responses.unsupported", extra={"error": str(exc)})
-        raise ConfigError("Client OpenAI non supporta l'API Responses.") from exc
-    except TypeError as exc:
-        # Alcune versioni dell'SDK non accettano `response_format` su Responses.create.
-        # In tal caso riproviamo senza `response_format`, mantenendo comunque il vincolo
-        # "JSON-only" a livello di prompt/system message.
-        if "response_format" in str(exc):
-            try:
-                resp = client.responses.create(
-                    model=model,
-                    input=input_payload,
-                    metadata=normalized_metadata,
-                )
-            except Exception as inner_exc:  # pragma: no cover - fallback best-effort
+        request_kwargs: Dict[str, Any] = {
+            "model": model,
+            "input": input_payload,
+            "metadata": normalized_metadata,
+            "response_format": rf_payload,
+        }
+        try:
+            resp = client.responses.create(**request_kwargs)
+        except TypeError as exc:
+            exc_msg = str(exc)
+            inner_exc: Exception | None = None
+            fallback_removed: List[str] = []
+            fallback_kwargs = dict(request_kwargs)
+
+            for _ in range(2):
+                if "response_format" in exc_msg and "response_format" in fallback_kwargs:
+                    fallback_removed.append("response_format")
+                    fallback_kwargs.pop("response_format", None)
+                    LOGGER.warning(
+                        "ai.responses.fallback",
+                        extra={"removed": "response_format", "error": exc_msg},
+                    )
+                elif "metadata" in exc_msg and "metadata" in fallback_kwargs:
+                    fallback_removed.append("metadata")
+                    fallback_kwargs.pop("metadata", None)
+                    LOGGER.warning(
+                        "ai.responses.fallback",
+                        extra={"removed": "metadata", "error": exc_msg},
+                    )
+                else:
+                    break
+
+                try:
+                    resp = client.responses.create(**fallback_kwargs)
+                    if fallback_removed:
+                        LOGGER.warning(
+                            "ai.responses.fallback_used",
+                            extra={"removed": fallback_removed},
+                        )
+                    break
+                except TypeError as next_exc:
+                    inner_exc = next_exc
+                    exc_msg = str(next_exc)
+                    continue
+                except Exception as next_exc:  # pragma: no cover
+                    inner_exc = next_exc
+                    break
+
+            if resp is None:
+                if inner_exc is not None:
+                    LOGGER.error(
+                        "ai.responses.fallback_failed",
+                        extra={
+                            "error": str(exc),
+                            "inner_error": str(inner_exc),
+                            "removed": fallback_removed,
+                        },
+                    )
+                    raise ConfigError(
+                        "Chiamata Responses fallita per incompatibilita' SDK/argomenti: " f"{exc}; inner: {inner_exc}",
+                        code="responses.request.invalid",
+                        component="responses",
+                    ) from inner_exc
                 raise ConfigError(
-                    f"Chiamata Responses fallita per incompatibilità SDK/argomenti: {exc}",
+                    f"Chiamata Responses fallita per incompatibilita' SDK/argomenti: {exc}",
                     code="responses.request.invalid",
                     component="responses",
-                ) from inner_exc
-        else:
-            raise ConfigError(
-                f"Chiamata Responses fallita per incompatibilità SDK/argomenti: {exc}",
-                code="responses.request.invalid",
-                component="responses",
-            ) from exc
+                ) from exc
+    except AttributeError as exc:  # pragma: no cover
+        # Extra-paranoid: if the SDK raises AttributeError mid-flight, classify as unsupported.
+        LOGGER.error("ai.responses.unsupported", extra={"error": str(exc)})
+        raise ConfigError(
+            "Client OpenAI non supporta l'API Responses.",
+            code="responses.unsupported",
+            component="responses",
+        ) from exc
     except Exception as exc:
         LOGGER.error("ai.responses.error", extra={"error": str(exc)})
         raise ConfigError(f"Chiamata Responses fallita: {exc}") from exc
