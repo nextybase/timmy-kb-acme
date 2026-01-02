@@ -47,21 +47,21 @@ def _legacy_regex(parts: tuple[str, ...], *, leading_underscore: bool = False) -
 LEGACY_ROUTER_RULES = [
     {
         "parts": ("active", "tab"),
-        "message": 'Stato legacy "active tab" non consentito in beta0',
+        "message": 'Stato legacy "active tab" non consentito in beta 1.0',
     },
     {
         "parts": ("render", "sidebar", "tab", "switches"),
-        "message": "Switcher legacy non consentito in beta0",
+        "message": "Switcher legacy non consentito in beta 1.0",
     },
     {
         "parts": ("init", "tab", "state"),
         "leading_underscore": True,
-        "message": "Router legacy: init tab state non consentito in beta0",
+        "message": "Router legacy: init tab state non consentito in beta 1.0",
     },
     {
         "parts": ("render", "tabs", "router"),
         "leading_underscore": True,
-        "message": "Router legacy: render tabs router non consentito in beta0",
+        "message": "Router legacy: render tabs router non consentito in beta 1.0",
     },
 ]
 
@@ -122,7 +122,7 @@ def scan_onboarding_file() -> list[str]:
 def scan_legacy_structure() -> list[str]:
     legacy_dir = REPO_ROOT / "pages"
     if legacy_dir.exists():
-        return ["[STRUCT] directory legacy 'pages/' presente. Rimuovere per beta0."]
+        return ["[STRUCT] directory legacy 'pages/' presente. Rimuovere per beta 1.0."]
     return []
 
 
@@ -133,12 +133,12 @@ def main() -> int:
     violations.extend(scan_legacy_structure())
 
     if violations:
-        print("Violazioni beta0 trovate:\n")
+        print("Violazioni beta 1.0 trovate:\n")
         for violation in violations:
             print("-", violation)
         return 1
 
-    print("UI beta0 compliance: OK")
+    print("UI beta 1.0 compliance: OK")
     return 0
 
 

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # onboarding_ui.py
 """
-Onboarding UI entrypoint (beta 0).
+Onboarding UI entrypoint (Beta 1.0).
 - Router nativo Streamlit: st.navigation + st.Page
 - Deep-linking via st.query_params (solo default 'tab')
 """
@@ -15,6 +15,7 @@ from typing import Any
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.paths import get_repo_root, global_logs_dir
+from timmy_kb.versioning import build_identity
 from ui.types import StreamlitLike
 
 try:
@@ -140,7 +141,7 @@ def _ensure_streamlit_api(st_module: StreamlitLike) -> None:
         or not hasattr(st_module, "navigation")
     ):
         raise RuntimeError(
-            "Streamlit 1.50.0 o superiore richiesto per l'interfaccia Beta 0. "
+            "Streamlit 1.50.0 o superiore richiesto per l'interfaccia Beta 1.0. "
             'Aggiorna con `pip install --upgrade "streamlit>=1.50.0"`.'
         )
 
@@ -394,10 +395,11 @@ def main() -> None:
     if not st.session_state.get("_startup_logged", False):
         port = os.getenv("PORT") or os.getenv("STREAMLIT_SERVER_PORT") or os.getenv("SERVER_PORT")
         st.session_state["_startup_logged"] = True
+        identity = build_identity()
         logger.info(
             "ui.startup",
             extra={
-                "version": "v1.0-beta",
+                **identity,
                 "streamlit_version": getattr(st, "__version__", "unknown"),
                 "port": port,
                 "mode": "streamlit",

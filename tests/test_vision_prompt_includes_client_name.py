@@ -15,6 +15,7 @@ class DummyCtx:
     def __init__(self, base_dir: Path, client_name: str | None = None):
         self.base_dir = str(base_dir)
         self.client_name = client_name
+        self.settings = {"ai": {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID"}}}
 
 
 class _NoopLogger:

@@ -9,20 +9,36 @@ from typing import Optional
 
 from pipeline.config_utils import get_client_config
 from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
+from pipeline.exceptions import ConfigError
 from pipeline.ingest.provider import build_ingest_provider
 from pipeline.logging_utils import get_structured_logger
 from semantic.api import copy_local_pdfs_to_raw
 from semantic.types import ClientContextProtocol
 
 
-def _normalize_provider(cfg: dict[str, str | bool], source: str) -> str:
+def _normalize_provider(cfg: dict[str, str | bool], source: str, *, slug: str | None, logger: logging.Logger) -> str:
+    if "skip_drive" in cfg:
+        logger.error(
+            "tag_onboarding.ingest.legacy_skip_drive",
+            extra={"slug": slug, "value": cfg.get("skip_drive")},
+        )
+        raise ConfigError(
+            "Config legacy: 'skip_drive' non supportato. Usa ingest_provider: local.",
+            slug=slug,
+        )
     provider = cfg.get("ingest_provider")
     if provider in {"drive", "local"}:
         return provider
     if source in {"drive", "local"}:
         return source
-    skip_drive = bool(cfg.get("skip_drive"))
-    return "local" if skip_drive else "drive"
+    logger.error(
+        "tag_onboarding.ingest.provider_invalid",
+        extra={"slug": slug, "provider": provider, "source": source},
+    )
+    raise ConfigError(
+        "Ingest provider non valido: usare 'drive' o 'local'.",
+        slug=slug,
+    )
 
 
 def _resolve_provider(
@@ -35,7 +51,8 @@ def _resolve_provider(
         cfg = get_client_config(context) or {}
     except AttributeError:
         cfg = {}
-    provider_key = _normalize_provider(cfg, source)
+    slug = getattr(context, "slug", None)
+    provider_key = _normalize_provider(cfg, source, slug=slug, logger=logger)
     logger_extra = getattr(logger, "extra", None)
     ingest_logger = get_structured_logger("tag_onboarding.ingest", **dict(logger_extra or {}))
     return build_ingest_provider(provider_key), provider_key, ingest_logger

@@ -36,19 +36,33 @@ class AiCfgRoot(TypedDict, total=False):
     ai: Mapping[str, AssistantSectionCfg]
 
 
-def _vision_section(payload: Mapping[str, Any]) -> Optional[VisionCfg]:
+def _vision_section(payload: Mapping[str, Any]) -> VisionCfg:
+    # Legacy compat: vision.* a root (hard cut)
+    if "vision" in payload:
+        LOGGER.error(
+            "ai.vision_config.legacy_root_vision",
+            extra={"path": "vision"},
+        )
+        raise ConfigError("Config legacy rilevata: sposta 'vision' sotto 'ai.vision' in config/config.yaml")
+
     # Schema attuale: ai.vision (config/config.yaml riorganizzato)
     ai_candidate = payload.get("ai")
     if isinstance(ai_candidate, Mapping):
         nested = ai_candidate.get("vision")
         if isinstance(nested, Mapping):
             return cast(VisionCfg, nested)
+        if "vision" in ai_candidate:
+            LOGGER.error(
+                "ai.vision_config.section_invalid",
+                extra={"path": "ai.vision", "error": "not_mapping"},
+            )
+            raise ConfigError("Sezione ai.vision non valida: atteso mapping", path="ai.vision")
 
-    # Legacy compat: vision.* a root
-    candidate = payload.get("vision")
-    if isinstance(candidate, Mapping):
-        return cast(VisionCfg, candidate)
-    return None
+    LOGGER.error(
+        "ai.vision_config.section_missing",
+        extra={"path": "ai.vision"},
+    )
+    raise ConfigError("Config Vision mancante: definire ai.vision in config/config.yaml", path="ai.vision")
 
 
 def _ai_section(payload: Mapping[str, Any], name: str) -> Optional[AssistantSectionCfg]:
@@ -115,10 +129,9 @@ def _resolve_assistant_env(
             settings_value = candidate
     payload_value: Optional[str] = None
     vision_cfg = _vision_section(settings_payload)
-    if vision_cfg:
-        candidate = vision_cfg.get("assistant_id_env")
-        if isinstance(candidate, str):
-            payload_value = candidate
+    candidate = vision_cfg.get("assistant_id_env")
+    if isinstance(candidate, str):
+        payload_value = candidate
     return resolution.resolve_assistant_env(settings_value, payload_value, default_env)
 
 
@@ -131,10 +144,9 @@ def _resolve_model_from_settings(settings_obj: Optional[Settings], settings_payl
         except Exception:
             pass
     vision_cfg = _vision_section(settings_payload)
-    if vision_cfg:
-        candidate = vision_cfg.get("model")
-        if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
+    candidate = vision_cfg.get("model")
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
     candidate = settings_payload.get("vision_model")
     if isinstance(candidate, str) and candidate.strip():
         return candidate.strip()
@@ -160,10 +172,9 @@ def _resolve_vision_use_kb(
 
     payload_flag: Optional[bool] = None
     vision_cfg = _vision_section(settings_payload)
-    if vision_cfg:
-        raw = vision_cfg.get("use_kb")
-        if isinstance(raw, bool):
-            payload_flag = raw
+    raw = vision_cfg.get("use_kb")
+    if isinstance(raw, bool):
+        payload_flag = raw
 
     return resolution.resolve_boolean_flag(env_flag, settings_flag, payload_flag, default=True)
 
@@ -200,10 +211,9 @@ def _resolve_vision_strict_output(
 
     payload_flag: Optional[bool] = None
     vision_cfg = _vision_section(settings_payload)
-    if vision_cfg:
-        raw = vision_cfg.get("strict_output")
-        if isinstance(raw, bool):
-            payload_flag = raw
+    raw = vision_cfg.get("strict_output")
+    if isinstance(raw, bool):
+        payload_flag = raw
 
     fallback_flag: Optional[bool] = None
     if base_dir:
@@ -311,13 +321,12 @@ def resolve_vision_retention_days(ctx: Any) -> int:
             return _warn_and_default("invalid_type", getattr(settings_obj, "vision_snapshot_retention_days", None))
     else:
         vision_cfg = _vision_section(settings_payload)
-        if vision_cfg:
-            raw_value = vision_cfg.get("snapshot_retention_days")
-            if raw_value is not None:
-                try:
-                    value = int(raw_value)
-                except (TypeError, ValueError):
-                    return _warn_and_default("invalid_type", raw_value)
+        raw_value = vision_cfg.get("snapshot_retention_days")
+        if raw_value is not None:
+            try:
+                value = int(raw_value)
+            except (TypeError, ValueError):
+                return _warn_and_default("invalid_type", raw_value)
 
     if value is None:
         return fallback

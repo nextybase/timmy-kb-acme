@@ -36,7 +36,7 @@ class _Ctx:
         self.base_dir = base_dir
         self.client_name = client_name
         # SSoT: il nome dell'env da cui ricavare l'assistant_id
-        self.settings = {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID"}}
+        self.settings = {"ai": {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID"}}}
 
 
 def _fake_pdf_text() -> str:
@@ -137,12 +137,14 @@ def _make_settings(use_kb: bool) -> Settings:
         config_path=Path("config.yaml"),
         data={
             "openai": {},
-            "vision": {
-                "model": "gpt-4o-mini",
-                "assistant_id_env": "OBNEXT_ASSISTANT_ID",
-                "snapshot_retention_days": 30,
-                "strict_output": True,
-                "use_kb": use_kb,
+            "ai": {
+                "vision": {
+                    "model": "gpt-4o-mini",
+                    "assistant_id_env": "OBNEXT_ASSISTANT_ID",
+                    "snapshot_retention_days": 30,
+                    "strict_output": True,
+                    "use_kb": use_kb,
+                }
             },
             "ui": {},
             "retriever": {"throttle": {}},
@@ -224,7 +226,7 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 def test_provision_ignores_engine_in_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "dummy-engine"
     ctx = _Ctx(tmp_path)
-    ctx.settings["vision"]["engine"] = "responses"
+    ctx.settings["ai"]["vision"]["engine"] = "responses"
 
     pdf = tmp_path / "vision.pdf"
     pdf.write_bytes(b"%PDF-FAKE%")
@@ -257,7 +259,7 @@ def test_provision_ignores_engine_in_settings(tmp_path: Path, monkeypatch: pytes
 def test_provision_retention_fallback_on_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "dummy-retention"
     ctx = _Ctx(tmp_path)
-    ctx.settings["vision"]["snapshot_retention_days"] = 0
+    ctx.settings["ai"]["vision"]["snapshot_retention_days"] = 0
 
     pdf = tmp_path / "vision.pdf"
     pdf.write_bytes(b"%PDF-FAKE%")
@@ -529,7 +531,7 @@ def test_prepare_payload_sets_instructions_by_use_kb(tmp_path: Path, monkeypatch
     pdf = tmp_path / "vision.pdf"
     pdf.write_bytes(b"%PDF-FAKE%")
     ctx = _Ctx(tmp_path)
-    ctx.settings["vision"]["model"] = "gpt-4o-mini"
+    ctx.settings["ai"]["vision"]["model"] = "gpt-4o-mini"
 
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
 

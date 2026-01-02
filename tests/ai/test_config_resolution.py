@@ -14,7 +14,7 @@ class DummySettings(SimpleNamespace):
         return None
 
     def as_dict(self) -> dict[str, object]:
-        return {}
+        return {"ai": {"vision": {}}}
 
     @property
     def vision_model(self) -> str:
@@ -60,7 +60,7 @@ def test_model_from_settings_avoids_make(monkeypatch):
     class SettingsWithModel(DummySettings):
         def __init__(self):
             super().__init__()
-            self._map = {"vision_model": "direct-model"}
+            self._map = {"vision_model": "direct-model", "ai": {"vision": {}}}
 
         def get(self, path: str) -> str:
             return self._map.get(path)  # type: ignore[return-value]
@@ -80,7 +80,7 @@ def test_model_from_settings_avoids_make(monkeypatch):
 def test_strict_output_logs_settings_load_failure(monkeypatch, caplog, tmp_path):
     caplog.set_level("WARNING", logger="ai.vision_config")
 
-    result = _resolve_vision_strict_output(None, {}, tmp_path)
+    result = _resolve_vision_strict_output(None, {"ai": {"vision": {}}}, tmp_path)
     assert result is True
     warnings = [rec for rec in caplog.records if "settings_load_failed" in rec.getMessage()]
     assert len(warnings) == 1
@@ -97,9 +97,16 @@ def test_strict_output_load_cached(monkeypatch, caplog, tmp_path):
 
     monkeypatch.setattr("ai.vision_config.Settings.load", fake_load)
 
-    _resolve_vision_strict_output(None, {}, tmp_path)
-    _resolve_vision_strict_output(None, {}, tmp_path)
+    _resolve_vision_strict_output(None, {"ai": {"vision": {}}}, tmp_path)
+    _resolve_vision_strict_output(None, {"ai": {"vision": {}}}, tmp_path)
 
     assert called == 1
     warnings = [rec for rec in caplog.records if "settings_load_failed" in rec.getMessage()]
     assert len(warnings) == 1
+
+
+def test_missing_ai_vision_section_raises(monkeypatch):
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "env-assistant")
+    ctx = _GovernorCtx(settings=SimpleNamespace(as_dict=lambda: {}))
+    with pytest.raises(ConfigError, match="ai\\.vision"):
+        resolve_vision_config(ctx)

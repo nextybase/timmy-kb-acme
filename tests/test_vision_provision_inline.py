@@ -41,6 +41,7 @@ def _write_pdf(path: Path, text: str | None) -> None:
 class DummyCtx:
     def __init__(self, base_dir: Path):
         self.base_dir = str(base_dir)
+        self.settings = {"ai": {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID"}}}
 
 
 class _NoopLogger:

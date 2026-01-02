@@ -48,38 +48,66 @@ def _progress_path(slug: str) -> Path:
     return progress_path
 
 
-def _read_progress(path: Path) -> Dict[str, bool]:
+def _read_progress(slug: str, path: Path) -> Dict[str, bool]:
+    if not path.exists():
+        _LOG.info("ui.semantic_progress.state_missing", extra={"slug": slug, "path": str(path)})
+        return {}
     try:
         raw = read_text_safe(path.parent, path, encoding="utf-8")
-    except Exception:
-        return {}
+    except Exception as exc:
+        _LOG.error(
+            "ui.semantic_progress.read_failed",
+            extra={"slug": slug, "path": str(path), "error": repr(exc)},
+        )
+        raise ConfigError("Impossibile leggere lo stato semantico", slug=slug, path=str(path)) from exc
     try:
         payload = json.loads(raw)
-    except Exception:
-        _LOG.warning("ui.semantic_progress.read_invalid", extra={"path": str(path)})
-        return {}
+    except Exception as exc:
+        _LOG.error(
+            "ui.semantic_progress.read_invalid",
+            extra={"slug": slug, "path": str(path), "error": repr(exc)},
+        )
+        raise ConfigError("Stato semantico non valido: JSON corrotto", slug=slug, path=str(path)) from exc
     if not isinstance(payload, dict):
-        return {}
+        _LOG.error(
+            "ui.semantic_progress.schema_invalid",
+            extra={"slug": slug, "path": str(path), "error": "payload_not_dict"},
+        )
+        raise ConfigError("Stato semantico non valido: schema inatteso", slug=slug, path=str(path))
     result: Dict[str, bool] = {}
     for key, value in payload.items():
         if not isinstance(key, str):
-            continue
-        result[key] = bool(value)
+            _LOG.error(
+                "ui.semantic_progress.schema_invalid",
+                extra={"slug": slug, "path": str(path), "error": "key_not_string"},
+            )
+            raise ConfigError("Stato semantico non valido: chiave non valida", slug=slug, path=str(path))
+        if not isinstance(value, bool):
+            _LOG.error(
+                "ui.semantic_progress.schema_invalid",
+                extra={"slug": slug, "path": str(path), "error": "value_not_bool", "key": key},
+            )
+            raise ConfigError("Stato semantico non valido: valore non booleano", slug=slug, path=str(path))
+        result[key] = value
     return result
 
 
-def _write_progress(path: Path, data: Dict[str, bool]) -> None:
+def _write_progress(slug: str, path: Path, data: Dict[str, bool]) -> None:
     try:
         payload = json.dumps(data, ensure_ascii=False, sort_keys=True)
         safe_write_text(path, payload + "\n", encoding="utf-8", atomic=True)
     except Exception as exc:
-        _LOG.warning("ui.semantic_progress.write_failed", extra={"path": str(path), "error": str(exc)})
+        _LOG.error(
+            "ui.semantic_progress.write_failed",
+            extra={"slug": slug, "path": str(path), "error": repr(exc)},
+        )
+        raise ConfigError("Impossibile salvare lo stato semantico", slug=slug, path=str(path)) from exc
 
 
 def get_semantic_progress(slug: str) -> Dict[str, bool]:
     """Restituisce lo stato dei passi semantici per lo slug richiesto."""
     path = _progress_path(slug)
-    stored = _read_progress(path)
+    stored = _read_progress(slug, path)
     return {step: stored.get(step, False) for step in SEMANTIC_STEP_IDS}
 
 
@@ -88,6 +116,6 @@ def mark_semantic_step_done(slug: str, step_id: str) -> None:
     if step_id not in SEMANTIC_STEP_IDS:
         raise ConfigError(f"Step non valido: {step_id!r}", slug=slug)
     path = _progress_path(slug)
-    progress = _read_progress(path)
+    progress = _read_progress(slug, path)
     progress[step_id] = True
-    _write_progress(path, progress)
+    _write_progress(slug, path, progress)

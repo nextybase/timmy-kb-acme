@@ -132,14 +132,18 @@ def test_resolvers_missing_env_raise(monkeypatch, resolver, env_name, resolver_c
         "PLANNER_ASSISTANT_ID",
         "OCP_EXECUTOR_ASSISTANT_ID",
         "AUDIT_ASSISTANT_ID",
+        "OBNEXT_ASSISTANT_ID",
     }:
-        section = {
-            "PROTOTIMMY_ID": "prototimmy",
-            "PLANNER_ASSISTANT_ID": "planner_assistant",
-            "OCP_EXECUTOR_ASSISTANT_ID": "ocp_executor",
-            "AUDIT_ASSISTANT_ID": "audit_assistant",
-        }[env_name]
-        ctx.settings = {"ai": {section: {"model": "dummy-model", "assistant_id_env": env_name}}}
+        if env_name == "OBNEXT_ASSISTANT_ID":
+            ctx.settings = {"ai": {"vision": {"assistant_id_env": env_name, "model": "dummy-model"}}}
+        else:
+            section = {
+                "PROTOTIMMY_ID": "prototimmy",
+                "PLANNER_ASSISTANT_ID": "planner_assistant",
+                "OCP_EXECUTOR_ASSISTANT_ID": "ocp_executor",
+                "AUDIT_ASSISTANT_ID": "audit_assistant",
+            }[env_name]
+            ctx.settings = {"ai": {section: {"model": "dummy-model", "assistant_id_env": env_name}}}
     with pytest.raises(ConfigError) as exc:
         resolver_call(ctx)
     assert env_name in str(exc.value)
@@ -184,3 +188,11 @@ def test_resolve_audit_assistant_missing_model(monkeypatch):
     with pytest.raises(ConfigError) as exc:
         resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": ""}}})
     assert "ai.audit_assistant.model" in str(exc.value)
+
+
+def test_legacy_root_vision_rejected(caplog):
+    ctx = _DummyCtx(settings={"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID", "model": "m"}})
+    caplog.set_level("ERROR", logger="ai.vision_config")
+    with pytest.raises(ConfigError, match="ai\\.vision"):
+        config.resolve_vision_config(ctx)
+    assert any(rec.message == "ai.vision_config.legacy_root_vision" for rec in caplog.records)
