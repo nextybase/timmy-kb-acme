@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -152,3 +153,163 @@ def test_deep_compiles_yaml_before_vision(
 
     assert payload["vision_used"] is True
     assert order == ["compile", "run_vision"]
+
+
+def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    logger: logging.Logger,
+) -> None:
+    repo_root = tmp_path / "repo"
+    (repo_root / "config").mkdir(parents=True, exist_ok=True)
+    (repo_root / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
+
+    base_dir = tmp_path / "workspace"
+    (base_dir / "config").mkdir(parents=True, exist_ok=True)
+    (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
+
+    def _compile(_pdf_path: Path, yaml_target: Path) -> None:
+        yaml_target.write_text("version: 1\n", encoding="utf-8")
+
+    def _run_vision_with_timeout_fn(**_: object) -> tuple[bool, dict[str, object] | None]:
+        return False, {
+            "error": "Error code: 429 insufficient_quota - check your plan and billing",
+            "file_path": "",
+        }
+
+    def _get_env_var(name: str, default: str | None = None) -> str | None:
+        if name == "VISION_MODE":
+            return "DEEP"
+        return default
+
+    drive_calls = {"min": 0, "build": 0, "readmes": 0}
+
+    def _call_drive_min_fn(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        drive_calls["min"] += 1
+        return {"ok": True}
+
+    def _call_drive_build_from_mapping_fn(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        drive_calls["build"] += 1
+        return {"ok": True}
+
+    def _call_drive_emit_readmes_fn(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        drive_calls["readmes"] += 1
+        return {"ok": True}
+
+    monkeypatch.setattr(orchestrator, "compile_document_to_vision_yaml", _compile)
+
+    payload = orchestrator.build_dummy_payload(
+        slug="dummy",
+        client_name="Dummy",
+        enable_drive=True,
+        enable_vision=True,
+        enable_semantic=True,
+        enable_enrichment=False,
+        enable_preview=False,
+        records_hint=None,
+        deep_testing=True,
+        logger=logger,
+        repo_root=repo_root,
+        ensure_local_workspace_for_ui=lambda **_: None,
+        run_vision=lambda **_: None,
+        get_env_var=_get_env_var,
+        ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
+        open_for_read_bytes_selfguard=lambda path: path.open("rb"),
+        load_vision_template_sections=lambda: [],
+        client_base=lambda _: base_dir,
+        pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
+        register_client_fn=lambda *_: None,
+        ClientContext=None,
+        get_client_config=None,
+        ensure_drive_minimal_and_upload_config=None,
+        build_drive_from_mapping=None,
+        emit_readmes_for_raw=None,
+        run_vision_with_timeout_fn=_run_vision_with_timeout_fn,
+        load_mapping_categories_fn=lambda _: {},
+        ensure_minimal_tags_db_fn=lambda *_args, **_kwargs: None,
+        ensure_raw_pdfs_fn=lambda *_args, **_kwargs: None,
+        ensure_local_readmes_fn=lambda *_args, **_kwargs: [],
+        ensure_book_skeleton_fn=lambda *_args, **_kwargs: None,
+        write_basic_semantic_yaml_fn=lambda *_args, **_kwargs: {"categories": {"contracts": {}}},
+        write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
+        validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
+        call_drive_min_fn=_call_drive_min_fn,
+        call_drive_build_from_mapping_fn=_call_drive_build_from_mapping_fn,
+        call_drive_emit_readmes_fn=_call_drive_emit_readmes_fn,
+    )
+
+    vision_check = payload["health"]["external_checks"]["vision_hardcheck"]
+    assert vision_check["ok"] is False
+    assert "downgraded to smoke" in vision_check["details"].lower()
+    assert "quota/billing" in vision_check["details"].lower()
+    assert payload["health"]["external_checks"]["drive_hardcheck"]["ok"] is True
+    assert any("downgraded to smoke" in err.lower() for err in payload["health"]["errors"])
+    assert drive_calls == {"min": 1, "build": 1, "readmes": 1}
+
+
+def test_deep_testing_non_quota_vision_failure_still_raises(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    logger: logging.Logger,
+) -> None:
+    repo_root = tmp_path / "repo"
+    (repo_root / "config").mkdir(parents=True, exist_ok=True)
+    (repo_root / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
+
+    base_dir = tmp_path / "workspace"
+    (base_dir / "config").mkdir(parents=True, exist_ok=True)
+    (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
+
+    def _compile(_pdf_path: Path, yaml_target: Path) -> None:
+        yaml_target.write_text("version: 1\n", encoding="utf-8")
+
+    def _run_vision_with_timeout_fn(**_: object) -> tuple[bool, dict[str, object] | None]:
+        return False, {"error": "permission denied", "file_path": ""}
+
+    def _get_env_var(name: str, default: str | None = None) -> str | None:
+        if name == "VISION_MODE":
+            return "DEEP"
+        return default
+
+    monkeypatch.setattr(orchestrator, "compile_document_to_vision_yaml", _compile)
+
+    with pytest.raises(orchestrator.HardCheckError):
+        orchestrator.build_dummy_payload(
+            slug="dummy",
+            client_name="Dummy",
+            enable_drive=True,
+            enable_vision=True,
+            enable_semantic=False,
+            enable_enrichment=False,
+            enable_preview=False,
+            records_hint=None,
+            deep_testing=True,
+            logger=logger,
+            repo_root=repo_root,
+            ensure_local_workspace_for_ui=lambda **_: None,
+            run_vision=lambda **_: None,
+            get_env_var=_get_env_var,
+            ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
+            open_for_read_bytes_selfguard=lambda path: path.open("rb"),
+            load_vision_template_sections=lambda: [],
+            client_base=lambda _: base_dir,
+            pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
+            register_client_fn=lambda *_: None,
+            ClientContext=None,
+            get_client_config=None,
+            ensure_drive_minimal_and_upload_config=None,
+            build_drive_from_mapping=None,
+            emit_readmes_for_raw=None,
+            run_vision_with_timeout_fn=_run_vision_with_timeout_fn,
+            load_mapping_categories_fn=lambda _: {},
+            ensure_minimal_tags_db_fn=lambda *_args, **_kwargs: None,
+            ensure_raw_pdfs_fn=lambda *_args, **_kwargs: None,
+            ensure_local_readmes_fn=lambda *_args, **_kwargs: [],
+            ensure_book_skeleton_fn=lambda *_args, **_kwargs: None,
+            write_basic_semantic_yaml_fn=None,
+            write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
+            validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
+            call_drive_min_fn=lambda *_args, **_kwargs: None,
+            call_drive_build_from_mapping_fn=lambda *_args, **_kwargs: None,
+            call_drive_emit_readmes_fn=lambda *_args, **_kwargs: None,
+        )

@@ -66,6 +66,11 @@
         "url_path": "config"
       },
       {
+        "path": "../../ui/pages/dummy_kb.py",
+        "title": "Dummy KB",
+        "url_path": "dummy-kb"
+      },
+      {
         "path": "../../ui/pages/diagnostics.py",
         "title": "Diagnostica",
         "url_path": "diagnostics"

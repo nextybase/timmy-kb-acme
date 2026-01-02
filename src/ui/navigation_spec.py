@@ -25,6 +25,7 @@ class PagePaths:
     DIAGNOSTICS = "../../ui/pages/diagnostics.py"
     LOGS_PANEL = "../../ui/pages/logs_panel.py"
     PROTOTIMMY_CHAT = "../../ui/pages/prototimmy_chat.py"
+    DUMMY_KB = "../../ui/pages/dummy_kb.py"
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,7 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
         "Tools",
         (
             NavPage(PagePaths.CONFIG_EDITOR, "Config Editor", "config"),
+            NavPage(PagePaths.DUMMY_KB, "Dummy KB", "dummy-kb"),
             NavPage(PagePaths.DIAGNOSTICS, "Diagnostica", "diagnostics"),
             NavPage(PagePaths.GUIDA, "Guida UI", "guida"),
         ),

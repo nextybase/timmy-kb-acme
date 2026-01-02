@@ -65,10 +65,26 @@ def call_drive_emit_readmes(
             ensure_structure=False,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "tools.gen_dummy_kb.drive_readmes_failed",
-            extra={"slug": slug, "error": str(exc)},
-        )
+        message = str(exc)
+        normalized = message.casefold()
+        if any(
+            signal in normalized
+            for signal in (
+                "cartella 'raw' non trovata",
+                "drive_id non impostato",
+                "funzionalita google drive non disponibili",
+                "installa gli extra",
+            )
+        ):
+            logger.info(
+                "tools.gen_dummy_kb.drive_readmes_skipped",
+                extra={"slug": slug, "error": message},
+            )
+        else:
+            logger.warning(
+                "tools.gen_dummy_kb.drive_readmes_failed",
+                extra={"slug": slug, "error": message},
+            )
         return None
 
 

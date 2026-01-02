@@ -62,6 +62,7 @@ GATE_EVENT_NAMES = {
 }
 BRIDGE_FIELDS_ALWAYS = {"run_id", "slug", "phase_id", "state_id", "intent_id", "action_id"}
 BRIDGE_FIELDS_OTEL = {"trace_id", "span_id"}
+_STREAMLIT_NOISE_SUPPRESSED = False
 
 
 def redact_secrets(msg: str) -> str:
@@ -313,6 +314,26 @@ class _PhaseInjectFilter(logging.Filter):
         return True
 
 
+def _is_streamlit_process() -> bool:
+    for arg in sys.argv:
+        if "streamlit" in str(arg).lower():
+            return True
+    return False
+
+
+def _suppress_streamlit_noise_if_needed() -> None:
+    global _STREAMLIT_NOISE_SUPPRESSED
+    if _STREAMLIT_NOISE_SUPPRESSED or _is_streamlit_process():
+        return
+    for name in (
+        "streamlit.runtime",
+        "streamlit.runtime.scriptrunner_utils.script_run_context",
+        "streamlit.runtime.state.session_state_proxy",
+    ):
+        logging.getLogger(name).setLevel(logging.ERROR)
+    _STREAMLIT_NOISE_SUPPRESSED = True
+
+
 def get_structured_logger(
     name: str,
     *,
@@ -358,6 +379,8 @@ def get_structured_logger(
         level = getattr(logging, level_name, logging.INFO)
     elif isinstance(level, str):
         level = getattr(logging, level.upper(), logging.INFO)
+
+    _suppress_streamlit_noise_if_needed()
 
     # 2) Redazione (Observability come default, override opzionale da context/parametro)
     effective_redact = bool(obs_settings.redact_logs)

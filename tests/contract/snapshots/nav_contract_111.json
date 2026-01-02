@@ -62,6 +62,11 @@
         "path": "../../ui/pages/manage.py",
         "title": "Gestisci cliente",
         "url_path": "manage"
+      },
+      {
+        "path": "../../ui/pages/semantics.py",
+        "title": "Semantica",
+        "url_path": "semantics"
       }
     ],
     "Tools": [
@@ -69,6 +74,11 @@
         "path": "../../ui/pages/config_editor.py",
         "title": "Config Editor",
         "url_path": "config"
+      },
+      {
+        "path": "../../ui/pages/dummy_kb.py",
+        "title": "Dummy KB",
+        "url_path": "dummy-kb"
       },
       {
         "path": "../../ui/pages/diagnostics.py",

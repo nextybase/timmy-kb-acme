@@ -60,6 +60,22 @@ def _resolve_vision_mode(get_env_var: Callable[[str, str | None], str | None]) -
     raise ConfigError(f"VISION_MODE non valido: {raw!r}. Usa 'SMOKE' o 'DEEP'.")
 
 
+def _is_credit_or_quota_error(message: str) -> bool:
+    if not message:
+        return False
+    normalized = message.casefold()
+    signals = (
+        "insufficient_quota",
+        "insufficient quota",
+        "exceeded your current quota",
+        "check your plan and billing",
+        "billing",
+        "quota",
+        "429",
+    )
+    return any(signal in normalized for signal in signals)
+
+
 def _record_external_check(
     health: Dict[str, Any],
     name: str,
@@ -259,6 +275,8 @@ def build_dummy_payload(
     vision_completed = False
     vision_status = "skipped" if vision_mode == "smoke" else "error"
     hard_check_results: dict[str, tuple[bool, str, int | None]] = {}
+    soft_errors: list[str] = []
+    vision_downgraded = False
 
     vision_already_completed = False
     if enable_vision and (sentinel_path.exists() or (mapping_path.exists() and cartelle_path.exists())):
@@ -378,13 +396,33 @@ def build_dummy_payload(
                 details = message or "Vision run failed"
                 if sentinel:
                     details = f"{details} | sentinel={sentinel}"
-                err_msg = f"Vision hard check failed; verifica secrets/permessi: {details}"
-                logger.error(
-                    "tools.gen_dummy_kb.vision_hardcheck.failed",
-                    extra={"slug": slug, "error": message, "sentinel": sentinel or None},
-                )
-                raise HardCheckError(err_msg, _hardcheck_health("vision_hardcheck", err_msg, latency_ms))
-        if not vision_already_completed:
+                if _is_credit_or_quota_error(details):
+                    warn_msg = (
+                        "Vision hard check downgraded to smoke due to quota/billing: "
+                        f"{details}"
+                    )
+                    logger.warning(
+                        "tools.gen_dummy_kb.vision_downgraded",
+                        extra={
+                            "slug": slug,
+                            "error": message,
+                            "reason": "quota_or_billing",
+                        },
+                    )
+                    hard_check_results["vision_hardcheck"] = (False, warn_msg, latency_ms)
+                    soft_errors.append(warn_msg)
+                    vision_status = "smoke_downgraded"
+                    vision_mode = "smoke"
+                    enable_vision = False
+                    vision_downgraded = True
+                else:
+                    err_msg = f"Vision hard check failed; verifica secrets/permessi: {details}"
+                    logger.error(
+                        "tools.gen_dummy_kb.vision_hardcheck.failed",
+                        extra={"slug": slug, "error": message, "sentinel": sentinel or None},
+                    )
+                    raise HardCheckError(err_msg, _hardcheck_health("vision_hardcheck", err_msg, latency_ms))
+        if not vision_already_completed and not vision_downgraded:
             vision_completed = True
             vision_status = "ok"
             categories_for_readmes = load_mapping_categories_fn(base_dir)
@@ -533,6 +571,8 @@ def build_dummy_payload(
     }
     health.setdefault("status", "ok")
     health.setdefault("errors", [])
+    if soft_errors:
+        health["errors"].extend(soft_errors)
     health.setdefault("checks", [])
     health.setdefault("external_checks", {})
     if deep_testing:
