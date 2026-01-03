@@ -16,6 +16,7 @@ from pipeline.tracing import start_decision_span
 from storage.tags_store import ensure_schema_v2, import_tags_yaml_to_db
 from ui.clients_store import get_state as _get_client_state
 from ui.utils.core import safe_write_text
+from ui.utils.workspace import tagging_ready
 
 __all__ = [
     "handle_tags_raw_save",
@@ -264,7 +265,7 @@ def enable_tags_stub(
             )
 
         has_terms = bool(importer_counts and importer_counts.get("terms"))
-        target_state = "arricchito" if has_terms else "pronto"
+        target_state = "pronto"
         previous_state = _lookup_client_state(slug)
         decision_attrs = {
             "previous_value": previous_state,
@@ -292,7 +293,7 @@ def enable_tags_stub(
 
         if updated:
             if has_terms:
-                st.toast("`tags_reviewed.yaml` generato (stub). Stato aggiornato a 'arricchito'.")
+                st.toast("`tags_reviewed.yaml` generato (stub). Stato aggiornato a 'pronto'.")
             else:
                 st.warning(
                     "Vocabolario ancora vuoto: stato riportato a 'pronto'. Compila lo YAML prima dell'arricchimento."
@@ -346,10 +347,12 @@ def enable_tags_service(
             logger,
             workspace_base=semantic_dir.parent,
         )
+        tagging_ok, _ = tagging_ready(slug)
+        target_state = "arricchito" if tagging_ok else "pronto"
         previous_state = _lookup_client_state(slug)
         decision_attrs = {
             "previous_value": previous_state,
-            "new_value": "arricchito",
+            "new_value": target_state,
         }
         updated = False
         decision_span_value: Any | None = None
@@ -362,7 +365,7 @@ def enable_tags_service(
                 reason="manual_emit",
                 attributes=decision_attrs,
             ) as decision_span_value:
-                updated = set_client_state(slug, "arricchito")
+                updated = set_client_state(slug, target_state)
                 if decision_span_value is not None:
                     decision_span_value.set_attribute("status", "success" if updated else "failed")
         except Exception as exc:
@@ -371,11 +374,14 @@ def enable_tags_service(
             logger.warning("ui.manage.state.update_failed", extra={"slug": slug, "error": str(exc)})
             updated = False
         if updated:
-            st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
+            if tagging_ok:
+                st.toast("`tags_reviewed.yaml` generato. Stato aggiornato a 'arricchito'.")
+            else:
+                st.warning("Vocabolario incompleto: stato mantenuto a 'pronto'.")
             reset_gating_cache(slug)
         else:
             st.error("Abilitazione semantica riuscita ma aggiornamento stato fallito.")
-            logger.error("ui.manage.state.update_failed", extra={"slug": slug, "target": "arricchito"})
+            logger.error("ui.manage.state.update_failed", extra={"slug": slug, "target": target_state})
             return False
         with _human_override_span(logger, slug, st, phase="ui.manage.tags_yaml", reason="manual_emit"):
             logger.info("ui.manage.tags_yaml.emitted", extra={"slug": slug, "path": str(yaml_path)})

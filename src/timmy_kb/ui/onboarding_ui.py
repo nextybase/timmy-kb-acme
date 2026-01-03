@@ -357,7 +357,7 @@ def main() -> None:
         raise RuntimeError("Streamlit non disponibile: installa le dipendenze UI") from exc
 
     from ui.config_store import get_skip_preflight, set_skip_preflight  # noqa: E402
-    from ui.gating import compute_gates, visible_page_specs  # noqa: E402
+    from ui.gating import compute_gates, visible_page_specs, write_gate_capability_manifest  # noqa: E402
     from ui.preflight import run_preflight  # noqa: E402
     from ui.theme_enhancements import inject_theme_css  # noqa: E402
     from ui.utils import get_active_slug  # noqa: E402
@@ -427,6 +427,8 @@ def main() -> None:
         run_preflight=run_preflight,
         status_guard=status_guard,
     )
+
+    write_gate_capability_manifest(global_logs_dir(REPO_ROOT), env=os.environ)
 
     # Navigazione principale (st.navigation + st.Page)
     build_navigation(

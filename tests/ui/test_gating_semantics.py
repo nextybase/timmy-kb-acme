@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 import pytest
@@ -88,3 +89,37 @@ def test_compute_gates_disables_missing_services(monkeypatch: pytest.MonkeyPatch
     assert calls["ui.services.drive_runner"] == "plan_raw_download"
     assert calls["ui.services.vision_provision"] == "run_vision"
     assert calls["ui.services.tags_adapter"] == "run_tags_update"
+
+
+def test_gate_capability_manifest_written_and_valid(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_available(module_name: str, *, attr: Optional[str] = None) -> bool:
+        return True
+
+    monkeypatch.setattr(gating, "_module_available", _fake_available, raising=False)
+
+    payload = gating.write_gate_capability_manifest(tmp_path)
+    path = tmp_path / "gate_capabilities.json"
+    assert path.exists()
+    stored = json.loads(path.read_text(encoding="utf-8"))
+
+    for data in (payload, stored):
+        assert data["schema_version"] == 1
+        assert isinstance(data["computed_at"], str)
+        gates = data["gates"]
+        assert set(gates.keys()) == {"drive", "vision", "tags", "qa"}
+        assert gates["qa"]["available"] is True
+
+
+def test_gate_capability_manifest_matches_compute_gates(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fake_available(module_name: str, *, attr: Optional[str] = None) -> bool:
+        return module_name != "ui.services.drive_runner"
+
+    env = {"DRIVE": "1", "VISION": "0", "TAGS": "1"}
+    monkeypatch.setattr(gating, "_module_available", _fake_available, raising=False)
+
+    payload = gating.write_gate_capability_manifest(tmp_path, env=env)
+    gates = gating.compute_gates(env)
+
+    assert payload["gates"]["drive"]["available"] == gates.drive
+    assert payload["gates"]["vision"]["available"] == gates.vision
+    assert payload["gates"]["tags"]["available"] == gates.tags

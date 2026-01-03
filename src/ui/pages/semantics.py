@@ -17,6 +17,8 @@ st: StreamlitLike = get_streamlit()
 
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger, log_gate_event, tail_path
+from pipeline.qa_evidence import QA_EVIDENCE_FILENAME as PIPELINE_QA_EVIDENCE_FILENAME
+from pipeline.qa_evidence import load_qa_evidence
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.api import get_paths  # noqa: F401 - usato dai test tramite monkeypatch
 from semantic.api import load_reviewed_vocab  # noqa: F401
@@ -38,7 +40,7 @@ LOGGER = get_structured_logger("ui.semantics")
 
 # SSoT: stati ammessi per la pagina Semantica (entry: include 'pronto')
 ALLOWED_STATES = SEMANTIC_ENTRY_STATES
-QA_EVIDENCE_FILENAME = "qa_passed.json"  # marker minimo: output pre-commit/pytest (vedi instructions/08)
+QA_EVIDENCE_FILENAME = PIPELINE_QA_EVIDENCE_FILENAME  # marker minimo: output pre-commit/pytest (vedi instructions/08)
 
 
 def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger, WorkspaceLayout]:
@@ -243,22 +245,39 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
         raise
     ctx, logger, layout = _make_ctx_and_logger(slug)
     qa_marker = _qa_evidence_path(layout)
-    qa_ready = qa_marker.exists() and qa_marker.stat().st_size > 0
-    if not qa_ready:
+    try:
+        evidence = load_qa_evidence(layout.log_dir)
+    except ConfigError as exc:
+        reason = "qa_evidence_missing" if exc.code == "qa_evidence_missing" else "qa_evidence_invalid"
         log_gate_event(
             _GATING_LOG,
             "qa_gate_failed",
             fields={
                 "slug": slug or "",
                 "state_id": get_state(slug) or "",
-                "reason": "qa_evidence_missing",
+                "reason": reason,
+                "evidence_path": tail_path(qa_marker),
+            },
+        )
+        st.error("QA Gate mancante: esegui `python -m timmy_kb.cli.qa_evidence --slug <slug>` per generare l'evidenza.")
+        st.caption("Il comando produce `qa_passed.json` in logs/ e fallisce se la QA non passa.")
+        return
+    if evidence.get("qa_status") != "pass":
+        log_gate_event(
+            _GATING_LOG,
+            "qa_gate_failed",
+            fields={
+                "slug": slug or "",
+                "state_id": get_state(slug) or "",
+                "reason": "qa_evidence_failed",
                 "evidence_path": tail_path(qa_marker),
             },
         )
         st.error(
-            "QA Gate mancante: esegui `pre-commit run --all-files` e `pytest -q`, salva i log in logs/qa_passed.json."
+            "QA Gate fallito: evidenza QA non in stato 'pass'. "
+            "Riesegui `python -m timmy_kb.cli.qa_evidence --slug <slug>`."
         )
-        st.caption("Aggiungi l'evidenza QA e ripeti l'azione SUMMARY.")
+        st.caption("Correggi la QA e ripeti l'azione SUMMARY.")
         return
     is_retry = _mark_retry(slug, "summary")
     try:

@@ -3,14 +3,28 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import json
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from functools import lru_cache
+from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
+from pipeline.exceptions import PipelineError
+from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
+from pipeline.path_utils import ensure_within_and_resolve
 
-__all__ = ["GateState", "compute_gates", "visible_page_specs", "reset_gating_cache"]
+__all__ = [
+    "GateState",
+    "build_gate_capability_manifest",
+    "compute_gates",
+    "gate_capability_manifest_path",
+    "reset_gating_cache",
+    "visible_page_specs",
+    "write_gate_capability_manifest",
+]
 from ui.clients_store import get_state
 from ui.constants import SEMANTIC_READY_STATES
 from ui.navigation_spec import PagePaths, requirements_for
@@ -23,6 +37,9 @@ _DISABLE_VALUES = {"0", "false", "off", "no", ""}
 _LOGGER = get_structured_logger("ui.gating")
 _LAST_RAW_READY: dict[str, bool] = {}
 _LAST_PREVIEW_READY: dict[str, bool] = {}
+_CAPABILITY_CACHE: dict[Path, dict[str, object]] = {}
+_CAPABILITY_SCHEMA_VERSION = 1
+_CAPABILITY_FILENAME = "gate_capabilities.json"
 
 
 def reset_gating_cache(slug: str | None = None) -> None:
@@ -30,6 +47,7 @@ def reset_gating_cache(slug: str | None = None) -> None:
     if slug is None:
         _LAST_RAW_READY.clear()
         _LAST_PREVIEW_READY.clear()
+        _CAPABILITY_CACHE.clear()
         try:
             _module_available.cache_clear()
         except AttributeError:
@@ -89,6 +107,82 @@ def compute_gates(env: Mapping[str, str] | None = None) -> GateState:
     tags = _flag(env_map, "TAGS", tags_available)
 
     return GateState(drive=drive, vision=vision, tags=tags)
+
+
+def _iso_utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _gate_reason(
+    env: Mapping[str, str],
+    *,
+    env_var: str,
+    module_available: bool,
+) -> str:
+    raw = env.get(env_var)
+    if raw is None:
+        return "module_available" if module_available else "module_missing"
+    enabled = _flag(env, env_var, module_available)
+    if enabled and not module_available:
+        return "env_enabled_module_missing"
+    return "env_enabled" if enabled else "env_disabled"
+
+
+def build_gate_capability_manifest(env: Mapping[str, str] | None = None) -> dict[str, object]:
+    env_map = env if env is not None else os.environ
+    gates = compute_gates(env_map)
+
+    drive_available = _module_available("ui.services.drive_runner", attr="plan_raw_download")
+    vision_available = _module_available("ui.services.vision_provision", attr="run_vision")
+    tags_available = _module_available("ui.services.tags_adapter", attr="run_tags_update")
+    qa_available = _module_available("pipeline.qa_evidence", attr="write_qa_evidence")
+
+    return {
+        "schema_version": _CAPABILITY_SCHEMA_VERSION,
+        "computed_at": _iso_utc_now(),
+        "gates": {
+            "drive": {
+                "available": gates.drive,
+                "reason": _gate_reason(env_map, env_var="DRIVE", module_available=drive_available),
+            },
+            "vision": {
+                "available": gates.vision,
+                "reason": _gate_reason(env_map, env_var="VISION", module_available=vision_available),
+            },
+            "tags": {
+                "available": gates.tags,
+                "reason": _gate_reason(env_map, env_var="TAGS", module_available=tags_available),
+            },
+            "qa": {
+                "available": qa_available,
+                "reason": "module_available" if qa_available else "module_missing",
+            },
+        },
+    }
+
+
+def gate_capability_manifest_path(log_dir: Path) -> Path:
+    return Path(ensure_within_and_resolve(log_dir, log_dir / _CAPABILITY_FILENAME))
+
+
+def write_gate_capability_manifest(log_dir: Path, env: Mapping[str, str] | None = None) -> dict[str, object]:
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        path = gate_capability_manifest_path(log_dir)
+        cached = _CAPABILITY_CACHE.get(path)
+        if cached is not None:
+            return cached
+        payload = build_gate_capability_manifest(env)
+        safe_write_text(
+            path,
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+            atomic=True,
+        )
+        _CAPABILITY_CACHE[path] = payload
+        return payload
+    except Exception as exc:
+        raise PipelineError("Unable to write gate capability manifest.", code="gate_manifest_write_failed") from exc
 
 
 def _requires(page: PageSpec) -> Sequence[str]:

@@ -10,6 +10,10 @@ from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.path_utils import clear_iter_safe_pdfs_cache, iter_safe_pdfs, validate_slug
 from pipeline.workspace_layout import WorkspaceLayout
+from semantic.tags_validator import load_yaml as _load_tags_yaml
+from semantic.tags_validator import validate_tags_reviewed as _validate_tags_reviewed
+from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
+from ui.utils.config import get_tags_env_config
 from ui.utils.context_cache import get_client_context, invalidate_client_context
 
 # Import opzionale di Streamlit senza type: ignore.
@@ -198,6 +202,8 @@ def tagging_ready(slug: Optional[str]) -> tuple[bool, Optional[Path]]:
     - richiede semantic/tags_reviewed.yaml presente e non vuoto
     Ritorna (ready, semantic_dir) per logging/gating.
     """
+    if get_tags_env_config().is_stub:
+        return False, None
     raw_ok, raw_dir = raw_ready(slug)
     if not raw_ok:
         return False, raw_dir
@@ -213,6 +219,42 @@ def tagging_ready(slug: Optional[str]) -> tuple[bool, Optional[Path]]:
         yaml_ok = tags_yaml.exists() and tags_yaml.stat().st_size > 0
     except Exception:
         return False, semantic_dir
-    if db_ok and yaml_ok:
-        return True, semantic_dir
-    return False, semantic_dir
+    if not (db_ok and yaml_ok):
+        return False, semantic_dir
+    if not _tags_db_has_terms(tags_db):
+        return False, semantic_dir
+    if not _tags_yaml_has_terms(tags_yaml):
+        return False, semantic_dir
+    return True, semantic_dir
+
+
+def _tags_db_has_terms(db_path: Path) -> bool:
+    try:
+        data = _load_tags_reviewed(str(db_path))
+    except Exception:
+        return False
+    tags = data.get("tags") if isinstance(data, dict) else None
+    if not isinstance(tags, list):
+        return False
+    for item in tags:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        action = str(item.get("action") or "").strip().lower()
+        if name and action == "keep":
+            return True
+    return False
+
+
+def _tags_yaml_has_terms(yaml_path: Path) -> bool:
+    try:
+        data = _load_tags_yaml(yaml_path)
+    except Exception:
+        return False
+    result = _validate_tags_reviewed(data)
+    if result.get("errors"):
+        return False
+    tags = data.get("tags") if isinstance(data, dict) else None
+    if not isinstance(tags, list):
+        return False
+    return any(isinstance(item, dict) and str(item.get("name") or "").strip() for item in tags)

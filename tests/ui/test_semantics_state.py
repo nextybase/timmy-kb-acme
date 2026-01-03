@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,6 +24,45 @@ def _patch_streamlit_semantics(monkeypatch, sem) -> None:
     monkeypatch.setattr(sem.st, "spinner", _spinner, raising=False)
     monkeypatch.setattr(sem.st, "success", lambda *a, **k: None, raising=False)
     monkeypatch.setattr(sem.st, "button", lambda *a, **k: False, raising=False)
+
+
+def _write_qa_evidence(path: Path, *, status: str = "pass") -> None:
+    payload = {
+        "schema_version": 1,
+        "qa_status": status,
+        "checks_executed": ["pre-commit run --all-files", "pytest -q"],
+        "timestamp": "2025-01-01T00:00:00+00:00",
+    }
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+
+def _write_qa_payload(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+
+def _mk_semantics_ctx(monkeypatch, sem, *, tmp_path: Path, log_dir: Path) -> list[tuple[str, dict | None]]:
+    _patch_streamlit_semantics(monkeypatch, sem)
+    monkeypatch.setattr(sem.st, "error", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(sem.st, "caption", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
+    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
+    events: list[tuple[str, dict | None]] = []
+    monkeypatch.setattr(
+        sem,
+        "log_gate_event",
+        lambda logger, event_name, *, fields=None: events.append((event_name, fields)),
+    )
+    monkeypatch.setattr(
+        sem,
+        "_make_ctx_and_logger",
+        lambda slug: (
+            SimpleNamespace(base_dir=tmp_path),
+            SimpleNamespace(set_step_status=lambda *a, **k: None),
+            SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=log_dir),
+        ),
+    )
+    return events
 
 
 def test_semantic_constants_allow_entry_from_pronto():
@@ -113,7 +153,7 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
 
     qa_dir = tmp_path / "logs"
     qa_dir.mkdir(parents=True, exist_ok=True)
-    (qa_dir / sem.QA_EVIDENCE_FILENAME).write_text("pytest ok\npre-commit ok", encoding="utf-8")
+    _write_qa_evidence(qa_dir / sem.QA_EVIDENCE_FILENAME)
 
     def _ctx_logger(_slug: str):
         logger = SimpleNamespace(info=_logger_info, warning=_logger_warning)
@@ -374,7 +414,7 @@ def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
     # ctx/logger minimi
     qa_dir = tmp_path / "logs"
     qa_dir.mkdir(parents=True, exist_ok=True)
-    (qa_dir / sem.QA_EVIDENCE_FILENAME).write_text("ok", encoding="utf-8")
+    _write_qa_evidence(qa_dir / sem.QA_EVIDENCE_FILENAME)
 
     def _mk_ctx_and_logger(slug: str):
         layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
@@ -494,6 +534,111 @@ def test_run_summary_requires_qa_marker(monkeypatch, tmp_path):
     assert state_calls == []
     assert errors and "QA Gate" in errors[0]
     assert events and events[-1][0] == "qa_gate_failed"
+
+
+def test_run_summary_blocks_when_qa_missing(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    qa_dir = tmp_path / "logs"
+    qa_dir.mkdir(parents=True, exist_ok=True)
+    events = _mk_semantics_ctx(monkeypatch, sem, tmp_path=tmp_path, log_dir=qa_dir)
+
+    state_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
+    monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)
+
+    sem._run_summary("dummy")
+
+    assert state_calls == []
+    assert any(evt[0] == "qa_gate_failed" and evt[1].get("reason") == "qa_evidence_missing" for evt in events if evt[1])
+
+
+def test_run_summary_blocks_when_qa_invalid_json(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    qa_dir = tmp_path / "logs"
+    qa_dir.mkdir(parents=True, exist_ok=True)
+    (qa_dir / sem.QA_EVIDENCE_FILENAME).write_text("{not-json", encoding="utf-8")
+    events = _mk_semantics_ctx(monkeypatch, sem, tmp_path=tmp_path, log_dir=qa_dir)
+
+    state_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
+    monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)
+
+    sem._run_summary("dummy")
+
+    assert state_calls == []
+    assert any(evt[0] == "qa_gate_failed" and evt[1].get("reason") == "qa_evidence_invalid" for evt in events if evt[1])
+
+
+def test_run_summary_blocks_when_qa_status_fail(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    qa_dir = tmp_path / "logs"
+    qa_dir.mkdir(parents=True, exist_ok=True)
+    _write_qa_evidence(qa_dir / sem.QA_EVIDENCE_FILENAME, status="fail")
+    events = _mk_semantics_ctx(monkeypatch, sem, tmp_path=tmp_path, log_dir=qa_dir)
+
+    state_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
+    monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)
+
+    sem._run_summary("dummy")
+
+    assert state_calls == []
+    assert any(evt[0] == "qa_gate_failed" and evt[1].get("reason") == "qa_evidence_failed" for evt in events if evt[1])
+
+
+def test_run_summary_blocks_on_schema_version_mismatch(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    qa_dir = tmp_path / "logs"
+    qa_dir.mkdir(parents=True, exist_ok=True)
+    _write_qa_payload(
+        qa_dir / sem.QA_EVIDENCE_FILENAME,
+        {
+            "schema_version": 2,
+            "qa_status": "pass",
+            "checks_executed": ["pytest -q"],
+            "timestamp": "2025-01-01T00:00:00+00:00",
+        },
+    )
+    events = _mk_semantics_ctx(monkeypatch, sem, tmp_path=tmp_path, log_dir=qa_dir)
+
+    state_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
+    monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)
+
+    sem._run_summary("dummy")
+
+    assert state_calls == []
+    assert any(evt[0] == "qa_gate_failed" and evt[1].get("reason") == "qa_evidence_invalid" for evt in events if evt[1])
+
+
+def test_run_summary_blocks_on_empty_checks(monkeypatch, tmp_path):
+    import ui.pages.semantics as sem
+
+    qa_dir = tmp_path / "logs"
+    qa_dir.mkdir(parents=True, exist_ok=True)
+    _write_qa_payload(
+        qa_dir / sem.QA_EVIDENCE_FILENAME,
+        {
+            "schema_version": 1,
+            "qa_status": "pass",
+            "checks_executed": [],
+            "timestamp": "2025-01-01T00:00:00+00:00",
+        },
+    )
+    events = _mk_semantics_ctx(monkeypatch, sem, tmp_path=tmp_path, log_dir=qa_dir)
+
+    state_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
+    monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)
+
+    sem._run_summary("dummy")
+
+    assert state_calls == []
+    assert any(evt[0] == "qa_gate_failed" and evt[1].get("reason") == "qa_evidence_invalid" for evt in events if evt[1])
 
 
 def test_retry_logged_and_gates_checked(monkeypatch, tmp_path):

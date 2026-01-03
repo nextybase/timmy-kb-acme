@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from pipeline.exceptions import ConfigError
+from storage.tags_store import save_tags_reviewed
 from ui.utils import ensure_within_and_resolve
 from ui.utils import workspace as ws
 
@@ -71,10 +72,25 @@ def test_tagging_ready_requires_db_and_yaml(tmp_path: Path, monkeypatch: pytest.
     sem_dir = tmp_path / "semantic"
     sem_dir.mkdir(parents=True)
     tags_db = sem_dir / "tags.db"
-    tags_db.write_text("db", encoding="utf-8")
     tags_yaml = sem_dir / "tags_reviewed.yaml"
-    tags_yaml.write_text("yaml", encoding="utf-8")
+    tags_yaml.write_text(
+        "version: 2\n"
+        "reviewed_at: 2025-01-01T00:00:00\n"
+        "keep_only_listed: true\n"
+        "tags:\n  - name: demo\n    action: keep\n",
+        encoding="utf-8",
+    )
+    save_tags_reviewed(
+        str(tags_db),
+        {
+            "version": "2",
+            "reviewed_at": "2025-01-01T00:00:00",
+            "keep_only_listed": True,
+            "tags": [{"name": "demo", "action": "keep", "synonyms": [], "note": ""}],
+        },
+    )
 
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         ws,
         "get_ui_workspace_layout",
@@ -89,3 +105,60 @@ def test_tagging_ready_requires_db_and_yaml(tmp_path: Path, monkeypatch: pytest.
     tags_yaml.unlink()
     ready_missing, _ = ws.tagging_ready("dummy")
     assert ready_missing is False
+
+
+def test_tagging_ready_false_when_tags_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sem_dir = tmp_path / "semantic"
+    sem_dir.mkdir(parents=True)
+    tags_db = sem_dir / "tags.db"
+    tags_yaml = sem_dir / "tags_reviewed.yaml"
+    tags_yaml.write_text("version: 2\nkeep_only_listed: true\ntags: []\n", encoding="utf-8")
+    save_tags_reviewed(
+        str(tags_db),
+        {
+            "version": "2",
+            "reviewed_at": "2025-01-01T00:00:00",
+            "keep_only_listed": True,
+            "tags": [],
+        },
+    )
+
+    monkeypatch.setattr(
+        ws,
+        "get_ui_workspace_layout",
+        lambda *_a, **_k: SimpleNamespace(semantic_dir=sem_dir, tags_db=tags_db, raw_dir=tmp_path / "raw"),
+    )
+    monkeypatch.setattr(ws, "raw_ready", lambda _slug: (True, tmp_path / "raw"))
+
+    ready, _ = ws.tagging_ready("dummy")
+    assert ready is False
+
+
+def test_tagging_ready_false_in_stub_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sem_dir = tmp_path / "semantic"
+    sem_dir.mkdir(parents=True)
+    tags_db = sem_dir / "tags.db"
+    tags_yaml = sem_dir / "tags_reviewed.yaml"
+    tags_yaml.write_text(
+        "version: 2\nkeep_only_listed: true\ntags:\n  - name: demo\n    action: keep\n",
+        encoding="utf-8",
+    )
+    save_tags_reviewed(
+        str(tags_db),
+        {
+            "version": "2",
+            "reviewed_at": "2025-01-01T00:00:00",
+            "keep_only_listed": True,
+            "tags": [{"name": "demo", "action": "keep", "synonyms": [], "note": ""}],
+        },
+    )
+    monkeypatch.setenv("TAGS_MODE", "stub")
+    monkeypatch.setattr(
+        ws,
+        "get_ui_workspace_layout",
+        lambda *_a, **_k: SimpleNamespace(semantic_dir=sem_dir, tags_db=tags_db, raw_dir=tmp_path / "raw"),
+    )
+    monkeypatch.setattr(ws, "raw_ready", lambda _slug: (True, tmp_path / "raw"))
+
+    ready, _ = ws.tagging_ready("dummy")
+    assert ready is False
