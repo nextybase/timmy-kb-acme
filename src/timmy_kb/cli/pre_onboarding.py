@@ -274,9 +274,7 @@ def _prepare_context_and_logger(
     if not client_name:
         client_name = slug
 
-    context: ClientContext = ClientContext.load(
-        slug=slug, interactive=interactive, require_env=require_env, run_id=run_id
-    )
+    context: ClientContext = ClientContext.load(slug=slug, require_env=require_env, run_id=run_id)
 
     if context.base_dir is None:
         raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)

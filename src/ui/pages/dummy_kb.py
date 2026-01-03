@@ -131,7 +131,7 @@ def _render_preview_after_success(slug: str, payload: dict[str, Any] | None) -> 
     try:
         from ui.utils.context_cache import get_client_context
 
-        ctx = get_client_context(slug, interactive=False, require_env=False)
+        ctx = get_client_context(slug, require_env=False)
     except Exception:
         ctx = None
     if ctx is None:

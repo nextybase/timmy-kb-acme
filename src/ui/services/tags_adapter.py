@@ -60,7 +60,7 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
 
     try:
         with st.spinner("Preparazione contesto..."):
-            ctx = get_client_context(slug, interactive=False, require_env=False)
+            ctx = get_client_context(slug, require_env=False)
             base_dir, raw_dir, semantic_dir = _resolve_paths(ctx, slug)
 
         with st.spinner("Generazione tags_raw.csv (SpaCy/euristica)..."):

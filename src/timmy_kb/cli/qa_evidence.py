@@ -38,7 +38,7 @@ def main() -> int:
         enable_tracing=settings.tracing_enabled,
     )
 
-    ctx = ClientContext.load(slug=slug, interactive=not args.non_interactive, require_env=False, run_id=run_id)
+    ctx = ClientContext.load(slug=slug, require_env=False, run_id=run_id)
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(ctx)
 

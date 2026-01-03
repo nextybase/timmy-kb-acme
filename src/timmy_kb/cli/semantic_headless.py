@@ -149,7 +149,6 @@ def run_semantic_headless(
 
             ctx = ClientContext.load(
                 slug=slug,
-                interactive=not bool(non_interactive),
                 require_env=False,
                 run_id=None,
             )

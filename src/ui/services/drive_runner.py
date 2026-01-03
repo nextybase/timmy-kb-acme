@@ -209,7 +209,7 @@ def build_drive_from_mapping(  # nome storico mantenuto per compatibilita UI
     _require_drive_for_raw_only()
     if get_drive_service is None or create_drive_structure_from_yaml is None:
         raise RuntimeError("Funzioni Drive non disponibili (RAW da YAML).")
-    ctx = get_client_context(slug, interactive=False, require_env=require_env)
+    ctx = get_client_context(slug, require_env=require_env)
     layout = _require_layout_from_context(ctx)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
@@ -417,7 +417,7 @@ def plan_raw_download(
             + ". Installa gli extra con: pip install .[drive]"
         )
 
-    ctx = get_client_context(slug, interactive=False, require_env=require_env)
+    ctx = get_client_context(slug, require_env=require_env)
     layout = _require_layout_from_context(ctx)
     service = cast(Callable[[ClientContext], Any], get_drive_service)(ctx)
     parent_id = (ctx.env or {}).get("DRIVE_ID")
@@ -595,7 +595,7 @@ def emit_readmes_for_raw(
         raise RuntimeError("Funzioni Drive non disponibili.")
 
     # Context & service
-    ctx = get_client_context(slug, interactive=False, require_env=require_env)
+    ctx = get_client_context(slug, require_env=require_env)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
@@ -732,7 +732,7 @@ def download_raw_from_drive_with_progress(
         )
 
     # Context & service
-    ctx = get_client_context(slug, interactive=False, require_env=require_env)
+    ctx = get_client_context(slug, require_env=require_env)
     layout = _require_layout_from_context(ctx)
     svc = cast(Callable[[ClientContext], Any], get_drive_service)(ctx)
     parent_id = (ctx.env or {}).get("DRIVE_ID")

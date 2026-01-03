@@ -40,7 +40,7 @@ else:  # pragma: no cover
 
 # ---------- helpers config ----------
 def _load_context_and_settings(slug: str) -> Tuple[ClientContext, Settings]:
-    ctx = get_client_context(slug, interactive=False, require_env=False)
+    ctx = get_client_context(slug, require_env=False)
     settings_obj = ctx.settings
     if isinstance(settings_obj, Settings):
         return ctx, settings_obj

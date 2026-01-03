@@ -27,7 +27,7 @@ MAX_TOTAL_LOG_BYTES = 5 * 1024 * 1024  # ~5 MiB
 def resolve_base_dir(slug: str) -> Optional[Path]:
     """Ritorna la base_dir del client se disponibile, None altrimenti."""
     try:
-        ctx = get_client_context(slug, interactive=False, require_env=False)
+        ctx = get_client_context(slug, require_env=False)
     except Exception:
         return None
     base_dir = getattr(ctx, "base_dir", None)

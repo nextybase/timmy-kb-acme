@@ -78,7 +78,7 @@ def _resolve_workspace_base(slug: str) -> Optional[Path]:
     if not slug:
         return None
     try:
-        ctx = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)
+        ctx = ClientContext.load(slug=slug, require_env=False, run_id=None)
         base_dir = getattr(ctx, "base_dir", None)
         if isinstance(base_dir, Path):
             return base_dir

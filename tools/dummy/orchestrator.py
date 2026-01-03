@@ -551,7 +551,7 @@ def build_dummy_payload(
     cfg_out: dict[str, Any] = {}
     if callable(get_client_config) and ClientContext:
         try:
-            ctx_cfg = ClientContext.load(slug=slug, interactive=False, require_env=False, run_id=None)  # type: ignore[misc]
+            ctx_cfg = ClientContext.load(slug=slug, require_env=False, run_id=None)  # type: ignore[misc]
             cfg = get_client_config(ctx_cfg) or {}
             cfg_out = {
                 "drive_folder_id": cfg.get("drive_folder_id"),

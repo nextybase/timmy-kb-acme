@@ -42,7 +42,7 @@ def test_client_context_load_reads_dotenv(tmp_path: Path, monkeypatch: pytest.Mo
 
     # Act: reload env_utils to reset lazy loader, then load context (no required env)
     _il.reload(envu)
-    ClientContext.load(slug="dummy", interactive=False, require_env=False, run_id=None)
+    ClientContext.load(slug="dummy", require_env=False, run_id=None)
 
     # Assert: value is read from current CWD .env via env getter
     assert envu.get_env_var("ZZZ_DRIVE_ID", required=True) == "abc123"
@@ -58,7 +58,7 @@ def test_client_context_require_env_missing_raises_configerror(monkeypatch: pyte
 
     # Act & Assert: con require_env=True deve alzare ConfigError chiaro (no KeyError)
     with pytest.raises(ConfigError) as ei:
-        ClientContext.load(slug="dummy", interactive=False, require_env=True, run_id=None)
+        ClientContext.load(slug="dummy", require_env=True, run_id=None)
     msg = str(ei.value)
     # Messaggio informativo: cita almeno una delle variabili mancanti
     assert "Variabili d'ambiente" in msg

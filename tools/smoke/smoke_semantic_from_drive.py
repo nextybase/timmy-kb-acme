@@ -133,12 +133,7 @@ def main() -> int:
     )
 
     # Prepara contesto semantico locale (come semantic_onboarding CLI)
-    ctx = ClientContext.load(
-        slug=slug,
-        interactive=not non_interactive,
-        require_env=False,
-        run_id=run_id,
-    )
+    ctx = ClientContext.load(slug=slug, require_env=False, run_id=run_id)
 
     try:
         with phase_scope(logger, stage="smoke.drive_to_raw", customer=slug) as m_drive:

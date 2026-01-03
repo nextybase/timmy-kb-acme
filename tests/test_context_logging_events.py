@@ -33,7 +33,7 @@ def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     lg.addHandler(mem)
 
     # require_env=False per non dipendere da variabili esterne
-    ctx = ClientContext.load(DUMMY_SLUG, logger=lg, interactive=False, require_env=False)
+    ctx = ClientContext.load(DUMMY_SLUG, logger=lg, require_env=False)
     assert ctx.repo_root_dir == repo_root.resolve()
 
     # Verifica eventi
@@ -55,7 +55,7 @@ def test_repo_root_dir_invalid_includes_slug(monkeypatch: pytest.MonkeyPatch, tm
     monkeypatch.setattr(ctxmod.Path, "resolve", _boom, raising=True)
 
     with pytest.raises(ConfigError) as ei:
-        ClientContext.load("oops", logger=get_structured_logger("t"), interactive=False, require_env=False)
+        ClientContext.load("oops", logger=get_structured_logger("t"), require_env=False)
     err = ei.value
     assert getattr(err, "slug", None) == "oops"
     assert str(err).startswith("REPO_ROOT_DIR non valido:")

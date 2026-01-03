@@ -377,7 +377,6 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
 
     context = ClientContext.load(
         slug=slug,
-        interactive=False,
         require_env=False,
         run_id=run_id,
         stage="validate",
@@ -767,7 +766,6 @@ def main(args: argparse.Namespace) -> int | None:
         if getattr(args, "scan_raw", False):
             ctx = ClientContext.load(
                 slug=slug,
-                interactive=False,
                 require_env=False,
                 run_id=run_id,
                 stage="scan_raw",
@@ -785,7 +783,6 @@ def main(args: argparse.Namespace) -> int | None:
         if getattr(args, "nlp", False):
             ctx = ClientContext.load(
                 slug=slug,
-                interactive=False,
                 require_env=False,
                 run_id=run_id,
                 stage="nlp",

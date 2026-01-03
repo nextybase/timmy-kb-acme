@@ -35,7 +35,6 @@ def prepare_context(
     """Carica il contesto cliente e restituisce percorsi/log pronti all'uso."""
     context = ClientContext.load(
         slug=slug,
-        interactive=not non_interactive,
         require_env=require_env,
         run_id=run_id,
     )

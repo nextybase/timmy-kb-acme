@@ -164,7 +164,7 @@ def _client_vision_yaml_path(slug: str, layout: WorkspaceLayout | None = None) -
 
 def _has_drive_ids(slug: str) -> bool:
     try:
-        ctx = get_client_context(slug, interactive=False, require_env=False)
+        ctx = get_client_context(slug, require_env=False)
     except Exception:
         return False
     try:

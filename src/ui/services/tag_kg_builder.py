@@ -24,7 +24,7 @@ def _require_streamlit() -> None:
 
 
 def _resolve_workspace(slug: str) -> tuple[Path, WorkspaceLayout]:
-    ctx = get_client_context(slug, interactive=False, require_env=False)
+    ctx = get_client_context(slug, require_env=False)
     layout = WorkspaceLayout.from_context(ctx)
     candidate = layout.base_dir.resolve()
     workspace: Path = ensure_within_and_resolve(candidate.parent, candidate)

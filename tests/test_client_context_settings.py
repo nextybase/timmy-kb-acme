@@ -67,7 +67,7 @@ def test_client_context_exposes_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_with_config))
-    ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False, interactive=False)
+    ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False)
     assert isinstance(ctx.settings, Settings)
     assert ctx.settings.vision_model == "gpt-4o-mini-2024-07-18"
     assert ctx.settings.ui_skip_preflight is True
@@ -80,7 +80,7 @@ def test_client_context_logger_respects_ops_level(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_with_config))
-    ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False, interactive=False)
+    ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False)
     logger = ctx.logger or ctx._get_logger()
     assert logger.level == logging.DEBUG
     handler_levels = {h.level for h in logger.handlers}

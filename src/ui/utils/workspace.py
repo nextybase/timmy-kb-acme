@@ -37,7 +37,7 @@ def _load_context_layout(slug: str) -> Optional[WorkspaceLayout]:
     cached = _LAYOUT_CACHE.get(slug_key)
     if cached:
         return cached
-    ctx = get_client_context(slug_key, interactive=False, require_env=False)
+    ctx = get_client_context(slug_key, require_env=False)
     layout = WorkspaceLayout.from_context(ctx)
     _LAYOUT_CACHE[slug_key] = layout
     return layout

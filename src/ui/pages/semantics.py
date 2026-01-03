@@ -46,7 +46,7 @@ QA_EVIDENCE_FILENAME = PIPELINE_QA_EVIDENCE_FILENAME  # marker minimo: output pr
 def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger, WorkspaceLayout]:
     run_id = uuid.uuid4().hex
     logger = get_structured_logger("ui.semantics", run_id=run_id)
-    ctx = get_client_context(slug, interactive=False, require_env=False, run_id=run_id)
+    ctx = get_client_context(slug, require_env=False, run_id=run_id)
     layout = WorkspaceLayout.from_context(ctx)
     return ctx, logger, layout
 

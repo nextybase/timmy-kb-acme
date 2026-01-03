@@ -184,7 +184,7 @@ def _request_shutdown(logger: Optional[logging.Logger]) -> None:
 
 def _base_dir_for(slug: str) -> Path:
     try:
-        ctx = get_client_context(slug, interactive=False, require_env=False)
+        ctx = get_client_context(slug, require_env=False)
     except Exception as exc:
         raise RuntimeError(CLIENT_CONTEXT_ERROR_MSG) from exc
 
@@ -223,7 +223,7 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
         raise RuntimeError("Streamlit non disponibile per la landing UI.")
     client_name: str = fallback_name or slug
     try:
-        ctx = get_client_context(slug, interactive=False, require_env=False)
+        ctx = get_client_context(slug, require_env=False)
         from pipeline.config_utils import get_client_config
 
         cfg = get_client_config(ctx) or {}
@@ -415,7 +415,7 @@ def render_workspace_summary(
         else:
             try:
                 ensure_local_workspace_for_ui(slug, client_name or slug, vision_statement_pdf=pdf_bytes)
-                ctx = get_client_context(slug, interactive=False, require_env=False)
+                ctx = get_client_context(slug, require_env=False)
                 if ctx.base_dir is None:
                     raise ConfigError("Workspace creato ma base_dir non disponibile.")
                 base_dir = Path(ctx.base_dir)

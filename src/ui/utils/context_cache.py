@@ -32,7 +32,6 @@ def _get_cache() -> Optional[Dict[str, ClientContext]]:
 def get_client_context(
     slug: str,
     *,
-    interactive: bool = False,
     require_env: bool = False,
     run_id: str | None = None,
     force_reload: bool = False,
@@ -52,7 +51,6 @@ def get_client_context(
 
     ctx = ClientContext.load(
         slug=slug,
-        interactive=interactive,
         require_env=require_env,
         run_id=run_id,
     )
