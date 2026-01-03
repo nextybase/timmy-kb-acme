@@ -1,400 +1,194 @@
-# Architecture Overview (v1.0 Beta)
-
-
-
-This page contains two Mermaid diagrams that illustrate Timmy KB at a high level.
-
-
-
-## Agency-first foundation
-
-- ProtoTimmy governs the foundation pipeline that produces semantically enriched markdown and validates the knowledge graph; only after that artifact pair is ready does Timmy assume the dialogic agency with Domain Gatekeepers and micro-agents.
-
-- Domain Gatekeepers validate policy and can veto with HiTL triggers; the Control Plane / Engineering Gatekeeper applies those gates while Prompt Chain/instructions define WHAT (governance) versus HOW (execution).
-
-- Codex and the pipeline helpers (`pipeline.*`, CLI flows, semantic services) execute the foundation tasks under Work Order Envelope (OK / NEED_INPUT / CONTRACT_ERROR) without orchestration authority; these tooling references are therefore HOW, not decision makers.
-
-
-
-## Architecture scope
-
-- WHAT: governance (ProtoTimmy/Timmy, Domain Gatekeepers, Control Plane/OCP, Prompt Chain) documented in `instructions/*`.
-
-- HOW: execution surface (`pipeline.*`, CLI/UI orchestrators, semantic services, GitHub/Drive helpers) that deliver markdown + KG.
-
-- Interpret the diagrams below as HOW flows serving the foundation; agency statements above specify when Timmy takes over.
-
-
-
-## Components
-
-
-
-```mermaid
-
-flowchart LR
-
-    subgraph Client
-
-      UI[Streamlit UI (src/ui/*)]
-
-      CLI[CLI Orchestrators]
-
-    end
-
-
-
-    subgraph Agency
-
-      PROTO[ProtoTimmy (foundation governance)]
-
-      TIMMY[Timmy (agency after foundation complete)]
-
-      GATE[Domain Gatekeepers (validation)]
-
-      OCP[Control Plane / Engineering Gatekeeper (gate application)]
-
-      MICRO[Codex & micro-agents (Work Order Envelope execution)]
-
-    end
-
-
-
-    PROTO -->|defines foundation tasks| GATE
-
-    TIMMY -->|assumes agency| GATE
-
-    GATE -->|hiTL| OCP
-
-    OCP -->|dispatch| MICRO
-
-
-
-    subgraph Orchestrators
-
-      PRE[timmy_kb.cli.pre_onboarding]
-
-      TAG[timmy_kb.cli.tag_onboarding]
-
-      KG[kg_build.py (Tag KG Builder)]
-
-      SEMCLI[timmy_kb.cli.semantic_onboarding (wrapper for semantic.* services)]
-
-      PREVIEW[honkit_preview.py]
-
-VISIONCLI[tools/gen_vision_yaml.py]
-
-    end
-
-
-
-    subgraph Foundation tools (HOW)
-
-      PCTX[pipeline.context]
-
-      PPATH[pipeline.path_utils]
-
-      PCONT[pipeline.content_utils]
-
-      PLOG[pipeline.logging_utils]
-
-
-      PDRIVE[pipeline.drive_utils]
-
-    end
-
-
-
-    subgraph Semantic
-
-      SEMANTIC[semantic.convert/frontmatter/embedding/mapping + semantic.nlp_runner]
-
-      SVISION[semantic.vision_provision + UI services]
-
-    end
-
-
-
-    subgraph Storage
-
-      DB[(SQLite: semantic/tags.db)]
-
-      FILES[[output/timmy-kb-<slug>]]
-
-    end
-
-
-
-    subgraph Adapters
-
-      HONKIT[Preview (HonKit/Docker)]
-
-
-      DRIVE[Google Drive]
-
-    end
-
-
-
-    subgraph AI Services
-
-      OPENAI[(OpenAI Chat API)]
-
-    end
-
-
-
-    UI -->|actions| PRE
-
-    UI -->|actions| TAG
-
-    UI -->|actions| KG
-
-    UI -->|actions| SEMCLI
-
-    UI -->|preview| HONKIT
-
-
-
-    CLI --> PRE
-
-    CLI --> TAG
-
-    CLI --> KG
-
-    CLI --> SEMCLI
-
-
-    CLI --> VISIONCLI
-
-
-
-    PRE --> PCTX
-
-    PRE --> PDRIVE
-
-    PRE --> FILES
-
-
-
-    TAG --> KG
-
-    KG --> SEMANTIC
-
-    TAG --> FILES
-
-    TAG --> DB
-
-
-
-    SEMCLI --> SEMANTIC
-
-    SEMANTIC --> PCONT
-
-    VISIONCLI --> SVISION
-
-    SEMANTIC --> FILES
-
-    SEMANTIC --> DB
-
-
-
-    SVISION --> OPENAI
-
-
-
-Vision provisioning now relies on the single `ai.vision_config` resolver and the `_with_config` operators exposed by `semantic.vision_provision` (CLI entrypoint `tools/gen_vision_yaml.py`). These components are part of the foundation execution (HOW); the governance to decide when they run is defined in `instructions/*` via the Prompt Chain. The architecture assumes dedicated hardware, controlled environments, automated processes, and loud failures to keep each step auditable and deterministic.
-
-
-
-- **Tag KG Builder:** `kg_build.py` (CLI) and the UI Knowledge Graph panel for tags invoke `build_kg_for_workspace`, read `semantic/tags_raw.json`, and write `semantic/kg.tags.json` / `semantic/kg.tags.md` before `semantic_onboarding` regenerates the README files.
-
-
-
-    PDRIVE --> DRIVE
-
-```
-
-
-
-## Component overview
-
-- **Agency layer (WHAT):** ProtoTimmy governs the foundation pipeline, Timmy assumes agency once the foundation is complete (semantically enriched markdown + knowledge graph validated), Domain Gatekeepers validate policies, and the Control Plane / OCP applies HiTL while Codex/micro-agents execute under Work Order Envelope.
-
-- **Foundation tools & execution surfaces (HOW):** pipeline.* helpers (context, workspace_layout, path_utils, logging_utils, drive_utils), CLI orchestrators (pre_onboarding, tag_onboarding, semantic_onboarding, honkit_preview, kg_build.py, tools/gen_vision_yaml.py), Streamlit UI (onboarding_ui.py, src/ui/*), and semantic services (semantic.*) produce the artifacts but do not make orchestration decisions.
-
-- **Workspace/storage:** output/timmy-kb-<slug>/raw/book/semantic/config/logs, semantic/tags.db, and WorkspaceLayout form the artifact SSoT.
-
-
-
-
-
-## End-to-end Sequence
-
-
-
-```mermaid
-
-sequenceDiagram
-
-    autonumber
-
-    participant User
-
-    participant UI as Streamlit UI / CLI
-
-    participant PRE as pre_onboarding
-
-    participant TAG as tag_onboarding
-
-    participant SEM as semantic services
-
-    participant FS as Local FS (output/timmy-kb-<slug>)
-
-    participant DB as SQLite (tags.db)
-
-    participant GH as GitHub
-
-    participant DRV as Google Drive
-
-    participant KG as Tag KG Builder
-
-
-
-    User->>UI: choose slug / start
-
-    UI->>PRE: create local workspace
-
-    PRE->>FS: ensure raw/, book/, config/, semantic/
-
-    PRE-->>DRV: (optional) create remote structure & upload config
-
-
-
-    UI->>TAG: generate tags CSV (drive/local)
-
-    TAG-->>DRV: (optional) download RAW PDFs
-
-    TAG->>FS: copy CSV / README_TAGGING
-
-    TAG->>DB: write semantic/tags.db
-
-    TAG->>KG: build_tag_kg (namespace slug)
-
-    KG->>FS: write semantic/kg.tags.json + semantic/kg.tags.md
-
-
-
-    UI->>SEM: convert_markdown(slug)
-
-    SEM->>FS: write book/*.md
-
-    UI->>SEM: enrich_frontmatter(vocab)
-
-    SEM->>DB: read canonical tags
-
-    SEM->>FS: update frontmatter
-
-    UI->>SEM: write_summary_and_readme()
-
-    SEM->>FS: SUMMARY.md, README.md (validated)
-
-
-
-    UI->>Preview: honkit_preview (Docker HonKit)
-
-
-```
-
-> Foundation complete: once markdown enriched (book/*.md, README.md, SUMMARY.md) and the knowledge graph artifacts (semantic/tags.db, semantic/kg.tags.*) pass validation, Timmy assumes agency; until then ProtoTimmy and the control plane manage the pipeline execution (HOW), and the Prompt Chain in instructions/* governs the Domain Gatekeepers, Control Plane/OCP, and micro-agent execution.
-
-
-
-
-
-
-
-## Workspace SSoT & Path Flow
-
-
-
-The onboarding pipeline (CLI, UI, semantic stages) now relies on a unified WorkspaceLayout as the Single Source of Truth (SSoT) for all workspace-related filesystem paths. Paths such as raw/, semantic/, book/, logs/, config/, and mapping/ are no longer constructed manually. They are instead resolved through WorkspaceLayout, which enforces path-safety, consistency across orchestrators, and eliminates drift between CLI and UI components.
-
-
-
-`
-                     +--------------------------+
-
-                     |       ClientContext      |
-
-                     |  (slug, settings, env)   |
-
-                     +-----------+--------------+
-
-                                   |
-
-                                   v
-
-                     +--------------------------+
-
-                     |      WorkspaceLayout     |
-
-                     |  Derived path SSoT       |
-
-                     |  raw/ semantic/ book/    |
-
-                     |  logs/ config/ mapping   |
-
-                     +-----------+--------------+
-
-                                 |
-
-       +-------------------------+-------------------------+
-
-       v                         v                         v
-
- +-------------------+  +----------------------+  +-----------------------+
-
- | CLI Orchestrators |  | Streamlit UI /      |  | Semantic Pipeline     |
-
- | pre, tag, semantic|  | Services            |  | convert, enrich,      |
-
- | kg_build, full    |  | new_client, tagging, |  | readme, indexing,     |
-
- |                   |  | vision              |  | mapping               |
-
- +--------+----------+  +--------+-------------+  +---------+-------------+
-
-          |                     |                         |
-
-          v                     v                         v
-
- Uses always:          Uses always:                 Uses always:
-
- WorkspaceLayout.*     WorkspaceLayout.*            WorkspaceLayout.*
-
- log_file, raw_dir,     raw_dir,                     semantic_dir,
-
- base_dir,              semantic_dir                book_dir,
-
-                        mapping_path,                tags_db
-
-`
-
-
-
-Manual construction of workspace paths (e.g. base_dir/'raw', base_dir/'semantic') is deprecated. All components must rely on WorkspaceLayout or ClientContext helpers to ensure filesystem consistency and security guarantees. Refer to the Coding Rules and Developer Guide for the enforced workflow and examples.
-
-
-
-## Operational notes
-
-1. YAML is used for the initial bootstrap, but at runtime SQLite (`semantic/tags.db`) is the source of truth for semantic metadata.
-2. The convert/enrich/summary phases share `_run_build_workflow` and log `semantic.book.frontmatter` with the number of enriched files, keeping UI and CLI aligned.
-3. Conversion fails if only README/SUMMARY artifacts remain after a run (no `.md` content generated); ensure `raw/` contains valid PDFs before triggering semantic processors.
-4. Vision mapping generation uses `semantic/vision_provision.py` (UI integration via `src/ui/services/vision_provision.py`), writes the textual snapshot `semantic/vision_statement.txt` beside the YAML, and always invokes the model configured in `config/config.yaml` via `get_vision_model()`.
-5. Additional CLI entrypoints (`src/ingest.py`, `src/timmy_kb/cli/retriever.py`, `src/timmy_kb/cli/semantic_headless.py`, `src/kb_db.py`) orchestrate standalone steps that reuse pipeline and semantic helpers.
-6. Tagging/UI shared state is stored in `src/storage/tags_store.py` (atomic JSON) and `clients_db/ui_state.json`; both remain within `output/timmy-kb-<slug>` as the local SSoT.
-7. SQLite indexing excludes `README.md` and `SUMMARY.md` and drops empty embeddings per file (log events such as `semantic.index.skip_empty_file` and `semantic.index.embedding_pruned`).
-8. Partial indexing for mismatched `contents` and `embeddings` processes the minimal common subset and emits `semantic.index.mismatched_embeddings`, `semantic.index.embedding_pruned`, and a single `semantic.index.skips` event.
-9. Empty-run telemetry flows through the `phase_scope` branch with `artifact_count=0` and closes via `semantic.index.done`.
+# Architettura del repository (pre-Beta / work in progress)
+
+Questo documento offre una mappa strutturale del repository con un focus descrittivo: `src/` è il core applicativo, tutto il resto è supporto, runtime o locale.
+
+La sezione “Repository Root” elenca ogni elemento a profondità 1 con ruolo/uso. La sezione “src/ — Core Architecture” descrive le aree del codice e le sotto-aree (profondità 2) usando esclusivamente l’inventario fornito.
+
+Stato corrente: pre-Beta; inventario e classificazioni sono work in progress.
+
+
+## Repository Root
+
+### Directory (depth 1)
+
+- `.codex/` — policy e workflow Codex (support).
+- `.git/` — metadati Git (support).
+- `.git.bak/` — backup Git (locale; da verificare).
+- `.github/` — automazioni GitHub (support).
+- `.hypothesis/` — cache Hypothesis (locale; cache).
+- `.mypy_cache/` — cache mypy (locale; cache).
+- `.pytest_cache/` — cache pytest (locale; cache).
+- `.pytest_clients_db/` — artefatti pytest (locale; da verificare).
+- `.qodana/` — cache/artefatti Qodana (locale; cache).
+- `.ruff_cache/` — cache Ruff (locale; cache).
+- `.timmy_kb/` — artefatti Timmy KB (locale; runtime).
+- `.venv/` — virtualenv locale (locale; rigenerabile).
+- `.vscode/` — configurazione editor (support).
+- `__pycache__/` — bytecode Python (locale; cache).
+- `build/` — output di build (locale; runtime).
+- `clients_db/` — dati clienti (runtime; da verificare).
+- `config/` — configurazioni versionate (support).
+- `data/` — dati ausiliari (support; da verificare).
+- `docs/` — documentazione (support).
+- `instructions/` — governance/Prompt Chain (support).
+- `Lib/` — librerie locali (locale; da verificare).
+- `logs/` — log locali (runtime; locale).
+- `node_modules/` — dipendenze JS (locale; runtime).
+- `observability/` — stack osservabilità (support).
+- `output/` — output per‑cliente (runtime).
+- `src/` — core del codice applicativo (core).
+- `system/` — specifiche e policy di sistema (support).
+- `tests/` — test (support).
+- `tools/` — tool e script (support).
+- `venv/` — virtualenv locale (locale; rigenerabile).
+
+### File (depth 1)
+
+- `.editorconfig` — regole di formattazione (support).
+- `.env` — variabili locali (sensibile; locale).
+- `.env.example` — esempio variabili (support).
+- `.gitattributes` — policy Git (support).
+- `.gitignore` — esclusioni Git (support).
+- `.gitignore.bak` — backup gitignore (locale; da verificare).
+- `.gitleaks.toml` — config Gitleaks (support).
+- `.pre-commit-config.yaml` — hook pre-commit (support).
+- `.secrets.baseline` — baseline scansione segreti (sensibile; support).
+- `AGENTS.md` — entrypoint policy agent (support).
+- `audit_repo.py` — script audit (da verificare).
+- `bench.json` — dati benchmark (da verificare).
+- `build_log.txt` — log build (locale; runtime).
+- `CHANGELOG.md` — storico versioni (support).
+- `CODE_OF_CONDUCT.md` — codice di condotta (support).
+- `constraints.txt` — vincoli dipendenze (support).
+- `CONTRIBUTING.md` — guida contribuzione (support).
+- `cspell.json` — dizionario cSpell (support).
+- `e2e.json` — config/risultati e2e (da verificare).
+- `LICENSE.md` — licenza (support).
+- `makefile` — comandi build/test (support).
+- `MANIFEST.md` — manifesto/limiti (support).
+- `mod_script.py` — script locale (da verificare).
+- `mypy.ini` — config mypy (support).
+- `package.json` — dipendenze JS (support).
+- `package-lock.json` — lockfile npm (support).
+- `patch_config_doc.py` — script doc/config (da verificare).
+- `pyproject.toml` — config Python/tooling (support).
+- `pyrightconfig.json` — config pyright (support).
+- `pytest.ini` — config pytest (support).
+- `pytest.log` — log pytest (locale; runtime).
+- `pytest_again.log` — log pytest (locale; runtime).
+- `pytest_full.log` — log pytest (locale; runtime).
+- `qodana.json` — config Qodana (support).
+- `qodana.licenses.yaml` — licenze Qodana (support).
+- `qodana.sarif.json` — report Qodana (locale; runtime).
+- `qodana.yaml` — config Qodana (support).
+- `qodana-refresh.ps1` — script Qodana (support; da verificare).
+- `README.md` — overview progetto (support).
+- `remove_block.py` — script locale (da verificare).
+- `requirements.in` — input dipendenze (support).
+- `requirements.txt` — dipendenze (support).
+- `requirements.txt.bak` — backup requirements (locale; da verificare).
+- `requirements-dev.in` — input dev deps (support).
+- `requirements-dev.txt` — dev deps (support).
+- `requirements-optional.in` — input opzionali (support).
+- `requirements-optional.txt` — deps opzionali (support).
+- `SECURITY.md` — policy sicurezza (support).
+- `service_account.json` — credenziali (sensibile; locale).
+- `show_lines.py` — script locale (da verificare).
+- `show_lines2.py` — script locale (da verificare).
+- `show_lines3.py` — script locale (da verificare).
+- `show_lines4.py` — script locale (da verificare).
+- `SUMMARY.md` — indice/summary (support).
+- `temp_gen_dummy_kb.txt` — output temporaneo (locale; da verificare).
+
+
+## src/ — Core Architecture
+
+La directory `src/` contiene il core applicativo. Qui risiedono pipeline, servizi semantici, UI, AI, storage e sicurezza; le altre aree del repo sono di supporto, runtime o locali.
+
+Le responsabilità sono separate: `pipeline/` per l’orchestrazione I/O‑safe, `semantic/` per l’elaborazione contenuti, `ui/` per la UX Streamlit, `ai/` per risoluzione/configurazione modelli, `storage/` per persistenza, `security/` per controlli e protezione.
+
+### Top‑level (depth 1)
+
+- `__pycache__/` — bytecode (locale; cache).
+- `adapters/` — adattatori per componenti esterni (support; da verificare).
+- `ai/` — configurazione e runtime AI (core).
+- `explainability/` — tracciabilità ed evidenze (core).
+- `nlp/` — moduli NLP (core).
+- `pipeline/` — orchestrazione core, path-safety, I/O, CLI e servizi di base (core).
+- `security/` — controlli di sicurezza (core).
+- `semantic/` — conversione, arricchimento, tagging e validazione (core).
+- `storage/` — persistenza locale/SSoT (core).
+- `timmy_kb/` — pacchetto principale (core).
+- `timmy_kb.egg-info/` — metadata packaging (locale; runtime).
+- `ui/` — interfaccia Streamlit, gating e componenti (core).
+- `__init__.py` — entrypoint package (core).
+- `kb_db.py` — DB/KB runtime (core; da verificare).
+- `kg_models.py` — modelli KG (core; da verificare).
+
+### Sotto‑aree (depth 2)
+
+**adapters/**
+`book_purity.py` (support; da verificare), `preview.py` (support).
+
+**ai/**
+`AGENTS.md` (support), `assistant_registry.py` (core), `check/` (support),
+`client_factory.py` (core), `codex_runner.py` (core), `kgraph.py` (core),
+`prototimmy.py` (core), `resolution.py` (core), `responses.py` (core),
+`schemas/` (support), `types.py` (core), `vision_config.py` (core).
+
+**explainability/**
+`manifest.py` (core), `serialization.py` (core), `service.py` (core).
+
+**nlp/**
+`nlp_keywords.py` (core).
+
+**pipeline/**
+`AGENTS.md` (support), `capabilities/` (core), `cleanup_utils.py` (core),
+`cli_runner.py` (core), `config_utils.py` (core), `constants.py` (core),
+`content_utils.py` (core), `context.py` (core), `docker_utils.py` (core),
+`drive/` (core), `drive_utils.py` (core), `embedding_utils.py` (core),
+`env_utils.py` (core), `exceptions.py` (core), `file_utils.py` (core),
+`frontmatter_utils.py` (core), `honkit_preview.py` (core), `import_utils.py` (core),
+`ingest/` (core), `layout_summary.py` (core), `log_viewer.py` (support),
+`logging_utils.py` (core), `metrics.py` (core), `observability_config.py` (support),
+`oidc_utils.py` (core), `ontology.py` (core), `ownership.py` (core),
+`path_utils.py` (core), `paths.py` (core), `proc_utils.py` (core),
+`provision_from_yaml.py` (core), `qa_evidence.py` (core), `secret_checks.py` (core),
+`settings.py` (core), `system_self_check.py` (core), `tracing.py` (core),
+`types.py` (core), `vision_runner.py` (core), `vision_template.py` (core),
+`workspace_bootstrap.py` (core), `workspace_layout.py` (core), `yaml_utils.py` (core).
+
+**security/**
+`authorization.py` (core), `masking.py` (core), `retention.py` (core), `throttle.py` (core).
+
+**semantic/**
+`AGENTS.md` (support), `api.py` (core), `auto_tagger.py` (core),
+`book_readiness.py` (core), `config.py` (core), `context_paths.py` (core),
+`contracts.py` (core), `convert_service.py` (core), `core.py` (core),
+`document_ingest.py` (core), `embedding_service.py` (core),
+`entities_extractor.py` (core), `entities_frontmatter.py` (core),
+`entities_review.py` (core), `entities_runner.py` (core), `explain_pack.py` (core),
+`exporters.py` (core), `frontmatter_service.py` (core), `layout_enricher.py` (core),
+`lexicon.py` (core), `mapping_loader.py` (core), `nlp_runner.py` (core),
+`normalizer.py` (core), `paths.py` (core), `pdf_utils.py` (core),
+`redaction.py` (core), `review_writer.py` (core), `semantic_mapping.py` (core),
+`spacy_extractor.py` (core), `tagging_service.py` (core), `tags_extractor.py` (core),
+`tags_io.py` (core), `tags_validator.py` (core), `types.py` (core),
+`validation.py` (core), `validators.py` (core), `vision_parser.py` (core),
+`vision_provision.py` (core), `vision_utils.py` (core), `vocab_loader.py` (core).
+
+**storage/**
+`kb_store.py` (core), `tags_store.py` (core).
+
+**timmy_kb/**
+`cli/` (core), `logs/` (runtime; locale), `ui/` (core), `versioning.py` (core).
+
+**ui/**
+`AGENTS.md` (support), `app_core/` (core), `app_services/` (core), `chrome.py` (core),
+`clients_store.py` (core), `components/` (core), `config_store.py` (core),
+`const.py` (core), `constants.py` (core), `errors.py` (core),
+`filters.py` (core), `fine_tuning/` (core), `gating.py` (core),
+`imports.py` (core), `landing_slug.py` (core), `manage/` (core),
+`navigation_spec.py` (core), `pages/` (core), `preflight.py` (core),
+`semantic_progress.py` (core), `services/` (core), `theme/` (core),
+`theme_enhancements.py` (core), `types.py` (core), `utils/` (core).
