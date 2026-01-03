@@ -70,8 +70,8 @@ def main() -> None:
     if not api_key:
         _print_json({"status": "error", "reason": "missing_api_key"}, 2)
 
-    # Nota: con Responses non Ã¨ strettamente necessario l'assistant_id,
-    # ma lo manteniamo per continuitÃ  / tracciabilitÃ .
+    # Nota: con Responses non è strettamente necessario l'assistant_id,
+    # ma lo manteniamo per continuità / tracciabilità.
     settings = None
     try:
         settings = PipelineSettings.load(ROOT)
@@ -133,7 +133,7 @@ def main() -> None:
 
     # 1) Import schema reale dal modulo Vision
     try:
-        # stesso loader usato dallâ€™app
+        # stesso loader usato dall’app
         from semantic.vision_provision import _load_vision_schema  # type: ignore[attr-defined]
     except Exception as e:
         _print_json(
@@ -282,7 +282,7 @@ def main() -> None:
                             }
                         )
 
-            # Se abbiamo giÃ  estratto il testo principale, possiamo fermarci
+            # Se abbiamo già estratto il testo principale, possiamo fermarci
             if text is not None:
                 break
 

@@ -48,6 +48,14 @@ Usa la Prompt Chain come **modalità predefinita** quando:
 
 In pratica: quando il lavoro **non è banale**, la Prompt Chain è il modo migliore per usare Codex in modo sicuro, tracciabile e coerente. Al termine di ogni Prompt Chain esegui il Closure Protocol e il Skeptic Gate descritti in `.codex/CLOSURE_AND_SKEPTIC.md` in modo da chiudere ufficialmente il ciclo di lavoro.
 
+### 1.3 UI testing stance (Beta 1.0)
+
+Per Beta 1.0 la UI Streamlit non viene testata in headless/stub: è una scelta di scope esplicita, non un fallback tecnico.
+I test UI headless/stub sono skip deterministici e non rientrano nella copertura CI.
+Lo stack è fisso: mancanze infrastrutturali => fail-fast (es. PyYAML richiesto), senza degradazione.
+La validazione avviene tramite import test (es. `tests/ui/test_pages_import.py`), contract/gating (es. `tests/contract/test_gating_contract.py`) ed E2E smoke su dataset dummy (script `scripts/smoke_e2e.py`).
+La UI resta un layer di presentazione: non ha autorità decisionale e non sostituisce la governance definita negli SSoT.
+
 ---
 
 ## 2. Uso diretto di Codex in VS Code
@@ -167,7 +175,7 @@ La catena attiva per proteggere `docs/` e `README.md` da mojibake si basa su tre
 - **`tests/encoding/test_docs_encoding.py`** è il test locale che esegue `apply_replacements` in dry-run, controlla `docs/**/*.md` + `README.md` e fallisce con un messaggio leggibile nel momento in cui lo script propone una modifica: l’intento è intercettare il mojibake prima del commit/PR (attivazione manuale con `pytest tests/encoding/test_docs_encoding.py`).
 - **Job CI “Docs UTF-8/accents normalization check”** (`.github/workflows/ci.yaml`) rilancia lo stesso script e fallisce se `git diff` segnala cambiamenti; così la seconda linea di difesa entra in funzione anche se il test locale viene saltato.
 
-**Cosa NON fa la guardia:** non è un controllo esaustivo, riceve solo i pattern presenti in `REPLACEMENTS`, quindi mojibake nuovi resta un falso negativo e va segnalato ufficialmente. Non c’è un hook pre-commit automatico; la regola è applicare il test prima del commit e affidarsi al job CI come fallback.
+**Cosa NON fa la guardia:** non è un controllo esaustivo, riceve solo i pattern presenti in `REPLACEMENTS`, quindi mojibake nuovi resta un falso negativo e va segnalato ufficialmente. Non c’è un hook pre-commit automatico; la regola è applicare il test prima del commit e affidarsi al job CI come fallback. Segnale: il job CI fallisce se rileva modifiche.
 
 **Istruzioni operative quando il test fallisce:**
 

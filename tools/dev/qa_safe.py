@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """
 Esegue QA locale in modo "safe" (auto-rimeditivo) con una smoke suite:
-1) isort (write-mode)        â†’ riordina import
-2) black (write-mode)        â†’ format definitivo
-3) ruff check --fix          â†’ lint + fix non distruttivi
-4) mypy                      â†’ type-check mirato (solo su target esistenti)
-5) pytest                    â†’ smoke ui/retriever/smoke
+1) isort (write-mode)        → riordina import
+2) black (write-mode)        → format definitivo
+3) ruff check --fix          → lint + fix non distruttivi
+4) mypy                      → type-check mirato (solo su target esistenti)
+5) pytest                    → smoke ui/retriever/smoke
 
 Exit code:
 - 0 se tutto ok o tool assenti (skip)
@@ -33,7 +33,7 @@ def run(cmd: List[str]) -> int:
 
 def run_module_if_available(module: str, args: List[str]) -> Tuple[str, int | None]:
     """
-    Esegue `python -m <module> <args>` se il modulo Ã¨ importabile; altrimenti skip.
+    Esegue `python -m <module> <args>` se il modulo è importabile; altrimenti skip.
     Ritorna (nome_modulo, rc | None).
     """
     if importlib.util.find_spec(module) is None:
@@ -78,7 +78,7 @@ def main(argv: List[str] | None = None) -> int:
         if rc not in (0, None):
             failures.append(mod)
     else:
-        print("[qa-safe] mypy: nessun target esistente tra " f"{mypy_candidates} â†’ skip", flush=True)
+        print("[qa-safe] mypy: nessun target esistente tra " f"{mypy_candidates} → skip", flush=True)
 
     # 5) pytest (smoke UI/retriever)
     smoke_targets = ["tests/ui", "tests/retriever", "tests/smoke"]
@@ -88,7 +88,7 @@ def main(argv: List[str] | None = None) -> int:
         if rc not in (0, None):
             failures.append(mod)
     else:
-        print(f"[qa-safe] pytest: nessun target esistente tra {smoke_targets} â†’ skip", flush=True)
+        print(f"[qa-safe] pytest: nessun target esistente tra {smoke_targets} → skip", flush=True)
 
     if failures:
         print(f"[qa-safe] Falliti: {', '.join(failures)}", flush=True)

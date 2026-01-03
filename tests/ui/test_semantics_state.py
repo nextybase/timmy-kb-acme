@@ -153,7 +153,7 @@ def test_semantics_message_string_matches_docs():
     from ui.constants import SEMANTIC_GATING_MESSAGE
 
     repo_root = Path(__file__).resolve().parents[2]
-    docs_text = (repo_root / "docs/streamlit_ui.md").read_text(encoding="utf-8")
+    docs_text = (repo_root / "docs/developer/streamlit_ui.md").read_text(encoding="utf-8")
     assert SEMANTIC_GATING_MESSAGE in docs_text, SEMANTIC_GATING_MESSAGE
 
 

@@ -5,9 +5,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pytest
-
-yaml = pytest.importorskip("yaml")
-
+import yaml  # type: ignore
 
 import ui.config_store as config_store
 from pipeline.exceptions import ConfigError

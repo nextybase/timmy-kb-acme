@@ -11,7 +11,7 @@ Per la cornice filosofica del progetto vedi [MANIFEST.md](../../MANIFEST.md).
 Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
-> Avvio interfaccia: `streamlit run onboarding_ui.py` (la UI imposta `REPO_ROOT_DIR` sul repo prima di importare i moduli).
+> Avvio interfaccia: `streamlit run onboarding_ui.py` (la UI risolve il repo root via SSoT e non si affida a `REPO_ROOT_DIR`).
 
 Nota: la UI e gli orchestratori CLI delegano alle funzioni modulari
 `semantic.convert_service`, `semantic.frontmatter_service`,
@@ -108,7 +108,7 @@ Per l'indicizzazione nel DB semantico puoi delegare a
 adottato nel tuo ambiente (es. quello configurato nella UI retriever).
 
 # 4) Preview finale (HonKit locale)
-La preview Docker/HonKit è gestita via adapter/UI; non esiste un entrypoint `python -m pipeline.honkit_preview` (vedi runbook).
+La preview Docker/HonKit è gestita via adapter/UI; il modulo esiste ma non è previsto/supportato come entrypoint pubblico `python -m pipeline.honkit_preview` (vedi runbook).
 
 Modalita` **batch** (senza prompt): aggiungi `--non-interactive` ai comandi sopra per la parte CLI di onboarding.
 
@@ -154,7 +154,7 @@ output/timmy-kb-<slug>/
 - Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.
 - Log con redazione automatica se `LOG_REDACTION` e` attivo.
 - I pulsanti **Avvia arricchimento semantico**/**Abilita** nella UI rispettano il servizio `ui.services.tags_adapter`: se non e` disponibile vengono disabilitati (salvo `TAGS_MODE=stub`). In modalita` stub lo YAML viene rigenerato con `DEFAULT_TAGS_YAML` e lo stato cliente torna a **pronto** se il DB resta vuoto.
-- La preview finale usa HonKit via Docker ed è gestita via adapter/UI; non esiste un entrypoint `python -m pipeline.honkit_preview` (vedi runbook).
+- La preview finale usa HonKit via Docker ed è gestita via adapter/UI; il modulo esiste ma non è previsto/supportato come entrypoint pubblico `python -m pipeline.honkit_preview` (vedi runbook).
 
 ## Impostazioni retriever (UI)
 La sidebar della UI consente di configurare il retriever, salvando i parametri in `config/config.yaml`:

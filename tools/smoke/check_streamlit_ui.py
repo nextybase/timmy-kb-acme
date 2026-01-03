@@ -6,7 +6,7 @@ Streamlit UI guard (crossâ€‘platform, Python)
 - Controlli:
   1) Router adoption: presenza di st.Page o st.navigation nel codice.
   2) Path-safety: vieta os.walk e Path.rglob.
-  3) Preferenze UX: avvisa se st.page_link non Ã¨ usato da nessuna parte.
+  3) Preferenze UX: avvisa se st.page_link non è usato da nessuna parte.
   4) Logging UI: avvisa se ci sono logger senza prefisso 'ui.'
 
 Uso:
@@ -14,7 +14,7 @@ Uso:
         --ci    tratta i warning come errori (exit 1)
 
 Note: le deprecazioni Streamlit (experimental_ / cache / unsafe_allow_html / use_*_width)
-      sono giÃ  coperte da check_streamlit_deprecations.py e check_ui_beta0_compliance.py.
+      sono già coperte da check_streamlit_deprecations.py e check_ui_beta0_compliance.py.
 """
 
 from __future__ import annotations

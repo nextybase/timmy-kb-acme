@@ -4,7 +4,7 @@ Questa cartella contiene **documentazione pensata prima di tutto per esseri uman
 
 > **Nota importante**
 > I file in `docs/` sono **esplicativi e descrittivi**, non normativi.
-> Le regole vincolanti, i contratti operativi e la governance formale vivono altrove (in particolare in `instructions/*` e nei file di policy).
+> Le regole vincolanti e la governance formale vivono in `MANIFEST.md` e in `instructions/*`; `docs/policies/*` contiene regole derivate/applicative e resta subordinato a quelle fonti.
 
 L’organizzazione della documentazione riflette lo stesso principio adottato dal sistema:
 **separare contesto, regole e operatività** per ridurre ambiguità ed entropia.
@@ -50,7 +50,7 @@ Qui si spiega **come funziona il sistema e come evolve**, senza definire regole 
 ---
 
 ### `docs/policies/`
-Documentazione **normativa e vincolante**.
+Documentazione **derivata/applicativa** (vincolante solo come applicazione delle regole in `MANIFEST.md` e `instructions/*`).
 
 Questa cartella raccoglie le policy operative che tutti devono rispettare:
 - regole di sviluppo,
@@ -59,7 +59,7 @@ Questa cartella raccoglie le policy operative che tutti devono rispettare:
 - contratti di import/export,
 - regole comuni per gli assistant.
 
-Se un comportamento viola un file in `policies/`, è da considerarsi un errore.
+Se un comportamento viola un file in `policies/`, è da considerarsi un errore nel perimetro applicativo, senza sovrascrivere `MANIFEST.md` o `instructions/*`.
 
 ---
 
@@ -93,4 +93,3 @@ Un percorso consigliato:
 4. `context/` se devi valutare allineamento concettuale, limiti e responsabilità.
 
 Questa separazione è intenzionale: evita sovrapposizioni, riduce interpretazioni errate e mantiene la documentazione coerente con l’architettura del sistema.
-

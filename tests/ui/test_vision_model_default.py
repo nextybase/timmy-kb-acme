@@ -4,8 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-yaml = pytest.importorskip("yaml")
+import yaml  # type: ignore
 
 import ui.config_store as config_store
 

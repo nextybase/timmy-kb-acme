@@ -34,7 +34,7 @@ def _read_pdf_text(pdf_path: Path) -> str:
 def _clean_text(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text or "")
     replacements = {
-        "’": "'",
+        "\u2019": "'",
         "“": '"',
         "”": '"',
         "–": "-",

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # tools/observability_stack.py
 """
-Helpers per avviare e fermare lo stack Grafana/Loki quando Docker Ã¨ disponibile.
+Helpers per avviare e fermare lo stack Grafana/Loki quando Docker è disponibile.
 """
 
 from __future__ import annotations

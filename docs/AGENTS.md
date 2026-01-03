@@ -51,6 +51,7 @@ This folder contains **explanations, guides, and technical references**, not gov
   - clarifications
   - examples
   - operational explanations
+ - Precedence order: `MANIFEST.md` -> `instructions/*` -> code -> `docs/` (incl. `docs/policies/`)
 
 Do **not** override or reinterpret agency statements defined in:
 - `instructions/00_ssot_agency.md`

@@ -175,17 +175,11 @@ make ci-safe
 ```
 
 ### Prompt Chain e QA
-- Il Prompt Chain segue il protocollo Planner → OCP → Codex → OCP → Planner descritto in `system/specs/promptchain_spec.md` con Phase 0 analitica/read-only, Phase 1..N micro-PR e Prompt N+1 finale.
-- Phase 0 è read-only: nessun diff, nessun QA, solo analisi e piano operativo dei prompt 0 e 0a..0x.
-- I prompt Phase 1..N producono micro-PR con diff limitati allo scope dichiarato, includono il memo Active Rules di `.codex/PROMPTS.md`, confermano path safety, eseguono `pytest -q -k "not slow"` (o giustificano l’eccezione) e rispondono in italiano.
-- Prompt N+1 esegue `pre-commit run --all-files` e `pytest -q`, documenta eventuali retry e chiude con una one-line commit summary in italiano.
-- Il QA intermedio e finale è parte integrante del turn-based protocol: non avanzare senza il filtro `pytest -q -k "not slow"` nei prompt 1..N e non concludere senza la suite completa nel Prompt N+1 (`system/ops/runbook_codex.md`, `.codex/WORKFLOWS.md`).
-- Documentazione e template restano in inglese mentre Codex risponde esclusivamente in italiano per report, memo e QA.
-- Successo di `pre-commit run --all-files` e `pytest -q` durante Prompt N+1.
-- Proposta del commit one-line finale da parte di Codex, come descritto in `system/specs/promptchain_spec.md`.
+- Lifecycle e ruoli: vedi [`system/specs/promptchain_spec.md`](../../system/specs/promptchain_spec.md) (SSoT).
+- Active Rules, template e QA gates: vedi [`.codex/PROMPTS.md`](../../.codex/PROMPTS.md) e [`docs/policies/guida_codex.md`](../policies/guida_codex.md).
+- Workflow OCP e gate: vedi [`docs/policies/OCP_WORKFLOW.md`](../policies/OCP_WORKFLOW.md).
 
-Solo dopo questa fase la modifica e pronta per PR.
-Solo dopo questa fase la modifica e pronta per PR.
+Solo dopo questa fase la modifica è pronta per PR.
 
 ---
 

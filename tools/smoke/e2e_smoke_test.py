@@ -121,7 +121,7 @@ def main():
     ap.add_argument(
         "--auto-dummy",
         action="store_true",
-        help="Se RAW Ã¨ vuota genera sandbox dummy prima dello scan",
+        help="Se RAW è vuota genera sandbox dummy prima dello scan",
     )
     args = ap.parse_args()
 
@@ -132,13 +132,13 @@ def main():
     if args.auto_dummy:
         need_gen = (not raw_dir.exists()) or (not any(raw_dir.rglob("*.pdf")))
         if need_gen:
-            print("[INFO] RAW vuota: genero sandbox dummyâ€¦")
+            print("[INFO] RAW vuota: genero sandbox dummy…")
             run([sys.executable, "-m", "tools.gen_dummy_kb", "--slug", args.slug], check=True)
 
     # 1) preflight
     check_optional_deps(args.lang)
 
-    # 1) scan RAW â†’ DB
+    # 1) scan RAW → DB
     run(
         [
             sys.executable,
@@ -155,7 +155,7 @@ def main():
         check=True,
     )
 
-    # 2) NLP â†’ DB
+    # 2) NLP → DB
     run(
         [
             sys.executable,

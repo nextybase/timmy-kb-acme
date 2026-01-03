@@ -70,7 +70,7 @@ model = get_vision_model()  # passa sempre da Settings.load (SSoT)
 
 ### GitBook API
 
-- La preview usa HonKit via Docker ed e gestita via adapter/UI; non esiste un entrypoint `python -m pipeline.honkit_preview` (vedi runbook).
+- La preview usa HonKit via Docker ed e gestita via adapter/UI; il modulo esiste ma non è previsto/supportato come entrypoint pubblico `python -m pipeline.honkit_preview` (vedi runbook).
 
 ---
 
@@ -272,7 +272,7 @@ Questa sezione descrive il modo corretto per collegare gli script del framework 
 ### 7.1 Architettura di riferimento
 - Recupero delle impostazioni dal `config.yaml` tramite `Settings()`.
 - Risoluzione dell'`assistant_id` se richiesto (assistant_env -> variabile ambiente).
-- Risoluzione del modello da config, con fallback al modello dell'assistant quando previsto.
+- Risoluzione del modello da config, con fallback al modello dell'assistant quando previsto. Segnale: nessun segnale/log esplicito documentato.
 - Uso dell'SDK OpenAI centralizzato:
   ```python
   from ai.client_factory import make_openai_client
@@ -347,16 +347,15 @@ logger.info("debug.raw_output", extra={"sample": text[:500]})
 ```
 
 ### Prompt Chain & agenti (vista sviluppatore)
-- Il Prompt Chain segue il protocollo Planner → OCP → Codex → OCP → Planner definito in `system/specs/promptchain_spec.md` con la sequenza Phase 0 (analisi read-only), Phase 1..N (micro-PR operativi) e Prompt N+1 (final QA + closing summary).
-- Phase 0 risponde solo con ragionamento strutturato e piano operativo dopo aver caricato gli SSoT (`system/specs/promptchain_spec.md`, `system/ops/runbook_codex.md`, `.codex/PROMPTS.md`, `.codex/WORKFLOWS.md`, `system/ops/agents_index.md`); nessun diff o QA viene eseguito in questa fase.
-- I prompt Phase 1..N applicano micro-PR limitati allo scope dichiarato, includono il memo Active Rules definito in `.codex/PROMPTS.md`, confermano path safety, eseguono `pytest -q -k "not slow"` (o giustificano l’eccezione) e producono una risposta italiana con diff e report.
-- Prompt N+1 chiude la chain: esegue `pre-commit run --all-files` e `pytest -q`, documenta eventuali retry (fino a dieci tentativi) e termina con un one-line commit summary in italiano.
-- Il linguaggio delle guide, dell’SSoT e dei template rimane inglese, ma tutte le risposte, i report QA e le comunicazioni tra Codex, OCP e Planner sono in italiano per rispettare la policy linguistica.
+- Lifecycle e ruoli (Planner/OCP/Codex): vedi [`system/specs/promptchain_spec.md`](../../system/specs/promptchain_spec.md) (SSoT).
+- Active Rules, template e QA gates: vedi [`.codex/PROMPTS.md`](../../.codex/PROMPTS.md) e [`docs/policies/guida_codex.md`](../policies/guida_codex.md).
+- Workflow OCP e gate: vedi [`docs/policies/OCP_WORKFLOW.md`](../policies/OCP_WORKFLOW.md).
 
 ---
 
 ## Test: piramide e casi minimi
 - **Unit**  **contract/middle**  **smoke E2E** (dataset dummy; nessuna rete).
+- Nota UI Beta 1.0: vedi `docs/policies/guida_codex.md` (sezione "UI testing stance (Beta 1.0)").
 - Casi minimi obbligatori:
   - Slug invalidi (devono essere scartati/validati).
   - Traversal via symlink in `raw/` (gli helper non devono attraversare).
@@ -486,7 +485,7 @@ log.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
 
 ### Drive optional / local-first ingestion
 - On Windows and in the CLI flows, source PDFs live under `output/<slug>/raw` (the standard workspace) and the ingest logic reads them through `WorkspaceLayout`/`ensure_within` to keep paths safe.
-- The configuration key `ingest_provider` (with the legacy `skip_drive` fallback) selects `drive` or `local`; no override means Drive remains the default behavior, while `ingest_provider: local` or `skip_drive: true` enable the local-first flow without touching the user experience.
+- The configuration key `ingest_provider` (with the legacy `skip_drive` fallback) selects `drive` or `local`; no override means Drive remains the default behavior, while `ingest_provider: local` or `skip_drive: true` enable the local-first flow without touching the user experience. Segnale: nessun segnale/log esplicito documentato.
 - In local-first mode just copy the PDFs under `output/<slug>/raw` or pass `--local-path` to the `tag_onboarding_raw` CLI so no Drive credentials are required.
 
 ### Rosetta predisposta

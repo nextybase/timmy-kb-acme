@@ -7,7 +7,7 @@ Timmy-KB è un ambiente per la creazione e il governo di Timmy: attraverso una p
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![CI](https://github.com/nextybase/timmy-kb-acme/actions/workflows/ci.yaml/badge.svg)](https://github.com/nextybase/timmy-kb-acme/actions/workflows/ci.yaml)
-[![Security Status](https://img.shields.io/badge/security-hardened-brightgreen)](docs/security.md)
+[![Security Status](https://img.shields.io/badge/security-hardened-brightgreen)](docs/policies/security.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.md)
 
 Timmy-KB è l’implementazione operativa che incarna i principi del framework NeXT: mantiene l’envelope epistemico, resta Human-in-the-Loop e imposta governance by design; NeXT è la cornice teorica che descrive l’AI come strumento di supporto, non come autorità autonoma.
@@ -51,7 +51,7 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 ---
 
 ## Dipendenze & QA
-- Installa gli ambienti tramite i pin generati con `pip-compile` (`requirements*.txt`). Maggiori dettagli in [docs/configurazione.md](docs/configurazione.md).
+- Installa gli ambienti tramite i pin generati con `pip-compile` (`requirements*.txt`). Maggiori dettagli in [docs/developer/configurazione.md](docs/developer/configurazione.md).
 - Il vocabolario richiede PyYAML. Non sono supportati parser di fallback o retrocompat: usa `semantic/tags.db` come SSoT runtime e `semantic/tags_reviewed.yaml` solo come artefatto di editing.
 - Namespace: i moduli sono importabili direttamente da `src` (es. `from timmy_kb.cli.ingest import ingest_folder`, `from pipeline.context import ClientContext`); gli alias di import legacy sono stati rimossi, usa il namespace attuale.
 - Hook consigliati:
@@ -60,7 +60,7 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
   make qa-safe     # lint + typing
   pytest -q        # suite rapida (dataset dummy)
   ```
-- Per l'elenco completo dei test e dei tag consulta [docs/test_suite.md](docs/test_suite.md).
+- Per l'elenco completo dei test e dei tag consulta [docs/developer/test_suite.md](docs/developer/test_suite.md).
 
 ---
 

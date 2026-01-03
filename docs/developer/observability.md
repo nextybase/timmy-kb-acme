@@ -12,7 +12,7 @@ Questa guida completa la documentazione di logging gia integrata nel progetto
 2. I log applicativi vengono raccolti da Promtail e inviati a Loki.
 3. Grafana espone la dashboard (default: <http://localhost:3000>).
    La password admin e letta da `GRAFANA_ADMIN_PASSWORD` nel `.env` in root;
-   se assente, parte con `admin` (fallback del compose).
+   se assente, parte con `admin` (fallback del compose). Segnale: nessun segnale/log esplicito documentato.
 
 I file di log raccolti includono sia i workspace (`/var/timmy/output/timmy-kb-*/logs/*.log`)
 sia i log globali (`/var/timmy/global-logs/*.log`). Le pipeline di Promtail
@@ -141,7 +141,7 @@ Per ogni cambio di stato (nell'helper `set_client_state`) tracciamo anche un mic
 
 - `semantic.api.build_tags_csv` valida ora che `tags.db` derivato risieda sotto `semantic/` prima di arricchire il vocabolario e scrivere su SQLite, mantenendo il requisito path-safety descritto nelle regole.
 - Se `storage.tags_store.load_tags_reviewed` non e disponibile (es. ambienti di test minimal), l'evento `semantic.vocab_loader.stubbed` viene loggato immediatamente con l'errore, rendendo visibile il downgrade e permettendo la correzione prima di una fail-fast.
-- `_compute_embeddings_for_markdown` ora cattura gli errori dal provider embedding, logga `semantic.index.embedding_error` e restituisce `(None, 0)` invece di propagare un'eccezione: la trace `index_markdown_to_db` rimane leggibile (phase span completo) e la pipeline puo continuare gestendo il fallback nei log successivi.
+- `_compute_embeddings_for_markdown` ora cattura gli errori dal provider embedding, logga `semantic.index.embedding_error` e restituisce `(None, 0)` invece di propagare un'eccezione: la trace `index_markdown_to_db` rimane leggibile (phase span completo) e la pipeline puo continuare gestendo il fallback nei log successivi. Segnale: log `semantic.index.embedding_error`.
 
 ### Decision span sampling
 

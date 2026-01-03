@@ -10,7 +10,7 @@
   * [Guida sviluppatore](docs/developer/developer_guide.md)
   * [Regole di codifica](docs/developer/coding_rule.md)
   * [Architettura tecnica](system/architecture.md)
-  * [Versioning policy](docs/versioning_policy.md)
+  * [Versioning policy](docs/policies/versioning_policy.md)
 * Rilasci & manutenzione
   * [CHANGELOG](CHANGELOG.md)
 * Contributi & governance

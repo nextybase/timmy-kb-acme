@@ -6,7 +6,7 @@
     Esporta la variabile `REPO_ROOT_DIR` basandosi sul percorso fornito o sulla
     directory corrente. Serve per forzare `ClientContext`/`pipeline` a risolvere
     i workspace dentro la working tree invece che dentro `venv\Lib`.
-    Questo script Ã¨ idempotente e va richiamato prima di lanciare Streamlit.
+    Questo script è idempotente e va richiamato prima di lanciare Streamlit.
 #>
 Param(
     [string]$Root = (Get-Location).ProviderPath

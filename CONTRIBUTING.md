@@ -28,7 +28,7 @@ Questa guida stabilisce come contribuire al progetto Timmy-KB. Ogni modifica al 
 - Formato consigliato: `<tipo>(<scope>): descrizione`.
   - Tipi: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
 - Ogni PR che modifica logica deve aggiornare `CHANGELOG.md`.
-- Seguire [Versioning Policy](docs/versioning_policy.md).
+- Seguire [Versioning Policy](docs/policies/versioning_policy.md).
 
 ---
 

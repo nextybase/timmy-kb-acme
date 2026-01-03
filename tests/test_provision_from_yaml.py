@@ -5,8 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-yaml = pytest.importorskip("yaml")
+import yaml  # type: ignore
 
 from pipeline.exceptions import ConfigError
 from pipeline.provision_from_yaml import provision_directories_from_cartelle_raw

@@ -32,12 +32,12 @@ Usa la UI per:
 streamlit run onboarding_ui.py
 ```
 
-Il file `onboarding_ui.py` setta automaticamente `REPO_ROOT_DIR` sulla directory del repository prima di importare la UI, quindi non serve piu un wrapper: Streamlit viene eseguito direttamente dal repo e la pipeline scrive/legge i workspace sotto `output/timmy-kb-<slug>`.
+Il file `onboarding_ui.py` risolve la directory del repository via SSoT e non si affida a `REPO_ROOT_DIR`, quindi non serve piu un wrapper: Streamlit viene eseguito direttamente dal repo e la pipeline scrive/legge i workspace sotto `output/timmy-kb-<slug>`.
 ### Accesso rapido alla Guida (sidebar)
 
 Nella **sidebar**, sezione *Azioni rapide*, trovi il pulsante **Guida UI**: apre questa guida **nella stessa scheda** e funziona anche senza uno *slug* cliente attivo. In alternativa, la trovi anche nella barra in alto: **Tools -> Guida UI** (deep-link: `/guida` oppure `?tab=guida`).
 
-> Nota tecnica: la navigazione usa `switch_page` quando disponibile; in fallback aggiorna automaticamente `?tab=guida` e forza il rerun.
+> Nota tecnica: la navigazione usa `switch_page` quando disponibile; in fallback aggiorna automaticamente `?tab=guida` e forza il rerun. Segnale: nessun segnale/log esplicito documentato.
 > Routing attuale: `st.Page` + `st.navigation` (UI index); evitati hack su query params/`switch_page`.
 
 ---
@@ -190,7 +190,7 @@ Le azioni principali sono raggruppate in expander distinti: `Scarica PDF da Driv
 **Genera README in raw (Drive)** Crea/aggiorna in **ogni sottocartella di ****\`\`**** su Drive** un file guida:
 
 - **Contenuto**: titolo = *ambito* dell'area; corpo = *descrizione*; se disponibili, elenco "Esempi" ricavato da `documents`, `artefatti`, `chunking_hints` e `descrizione_dettagliata.include` del mapping Vision-only.
-- **Formato**: `README.pdf` se e' presente ReportLab; altrimenti fallback `README.txt`.
+- **Formato**: `README.pdf` se e' presente ReportLab; altrimenti fallback `README.txt`. Segnale: nessun segnale/log esplicito documentato.
 - **Coerenza nomi**: le categorie sono mappate in *kebab-case* (es. `Governance Etica AI` -> `governance-etica-ai`) e devono **corrispondere ai nomi delle cartelle** sotto `raw/`.
 - **Idempotente**: se il file esiste viene **aggiornato** (non duplicato); puoi rilanciare dopo ogni modifica al mapping.
 - **Prerequisiti**: Drive configurato (`SERVICE_ACCOUNT_FILE`, `DRIVE_ID`) e struttura `<slug>/raw` gia' creata (Step 2 "Apri workspace").

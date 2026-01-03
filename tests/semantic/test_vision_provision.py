@@ -8,9 +8,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pytest
-
-yaml = pytest.importorskip("yaml")
-
+import yaml  # type: ignore
 
 import ai.vision_config as ai_config
 import semantic.vision_provision as vp

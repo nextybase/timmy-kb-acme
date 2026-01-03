@@ -23,7 +23,7 @@ pytest -ra -m "e2e"          # attiva gli end-to-end Playwright (browser)
 > Nota: i test `e2e` richiedono le dipendenze extra (`pip install -r requirements-dev.txt`) e l'installazione del browser con `playwright install chromium`.
 **Default CI:** i test marcati `drive` e `e2e` sono esclusi per impostazione predefinita.
 
->  **Dipendenze opzionali**: oltre a `pyyaml` (UI/semantic; esiste un parser fallback minimale ma raccomandiamo PyYAML per YAML complessi), alcuni test richiedono
+>  **Dipendenze opzionali**: oltre a `pyyaml` (UI/semantic; richiesto, assenza => fail-fast infrastrutturale, nessun fallback), alcuni test richiedono. Segnale: nessun segnale/log esplicito documentato.
 > `google.oauth2.service_account` e `googleapiclient.http` (gating Drive), `fitz`
 > / PyMuPDF (Vision inline), `reportlab` (README.pdf generati dagli script) o Playwright + Chromium (e2e). Installa gli extra
 > con `pip install -r requirements-dev.txt` e, per i browser, `playwright install chromium`.
@@ -62,6 +62,7 @@ pytest -q -m "drive" --maxfail=1                # richiede SERVICE_ACCOUNT_FILE 
 Quando usare cosa (regola pratica)
 - PR piccola su utility/pipeline: `pytest -q tests/pipeline --maxfail=1`
 - Modifiche UI/Streamlit: `pytest -q -m "ui" --maxfail=1` (o `pytest -q tests/ui --maxfail=1`)
+- Nota Beta 1.0: i test UI headless/stub sono skip deterministici e non fanno parte della copertura CI.
 - Gating/navigazione: `pytest -q -m "contract" --maxfail=1`
 - Verifica regressioni E2E UI: `pytest -q -m "e2e" --maxfail=1` (solo con Playwright pronto)
 - Smoke end-to-end “lento”: `pytest -q -m "slow" --maxfail=1`
@@ -115,7 +116,7 @@ Quando usare cosa (regola pratica)
 - **Smoke end-to-end (`slow`):** `tests/test_smoke_e2e.py`, `tests/test_smoke_dummy_e2e.py`, `src/tests/e2e/test_dummy_smoke.py`.
 - **Orchestratori & tag onboarding:** `test_tag_onboarding_cli_smoke.py`, `test_tag_onboarding_helpers.py`.
 - **CLI & contratti/exit-codes:** `test_cli_env_missing.py`, `test_cli_gen_vision_yaml.py`, `test_contract_defaults.py`, `test_contract_artifacts.py`.
-- **Dummy KB / fallback Vision:** `tests/tools/test_gen_dummy_kb.py` copre workspace idempotente, fallback YAML senza PyYAML, README locali generati (PDF o TXT) e upload Drive best-effort.
+- **Dummy KB / fallback Vision:** `tests/tools/test_gen_dummy_kb.py` copre workspace idempotente, fallback YAML senza PyYAML, README locali generati (PDF o TXT) e upload Drive best-effort. Segnale: nessun segnale/log esplicito documentato.
 - **NLP  DB:** `test_run_nlp_to_db.py`.
 
 ### 4bis) Tag review e provisioning
@@ -164,13 +165,13 @@ Quando usare cosa (regola pratica)
 
 ### 11) Adapter e IO esterni  Drive, client
 - **Drive:** `test_drive_guards.py`, `test_drive_runner_pagination.py`, `test_drive_runner_progress.py`, `test_tag_onboarding_drive_guard_main.py`.
-- **Client OpenAI (fallback/config):** `test_client_factory.py`.
+- **Client OpenAI (fallback/config):** `test_client_factory.py`. Segnale: nessun segnale/log esplicito documentato.
 - **ClientContext settings (richiede PyYAML):** `test_client_context_settings.py` usa `pytest.importorskip("yaml")` per saltare l'integrazione se la libreria non e installata.
 
 ### 12) Vocab e loader  SQLite, fallback e fail-fast
 - **Vocab loader:** `test_vocab_loader.py`, `test_vocab_loader_failfast.py`, `test_vocab_loader_sqlite_errors.py`.
 - **Integrazione DB:** `tests/test_vocab_loader_integration_db.py`.
-- **Import tag YAML  SQLite (fallback):** `tests/storage/test_import_tags_yaml_to_db.py` verifica l'import e il log `storage.tags_store.import_yaml.fallback` quando PyYAML non e disponibile.
+- **Import tag YAML  SQLite (fallback):** `tests/storage/test_import_tags_yaml_to_db.py` verifica l'import e il log `storage.tags_store.import_yaml.fallback` quando PyYAML non e disponibile. Segnale: log `storage.tags_store.import_yaml.fallback`.
 
 ### 13) Script e qualita repo
 - **sanitizzazione file (test):** `tests/tools/test_forbid_control_chars.py`.

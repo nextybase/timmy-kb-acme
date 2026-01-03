@@ -46,16 +46,9 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](../.
 - The Onboarding Task Codex prompt enforces planning, micro-PR behavior, QA guardrails (path safety, atomic writes, structured logging), and AGENTS matrix maintenance.
 
 ### Prompt Chain governance
-- The Prompt Chain follows the turn-based protocol in `system/specs/promptchain_spec.md`: Planner → OCP → Codex → OCP → Planner with exactly one action per prompt.
-- Governance split: Human decides and authorizes, OCP applies gates within that authorization, Codex executes without decision agency.
-- Phase 0 prompts (Prompt 0, 0a..0x) are analytical/read-only and must confirm the SSoT documents before any diff is produced.
-- Phase 1..N prompts are operational micro-PRs that touch files declared by the OCP, include the Active Rules memo, and run at least `pytest -q -k "not slow"` before proceeding.
-- Prompt N+1 runs the final QA (`pre-commit run --all-files` + `pytest -q`), documents retries (up to ten), and ends with an Italian one-line closing commit summary.
-- Codex responses are in Italian by default; when the OCP dichiara control-mode, OCP ↔ Codex exchanges switch to English, mentre Timmy/ProtoTimmy ↔ User resta in italiano; documentation and templates remain in English to preserve the SSoT.
-- The OCP issues one prompt at a time, Codex replies with a diff/report and waits, and no prompt may skip a phase or bypass the final QA.
-- Evidence Gate e Skeptic Gate seguono il testo canonico in `system/specs/promptchain_spec.md`; questo runbook è supporto operativo.
-- Every prompt must preserve the canonical header defined in `.codex/PROMPTS.md`, starting with `ROLE: Codex` and continuing with `PHASE`, `SCOPE`, `ACTIVE RULES MEMO`, `EXPECTED OUTPUTS`, `TESTS`, `CONSTRAINTS`, and `STOP RULE`. Codex and OCP rely on this structure to detect malformed prompts: absence or misassignment of the `ROLE` line halts the chain until corrected.
-- L’OCP registra l’approvazione umana dei prompt OPS/RUN (Phase 1..N e Prompt N+1) prima di inoltrarli a Codex e applica i gate di governance all’interno di tale autorizzazione: la decisione umana deve essere già registrata quando il prompt arriva nell’Active Rules memo. Codex non deve richiedere conferme, né gestire questo gate; esegue la micro-PR solo dopo aver ricevuto il prompt autorizzato e mantiene reporting completo (memo + diff/report/QA) per il gate successivo.
+- Lifecycle, ruoli e fasi: vedi [`system/specs/promptchain_spec.md`](../specs/promptchain_spec.md) (SSoT).
+- Active Rules, template e QA gates: vedi [`.codex/PROMPTS.md`](../../.codex/PROMPTS.md) e [`docs/policies/guida_codex.md`](../../docs/policies/guida_codex.md).
+- Workflow OCP e gate: vedi [`docs/policies/OCP_WORKFLOW.md`](../../docs/policies/OCP_WORKFLOW.md).
 -## Agency, Control Plane e ruolo dei micro-agent
 - I riferimenti al flusso CLI o agli helper `pipeline.*` delineano gli strumenti della foundation: producono markdown semanticamente arricchiti e validano il knowledge graph ma NON orchestrano né decidono.
 - La governance WHAT della Prompt Chain, del registry Intent/Action e delle escalation HiTL è descritta in `instructions/*`; ProtoTimmy/Timmy (agency) dialogano con Domain Gatekeepers (validazione) e il Control Plane/OCP applica i gate e la consegna ai micro-agent.
@@ -332,7 +325,7 @@ python -m timmy_kb.cli.tag_onboarding --slug <slug> --non-interactive --proceed
 python -m timmy_kb.cli.tag_onboarding --slug <slug> --nlp --nlp-workers 6 --nlp-batch-size 8
 python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive
 # Preview locale (HonKit/Docker)
-# La preview è gestita via adapter/UI (vedi `src/adapters/preview.py`); non esiste un entrypoint `python -m pipeline.honkit_preview`.
+# La preview è gestita via adapter/UI (vedi `src/adapters/preview.py`); il modulo esiste ma non è previsto/supportato come entrypoint pubblico `python -m pipeline.honkit_preview`.
 
 # QA
 make qa-safe

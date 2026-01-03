@@ -11,9 +11,7 @@ from pathlib import Path
 from typing import Dict, Iterator
 
 import pytest
-
-yaml = pytest.importorskip("yaml")
-
+import yaml  # type: ignore
 
 from ui.pages.registry import PagePaths, url_path_for
 

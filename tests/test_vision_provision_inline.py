@@ -5,9 +5,7 @@ import logging
 from pathlib import Path
 
 import pytest
-
-yaml = pytest.importorskip("yaml")
-
+import yaml  # type: ignore
 
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF")
 

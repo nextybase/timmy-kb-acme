@@ -5,6 +5,8 @@ import pytest
 
 from pipeline.honkit_preview import _log_layout_summary
 
+pytestmark = pytest.mark.internal
+
 
 def test_log_layout_summary_records_entries(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     book_dir = tmp_path / "book"

@@ -60,7 +60,8 @@ Questa sezione spiega **come funziona e come evolve il sistema**, non cosa è co
 
 ## Policy (`docs/policies/`)
 
-Documentazione **vincolante**.
+Documentazione **derivata/applicativa** (vincolante solo come applicazione delle regole in `MANIFEST.md` e `instructions/*`).
+Ordine di precedenza: `MANIFEST.md` -> `instructions/*` -> codice -> `docs/` (incl. `docs/policies/`).
 
 Qui vivono le regole operative che definiscono i confini del sistema:
 
@@ -69,7 +70,7 @@ Qui vivono le regole operative che definiscono i confini del sistema:
 - **[Contratti operativi](policies/import_contract.md)** – import/export, invarianti di pipeline.
 - **[Core rules per assistant](policies/next_core_for_assistants.md)** – regole comuni per i moduli AI nell’ecosistema NeXT.
 
-Se un comportamento viola un documento in questa sezione, è da considerarsi un errore.
+Se un comportamento viola un documento in questa sezione, è da considerarsi un errore nel perimetro applicativo, senza sovrascrivere `MANIFEST.md` o `instructions/*`.
 
 ---
 
@@ -112,14 +113,12 @@ Gli ADR sono **scritti per esseri umani**, ma **leggibili dagli agenti** come fo
 
 ---
 
-## Changelog e milestone
+## Changelog
 
 - **[CHANGELOG](../CHANGELOG.md)** – novità e fix per release.
-- **Milestones** – cleanup e attività archiviate.
 
 ---
 
 > **Nota finale sulla configurazione**\
 > La configurazione globale vive in `config/config.yaml`.\
 > La configurazione per cliente è in `output/timmy-kb-<slug>/config/config.yaml`.
-

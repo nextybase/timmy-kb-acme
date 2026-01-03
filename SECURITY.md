@@ -33,7 +33,7 @@ Il team si impegna a rispondere entro **72 ore** dalla ricezione della segnalazi
   - installa sempre dai `.txt` generati
   - evita installazioni ad hoc non riproducibili
 - Esegui periodicamente uno **scan** con `pip-audit` (gia incl'uso tra le dipendenze degli hook QA).
-- Per note su licenze e componenti opzionali (es. uso di PyMuPDF per funzioni Vision) vedi anche `docs/SECURITY.md`.
+- Per note su licenze e componenti opzionali (es. uso di PyMuPDF per funzioni Vision) vedi anche `docs/policies/security.md`.
 
 ---
 

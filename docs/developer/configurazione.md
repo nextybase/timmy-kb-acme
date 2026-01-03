@@ -61,7 +61,7 @@ ai:
 - `ops`: `log_level` per i logger applicativi.
 - `integrations`: sezione mostrata in UI Configurazione (valori operativi per integrazioni esterne).
 - `rosetta`: flag `rosetta.enabled` e `rosetta.provider` letti dal client Rosetta.
-- `slug_regex`: regex opzionale per validare gli slug (fallback: `^[a-z0-9-]+$`).
+- `slug_regex`: regex opzionale per validare gli slug (fallback: `^[a-z0-9-]+$`). Segnale: nessun segnale/log esplicito documentato.
 
 Sezioni assistant (letto da `ai.assistant_registry`):
 - `ai.prototimmy`, `ai.planner_assistant`, `ai.ocp_executor`, `ai.audit_assistant`, `ai.kgraph`
@@ -111,7 +111,7 @@ Il modulo `pipeline.oidc_utils.ensure_oidc_context(...)` consuma `security.oidc`
 dal YAML e risolve i valori *_env dall'ambiente:
 
 1. Legge `security.oidc` (provider, nomi delle ENV).
-2. Recupera un ID token (preferibilmente via GitHub Actions, fallback a file `.jwt` locale).
+2. Recupera un ID token (preferibilmente via GitHub Actions, fallback a file `.jwt` locale). Segnale: nessun segnale/log esplicito documentato.
 3. Se `provider=vault`, scambia il JWT con un client token (`VAULT_TOKEN`) tramite login standard.
 4. Restituisce un dizionario di variabili da esportare/loggare (mai il token vero).
 

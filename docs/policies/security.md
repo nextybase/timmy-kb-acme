@@ -9,9 +9,9 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
 - **OIDC (preferito)**: sostituisci le credenziali statiche con ruoli federati.
   Nel workflow `ci.yaml` trovi un blocco commentato che usa
   `aws-actions/configure-aws-credentials@<PIN_SHA>` con le variabili
-  `TIMMY_SERVICE_NAME` e `TIMMY_ENV`. Abilitando il ruolo OIDC non A  piA1 necessario salvare
+  `TIMMY_SERVICE_NAME` e `TIMMY_ENV`. Abilitando il ruolo OIDC non è più necessario salvare
   access key nel repository.
-- **Fallback**: i secrets esistenti restano supportati; assicurati perA2 di ruotarli periodicamente.
+- **Fallback**: i secrets esistenti restano supportati; assicurati però di ruotarli periodicamente. Segnale: nessun segnale/log esplicito documentato.
 
 ## OIDC config (local & CI)
 

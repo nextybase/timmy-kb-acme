@@ -16,9 +16,9 @@ def main() -> None:
     props = schema.get("properties") or {}
     required = schema.get("required") or []
     if not isinstance(props, dict):
-        raise SystemExit("properties non Ã¨ un oggetto nel JSON schema")
+        raise SystemExit("properties non è un oggetto nel JSON schema")
     if not isinstance(required, list):
-        raise SystemExit("required non Ã¨ una lista nel JSON schema")
+        raise SystemExit("required non è una lista nel JSON schema")
 
     props_keys = sorted(props.keys())
     required_keys = sorted(required)

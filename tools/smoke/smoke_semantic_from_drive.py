@@ -11,7 +11,7 @@ Smoke runner end-to-end (headless):
 
 Questo script NON tocca la UI Streamlit e non modifica il DB knowledge base.
 Serve solo come smoke test operativo del flusso:
-Drive â†’ RAW â†’ gating Semantica â†’ pipeline semantica.
+Drive → RAW → gating Semantica → pipeline semantica.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def _ensure_raw_from_drive(
     Esegue (best-effort) il download da Drive in raw/ e invalida le cache RAW.
     Se il download fallisce, lascia propagare l'eccezione (il smoke deve fallire).
     """
-    # workspace_root Ã¨ risolto internamente da drive_runner; base_root Ã¨ opzionale
+    # workspace_root è risolto internamente da drive_runner; base_root è opzionale
     drive_runner.download_raw_from_drive_with_progress(
         slug=slug,
         base_root=str(base_root) if base_root is not None else None,
@@ -101,7 +101,7 @@ def _check_semantic_gating(slug: str, *, base_root: Path | None, logger) -> bool
     - workspace esistente
     - presenza di PDF validi in raw/ per lo slug
     """
-    # has_raw_pdfs applica giÃ  path-safety e cache LRU sui risultati positivi
+    # has_raw_pdfs applica già path-safety e cache LRU sui risultati positivi
     raw_ready, _raw_dir = ws.has_raw_pdfs(slug=slug)
     if not raw_ready:
         logger.info("ui.gating.sem_hidden", extra={"slug": slug, "raw_ready": False})
@@ -201,7 +201,7 @@ def main() -> int:
         return 0
 
     except (ConfigError, PipelineError) as exc:
-        # Errori "previsti" (config/pipeline) â†’ exit code deterministico
+        # Errori "previsti" (config/pipeline) → exit code deterministico
         code = int(exit_code_for(exc))
         logger.error(
             "smoke.semantic_from_drive.failed",

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 # SPDX-License-Identifier: GPL-3.0-only
 # tests/conftest.py
-import importlib.util
-import json
 import logging
 import os
 import shutil
@@ -12,7 +10,6 @@ import subprocess
 import sys
 import threading
 import time
-import types
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -47,6 +44,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
     Skip mirato (deterministico) solo per test UI che, nel repository corrente,
     dipendono esplicitamente da stub/headless helpers.
+    Rif: docs/policies/guida_codex.md (sezione "UI testing stance (Beta 1.0)").
     """
     marker = pytest.mark.skip(reason="Test UI basato su Streamlit stub/headless: non supportato in Beta 1.0.")
     stub_ui_test_files: set[str] = {
@@ -95,31 +93,15 @@ def _reset_semantic_api_functions() -> None:
     yield
 
 
-def _install_yaml_stub() -> None:
-    """Installa uno stub minimale di yaml se la dipendenza manca."""
-
-    if importlib.util.find_spec("yaml") is not None:
-        return
-
-    def _safe_load(text: str | bytes | None = None, **_: object):
-        if text is None:
-            return {}
-        try:
-            return json.loads(text)
-        except Exception:
-            return {}
-
-    def _safe_dump(data: object, **_: object) -> str:
-        try:
-            return json.dumps(data)
-        except Exception:
-            return "{}"
-
-    yaml_stub = types.SimpleNamespace(safe_load=_safe_load, safe_dump=_safe_dump)
-    sys.modules["yaml"] = yaml_stub
+def _require_yaml() -> None:
+    """Fail-fast se PyYAML non e' disponibile nel test harness."""
+    try:
+        import yaml  # type: ignore # noqa: F401
+    except Exception:
+        pytest.fail("infrastruttura non conforme / stack incompleto: PyYAML richiesto")
 
 
-_install_yaml_stub()
+_require_yaml()
 
 
 def _safe_flush(fn: Any) -> None:
@@ -284,25 +266,15 @@ def observability_stack_fixture():
 # Import diretto dello script: repo root deve essere nel PYTHONPATH quando lanci pytest
 try:
     from tools.gen_dummy_kb import main as _gen_dummy_main  # type: ignore
-except ModuleNotFoundError as exc:
-    if exc.name in {"yaml", "pyyaml"}:
-        _gen_dummy_main = None
-    else:
-        raise
-except Exception:
-    # In ambienti minimali alcuni import transitivi (es. ui.services.vision_provision) possono fallire:
-    # degradare a builder minimale del workspace dummy.
-    _gen_dummy_main = None
+except Exception as exc:
+    raise RuntimeError("tools.gen_dummy_kb non importabile per i test; verifica le dipendenze di runtime.") from exc
 
 DUMMY_SLUG = "dummy"
 
 
 def _ensure_gen_dummy_available():
     if _gen_dummy_main is None:
-        pytest.skip(
-            "pyyaml richiesto per generare il workspace dummy (tools.gen_dummy_kb)",
-            allow_module_level=True,
-        )
+        pytest.fail("infrastruttura non conforme / stack incompleto: PyYAML richiesto")
     return _gen_dummy_main
 
 
@@ -311,57 +283,6 @@ def _bool_env(name: str, default: bool) -> bool:
     if v is None:
         return default
     return v not in {"0", "false", "False", ""}
-
-
-def _build_minimal_workspace(base_parent: Path, clients_db_relative: Path) -> dict[str, Any]:
-    """Costruisce un workspace dummy minimo senza dipendenze extra."""
-
-    base = base_parent / f"timmy-kb-{DUMMY_SLUG}"
-    config_dir = base / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    cfg = config_dir / "config.yaml"
-    safe_write_text(cfg, "client_name: Dummy\n", encoding="utf-8")
-    pdf = config_dir / "VisionStatement.pdf"
-    pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
-
-    raw_dir = base / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-
-    book = base / "book"
-    book.mkdir(parents=True, exist_ok=True)
-    safe_write_text(book / "SUMMARY.md", "* [Alpha](alpha.md)\n", encoding="utf-8")
-    safe_write_text(book / "README.md", "# Dummy KB\n", encoding="utf-8")
-
-    sem_dir = base / "semantic"
-    sem_dir.mkdir(parents=True, exist_ok=True)
-    sem_map = sem_dir / "semantic_mapping.yaml"
-    safe_write_text(
-        sem_map,
-        "context:\n  slug: dummy\n  client_name: Dummy dummy\n",
-        encoding="utf-8",
-    )
-    sem_cart = sem_dir / "cartelle_raw.yaml"
-    safe_write_text(sem_cart, "version: 1\nfolders: []\ncontext:\n  slug: dummy\n", encoding="utf-8")
-
-    clients_db_dir = base / clients_db_relative.parent
-    clients_db_dir.mkdir(parents=True, exist_ok=True)
-    clients_db_file = clients_db_dir / clients_db_relative.name
-    safe_write_text(clients_db_file, "[]\n", encoding="utf-8")
-
-    return {
-        "base": base,
-        "config": cfg,
-        "vision_pdf": pdf,
-        "semantic_mapping": sem_map,
-        "cartelle_raw": sem_cart,
-        "book_dir": book,
-        "raw_dir": raw_dir,
-        "slug": DUMMY_SLUG,
-        "client_name": f"Dummy {DUMMY_SLUG}",
-        "with_semantic": True,
-        "clients_db_file": clients_db_file,
-        "clients_db_dir": clients_db_dir,
-    }
 
 
 @pytest.fixture(scope="session")
@@ -378,9 +299,6 @@ def dummy_workspace(tmp_path_factory):
     """
     base_parent = tmp_path_factory.mktemp("kbws")
     clients_db_relative = Path("clients_db/clients.yaml")
-
-    if _gen_dummy_main is None:
-        return _build_minimal_workspace(base_parent, clients_db_relative)
 
     rc = _gen_dummy_main(
         [
