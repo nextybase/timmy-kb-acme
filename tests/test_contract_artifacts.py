@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.logging_utils import get_structured_logger
-from semantic.api import write_summary_and_readme
+from semantic.frontmatter_service import write_summary_and_readme
 
 
 def _make_context(tmp_path: Path, slug: str):

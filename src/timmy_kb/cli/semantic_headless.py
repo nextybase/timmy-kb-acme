@@ -11,13 +11,9 @@ from typing import TYPE_CHECKING, Dict, List, TypeVar, cast
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary
 from pipeline.tracing import start_root_trace
-from semantic.api import (
-    convert_markdown,
-    enrich_frontmatter,
-    get_paths,
-    require_reviewed_vocab,
-    write_summary_and_readme,
-)
+from semantic.api import get_paths, require_reviewed_vocab
+from semantic.convert_service import convert_markdown
+from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
 
 __all__ = [
     "build_markdown_headless",

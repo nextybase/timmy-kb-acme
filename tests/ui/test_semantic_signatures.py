@@ -11,26 +11,27 @@ def _sig(fn: object) -> list[tuple[inspect._ParameterKind, str, object]]:
 
 
 def test_semantics_ui_facade_signatures_match() -> None:
-    api = import_module("semantic.api")
     expected = {
-        "convert_markdown": [
+        "semantic.convert_service:convert_markdown": [
             (inspect.Parameter.POSITIONAL_OR_KEYWORD, "context", inspect._empty),
             (inspect.Parameter.POSITIONAL_OR_KEYWORD, "logger", inspect._empty),
             (inspect.Parameter.KEYWORD_ONLY, "slug", inspect._empty),
         ],
-        "enrich_frontmatter": [
+        "semantic.frontmatter_service:enrich_frontmatter": [
             (inspect.Parameter.POSITIONAL_OR_KEYWORD, "context", inspect._empty),
             (inspect.Parameter.POSITIONAL_OR_KEYWORD, "logger", inspect._empty),
             (inspect.Parameter.POSITIONAL_OR_KEYWORD, "vocab", inspect._empty),
             (inspect.Parameter.KEYWORD_ONLY, "slug", inspect._empty),
             (inspect.Parameter.KEYWORD_ONLY, "allow_empty_vocab", False),
         ],
-        "write_summary_and_readme": [
+        "semantic.frontmatter_service:write_summary_and_readme": [
             (inspect.Parameter.POSITIONAL_OR_KEYWORD, "context", inspect._empty),
             (inspect.Parameter.POSITIONAL_OR_KEYWORD, "logger", inspect._empty),
             (inspect.Parameter.KEYWORD_ONLY, "slug", inspect._empty),
         ],
     }
-    for name, expected_sig in expected.items():
-        fn = getattr(api, name)
+    for locator, expected_sig in expected.items():
+        module_name, func_name = locator.split(":", 1)
+        module = import_module(module_name)
+        fn = getattr(module, func_name)
         assert _sig(fn) == expected_sig

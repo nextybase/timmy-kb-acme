@@ -454,6 +454,7 @@ class ClientContext:
         """Ritorna una copia del contesto con `run_id` aggiornato (immutability-friendly)."""
         return replace(self, run_id=run_id)
 
+
 def _coerce_log_level(value: Any) -> int:
     if isinstance(value, int):
         return value

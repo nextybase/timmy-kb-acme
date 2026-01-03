@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-import semantic.api as sapi
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
+from semantic import convert_service
 
 
 @dataclass
@@ -45,7 +45,7 @@ def test_convert_no_files_logs_event_and_raises(tmp_path: Path, caplog: pytest.L
     caplog.set_level(logging.INFO, logger="tests.convert.no_files")
 
     with pytest.raises(ConfigError):
-        sapi.convert_markdown(ctx, logger, slug="dummy")
+        convert_service.convert_markdown(ctx, logger, slug="dummy")
 
     # Deve comparire l’evento esplicito prima del fail-fast
     assert any(

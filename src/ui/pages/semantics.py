@@ -22,8 +22,10 @@ from pipeline.qa_evidence import load_qa_evidence
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.api import get_paths  # noqa: F401 - usato dai test tramite monkeypatch
 from semantic.api import load_reviewed_vocab  # noqa: F401
-from semantic.api import convert_markdown, enrich_frontmatter, require_reviewed_vocab, write_summary_and_readme
+from semantic.api import require_reviewed_vocab
 from semantic.book_readiness import is_book_ready
+from semantic.convert_service import convert_markdown
+from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_state, set_state
 from ui.components.semantic_wizard import render_semantic_wizard

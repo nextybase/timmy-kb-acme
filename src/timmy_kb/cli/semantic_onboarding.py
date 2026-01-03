@@ -22,12 +22,14 @@ from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import iter_safe_paths
 from pipeline.tracing import start_root_trace
 from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
-from semantic.api import convert_markdown  # noqa: F401  # esposto per monkeypatch nei test CLI
-from semantic.api import enrich_frontmatter  # noqa: F401  # esposto per monkeypatch nei test CLI
-from semantic.api import list_content_markdown  # <-- PR2: import dell'helper
 from semantic.api import require_reviewed_vocab  # noqa: F401  # esposto per monkeypatch nei test CLI
-from semantic.api import write_summary_and_readme  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import run_semantic_pipeline
+from semantic.convert_service import convert_markdown  # noqa: F401  # esposto per monkeypatch nei test CLI
+from semantic.embedding_service import list_content_markdown  # <-- PR2: import dell'helper
+from semantic.frontmatter_service import (  # noqa: F401  # esposto per monkeypatch nei test CLI
+    enrich_frontmatter,
+    write_summary_and_readme,
+)
 from semantic.types import SemanticContextProtocol
 from timmy_kb.cli.kg_builder import build_kg_for_workspace
 

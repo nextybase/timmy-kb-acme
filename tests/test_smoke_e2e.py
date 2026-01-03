@@ -65,7 +65,9 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Import tardivi per evitare costi se marker esclusi
     from pipeline.context import ClientContext
     from pipeline.logging_utils import get_structured_logger
-    from semantic.api import convert_markdown, enrich_frontmatter, load_reviewed_vocab, write_summary_and_readme
+    from semantic.api import load_reviewed_vocab
+    from semantic.convert_service import convert_markdown
+    from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
 
     ctx = ClientContext.load(slug=slug, require_env=False)
     logger = get_structured_logger("smoke.bad", context=ctx, run_id="test-run")

@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 
 from pipeline.exceptions import ConfigError
-from semantic import api as sapi
 from semantic import convert_service
 
 
@@ -63,7 +62,7 @@ def test_only_unsafe_pdfs_raise_explicit_message(tmp_path: Path, monkeypatch: py
     monkeypatch.setattr(ppath, "ensure_within_and_resolve", _always_unsafe, raising=True)
 
     with pytest.raises(ConfigError) as ei:
-        sapi.convert_markdown(ctx, logger=logger, slug=ctx.slug)
+        convert_service.convert_markdown(ctx, logger=logger, slug=ctx.slug)
 
     msg = str(ei.value)
     assert "non sicuri" in msg or "fuori perimetro" in msg
@@ -100,6 +99,6 @@ def test_mixed_unsafe_and_valid_pdfs_processes_valid_ones(tmp_path: Path, monkey
     (ctx.md_dir / "doc.md").write_text("# Doc\n", encoding="utf-8")
     monkeypatch.setattr(convert_service, "_call_convert_md", lambda *a, **k: None, raising=True)
 
-    mds = sapi.convert_markdown(ctx, logger=logger, slug=ctx.slug)
+    mds = convert_service.convert_markdown(ctx, logger=logger, slug=ctx.slug)
     names = {p.name for p in mds}
     assert "doc.md" in names

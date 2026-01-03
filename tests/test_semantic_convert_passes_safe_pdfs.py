@@ -2,7 +2,6 @@
 # tests/test_semantic_convert_passes_safe_pdfs.py
 import logging
 
-from semantic import api as sapi
 from semantic import convert_service
 from tests.support.contexts import TestClientCtx
 
@@ -56,7 +55,7 @@ def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch,
     monkeypatch.setattr(convert_service, "_convert_md", _convert_md_stub)
 
     caplog.set_level(logging.INFO)
-    out = sapi.convert_markdown(ctx, logging.getLogger("test"), slug="dummy")
+    out = convert_service.convert_markdown(ctx, logging.getLogger("test"), slug="dummy")
 
     assert called["ok"] is True
     assert called["safe_pdfs_len"] == 1

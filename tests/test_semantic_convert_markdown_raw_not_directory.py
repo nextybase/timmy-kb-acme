@@ -4,7 +4,8 @@ import logging
 
 import pytest
 
-from semantic.api import ConfigError, convert_markdown
+from semantic.api import ConfigError
+from semantic.convert_service import convert_markdown
 from tests.support.contexts import TestClientCtx
 
 

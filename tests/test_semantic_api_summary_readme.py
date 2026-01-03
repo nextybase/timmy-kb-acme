@@ -9,7 +9,6 @@ from typing import Any, cast
 
 import pytest
 
-import semantic.api as sapi
 from pipeline.exceptions import ConversionError
 from semantic import frontmatter_service as front
 
@@ -57,7 +56,7 @@ def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> Non
     # Validazione: no-op per il test (la funzione reale viene testata altrove)
     monkeypatch.setattr(front, "_validate_md", lambda ctx: None, raising=True)
 
-    sapi.write_summary_and_readme(
+    front.write_summary_and_readme(
         cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, md_dir=book)),  # duck typing nei test
         logging.getLogger("test"),
         slug="e2e",
@@ -86,7 +85,7 @@ def test_write_summary_and_readme_generators_fail_raise(monkeypatch, tmp_path: P
 
     logger = logging.getLogger("test")
     with pytest.raises(ConversionError) as exc:
-        sapi.write_summary_and_readme(
+        front.write_summary_and_readme(
             cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, md_dir=book)),  # idem sopra
             logger,
             slug="e2e",
@@ -118,7 +117,7 @@ def test_write_summary_and_readme_logs_errors_with_context(
     logger = logging.getLogger("test.summary")
     with caplog.at_level(logging.ERROR):
         with pytest.raises(ConversionError):
-            sapi.write_summary_and_readme(
+            front.write_summary_and_readme(
                 cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, md_dir=book)),
                 logger,
                 slug="e2e",

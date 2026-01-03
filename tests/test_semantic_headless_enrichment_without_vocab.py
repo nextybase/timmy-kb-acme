@@ -5,6 +5,7 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 from semantic import api as sapi
+from semantic import convert_service
 from tests.support.contexts import TestClientCtx
 from timmy_kb.cli import semantic_headless as sh
 
@@ -29,7 +30,7 @@ def test_headless_fails_without_vocab(tmp_path, monkeypatch):
         config_dir=base / "config",
     )
 
-    monkeypatch.setattr(sapi, "convert_markdown", lambda *a, **k: [md.relative_to(book)])
+    monkeypatch.setattr(convert_service, "convert_markdown", lambda *a, **k: [md.relative_to(book)])
     monkeypatch.setattr(sapi, "load_reviewed_vocab", lambda *a, **k: {})
 
     with pytest.raises(ConfigError):

@@ -7,7 +7,6 @@ from typing import Any, cast
 
 import pytest
 
-import semantic.api as sem
 from pipeline.exceptions import ConfigError, ConversionError
 from semantic import convert_service
 
@@ -62,7 +61,7 @@ def test_convert_markdown_raises_when_only_readme_summary_and_pdfs_present(tmp_p
     monkeypatch.setattr(convert_service, "_convert_md", _fake_convert_md, raising=True)
 
     with pytest.raises(ConversionError):
-        sem.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
+        convert_service.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
 
 
 def test_convert_markdown_raises_configerror_when_no_pdfs_and_only_readme_summary(tmp_path: Path, monkeypatch):
@@ -81,4 +80,4 @@ def test_convert_markdown_raises_configerror_when_no_pdfs_and_only_readme_summar
     monkeypatch.setattr(convert_service, "_convert_md", _fake_convert_md, raising=True)
 
     with pytest.raises(ConfigError):
-        sem.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
+        convert_service.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)

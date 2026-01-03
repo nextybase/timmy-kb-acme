@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, cast
 
-import semantic.api as sapi
+from semantic import frontmatter_service
 
 
 class DummyCtx:
@@ -45,7 +45,7 @@ def test_enrich_frontmatter_ignores_md_dir_override(tmp_path: Path):
     logger = logging.getLogger("test")
 
     vocab = {"ai": {"aliases": {"artificial intelligence"}}}
-    touched = sapi.enrich_frontmatter(cast(Any, ctx), logger, vocab, slug="ctx-test")
+    touched = frontmatter_service.enrich_frontmatter(cast(Any, ctx), logger, vocab, slug="ctx-test")
     assert md_file in touched
     text = md_file.read_text(encoding="utf-8")
     assert "---" in text
@@ -71,6 +71,8 @@ def test_enrich_frontmatter_does_not_touch_md_dir_outside_base(tmp_path: Path):
     ctx = DummyCtx(base=base, md=md_outside, raw=raw)
     logger = logging.getLogger("test")
 
-    touched = sapi.enrich_frontmatter(cast(Any, ctx), logger, {"ai": {"aliases": set()}}, slug="ctx-test")
+    touched = frontmatter_service.enrich_frontmatter(
+        cast(Any, ctx), logger, {"ai": {"aliases": set()}}, slug="ctx-test"
+    )
     assert inside_file in touched
     assert outside_file.read_text(encoding="utf-8") == "Contenuto"

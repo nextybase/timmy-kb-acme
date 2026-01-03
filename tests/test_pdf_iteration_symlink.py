@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from pipeline.exceptions import ConfigError, ConversionError
-from semantic import api as sapi
 from semantic import convert_service
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig
@@ -85,7 +84,7 @@ def test_convert_markdown_treats_only_symlinks_as_no_pdfs(tmp_path: Path):
     make_symlink(target_pdf, link)
 
     with pytest.raises(ConfigError) as ei:
-        sapi.convert_markdown(ctx, logger=logger, slug=ctx.slug)
+        convert_service.convert_markdown(ctx, logger=logger, slug=ctx.slug)
     err = ei.value
     assert Path(getattr(err, "file_path", "")) == raw
 
@@ -108,4 +107,4 @@ def test_convert_markdown_raises_when_only_readme_summary_with_pdfs(tmp_path: Pa
     monkeypatch.setattr(convert_service, "_call_convert_md", lambda *a, **k: None)
 
     with pytest.raises(ConversionError):
-        sapi.convert_markdown(ctx, logger=logger, slug=ctx.slug)
+        convert_service.convert_markdown(ctx, logger=logger, slug=ctx.slug)

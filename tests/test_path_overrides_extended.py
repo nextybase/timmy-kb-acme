@@ -61,7 +61,7 @@ def test_convert_markdown_ignores_ctx_overrides(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(convert_service, "_convert_md", _fake_convert_md, raising=True)
 
     # cast(Any, ...) per evitare reportArgumentType: accettiamo duck typing nei test
-    mds = sapi.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
+    mds = convert_service.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
 
     assert (base / "book" / "A.md").exists()
     assert any(p.name == "A.md" for p in mds)
@@ -83,7 +83,7 @@ def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, mon
         # convert_markdown restituisce path relativi alla cartella book
         return [p.relative_to(book)]
 
-    monkeypatch.setattr(sapi, "convert_markdown", _fake_convert_md, raising=True)
+    monkeypatch.setattr(convert_service, "convert_markdown", _fake_convert_md, raising=True)
 
     # README/SUMMARY
     def _fake_write_summary(context, logger, *, slug):  # noqa: ANN001
@@ -104,7 +104,7 @@ def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, mon
 
     monkeypatch.setattr(sapi, "load_reviewed_vocab", _fake_load_vocab, raising=True)
     # enrich_frontmatter no-op che non fallisce
-    monkeypatch.setattr(sapi, "enrich_frontmatter", lambda *a, **k: [], raising=True)
+    monkeypatch.setattr(frontmatter_service, "enrich_frontmatter", lambda *a, **k: [], raising=True)
 
     out = sapi.build_markdown_book(cast(Any, ctx), _logger(), slug=ctx.slug)
     assert (book / "README.md").exists()

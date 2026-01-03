@@ -15,8 +15,7 @@ Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
 Nota: la UI e gli orchestratori CLI delegano alle funzioni modulari
 `semantic.convert_service`, `semantic.frontmatter_service`,
-`semantic.embedding_service` e `semantic.mapping_loader` (riesportate da
-`semantic.api` per compatibilita`).
+`semantic.embedding_service` e `semantic.mapping_loader`.
 
 ---
 

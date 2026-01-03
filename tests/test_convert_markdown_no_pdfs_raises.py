@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from pipeline.exceptions import ConfigError
-from semantic import api as sapi
 from semantic import convert_service
 
 
@@ -62,7 +61,7 @@ def test_convert_markdown_without_pdfs_raises_configerror(tmp_path: Path, monkey
     )
 
     with pytest.raises(ConfigError) as ei:
-        sapi.convert_markdown(ctx, logger=logger, slug=ctx.slug)
+        convert_service.convert_markdown(ctx, logger=logger, slug=ctx.slug)
 
     err = ei.value
     assert getattr(err, "slug", None) == ctx.slug
@@ -95,6 +94,6 @@ def test_convert_markdown_without_pdfs_returns_existing_book_md(tmp_path: Path, 
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("converter should NOT be called when RAW has no PDFs")),
     )
 
-    mds = sapi.convert_markdown(ctx, logger=logger, slug=ctx.slug)
+    mds = convert_service.convert_markdown(ctx, logger=logger, slug=ctx.slug)
     names = {p.name for p in mds}
     assert "foo.md" in names

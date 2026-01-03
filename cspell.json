@@ -318,7 +318,8 @@
     "concep",
     "petrov",
     "rosetta",
-    "nconten"
+    "nconten",
+    "pathlib"
   ],
   "flagWords": [
     "�",

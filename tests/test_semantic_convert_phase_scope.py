@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from pipeline.exceptions import ConversionError
-from semantic import api as sapi
 from semantic import convert_service
 from tests.support.contexts import TestClientCtx
 
@@ -56,7 +55,7 @@ def test_convert_markdown_logs_done_once_on_success(tmp_path: Path, caplog, monk
     logger = logging.getLogger("test.convert")
     caplog.set_level(logging.INFO)
 
-    out = sapi.convert_markdown(ctx, logger, slug="x")
+    out = convert_service.convert_markdown(ctx, logger, slug="x")
 
     # Un solo log "done" nei successi
     done = [r for r in caplog.records if r.msg == "semantic.convert_markdown.done"]
@@ -84,7 +83,7 @@ def test_convert_markdown_phase_failed_on_no_output(tmp_path: Path, caplog, monk
     caplog.set_level(logging.INFO)
 
     with pytest.raises(ConversionError):
-        sapi.convert_markdown(ctx, logger, slug="x")
+        convert_service.convert_markdown(ctx, logger, slug="x")
 
     # Deve risultare un phase_failed (non completed)
     msgs = [r.msg for r in caplog.records]

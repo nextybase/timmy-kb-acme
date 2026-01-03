@@ -2,7 +2,7 @@
 # tests/test_convert_markdown_rerun_processes_new_pdfs.py
 from pathlib import Path
 
-from semantic.api import convert_markdown
+from semantic.convert_service import convert_markdown
 
 
 class _Ctx:

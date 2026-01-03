@@ -11,10 +11,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.types import ChunkRecord
-from semantic import embedding_service, tagging_service
-from semantic.convert_service import convert_markdown
-from semantic.embedding_service import list_content_markdown
-from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
+from semantic import convert_service, embedding_service, frontmatter_service, tagging_service
 from semantic.paths import get_semantic_paths
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
 from semantic.tags_io import write_tags_reviewed_from_nlp_db as _write_tags_yaml_from_db
@@ -60,16 +57,12 @@ __all__ = [
     "get_paths",
     "load_reviewed_vocab",
     "require_reviewed_vocab",
-    "convert_markdown",
-    "enrich_frontmatter",
-    "write_summary_and_readme",
     "run_semantic_pipeline",
     "run_semantic_pipeline_for_slug",
     "build_tags_csv",
     "build_markdown_book",
     "index_markdown_to_db",
     "copy_local_pdfs_to_raw",
-    "list_content_markdown",
     "export_tags_yaml_from_db",
 ]
 
@@ -189,10 +182,10 @@ def _run_build_workflow(
             return func()
         return stage_wrapper(stage_name, func)
 
-    convert_impl: ConvertStage = convert_fn or convert_markdown
+    convert_impl: ConvertStage = convert_fn or convert_service.convert_markdown
     vocab_impl: VocabStage = vocab_fn or _require_reviewed_vocab
-    enrich_impl: EnrichStage = enrich_fn or enrich_frontmatter
-    summary_impl: SummaryStage = summary_fn or write_summary_and_readme
+    enrich_impl: EnrichStage = enrich_fn or frontmatter_service.enrich_frontmatter
+    summary_impl: SummaryStage = summary_fn or frontmatter_service.write_summary_and_readme
 
     try:
         mds: List[Path] = cast(
