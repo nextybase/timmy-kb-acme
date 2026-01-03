@@ -172,7 +172,6 @@ class ClientContext:
         cls,
         slug: str,
         logger: Optional[logging.Logger] = None,
-        interactive: Optional[bool] = None,  # compat, ignorato
         *,
         require_env: bool = True,
         run_id: Optional[str] = None,
@@ -191,13 +190,6 @@ class ClientContext:
         """
         # 0) Logger (unico) – includiamo run_id se presente
         _logger = cls._init_logger(logger, run_id)
-
-        # Deprecation notice soft (parametro non più usato qui)
-        if interactive is not None:
-            _logger.debug(
-                "context.deprecated_interactive_param",
-                extra={"slug": slug},
-            )
 
         # 1) Validazione slug
         validate_slug(slug)
@@ -461,14 +453,6 @@ class ClientContext:
     def with_run_id(self, run_id: Optional[str]) -> "ClientContext":
         """Ritorna una copia del contesto con `run_id` aggiornato (immutability-friendly)."""
         return replace(self, run_id=run_id)
-
-    # Alias legacy (se qualche chiamante li usasse già)
-    def set_stage(self, stage: Optional[str]) -> "ClientContext":  # pragma: no cover
-        return self.with_stage(stage)
-
-    def set_run_id(self, run_id: Optional[str]) -> "ClientContext":  # pragma: no cover
-        return self.with_run_id(run_id)
-
 
 def _coerce_log_level(value: Any) -> int:
     if isinstance(value, int):
