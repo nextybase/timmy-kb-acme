@@ -68,7 +68,7 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 - [User Guide](docs/user/user_guide.md) - flussi UI/CLI, Vision, workspace.
 - [Developer Guide](docs/developer/developer_guide.md) - SSoT, pipeline, logging, get_vision_model().
 - [Coding Rules](docs/developer/coding_rule.md) e [Architecture Overview](system/architecture.md).
-- [Configuration split](docs/configurazione.md) e [Runbook Codex](system/ops/runbook_codex.md).
+- [Configuration split](docs/developer/configurazione.md) e [Runbook Codex](system/ops/runbook_codex.md).
 - [CONTRIBUTING](CONTRIBUTING.md) - policy PR e micro-PR.
 - [LICENSE](LICENSE.md) - GPL-3.0.
 - [Code of Conduct](CODE_OF_CONDUCT.md) e [Security](SECURITY.md).
