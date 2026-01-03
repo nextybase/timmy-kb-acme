@@ -1,54 +1,125 @@
-# Timmy-KB - Documentazione (v1.0 Beta)
+# Timmy-KB – Documentazione (v1.0 Beta)
 
-Benvenuto nella documentazione di **Timmy-KB**: sistema di creazione governata che traduce tecnicamente i principi di NeXT, con la pipeline di fondazione che costruisce la KB e l’assistente Timmy operativo sotto controllo umano (Human-in-the-Loop). Questo spazio mostra il “come” concreto mantenendo l’envelope epistemico e l’orchestrazione di agenti HiTL/micro-agenti; per la cornice valoriale consulta [MANIFEST.md](../MANIFEST.md).
+Benvenuto nella documentazione di **Timmy-KB**.
+Questo spazio raccoglie i materiali necessari a comprendere, usare e mantenere il sistema, mantenendo una separazione chiara tra **contesto concettuale**, **regole vincolanti** e **operatività tecnica**.
 
-- **Lingue**: la documentazione operativa rimane in italiano; il documento di architettura (`../system/architecture.md`) resta in inglese per coerenza con diagrammi e naming del codice.
+Timmy-KB è un ambiente di creazione e governo che traduce operativamente i principi di **NeXT** attraverso una pipeline di fondazione e un assistente (Timmy) che opera sempre sotto **Human-in-the-Loop**.
+Per la cornice valoriale ed epistemica di riferimento consulta il file `MANIFEST.md` alla root del repository.
 
-> **Doppio approccio**: puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
-- Avvio interfaccia: `streamlit run onboarding_ui.py` - vedi [Guida UI (Streamlit)](user/guida_ui.md).
+> **Nota sulle lingue**\
+> La documentazione operativa è in italiano. Il documento di architettura (`system/architecture.md`) resta in inglese per coerenza con diagrammi, naming e codice.
 
-## Indice
+---
 
-- **Guide**
-  - [User Guide](user/user_guide.md) - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, preview Docker).
-  - [Arricchimento semantico](arricchimento.md) - flusso UI/CLI, tag, euristica vs SpaCy.
-  - [Architettura del sistema](../system/architecture.md) - componenti, flussi end-to-end, API interne.
-  - [Next Core per Assistant](next_core_for_assistants.md) - linee guida NeXT per moduli OpenAI (context operativo Timmy-KB).
-  - [Developer Guide](developer/developer_guide.md) - principi architetturali, redazione log, test suggeriti.
-  - [Developer Quickstart](developer/developer_quickstart.md) - happy path minimi (CLI e UI).
-  - [Coding Rules](developer/coding_rule.md) - stile, tipizzazione, logging, I/O sicuro, atomicita', versioning.
-  - [Revisione pipeline di trasformazione](data_transformation_review.md) - strumenti della pipeline di fondazione e aggiornamenti.
-  - [NeXT alignment](next_alignment.md) - allineamento NeXT ↔ Timmy-KB per auditor e developer.
-  - [NeXT boundary](next_boundary.md) - limiti tra NeXT teorico e implementazione Timmy-KB.
-  - [Configurazione (YAML, .env, OIDC)](configurazione.md) - SSoT, segreti, wiring OIDC.
-  - [Configuration (EN)](configurazione.md) - overview di configurazione in inglese.
-  - [Interfaccia Streamlit ](streamlit_ui.md) - Regole di coding per Streamlit 1.50.0.
-  - [Test suite](test_suite.md) - test smoke e suite PyTest.
-  - [Explainability overview](explainability_overview.md) - segnale/lineage delle risposte.
-  - [Guida UI (Streamlit)](user/guida_ui.md) - interfaccia grafica; **avvio rapido**: `streamlit run onboarding_ui.py`.
-  - Type checking rapido: `make type` (mypy), `make type-pyright` (pyright/npx)
-- **Policy**
-  - [Policy di Versioning](versioning_policy.md) - SemVer, naming tag e branch, compatibilita'.
-  - [Security & Compliance](security.md) - gestione segreti, OIDC, branch protection, hook locali.
-- **ADR - scelte tecniche**
-  - [Registro decisioni (ADR)](adr/README.md) - contesto delle scelte tecniche.
-    - [ADR 0001 - SQLite SSOT dei tag](adr/0001-sqlite-ssot-tags.md)
-    - [ADR 0002 - Separation secrets/config](adr/0002-separation-secrets-config.md)
-    - [ADR 0003 - Playwright E2E UI](adr/0003-playwright-e2e-ui.md)
-    - [ADR 0004 - NLP performance tuning](adr/0004-nlp-performance-tuning.md)
-- **Observability**
-  - [Observability Stack](observability.md) - Loki/Promtail/Grafana, trace_id/span_id, query utili.
-  - [Logging Events](logging_events.md) - eventi log strutturati e nomenclatura.
-- [Code Review Senior](developer/code_review_senior.md) - sintesi delle review tecniche + quick wins sulle policy di logging/tracing.
-- **Agente Codex**
-  - [Guida Codex](guida_codex.md) - uso di Codex in VS Code come coding agent, regole AGENTS.md e configurazione avanzata.
-  - [Runbook Codex](../system/ops/runbook_codex.md) - flussi operativi per l'uso di Codex.
-  - [AGENTS (Repo)](AGENTS.md) - regole locali per gli agent.
-  - [AGENTS Index](../system/ops/agents_index.md) - indice delle policy per agent e preferenze.
-  - Prompt Chain Spec: [PromptChain_spec](../system/specs/promptchain_spec.md) - modello SSoT per orchestrazione Planner/OCP/Codex e chiusura QA.
-- **Changelog**
-  - [CHANGELOG](../CHANGELOG.md) - novita' e fix per ogni release.
-- **Milestones**
-  - [Archive cleanup](milestones/archive_cleanup.md) - milestone archiviate e cleanup pianificati.
+## Come orientarsi
 
-> La config bootstrap globale vive in `config/config.yaml`. La config *per cliente* e' in `output/timmy-kb-<slug>/config/config.yaml`.
+La documentazione è organizzata per **ruolo e funzione**. Usa l’indice seguente come mappa di navigazione, non come ordine di lettura obbligatorio.
+
+---
+
+## Entry point
+
+- **[README della documentazione](README.md)**\
+  Introduzione alla struttura e ai criteri di organizzazione dei documenti.
+
+- **Quickstart**
+
+  - [User Quickstart](user/user_guide.md)
+  - [Developer Quickstart](developer/developer_quickstart.md)
+
+---
+
+## User documentation (`docs/user/`)
+
+Guida per chi **utilizza Timmy-KB** tramite UI o CLI.
+
+- **[User Guide](user/user_guide.md)** – utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, preview).
+- **[Guida UI (Streamlit)](user/guida_ui.md)** – interfaccia grafica e avvio rapido.
+- **[Arricchimento semantico](user/arricchimento.md)** – flusso completo UI/CLI, generazione tag, euristica vs SpaCy.
+
+Questi documenti descrivono **cosa fa il sistema e cosa osserva l’utente**, senza introdurre regole normative.
+
+---
+
+## Developer documentation (`docs/developer/`)
+
+Materiali per chi **sviluppa o mantiene Timmy-KB**.
+
+- **[Developer Guide](developer/developer_guide.md)** – principi architetturali, logging, test.
+- **[Developer Quickstart](developer/developer_quickstart.md)** – percorsi minimi di lavoro (CLI/UI).
+- **[Coding Rules](developer/coding_rule.md)** – stile, tipizzazione, logging, I/O sicuro.
+- **[Configurazione](developer/configurazione.md)** – YAML, `.env`, SSoT, wiring OIDC.
+- **[Streamlit UI](developer/streamlit_ui.md)** – regole di coding per l’interfaccia.
+- **[Explainability overview](developer/explainability_overview.md)** – segnali, lineage e tracciabilità.
+- **[Revisione pipeline di trasformazione](developer/data_transformation_review.md)** – stato e note evolutive della pipeline di fondazione.
+- **[Code Review Senior](developer/code_review_senior.md)** – sintesi ricorrente delle review tecniche.
+
+Questa sezione spiega **come funziona e come evolve il sistema**, non cosa è consentito o vietato.
+
+---
+
+## Policy (`docs/policies/`)
+
+Documentazione **vincolante**.
+
+Qui vivono le regole operative che definiscono i confini del sistema:
+
+- **[Policy di versioning](policies/versioning_policy.md)** – SemVer, naming, compatibilità.
+- **[Security & compliance](policies/security.md)** – segreti, OIDC, branch protection.
+- **[Contratti operativi](policies/import_contract.md)** – import/export, invarianti di pipeline.
+- **[Core rules per assistant](policies/next_core_for_assistants.md)** – regole comuni per i moduli AI nell’ecosistema NeXT.
+
+Se un comportamento viola un documento in questa sezione, è da considerarsi un errore.
+
+---
+
+## Context & alignment (`docs/context/`)
+
+Documenti di **allineamento concettuale e boundary**.
+
+- **[NeXT alignment](context/next_alignment.md)** – mappa tra principi NeXT e implementazione Timmy-KB.
+- **[NeXT boundary](context/next_boundary.md)** – cosa Timmy-KB non implementa o delega rispetto al framework teorico.
+
+Questi file non sono guide né policy: servono a chiarire **perimetro, limiti e senso del sistema**, soprattutto in fase di review, audit o onboarding avanzato.
+
+---
+
+## ADR – Architecture Decision Records (`docs/adr/`)
+
+Registro delle principali decisioni architetturali.
+
+- **[ADR index](adr/README.md)** – panoramica delle decisioni.
+- ADR specifici (SQLite come SSoT, separazione segreti/config, E2E UI, NLP tuning, …).
+
+Gli ADR sono **scritti per esseri umani**, ma **leggibili dagli agenti** come fonte di contesto decisionale e storico.
+
+---
+
+## Observability
+
+- **[Observability stack](developer/observability.md)** – Loki, Promtail, Grafana, tracing.
+- **[Logging events](developer/logging_events.md)** – nomenclatura e struttura degli eventi log.
+
+---
+
+## Agent & tooling
+
+- **[Guida Codex](policies/guida_codex.md)** – uso di Codex come coding agent.
+- **[Runbook Codex](../system/ops/runbook_codex.md)** – flussi operativi.
+- **[AGENTS (repo)](policies/AGENTS.md)** – regole locali per gli agent.
+- **[AGENTS index](../system/ops/agents_index.md)** – indice delle policy per agent.
+- **[Prompt Chain spec](../system/specs/promptchain_spec.md)** – modello SSoT per orchestrazione planner/OCP.
+
+---
+
+## Changelog e milestone
+
+- **[CHANGELOG](../CHANGELOG.md)** – novità e fix per release.
+- **Milestones** – cleanup e attività archiviate.
+
+---
+
+> **Nota finale sulla configurazione**\
+> La configurazione globale vive in `config/config.yaml`.\
+> La configurazione per cliente è in `output/timmy-kb-<slug>/config/config.yaml`.
+
