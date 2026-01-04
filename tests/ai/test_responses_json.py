@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import json
 import pytest
 
 from ai.responses import ConfigError, _parse_json_payload, run_json_model
@@ -37,19 +38,14 @@ class _ResponsesWithoutCreate:
     responses = object()
 
 
-class _FallbackClient:
-    def __init__(self, text: str, reject_order: list[str]):
-        self._text = text
-        self._reject_order = reject_order
-        self.calls: list[dict[str, object]] = []
+class _TypeErrorClient:
+    responses = SimpleNamespace()
+
+    def __init__(self) -> None:
         self.responses = self
 
-    def create(self, **kwargs: object) -> _FakeResponse:
-        self.calls.append(kwargs)
-        for key in self._reject_order:
-            if key in kwargs:
-                raise TypeError(f"create() got an unexpected keyword argument '{key}'")
-        return _FakeResponse(self._text)
+    def create(self, **_kwargs: object) -> _FakeResponse:
+        raise TypeError("create() got an unexpected keyword argument 'response_format'")
 
 
 def test_run_json_model_uses_client_without_make(monkeypatch) -> None:
@@ -93,42 +89,20 @@ def test_run_json_model_responses_without_create_raises() -> None:
     assert "Client OpenAI non supporta l'API Responses." in str(exc.value)
 
 
-def test_run_json_model_fallback_removes_response_format_only() -> None:
-    client = _FallbackClient('{"ok": true}', reject_order=["response_format"])
-    result = run_json_model(
-        model="stub",
-        messages=[{"role": "user", "content": "hi"}],
-        client=client,
-    )
-    assert result.data["ok"] is True
-    assert len(client.calls) == 2
-    assert "response_format" in client.calls[0]
-    assert "metadata" in client.calls[0]
-    assert "response_format" not in client.calls[1]
-    assert "metadata" in client.calls[1]
+def test_run_json_model_type_error_raises() -> None:
+    client = _TypeErrorClient()
+    with pytest.raises(ConfigError):
+        run_json_model(
+            model="stub",
+            messages=[{"role": "user", "content": "hi"}],
+            client=client,
+        )
 
 
-def test_run_json_model_fallback_removes_response_format_and_metadata() -> None:
-    client = _FallbackClient('{"ok": true}', reject_order=["response_format", "metadata"])
-    result = run_json_model(
-        model="stub",
-        messages=[{"role": "user", "content": "hi"}],
-        client=client,
-    )
-    assert result.data["ok"] is True
-    assert len(client.calls) == 3
-    assert "response_format" in client.calls[0]
-    assert "metadata" in client.calls[0]
-    assert "response_format" not in client.calls[1]
-    assert "metadata" in client.calls[1]
-    assert "response_format" not in client.calls[2]
-    assert "metadata" not in client.calls[2]
-
-
-def test_parse_json_with_fences() -> None:
+def test_parse_json_with_fences_raises() -> None:
     text = '```json\n{"foo": 1}\n```'
-    payload = _parse_json_payload(text)
-    assert payload == {"foo": 1}
+    with pytest.raises(json.JSONDecodeError):
+        _parse_json_payload(text)
 
 
 def test_run_json_model_invalid_json_raises() -> None:

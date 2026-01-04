@@ -233,8 +233,6 @@ def run_json_model(
         ),
     )
 
-    resp: Any | None = None
-
     try:
         request_kwargs: Dict[str, Any] = {
             "model": model,
@@ -242,68 +240,17 @@ def run_json_model(
             "metadata": normalized_metadata,
             "response_format": rf_payload,
         }
-        try:
-            resp = client.responses.create(**request_kwargs)
-        except TypeError as exc:
-            exc_msg = str(exc)
-            inner_exc: Exception | None = None
-            fallback_removed: List[str] = []
-            fallback_kwargs = dict(request_kwargs)
-
-            for _ in range(2):
-                if "response_format" in exc_msg and "response_format" in fallback_kwargs:
-                    fallback_removed.append("response_format")
-                    fallback_kwargs.pop("response_format", None)
-                    LOGGER.warning(
-                        "ai.responses.fallback",
-                        extra={"removed": "response_format", "error": exc_msg},
-                    )
-                elif "metadata" in exc_msg and "metadata" in fallback_kwargs:
-                    fallback_removed.append("metadata")
-                    fallback_kwargs.pop("metadata", None)
-                    LOGGER.warning(
-                        "ai.responses.fallback",
-                        extra={"removed": "metadata", "error": exc_msg},
-                    )
-                else:
-                    break
-
-                try:
-                    resp = client.responses.create(**fallback_kwargs)
-                    if fallback_removed:
-                        LOGGER.warning(
-                            "ai.responses.fallback_used",
-                            extra={"removed": fallback_removed},
-                        )
-                    break
-                except TypeError as next_exc:
-                    inner_exc = next_exc
-                    exc_msg = str(next_exc)
-                    continue
-                except Exception as next_exc:  # pragma: no cover
-                    inner_exc = next_exc
-                    break
-
-            if resp is None:
-                if inner_exc is not None:
-                    LOGGER.error(
-                        "ai.responses.fallback_failed",
-                        extra={
-                            "error": str(exc),
-                            "inner_error": str(inner_exc),
-                            "removed": fallback_removed,
-                        },
-                    )
-                    raise ConfigError(
-                        "Chiamata Responses fallita per incompatibilita' SDK/argomenti: " f"{exc}; inner: {inner_exc}",
-                        code="responses.request.invalid",
-                        component="responses",
-                    ) from inner_exc
-                raise ConfigError(
-                    f"Chiamata Responses fallita per incompatibilita' SDK/argomenti: {exc}",
-                    code="responses.request.invalid",
-                    component="responses",
-                ) from exc
+        resp = client.responses.create(**request_kwargs)
+    except TypeError as exc:
+        LOGGER.error(
+            "ai.responses.invalid_request",
+            extra={"error": str(exc), "kwargs": sorted(request_kwargs.keys())},
+        )
+        raise ConfigError(
+            f"Chiamata Responses fallita per incompatibilita' SDK/argomenti: {exc}",
+            code="responses.request.invalid",
+            component="responses",
+        ) from exc
     except AttributeError as exc:  # pragma: no cover
         # Extra-paranoid: if the SDK raises AttributeError mid-flight, classify as unsupported.
         LOGGER.error("ai.responses.unsupported", extra={"error": str(exc)})
@@ -336,25 +283,4 @@ def run_json_model(
 
 
 def _parse_json_payload(payload: str) -> Dict[str, Any]:
-    def _strip_fences(candidate: str) -> str:
-        stripped = candidate.strip()
-        if stripped.startswith("```") and stripped.count("```") >= 2:
-            parts = stripped.split("```")
-            stripped = parts[1] if len(parts) > 1 else stripped
-        if stripped.lower().startswith("json"):
-            stripped = stripped[4:].lstrip()
-        return stripped.strip()
-
-    try:
-        return json.loads(payload)
-    except json.JSONDecodeError:
-        if "```" in payload:
-            for chunk in payload.split("```"):
-                chunk = _strip_fences(chunk)
-                if not chunk:
-                    continue
-                try:
-                    return json.loads(chunk)
-                except Exception:
-                    continue
-        raise
+    return json.loads(payload)
