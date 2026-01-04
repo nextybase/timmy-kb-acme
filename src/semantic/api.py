@@ -11,11 +11,11 @@ from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.types import ChunkRecord
+from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
 from semantic import embedding_service, tagging_service
 from semantic.convert_service import convert_markdown
 from semantic.embedding_service import list_content_markdown
 from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
-from semantic.paths import get_semantic_paths
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
 from semantic.tags_io import write_tags_reviewed_from_nlp_db as _write_tags_yaml_from_db
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
@@ -75,7 +75,14 @@ __all__ = [
 
 
 def get_paths(slug: str) -> Dict[str, Path]:
-    return dict(get_semantic_paths(slug))
+    with workspace_validation_policy(skip_validation=True):
+        layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
+    return {
+        "base": layout.base_dir,
+        "raw": layout.raw_dir,
+        "book": layout.book_dir,
+        "semantic": layout.semantic_dir,
+    }
 
 
 def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Sequence[str]]]:
@@ -182,7 +189,13 @@ def _run_build_workflow(
     """
 
     ctx_base = cast(Path, getattr(context, "base_dir", None))
-    base_dir = ctx_base if ctx_base is not None else get_paths(slug)["base"]
+    layout: WorkspaceLayout | None = None
+    if getattr(context, "repo_root_dir", None) is not None:
+        with workspace_validation_policy(skip_validation=True):
+            layout = WorkspaceLayout.from_context(cast(Any, context))
+    elif ctx_base is not None:
+        layout = WorkspaceLayout.from_workspace(Path(ctx_base), slug=slug, skip_validation=True)
+    base_dir = ctx_base if ctx_base is not None else (layout.base_dir if layout else get_paths(slug)["base"])
 
     def _wrap(stage_name: str, func: Callable[[], Any]) -> Any:
         if stage_wrapper is None:
@@ -342,9 +355,22 @@ def index_markdown_to_db(
     chunk_records: Sequence[ChunkRecord] | None = None,
 ) -> int:
     """Indice i Markdown presenti in book/ nel DB, delegando al servizio dedicato."""
-    paths = get_paths(slug)
-    base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
-    book_dir = cast(Path, getattr(context, "md_dir", None) or paths["book"])
+    ctx_base = getattr(context, "base_dir", None)
+    layout = None
+    if getattr(context, "repo_root_dir", None) is not None:
+        with workspace_validation_policy(skip_validation=True):
+            layout = WorkspaceLayout.from_context(cast(Any, context))
+    elif ctx_base is not None:
+        layout = WorkspaceLayout.from_workspace(Path(ctx_base), slug=slug, skip_validation=True)
+    paths = get_paths(slug) if layout is None else None
+    base_dir = cast(
+        Path,
+        getattr(context, "base_dir", None) or (layout.base_dir if layout is not None else paths["base"]),
+    )
+    book_dir = cast(
+        Path,
+        getattr(context, "md_dir", None) or (layout.book_dir if layout is not None else paths["book"]),
+    )
     store = KbStore.for_slug(slug=slug, base_dir=base_dir, db_path=db_path)
     effective_db_path = store.effective_db_path()
     return cast(

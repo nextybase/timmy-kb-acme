@@ -9,10 +9,10 @@ from typing import Any, Dict, List, Mapping, Sequence, TypedDict, cast
 from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve
+from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
 from semantic.auto_tagger import render_tags_csv as _render_tags_csv
 from semantic.config import load_semantic_config as _load_semantic_config
 from semantic.normalizer import normalize_tags as _normalize_tags
-from semantic.paths import get_semantic_paths
 from semantic.tags_io import write_tagging_readme as _write_tagging_readme
 from semantic.types import SemanticContextProtocol as ClientContextType
 from storage.tags_store import DocEntityRecord
@@ -132,10 +132,19 @@ def _apply_folder_terms(
 
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
     """Costruisce `tags_raw.csv` dal workspace corrente applicando arricchimento NLP (DB + Spacy)."""
-    paths = dict(get_semantic_paths(slug))
-    base_dir = cast(Path, getattr(context, "base_dir", None) or paths["base"])
-    raw_dir = cast(Path, getattr(context, "raw_dir", None) or paths["raw"])
-    semantic_dir = base_dir / "semantic"
+    ctx_base = getattr(context, "base_dir", None)
+    layout: WorkspaceLayout | None = None
+    if getattr(context, "repo_root_dir", None) is not None:
+        with workspace_validation_policy(skip_validation=True):
+            layout = WorkspaceLayout.from_context(cast(Any, context))
+    elif ctx_base is not None:
+        layout = WorkspaceLayout.from_workspace(Path(ctx_base), slug=slug, skip_validation=True)
+    else:
+        with workspace_validation_policy(skip_validation=True):
+            layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
+    base_dir = cast(Path, ctx_base or layout.base_dir)
+    raw_dir = cast(Path, getattr(context, "raw_dir", None) or layout.raw_dir)
+    semantic_dir = layout.semantic_dir
     csv_path = semantic_dir / "tags_raw.csv"
 
     ensure_within(base_dir, raw_dir)
