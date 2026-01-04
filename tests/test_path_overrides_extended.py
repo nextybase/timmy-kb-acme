@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List, cast
 
 from semantic import api as sapi
-from semantic import convert_service, frontmatter_service
+from semantic import convert_service
 
 
 class _Ctx:
@@ -83,7 +83,7 @@ def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, mon
         # convert_markdown restituisce path relativi alla cartella book
         return [p.relative_to(book)]
 
-    monkeypatch.setattr(convert_service, "convert_markdown", _fake_convert_md, raising=True)
+    monkeypatch.setattr(sapi, "convert_markdown", _fake_convert_md, raising=True)
 
     # README/SUMMARY
     def _fake_write_summary(context, logger, *, slug):  # noqa: ANN001
@@ -93,7 +93,7 @@ def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, mon
         readme.write_text("# Book", encoding="utf-8")
         return summary, readme
 
-    monkeypatch.setattr(frontmatter_service, "write_summary_and_readme", _fake_write_summary, raising=True)
+    monkeypatch.setattr(sapi, "write_summary_and_readme", _fake_write_summary, raising=True)
     # intercetta la base_dir passata a load_reviewed_vocab
     seen_base: Dict[str, str] = {}
 
@@ -104,7 +104,7 @@ def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, mon
 
     monkeypatch.setattr(sapi, "load_reviewed_vocab", _fake_load_vocab, raising=True)
     # enrich_frontmatter no-op che non fallisce
-    monkeypatch.setattr(frontmatter_service, "enrich_frontmatter", lambda *a, **k: [], raising=True)
+    monkeypatch.setattr(sapi, "enrich_frontmatter", lambda *a, **k: [], raising=True)
 
     out = sapi.build_markdown_book(cast(Any, ctx), _logger(), slug=ctx.slug)
     assert (book / "README.md").exists()

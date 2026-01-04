@@ -5,8 +5,7 @@ import logging
 
 import pytest
 
-from semantic.api import ConfigError, build_markdown_book
-from semantic.frontmatter_service import enrich_frontmatter
+from semantic.api import ConfigError, build_markdown_book, enrich_frontmatter
 
 
 def test_build_markdown_book_requires_vocab(tmp_path, monkeypatch):
@@ -16,8 +15,8 @@ def test_build_markdown_book_requires_vocab(tmp_path, monkeypatch):
     class Ctx:
         base_dir = base
 
-    monkeypatch.setattr("semantic.convert_service.convert_markdown", lambda context, logger, slug: ["dummy.md"])
-    monkeypatch.setattr("semantic.frontmatter_service.write_summary_and_readme", lambda context, logger, slug: None)
+    monkeypatch.setattr("semantic.api.convert_markdown", lambda context, logger, slug: ["dummy.md"])
+    monkeypatch.setattr("semantic.api.write_summary_and_readme", lambda context, logger, slug: None)
 
     with pytest.raises(ConfigError):
         build_markdown_book(Ctx(), logger=None, slug="dummy")  # type: ignore[arg-type]

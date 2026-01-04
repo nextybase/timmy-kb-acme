@@ -7,7 +7,6 @@ import pytest
 
 from pipeline.exceptions import ConversionError
 from semantic import api as sapi
-from semantic import convert_service, frontmatter_service
 
 
 class _Ctx:
@@ -48,7 +47,7 @@ def test_build_markdown_book_no_success_if_enrich_fails(tmp_path, caplog, monkey
     def _boom(*args, **kwargs):
         raise ConversionError("boom", slug="obs", file_path=book)
 
-    monkeypatch.setattr(frontmatter_service, "enrich_frontmatter", _boom)
+    monkeypatch.setattr(sapi, "enrich_frontmatter", _boom)
 
     ctx = _Ctx(base)
 
@@ -86,12 +85,10 @@ def test_build_markdown_book_logs_enriched_count(tmp_path, caplog, monkeypatch):
 
     ctx = _Ctx(base)
 
-    monkeypatch.setattr(
-        convert_service, "convert_markdown", lambda *_, **__: [base / "book" / "a.md", base / "book" / "b.md"]
-    )
+    monkeypatch.setattr(sapi, "convert_markdown", lambda *_, **__: [base / "book" / "a.md", base / "book" / "b.md"])
     monkeypatch.setattr(sapi, "_require_reviewed_vocab", lambda *_, **__: {"canon": {"aliases": set()}})
-    monkeypatch.setattr(frontmatter_service, "enrich_frontmatter", lambda *_, **__: [base / "book" / "a.md"])
-    monkeypatch.setattr(frontmatter_service, "write_summary_and_readme", lambda *_, **__: None)
+    monkeypatch.setattr(sapi, "enrich_frontmatter", lambda *_, **__: [base / "book" / "a.md"])
+    monkeypatch.setattr(sapi, "write_summary_and_readme", lambda *_, **__: None)
 
     logger = logging.getLogger("semantic.book.test")
     caplog.set_level(logging.INFO, logger="semantic.book.test")
