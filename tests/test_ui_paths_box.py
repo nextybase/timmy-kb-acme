@@ -54,6 +54,19 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
         def text_input(self, *a, **k):
             return "dummy"
 
+        def form(self, *a, **k):
+            class _Form:
+                def __enter__(self_inner):
+                    return self_inner
+
+                def __exit__(self_inner, exc_type, exc, tb):
+                    return False
+
+            return _Form()
+
+        def form_submit_button(self, *a, **k):
+            return False
+
         def button(self, label: str, *a, **k):
             self.buttons.append(label)
             # Attiva solo il bottone di creazione

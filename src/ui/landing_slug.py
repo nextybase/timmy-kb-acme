@@ -6,8 +6,7 @@ import logging
 import os
 import signal
 from pathlib import Path
-from types import TracebackType
-from typing import TYPE_CHECKING, Any, ContextManager, Dict, Literal, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, cast
 
 from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError, InvalidSlug
@@ -83,50 +82,6 @@ def _state_pop(name: str) -> Any:
     value = st.session_state.pop(full_key, None)
     st.session_state.pop(name, None)
     return value
-
-
-class _NullForm:
-    def __enter__(self) -> "_NullForm":
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: TracebackType | None,
-    ) -> Literal[False]:
-        return False
-
-
-def _safe_form(name: str, clear_on_submit: bool = False) -> ContextManager[Any]:
-    if st is None:
-        return cast(ContextManager[Any], _NullForm())
-    form_fn = getattr(st, "form", None)
-    if callable(form_fn):
-        try:
-            return cast(ContextManager[Any], form_fn(name, clear_on_submit=clear_on_submit))
-        except TypeError as exc:
-            if "clear_on_submit" not in str(exc):
-                raise
-            return cast(ContextManager[Any], form_fn(name))
-    return cast(ContextManager[Any], _NullForm())
-
-
-def _safe_form_submit(label: str, **kwargs: Any) -> bool:
-    if st is None:
-        return False
-    submit_fn = getattr(st, "form_submit_button", None)
-    if callable(submit_fn):
-        try:
-            result = submit_fn(label, **kwargs)
-        except TypeError as exc:
-            message = str(exc)
-            if any(key in message for key in kwargs.keys()):
-                result = submit_fn(label)
-            else:
-                raise
-        return bool(result)
-    return bool(getattr(st, "button", lambda *a, **k: False)(label, **kwargs))
 
 
 CLIENT_CONTEXT_ERROR_MSG = (
@@ -288,9 +243,9 @@ def render_header_form(slug_state: str, log: Optional[logging.Logger]) -> tuple[
 
     _, col_form, _ = st.columns([1, 2, 1])
     with col_form:
-        with _safe_form("ls_slug_form", clear_on_submit=False):
+        with st.form("ls_slug_form", clear_on_submit=False):
             slug_input = st.text_input("Slug cliente", value=slug_state, key="ls_slug", placeholder="es. acme")
-            verify_clicked = _safe_form_submit("Verifica cliente", type="primary")
+            verify_clicked = st.form_submit_button("Verifica cliente", type="primary")
         if get_bool("UI_ALLOW_EXIT", default=False):
             st.button("Esci", key="ls_exit", on_click=lambda: _request_shutdown(log), width="stretch")
     return slug_input, verify_clicked

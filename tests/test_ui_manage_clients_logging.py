@@ -24,6 +24,7 @@ def manage_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     fake_clients_store.get_state = lambda slug: "ready"  # type: ignore[attr-defined]
     fake_clients_store.get_all = lambda: []  # type: ignore[attr-defined]
     fake_clients_store.get_ui_state_path = lambda: tmp_path / "ui_state.json"  # type: ignore[attr-defined]
+    fake_clients_store.set_state = lambda *_a, **_k: True  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "ui.chrome", fake_chrome)
     monkeypatch.setitem(sys.modules, "ui.clients_store", fake_clients_store)
 

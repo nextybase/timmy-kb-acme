@@ -24,26 +24,12 @@ from ui.utils.core import safe_write_text
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
-
-try:
-    from ui.clients_store import set_state as set_client_state
-except (ImportError, AttributeError):  # pragma: no cover - fallback per stub di test
-
-    def set_client_state(slug: str, new_state: str) -> bool:
-        return False
-
-
+from ui.clients_store import set_state as set_client_state
 from ui.utils import set_slug
 from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard
 from ui.utils.workspace import count_pdfs_safe, get_ui_workspace_layout
-
-try:
-    from ui.gating import reset_gating_cache as _reset_gating_cache
-except Exception:  # pragma: no cover - fallback per test headless
-
-    def _reset_gating_cache(_slug: str | None = None) -> None:
-        return
+from ui.gating import reset_gating_cache as _reset_gating_cache
 
 
 LOGGER = get_structured_logger("ui.manage")
@@ -330,11 +316,7 @@ if not slug:
 
     if not clients:
         st.info("Nessun cliente registrato. Crea il primo dalla pagina **Nuovo cliente**.")
-        # Sostituisce anchor HTML interno con page_link / fallback
-        if hasattr(st, "page_link"):
-            st.page_link(PagePaths.NEW_CLIENT, label="➕ Crea nuovo cliente")
-        else:
-            st.link_button("➕ Crea nuovo cliente", url="/new?tab=new")
+        st.page_link(PagePaths.NEW_CLIENT, label="➕ Crea nuovo cliente")
         st.stop()
 
     options: list[tuple[str, str]] = []
@@ -611,8 +593,5 @@ if slug:
     if (get_client_state(slug) or "").strip().lower() == "arricchito":
         # Sostituisce anchor HTML interno con API native di navigazione
         link_label = "📌 Prosegui con l’arricchimento semantico"
-        if hasattr(st, "page_link"):
-            st.page_link(PagePaths.SEMANTICS, label=link_label)
-        else:
-            st.link_button(link_label, url="/semantics")
+        st.page_link(PagePaths.SEMANTICS, label=link_label)
     _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
