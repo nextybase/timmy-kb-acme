@@ -5,7 +5,7 @@ from typing import List, Optional, TypedDict
 
 
 class RelationContract(TypedDict):
-    """Contratto minimo per ogni relazione tracciabile da Rosetta."""
+    """Contratto minimo per ogni relazione tracciabile."""
 
     relation_id: str
     from_assertion: str
@@ -15,7 +15,7 @@ class RelationContract(TypedDict):
 
 
 class AssertionContract(TypedDict, total=False):
-    """Descrive un'assertion che alimenta la Knowledge Graph + Rosetta."""
+    """Descrive un'assertion che alimenta la Knowledge Graph."""
 
     assertion_id: str
     source: str
