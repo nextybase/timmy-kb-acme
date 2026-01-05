@@ -268,7 +268,7 @@ class ClientContext:
 
         Priorità:
         - ENV `REPO_ROOT_DIR` (espansa e risolta).
-        - Fallback deterministico: `<project_root>/output/timmy-kb-<slug>`.
+        - Fallback deterministico locale: `<project_root>/output/timmy-kb-<slug>` (derivatives).
         """
         env_root = env_vars.get("REPO_ROOT_DIR")
         if env_root:

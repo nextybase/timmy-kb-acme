@@ -4,7 +4,7 @@
 
 Ruolo:
 - Fornire funzioni *pure* di cleanup senza interazione utente né terminazioni del processo.
-- Limitarsi a rimuovere in sicurezza eventuali artefatti locali legacy
+- Limitarsi a rimuovere in sicurezza eventuali derivatives locali legacy
   (es. una `.git` annidata in `book/`) o run precedenti.
 
 ⚠️ Niente input()/print()/sys.exit(): i prompt stanno negli orchestratori.
@@ -52,7 +52,7 @@ def clean_legacy_artifacts(
     *,
     logger_name: str = "pipeline.cleanup_utils",
 ) -> Dict[str, Any]:
-    """Rimuove in modo *idempotente* e *sicuro* eventuali artefatti locali legacy.
+    """Rimuove in modo *idempotente* e *sicuro* eventuali derivatives locali legacy.
 
     Attualmente:
     - elimina `.git` eventualmente presente sotto `context.md_dir` (book/),
@@ -82,7 +82,7 @@ def clean_legacy_artifacts(
         return {"ok": False, "reason": "unsafe_path", "targets": []}
 
     targets = []
-    # Artefatto principale noto: repo Git locale legacy
+    # Derivative principale noto: repo Git locale legacy
     git_dir = book_dir / ".git"
     if git_dir.exists():
         # Validazione STRONG anche del target specifico prima della rimozione

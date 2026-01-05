@@ -4,9 +4,9 @@ from __future__ import annotations
 """SSoT for workspace bootstrap/migration APIs.
 
 This module exposes the only authorized entry points that may create or repair
-`output/timmy-kb-<slug>/...` layouts (NEW_CLIENT_Bootstrap, DUMMY_BOOTSTRAP,
-and MIGRATION/Maintenance). Runtime modules must keep using `WorkspaceLayout`
-in fail-fast mode and never call these functions directly.
+workspace layouts (default locale: `output/timmy-kb-<slug>/...`) for NEW_CLIENT,
+DUMMY_BOOTSTRAP, and MIGRATION/Maintenance. Runtime modules must keep using
+`WorkspaceLayout` in fail-fast mode and never call these functions directly.
 """
 
 import os

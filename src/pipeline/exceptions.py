@@ -142,7 +142,7 @@ class WorkspaceNotFound(ConfigError):
 
 
 class WorkspaceLayoutInvalid(ConfigError):
-    """Layout presente ma privo di artefatti minimi obbligatori."""
+    """Layout presente ma privo di asset minimi obbligatori (derivatives)."""
 
     pass
 

@@ -101,7 +101,7 @@ def _ensure_dir(base: Path, target: Path) -> None:
 
 
 def global_logs_dir(repo_root: Path) -> Path:
-    """Restituisce .timmy_kb/logs sotto la repo root, creandolo se mancante."""
+    """Log globali (derivatives) sotto la repo root: solo dev/diagnostica locale; non runtime e non richiesti."""
     path = ensure_within_and_resolve(repo_root, repo_root / ".timmy_kb" / LOGS_DIR_NAME)
     _ensure_dir(repo_root, path)
     return path

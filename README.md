@@ -1,6 +1,6 @@
 # Timmy KB - README (v1.0 Beta)
 
-Timmy-KB è un ambiente per la creazione e il governo di Timmy: attraverso una pipeline di fondazione inghiotte dati, costruisce artefatti e abilita l’emergere controllato dell’agency, restando HiTL e mantenendo governance by design.
+Timmy-KB è un ambiente per la creazione e il governo di Timmy: attraverso una pipeline di fondazione inghiotte dati, produce output deterministici (derivatives) e abilita l’emergere controllato dell’agency, restando HiTL e mantenendo governance by design.
 
 [**Design premise:** il sistema è pensato per hardware dedicato e ambienti controllati, esegue processi automatizzati e usa regole/test rigorosi per garantire riproducibilità e auditabilità: qualsiasi rottura deve fallire rumorosamente.]
 
@@ -31,7 +31,7 @@ Per il logging avanzato usa `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TI
 
 ### Interfaccia Streamlit
 ```bash
-streamlit run src/timmy_kb/ui/onboarding_ui.py
+python -m streamlit run src/timmy_kb/ui/onboarding_ui.py
 ```
 La UI guida l'onboarding end-to-end. Per flussi completi e screenshot consulta la [User Guide](docs/user/user_guide.md).
 
@@ -45,8 +45,8 @@ python -m timmy_kb.cli.semantic_onboarding --slug acme --non-interactive
 Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user/user_guide.md). Il flusso termina con la preview locale via Docker/HonKit (pipeline `honkit_preview`).
 
 ### Igiene workspace
-- Gli artefatti runtime restano fuori dal controllo versione: `output/`, `logs/`, `.timmy_kb/`, `.streamlit/`, cache pytest/ruff/mypy e `node_modules/` sono ignorati.
-- Se compaiono nel working tree, rimuovili prima di eseguire un commit o spostali fuori dal repository.
+- I derivatives runtime restano fuori dal controllo versione e fuori dalla repo root: `output/`, `logs/`, `.timmy_kb/`, `.streamlit/`, cache pytest/ruff/mypy e `node_modules/` sono ignorati.
+- Se compaiono nel working tree, rimuovili prima di eseguire un commit o spostali fuori dal repository. Vedi [Developer Guide](docs/developer/developer_guide.md) (ALERT / Workspace Discipline).
 
 ---
 
@@ -73,12 +73,12 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 - [LICENSE](LICENSE.md) - GPL-3.0.
 - [Code of Conduct](CODE_OF_CONDUCT.md) e [Security](SECURITY.md).
 
-La pipeline costruisce artefatti necessari e orchestra l’emergere di agenti HiTL e micro-agenti sotto supervisione umana, mantenendo l’envelope epistemico come limite operativo.
+La pipeline produce output necessari (derivatives) e orchestra l’emergere di agenti HiTL e micro-agenti sotto supervisione umana, mantenendo l’envelope epistemico come limite operativo.
 
 ## From Foundation Pipeline to Agency
 - La pipeline di ingestione è l’atto di nascita di Timmy: nasce quando i PDF del cliente vengono trasformati in markdown semanticamente arricchiti e il knowledge graph associato viene validato.
 - Solo a quel punto il passaggio concettuale ProtoTimmy → Timmy diventa operativo: ProtoTimmy governa la fondazione, Timmy assume agency globale e dialoga con Domain Gatekeepers e micro-agent.
-- La pipeline non decide né orchestra: è lo strumento che genera gli artifact (markdown + knowledge graph) richiesti dallo SSoT e abilita il control plane, ma la direzione resta affidata a Timmy e ai gatekeeper.
+- La pipeline non decide né orchestra: è lo strumento che genera output (markdown + knowledge graph) richiesti dallo SSoT e abilita il control plane, ma la direzione resta affidata a Timmy e ai gatekeeper.
 - Tutti i riferimenti tecnici a `pipeline.*` descrivono gli strumenti operativi della fondazione; dopo la validazione la Prompt Chain documentata in `instructions/` prende il comando.
 
 La sezione seguente descrive il passaggio dalla fondazione alla fase di agency governata, mantenendo sempre la supervisione umana.
@@ -100,13 +100,13 @@ Per i dettagli operativi vedi `.codex/PROMPTS.md`, `system/ops/runbook_codex.md`
 ---
 
 ## Telemetria & sicurezza
-- **Workspace slug-based:** Tutti i log operativi (output, ingest, UI, semantic) vivono sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti; ogni componente scrive sotto il proprio slug/workspace e rispetta path-safety e scritture atomiche.
-- **Global UI log guard:** L'handler condiviso dei log UI globali serve al viewer (Log dashboard) ma non ospita dati operativi o fallback di ingest; Promtail ? configurato solo per leggere `output/timmy-kb-*/logs/*.log` e i log UI globali per le dashboard di grafana/tempo.
+- **Workspace slug-based:** Tutti i log operativi vivono nel workspace cliente; in setup locali tipicamente sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti. Ogni componente scrive sotto il proprio slug/workspace e rispetta path-safety e scritture atomiche.
+- **Global UI log guard:** L'handler condiviso dei log UI globali serve al viewer (Log dashboard) ma non ospita dati operativi o fallback di ingest; quando il workspace ? locale, Promtail ? configurato per leggere `output/timmy-kb-*/logs/*.log` e i log UI globali per le dashboard di grafana/tempo.
 - Rotazione file (`RotatingFileHandler`) e tracing OTEL (configurazioni `TIMMY_LOG_*`, `TIMMY_OTEL_*`) sono gestiti come prima, senza introdurre meccanismi legacy.
 - `pre-commit` include CSpell, gitleaks e controlli SPDX per mantenere documentazione e codice coerenti.
 
 ### Observability stack (Loki + Grafana + Promtail)
-- `observability/docker-compose.yaml` (Loki + Grafana + Promtail) legge solo `output/timmy-kb-*/logs/*.log` e i log UI globali; non usa alcun fallback di storage.
+- `observability/docker-compose.yaml` (Loki + Grafana + Promtail) legge i log del workspace locale (`output/timmy-kb-*/logs/*.log`) e i log UI globali; non usa alcun fallback di storage.
 - Le righe structured `slug=... run_id=... event=...` sono esportate come label Loki (`slug`, `run_id`, `event`) e alimentano liste di alert o dashboard.
 - Avvia con:
   ```bash

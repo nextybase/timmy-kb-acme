@@ -319,7 +319,8 @@
     "petrov",
     "rosetta",
     "nconten",
-    "pathlib"
+    "pathlib",
+    "artefacts"
   ],
   "flagWords": [
     "�",

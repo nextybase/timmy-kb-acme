@@ -22,20 +22,29 @@ python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive
 # 4) Preview locale (HonKit via Docker): gestita via adapter/UI (vedi runbook)
 # non esiste un entrypoint `python -m pipeline.honkit_preview`
 ```
-Note: il workspace vive in `output/timmy-kb-<slug>/`; non manipolare YAML/JSON a mano, passa sempre dalle API pipeline/semantic.
+Note: in locale il workspace vive di default in `output/timmy-kb-<slug>/` (derivatives); in ambienti dedicati usa un workspace fuori dalla repo root. Vedi [Developer Guide](docs/developer/developer_guide.md) (ALERT / Workspace Discipline).
 
 ## Flusso 2: UI Streamlit + workspace cliente
 ```bash
-streamlit run onboarding_ui.py
+python -m streamlit run onboarding_ui.py
 ```
 - Seleziona/crea lo slug dal pannello iniziale (registry UI).
 - Gating: la tab **Semantica** si attiva solo con `raw/` presente; i percorsi sono validati via path-safety.
 - Il modello Vision ? letto da `ui.config_store.get_vision_model()` ? SSoT `config/config.yaml`.
+- Diagnostica runtime (opt-in): `set DEBUG_RUNTIME=1` e `python tools/smoke/kb_healthcheck.py --slug dummy --force`.
+- Diagnostica offline: `python tools/smoke/kb_healthcheck.py --slug dummy --offline` (valida artefatti Vision senza chiamate rete).
+- Eseguire sempre gli smoke con `.\.venv\Scripts\python.exe ...` (Windows) o `./.venv/bin/python ...` (Unix).
+- `python -m pip index versions openai`
+- `python -m pip install -U "openai>=X"`
+- `python tests/scripts/openai_responses_signature.py`
+- Dummy smoke offline: `python tools/gen_dummy_kb.py --slug dummy --no-drive` (nessun Drive, niente deep-testing).
+- Dummy deep-testing (richiede Drive): `python tools/gen_dummy_kb.py --slug dummy --deep-testing`.
+  `--no-drive --deep-testing` è un conflitto e deve fallire.
 
 ## Flusso 3: Aggiunta nuovo cliente (registry UI)
 - Apri la UI, vai su **Gestisci cliente** ? **Nuovo cliente**.
 - Inserisci slug/nome; il registry ? gestito da `ui.clients_store` (SSoT runtime).
-- La configurazione cliente viene creata in `output/timmy-kb-<slug>/config/config.yaml` e letta via `pipeline.config_utils.get_client_config(context)`.
+- La configurazione cliente viene creata nel workspace cliente (default locale: `output/timmy-kb-<slug>/config/config.yaml`) e letta via `pipeline.config_utils.get_client_config(context)`.
 
 ## QA rapidi consigliati
 - `make qa-safe` (isort/black/ruff/mypy).

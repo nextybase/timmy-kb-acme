@@ -17,9 +17,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from pipeline.env_utils import ensure_dotenv_loaded, get_bool, get_env_var
 from pipeline.file_utils import safe_write_bytes
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from ui.config_store import get_vision_model  # type: ignore
 from ui.services.vision_provision import run_vision  # type: ignore
+import yaml
 
 
 def _optional_env(name: str) -> Optional[str]:
@@ -52,6 +53,58 @@ def _existing_vision_artifacts(base_dir: Path) -> Dict[str, str]:
     if cartelle.exists():
         payload["cartelle_raw"] = str(cartelle)
     return payload
+
+
+def _verify_offline_artifacts(base_dir: Path, repo_pdf: Path) -> Dict[str, Any]:
+    semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
+    mapping = semantic_dir / "semantic_mapping.yaml"
+    cartelle = semantic_dir / "cartelle_raw.yaml"
+    workspace_pdf = Path(ensure_within_and_resolve(base_dir, base_dir / "config" / "VisionStatement.pdf"))
+
+    missing: List[str] = []
+    if not mapping.exists():
+        missing.append(str(mapping))
+    if not cartelle.exists():
+        missing.append(str(cartelle))
+    if not workspace_pdf.exists():
+        missing.append(str(workspace_pdf))
+
+    if missing:
+        return {"ok": False, "missing": missing, "paths": {}}
+
+    try:
+        if workspace_pdf.read_bytes() != repo_pdf.read_bytes():
+            return {
+                "ok": False,
+                "missing": [],
+                "paths": {
+                    "mapping": str(mapping),
+                    "cartelle_raw": str(cartelle),
+                    "vision_pdf": str(workspace_pdf),
+                },
+                "error": "VisionStatement.pdf non sincronizzato con la repo.",
+            }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "missing": [],
+            "paths": {
+                "mapping": str(mapping),
+                "cartelle_raw": str(cartelle),
+                "vision_pdf": str(workspace_pdf),
+            },
+            "error": f"Impossibile leggere VisionStatement.pdf: {exc}",
+        }
+
+    return {
+        "ok": True,
+        "missing": [],
+        "paths": {
+            "mapping": str(mapping),
+            "cartelle_raw": str(cartelle),
+            "vision_pdf": str(workspace_pdf),
+        },
+    }
 
 
 class HealthcheckError(RuntimeError):
@@ -157,12 +210,89 @@ def _load_env() -> None:
         pass
 
 
+def _should_log_runtime_diagnostics() -> bool:
+    return bool(get_bool("DEBUG_RUNTIME", default=False) or get_bool("DEBUG", default=False))
+
+
+def _log_runtime_diagnostics(logger: logging.Logger) -> None:
+    """DEBUG_RUNTIME: diagnostica opt-in; UI/Streamlit deve usare lo stesso interpreter/venv della CLI."""
+    if not _should_log_runtime_diagnostics():
+        return
+    if getattr(_log_runtime_diagnostics, "_done", False):
+        return
+    _log_runtime_diagnostics._done = True  # type: ignore[attr-defined]
+
+    try:
+        import openai  # type: ignore
+
+        openai_version = getattr(openai, "__version__", "unknown")
+        openai_file = getattr(openai, "__file__", "unknown")
+    except Exception as exc:
+        openai_version = f"unavailable:{type(exc).__name__}"
+        openai_file = "unavailable"
+
+    logger.info(
+        "healthcheck.runtime.diagnostics | exe=%s openai=%s cwd=%s",
+        sys.executable,
+        openai_version,
+        os.getcwd(),
+        extra={
+            "sys_executable": sys.executable,
+            "sys_version": sys.version,
+            "openai_version": openai_version,
+            "openai_file": openai_file,
+            "cwd": os.getcwd(),
+            "sys_path_0": (sys.path[0] if sys.path else ""),
+        },
+    )
+
+
+def _runtime_diagnostics_summary() -> str:
+    try:
+        import openai  # type: ignore
+
+        openai_version = getattr(openai, "__version__", "unknown")
+        openai_file = getattr(openai, "__file__", "unknown")
+    except Exception as exc:
+        openai_version = f"unavailable:{type(exc).__name__}"
+        openai_file = "unavailable"
+    return f"exe={sys.executable} openai={openai_version} file={openai_file}"
+
+
+def _runtime_project_org_summary() -> str:
+    project = os.environ.get("OPENAI_PROJECT") or ""
+    org = os.environ.get("OPENAI_ORG") or ""
+    parts: list[str] = []
+    if project:
+        parts.append(f"OPENAI_PROJECT={project}")
+    if org:
+        parts.append(f"OPENAI_ORG={org}")
+    return " ".join(parts)
+
+
+def _load_client_settings(base_dir: Path, logger: logging.Logger) -> Dict[str, Any]:
+    cfg_path = ensure_within_and_resolve(base_dir, base_dir / "config" / "config.yaml")
+    if not cfg_path.exists():
+        return {}
+    try:
+        raw = read_text_safe(cfg_path.parent, cfg_path, encoding="utf-8")
+        data = yaml.safe_load(raw) if raw else None
+        return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning(
+            "healthcheck.config_load_failed",
+            extra={"error": str(exc), "file_path": str(cfg_path)},
+        )
+        return {}
+
+
 def run_healthcheck(
     slug: str,
     *,
     force: bool = False,
     model: Optional[str] = None,
     include_prompt: bool = False,
+    offline: bool = False,
 ) -> Dict[str, Any]:
     slug = slug.strip()
     base_dir = _client_base(slug)
@@ -172,8 +302,6 @@ def run_healthcheck(
             {"error": "VisionStatement non trovato", "expected": str(repo_pdf)},
             1,
         )
-    workspace_pdf = _sync_workspace_pdf(base_dir, repo_pdf)
-
     class _Ctx:
         def __init__(self, base_dir: Path):
             self.base_dir = base_dir
@@ -183,7 +311,38 @@ def run_healthcheck(
     ctx = _Ctx(base_dir)
     logger = logging.getLogger("healthcheck.vision")
     logger.setLevel(logging.INFO)
+    _log_runtime_diagnostics(logger)
+    ctx.settings = _load_client_settings(base_dir, logger)
 
+    if offline:
+        verified = _verify_offline_artifacts(base_dir, repo_pdf)
+        logger.info(
+            "healthcheck.vision.offline_mode",
+            extra={
+                "slug": slug,
+                "mapping": verified.get("paths", {}).get("mapping"),
+                "cartelle_raw": verified.get("paths", {}).get("cartelle_raw"),
+                "vision_pdf": verified.get("paths", {}).get("vision_pdf"),
+            },
+        )
+        if not verified.get("ok"):
+            payload = {
+                "error": "Vision offline validation failed",
+                "missing": verified.get("missing", []),
+                "paths": verified.get("paths", {}),
+            }
+            if verified.get("error"):
+                payload["details"] = verified["error"]
+            raise HealthcheckError(payload, 1)
+        return {
+            "status": "ok_offline",
+            "base_dir": str(base_dir),
+            "mapping_yaml": verified["paths"]["mapping"],
+            "cartelle_raw_yaml": verified["paths"]["cartelle_raw"],
+            "pdf_path": verified["paths"]["vision_pdf"],
+        }
+
+    workspace_pdf = _sync_workspace_pdf(base_dir, repo_pdf)
     prepared_prompt: Optional[str] = None
     effective_model = model or get_vision_model()
     prompt_requested = bool(include_prompt)
@@ -221,7 +380,24 @@ def run_healthcheck(
             run_skipped = True
             vision_result = _existing_vision_artifacts(base_dir)
         else:
-            raise HealthcheckError({"error": f"Vision failed: {exc}"}, 1)
+            detail = str(exc)
+            if _should_log_runtime_diagnostics():
+                normalized = detail.casefold()
+                if "response_format" in normalized and "unexpected keyword" in normalized:
+                    detail = f"{detail} | runtime: {_runtime_diagnostics_summary()}"
+                elif (
+                    "insufficient_quota" in normalized
+                    or "exceeded your current quota" in normalized
+                    or "check your plan and billing" in normalized
+                    or "quota" in normalized
+                    or "429" in normalized
+                ):
+                    env_suffix = _runtime_project_org_summary()
+                    suffix = _runtime_diagnostics_summary()
+                    if env_suffix:
+                        suffix = f"{suffix} {env_suffix}"
+                    detail = f"{detail} | runtime: {suffix}"
+            raise HealthcheckError({"error": f"Vision failed: {detail}"}, 1)
 
     used_file_search = False
     citations: List[Dict[str, Any]] = []
@@ -265,8 +441,6 @@ def run_healthcheck(
 # ---- main -------------------------------------------------------------------
 def main() -> None:
     _load_env()
-    _require_env()
-    _ensure_kb_enabled_or_fail()
 
     parser = argparse.ArgumentParser(description="Healthcheck E2E Vision (usa Vision reale + tracing Assistente)")
     parser.add_argument("--slug", default="dummy", help="Slug cliente (default: dummy)")
@@ -281,7 +455,16 @@ def main() -> None:
         action="store_true",
         help="Include nel risultato JSON il prompt Vision generato",
     )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Valida artefatti Vision senza chiamate di rete",
+    )
     args = parser.parse_args()
+
+    if not args.offline:
+        _require_env()
+        _ensure_kb_enabled_or_fail()
 
     try:
         out = run_healthcheck(
@@ -289,6 +472,7 @@ def main() -> None:
             force=bool(args.force),
             model=(args.model or get_vision_model()),
             include_prompt=bool(args.include_prompt),
+            offline=bool(args.offline),
         )
     except HealthcheckError as exc:
         _print_err(exc.payload, exc.code)

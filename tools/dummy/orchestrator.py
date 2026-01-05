@@ -345,7 +345,7 @@ def build_dummy_payload(
             )
             raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg))
         if not enable_drive:
-            msg = "Deep testing requires Drive enabled (secrets/permessi non pronti)"
+            msg = "Deep testing richiede Drive abilitato (con --no-drive e' un conflitto)"
             logger.error(
                 "tools.gen_dummy_kb.drive_hardcheck.disabled",
                 extra={"slug": slug, "reason": "drive disabled"},
@@ -399,7 +399,8 @@ def build_dummy_payload(
                 if _is_credit_or_quota_error(details):
                     warn_msg = (
                         "Vision hard check downgraded to smoke due to quota/billing: "
-                        f"{details}"
+                        f"{details}. Per smoke deterministico usa "
+                        f"`python tools/smoke/kb_healthcheck.py --slug {slug} --offline`."
                     )
                     logger.warning(
                         "tools.gen_dummy_kb.vision_downgraded",

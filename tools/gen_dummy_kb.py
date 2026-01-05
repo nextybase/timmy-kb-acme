@@ -5,6 +5,15 @@
 
 from __future__ import annotations
 
+if __name__ == "__main__":
+    # Avvio diretto: assicura la repo root su sys.path per import deterministici di tools/*.
+    import sys
+    from pathlib import Path
+
+    _repo_root = Path(__file__).resolve().parents[1]
+    if str(_repo_root) not in sys.path:
+        sys.path.insert(0, str(_repo_root))
+
 import argparse
 import importlib
 import json

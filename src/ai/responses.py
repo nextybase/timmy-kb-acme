@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import inspect
 import json
+import os
+import sys
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from pipeline.exceptions import ConfigError
@@ -24,6 +27,34 @@ _INVOCATION_KEYS: Sequence[str] = (
     "phase",
     "trace_id",
 )
+
+
+def _debug_runtime_enabled() -> bool:
+    raw = os.environ.get("DEBUG_RUNTIME") or os.environ.get("DEBUG") or ""
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _inspect_signature(create_fn: Any) -> tuple[Optional[str], Optional[bool], Optional[list[str]]]:
+    try:
+        signature_obj = inspect.signature(create_fn)
+    except Exception:
+        return None, None, None
+    params = list(signature_obj.parameters.values())
+    param_names = [param.name for param in params]
+    supports_text = "text" in param_names or any(param.kind is inspect.Parameter.VAR_KEYWORD for param in params)
+    return str(signature_obj), supports_text, param_names
+
+
+def _runtime_info() -> tuple[str, str, str]:
+    try:
+        import openai  # type: ignore
+
+        openai_version = getattr(openai, "__version__", "unknown")
+        openai_file = getattr(openai, "__file__", "unknown")
+    except Exception as exc:
+        openai_version = f"unavailable:{type(exc).__name__}"
+        openai_file = "unavailable"
+    return sys.executable, openai_version, openai_file
 
 
 def _build_invocation_extra(
@@ -233,12 +264,44 @@ def run_json_model(
         ),
     )
 
+    signature_text, supports_text, signature_params = _inspect_signature(create_fn)
+    if _debug_runtime_enabled():
+        sys_executable, openai_version, openai_file = _runtime_info()
+        LOGGER.info(
+            "ai.responses.signature",
+            extra={
+                "openai_version": openai_version,
+                "openai_file": openai_file,
+                "sys_executable": sys_executable,
+                "signature": signature_text,
+                "supports_text": supports_text,
+            },
+        )
+    if not supports_text:
+        params_value = ", ".join(signature_params or []) or "unavailable"
+        message = (
+            "SDK Responses.create non supporta text.format; parametri disponibili="
+            f"{params_value}; upgrade richiesto."
+        )
+        if _debug_runtime_enabled():
+            sys_executable, openai_version, openai_file = _runtime_info()
+            signature_value = signature_text or "unavailable"
+            message = (
+                f"{message} Runtime: exe={sys_executable} openai={openai_version} "
+                f"file={openai_file} signature={signature_value}"
+            )
+        raise ConfigError(
+            message,
+            code="responses.request.invalid",
+            component="responses",
+        )
+
     try:
         request_kwargs: Dict[str, Any] = {
             "model": model,
             "input": input_payload,
             "metadata": normalized_metadata,
-            "response_format": rf_payload,
+            "text": {"format": rf_payload},
         }
         resp = client.responses.create(**request_kwargs)
     except TypeError as exc:

@@ -23,6 +23,14 @@ Per un percorso rapido step-by-step vedi anche [Developer Quickstart](developer_
 -
 ---
 
+## ALERT / Workspace Discipline (non negoziabile)
+- **Decisione Beta:** la repo root non deve mai diventare stato runtime; contiene solo artefacts versionati.
+- **Definizioni (rigide):** artefacts = input versionati che determinano il comportamento (codice, config, policy, schemi). Derivatives = output generati a runtime (output, log, cache, index, tmp, build).
+- **Stop-the-line (Git):** se `git status` mostra file non tracciati o modificati fuori policy (fuori policy = qualsiasi file o directory non versionata che non sia codice, configurazione o documentazione), fermati e ripulisci.
+- **Stop-the-line (ignored):** se `git status --ignored` o `git clean -ndx` mostra derivatives, fermati e rimuovili dal repo.
+- **Decisione Beta:** vietati backup ad-hoc nel repo (`*.bak`, `.git.bak`, copie manuali, snapshot).
+- **Runtime solo disposable:** ammesso solo se usa e getta, non richiesto per correttezza, e fuori dal repo.
+
 ## Agency & Control Plane
 - WHAT: la governance agency-first (ProtoTimmy → Timmy, Domain Gatekeepers, Control Plane/OCP, Prompt Chain) è documentata in `instructions/*` e definisce chi decide, valida ed esegue.
 - HOW: i moduli `pipeline.*`, `semantic.*`, `workspace_bootstrap` e `WorkspaceLayout` sono strumenti operativi per I/O, path, logging e semantica; garantiscono artifact affidabili (markdown arricchiti + knowledge graph validato) ma non orchestrano né decidono.
