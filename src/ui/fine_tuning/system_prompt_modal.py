@@ -90,13 +90,10 @@ def _join_sections(sections: Dict[str, str]) -> str:
 
 
 def _resolve_ui_assistant_id() -> str:
-    """Risoluzione assistant_id: OBNEXT_ASSISTANT_ID -> ASSISTANT_ID -> errore."""
-    asst_id = cast(
-        Optional[str],
-        get_env_var("OBNEXT_ASSISTANT_ID", default=None) or get_env_var("ASSISTANT_ID", default=None),
-    )
+    """Risoluzione assistant_id: OBNEXT_ASSISTANT_ID -> errore."""
+    asst_id = cast(Optional[str], get_env_var("OBNEXT_ASSISTANT_ID", default=None))
     if not asst_id:
-        raise ConfigError("Assistant ID mancante (env: OBNEXT_ASSISTANT_ID o ASSISTANT_ID).")
+        raise ConfigError("Assistant ID mancante (env: OBNEXT_ASSISTANT_ID).")
     return asst_id
 
 

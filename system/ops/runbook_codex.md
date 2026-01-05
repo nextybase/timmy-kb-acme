@@ -121,7 +121,7 @@ References: [Developer Guide → Configuration](../../docs/developer/developer_g
 - **Frontmatter caching:** post-write cache alignment with a 256-entry LRU; `semantic.api` clears caches after runs to avoid stale reuse.
 - **UI import safety:** avoid import-time side effects; wrappers must keep signature parity with the backend.
 - **Drive downloads:** UI downloads only missing PDFs. To overwrite, toggle "Overwrite conflicting local files" or manually rename files.
-- **Preview stubs:** `PREVIEW_LOG_DIR` may point to absolute paths; if unreachable, fallback to `logs/preview` and notify the user.
+- **Preview stubs:** `PREVIEW_LOG_DIR` may point to absolute paths; if unreachable the preview fails explicitly (no fallback).
 - **Ingest telemetry:** events such as `ingest.embed`, `ingest.persist`, `ingest.process_file`, `ingest.summary` must include `artifact_count`. Use these for dashboards and alerts.
 - **Streaming ingest:** `ingest_folder` runs streaming globs with throttling controls (`max_files`, `batch_size`) to prevent OOM in migrations.
 

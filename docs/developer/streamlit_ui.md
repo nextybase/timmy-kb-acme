@@ -413,7 +413,7 @@ except RuntimeError as exc:
 Il percorso "Preview Docker" supporta una modalita stub pensata per CI ed e2e:
 
 - `PREVIEW_MODE=stub` forza l'uso della pipeline fake senza container reali.
-- `PREVIEW_LOG_DIR=/percorso/custom` definisce la cartella dove scrivere i log stub (default `logs/preview` dentro al repo).
+- `PREVIEW_LOG_DIR=/percorso/custom` definisce la cartella dove scrivere i log stub (deve esistere ed essere scrivibile).
 - Ogni path viene normalizzato con `ensure_within_and_resolve` e scritto in modo atomico tramite `safe_write_text`.
 - Eventi strutturati emessi: `ui.preview.stub_started`, `ui.preview.stub_stopped`, `ui.preview.start_failed`, `ui.preview.stop_failed`.
 

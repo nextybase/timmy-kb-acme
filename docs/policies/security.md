@@ -17,6 +17,9 @@ Questa pagina descrive le policy operative per proteggere il repository `timmy-k
 
 - Imposta la sezione `security.oidc` in `config/config.yaml` (provider, variabili `_env`).
 - Valorizza le ENV in `.env`/Repository Variables (`OIDC_*`, `VAULT_*`).
+- Quando `security.oidc.enabled=true`, la risoluzione OIDC è fail-fast: se mancano
+  variabili richieste o il token non è ottenibile, il processo fallisce con errore
+  esplicito (nessun best-effort).
 - Lo step "OIDC probe (optional)" in `ci.yaml` esegue `tools/ci/oidc_probe.py` quando la variabile `GITHUB_OIDC_AUDIENCE` e valorizzata.
 - Consulta [docs/configurazione.md](configurazione.md) per il dettaglio completo.
 - Per rendere la pipeline hard imposta in `config/config.yaml`:

@@ -15,22 +15,21 @@ from storage.tags_store import import_tags_yaml_to_db
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_all as get_clients
 from ui.clients_store import get_state as get_client_state
+from ui.clients_store import set_state as set_client_state
+from ui.gating import reset_gating_cache as _reset_gating_cache
 from ui.manage import _helpers as manage_helpers
 from ui.manage import drive as drive_component
 from ui.manage import tags as tags_component
 from ui.pages.registry import PagePaths
+from ui.utils import set_slug
 from ui.utils.config import get_drive_env_config, get_tags_env_config
+from ui.utils.context_cache import get_client_context
 from ui.utils.core import safe_write_text
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
+from ui.utils.status import status_guard
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
-from ui.clients_store import set_state as set_client_state
-from ui.utils import set_slug
-from ui.utils.context_cache import get_client_context
-from ui.utils.status import status_guard
 from ui.utils.workspace import count_pdfs_safe, get_ui_workspace_layout
-from ui.gating import reset_gating_cache as _reset_gating_cache
-
 
 LOGGER = get_structured_logger("ui.manage")
 st = get_streamlit()

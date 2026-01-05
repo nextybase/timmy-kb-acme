@@ -89,20 +89,11 @@ def main() -> None:
     assistant_id_source = "missing"
     assistant_env = "missing"
     assistant_env_source = "missing"
-    for candidate in (assistant_env_name, "ASSISTANT_ID"):
-        value = get_env_var(candidate, default=None)
-        if value:
-            assistant_id = value
-            if candidate == "ASSISTANT_ID":
-                assistant_id_source = "default"
-            elif assistant_configured and settings and candidate == assistant_env_name:
-                assistant_id_source = "config"
-            else:
-                assistant_id_source = "env"
-            break
-
-    if assistant_id:
-        assistant_env = candidate
+    value = get_env_var(assistant_env_name, default=None)
+    if value:
+        assistant_id = value
+        assistant_id_source = "config" if assistant_configured and settings else "env"
+        assistant_env = assistant_env_name
         assistant_env_source = assistant_id_source
 
     LOGGER.info(

@@ -9,7 +9,6 @@ from timmy_kb.cli.ingest import get_vision_cfg
 
 def test_get_vision_cfg_requires_assistant_id(monkeypatch):
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
-    monkeypatch.delenv("ASSISTANT_ID", raising=False)
     with pytest.raises(ConfigError):
         get_vision_cfg({})
 

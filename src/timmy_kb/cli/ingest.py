@@ -676,13 +676,13 @@ def get_vision_cfg(cfg: dict | None) -> dict:
     Restituisce la configurazione Vision normalizzata **inline-only**.
     - Percorso unico: engine = "assistant" (Threads/Runs), niente vector/attachments/fallback.
     - Modello non configurato qui: lo decide il profilo Assistant (dashboard).
-    - `assistant_id` è OBBLIGATORIO: letto da OBNEXT_ASSISTANT_ID o ASSISTANT_ID.
+    - `assistant_id` è OBBLIGATORIO: letto da OBNEXT_ASSISTANT_ID.
     - `strict_output` resta abilitato di default.
     """
     v = (cfg or {}).get("vision") or {}
-    assistant_id = (get_env_var("OBNEXT_ASSISTANT_ID", default=None) or get_env_var("ASSISTANT_ID", default="")).strip()
+    assistant_id = (get_env_var("OBNEXT_ASSISTANT_ID", default=None) or "").strip()
     if not assistant_id:
-        raise ConfigError("Assistant ID non configurato: imposta OBNEXT_ASSISTANT_ID o ASSISTANT_ID.")
+        raise ConfigError("Assistant ID non configurato: imposta OBNEXT_ASSISTANT_ID.")
 
     return {
         "engine": "assistant",

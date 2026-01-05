@@ -688,12 +688,6 @@ class Settings:
                 "doc_url": doc_url,
             },
             {
-                "name": "ASSISTANT_ID",
-                "required": False,
-                "description": "Assistant fallback (compatibilità).",
-                "doc_url": doc_url,
-            },
-            {
                 "name": "GOOGLE_CLIENT_ID",
                 "required": False,
                 "description": "Client ID OAuth Google per login amministrazione.",

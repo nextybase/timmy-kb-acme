@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
-import json
 import pytest
 
 from ai.responses import ConfigError, _parse_json_payload, run_json_model

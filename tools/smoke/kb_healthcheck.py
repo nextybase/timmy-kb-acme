@@ -114,19 +114,19 @@ except Exception as e:
 
 # ---- guardie ambiente / .env -----------------------------------------------
 def _require_env() -> None:
-    """Richiede OPENAI_API_KEY + OBNEXT_ASSISTANT_ID/ASSISTANT_ID, altrimenti esce (2)."""
+    """Richiede OPENAI_API_KEY + OBNEXT_ASSISTANT_ID, altrimenti esce (2)."""
     try:
         api_key = get_env_var("OPENAI_API_KEY", required=True)
     except KeyError:
         api_key = None
-    assistant_id = _optional_env("OBNEXT_ASSISTANT_ID") or _optional_env("ASSISTANT_ID")
+    assistant_id = _optional_env("OBNEXT_ASSISTANT_ID")
     if not api_key or not assistant_id:
         _print_err(
             {
-                "error": "OPENAI_API_KEY e OBNEXT_ASSISTANT_ID/ASSISTANT_ID sono obbligatori.",
+                "error": "OPENAI_API_KEY e OBNEXT_ASSISTANT_ID sono obbligatori.",
                 "missing": {
                     "OPENAI_API_KEY": bool(api_key),
-                    "ASSISTANT_ID": bool(assistant_id),
+                    "OBNEXT_ASSISTANT_ID": bool(assistant_id),
                 },
             },
             2,

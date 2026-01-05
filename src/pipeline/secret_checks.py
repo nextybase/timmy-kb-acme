@@ -70,7 +70,7 @@ def test_secret(name: str, value: str, context: Dict[str, Any] | None = None) ->
             return _test_drive_parent_folder_id(value)
         if name == "OPENAI_API_KEY":
             return _test_openai_api_key(value)
-        if name in {"OBNEXT_ASSISTANT_ID", "ASSISTANT_ID"}:
+        if name == "OBNEXT_ASSISTANT_ID":
             return _test_openai_assistant_id(value)
         if name == "GOOGLE_CLIENT_ID":
             return _test_google_client_id(value)
@@ -202,7 +202,7 @@ def _test_openai_api_key(value: str) -> SecretTestResult:
 
 def _test_openai_assistant_id(value: str) -> SecretTestResult:
     """
-    OBNEXT_ASSISTANT_ID / ASSISTANT_ID:
+    OBNEXT_ASSISTANT_ID:
     - deve iniziare con 'asst_'.
     """
     if not value.startswith("asst_"):

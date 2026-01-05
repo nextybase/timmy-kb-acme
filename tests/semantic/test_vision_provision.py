@@ -365,22 +365,12 @@ def test_provision_with_prepared_prompt_skips_pdf_read(tmp_path: Path, monkeypat
     assert first_msg.get("content") == prepared_prompt
 
 
-def test_provision_uses_assistant_fallback_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    ctx = _Ctx(tmp_path)
-    monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
-    monkeypatch.setenv("ASSISTANT_ID", "asst_fallback")
-    with pytest.raises(ConfigError) as excinfo:
-        resolve_vision_config(ctx, override_model="test-model")
-    assert "OBNEXT_ASSISTANT_ID" in str(excinfo.value)
-
-
 def test_provision_missing_assistant_id_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     ctx = _Ctx(tmp_path)
     pdf = tmp_path / "vision.pdf"
     pdf.write_bytes(b"%PDF-FAKE%")
 
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
-    monkeypatch.delenv("ASSISTANT_ID", raising=False)
 
     with pytest.raises(ConfigError) as excinfo:
         resolve_vision_config(ctx, override_model="test-model")
@@ -395,7 +385,6 @@ def test_provision_with_config_skips_env(tmp_path: Path, monkeypatch: pytest.Mon
     pdf.write_bytes(b"%PDF-FAKE%")
 
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
-    monkeypatch.delenv("ASSISTANT_ID", raising=False)
 
     monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
 

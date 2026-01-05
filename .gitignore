@@ -6,6 +6,7 @@ scripts/__pycache__/
 *.pyd
 *.pyo
 *.log
+__pypackages__/
 .python-version
 
 # === Virtualenv ===
@@ -14,6 +15,7 @@ env/
 ENV/
 .venv/
 .ENV/
+.direnv/
 
 # === Editors/IDEs ===
 .vscode/*
@@ -55,6 +57,7 @@ data/
 *.env.local
 *.env.production
 *.env.development
+.envrc
 service_account.json
 *.pem
 *.p12
@@ -116,6 +119,14 @@ node_modules/
 /Scripts/
 !scripts/
 !scripts/**
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.pnpm-store/
+.parcel-cache/
+.eslintcache
+.stylelintcache
 clients_db/*
 !clients_db/clients/
 !clients_db/clients/**

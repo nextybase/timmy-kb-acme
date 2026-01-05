@@ -455,7 +455,6 @@ def _stable_env(monkeypatch, dummy_workspace):
 
     # Disabilita accidentalmente l'assistente, salvo override nel test
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
-    monkeypatch.delenv("ASSISTANT_ID", raising=False)
 
     # Evita side-effect su output/ del repo: se qualche codice usa default,
     # meglio che punti alla base temporanea del dummy.

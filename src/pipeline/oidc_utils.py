@@ -11,6 +11,7 @@ import urllib.request
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Protocol
 
 from .env_utils import ensure_dotenv_loaded, get_env_var
+from .exceptions import ConfigError
 from .logging_utils import get_structured_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -112,23 +113,70 @@ def ensure_oidc_context(
         log.debug("oidc.disabled", extra={"provider": provider})
         return {"enabled": False, "provider": provider, "has_token": False}
 
-    audience_name = str(sec_oidc.get("audience_env") or "")
-    role_name = str(sec_oidc.get("role_env") or "")
-    token_url_env = str(sec_oidc.get("token_request_url_env") or "")
-    token_token_env = str(sec_oidc.get("token_request_token_env") or "")
+    if provider != "github":
+        raise ConfigError(
+            f"OIDC provider non supportato: {provider}",
+            code="oidc.provider.unsupported",
+            component="oidc",
+        )
 
-    # Pre-carica eventuali ENV personalizzate
-    audience = _read_env(audience_name)
-    role = _read_env(role_name)
+    audience_name = str(sec_oidc.get("audience_env") or "").strip()
+    role_name = str(sec_oidc.get("role_env") or "").strip()
+    token_url_env = str(sec_oidc.get("token_request_url_env") or "").strip()
+    token_token_env = str(sec_oidc.get("token_request_token_env") or "").strip()
+
+    missing: list[str] = []
+    if not audience_name:
+        missing.append("security.oidc.audience_env")
+        audience = None
+    else:
+        audience = _read_env(audience_name)
+        if not audience:
+            missing.append(audience_name)
+
+    role = _read_env(role_name) if role_name else None
+    if role_name and not role:
+        missing.append(role_name)
+
+    req_url = _read_env("ACTIONS_ID_TOKEN_REQUEST_URL")
+    req_token = _read_env("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+    if not req_url:
+        missing.append("ACTIONS_ID_TOKEN_REQUEST_URL")
+    if not req_token:
+        missing.append("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+
     if token_url_env:
-        _ = _read_env(token_url_env)  # warm up eventuale env custom
+        custom_url = _read_env(token_url_env)
+        if not custom_url:
+            missing.append(token_url_env)
     if token_token_env:
-        _ = _read_env(token_token_env)
+        custom_token = _read_env(token_token_env)
+        if not custom_token:
+            missing.append(token_token_env)
 
-    has_token = False
-    if provider == "github" and audience:
-        token = fetch_github_id_token(audience, logger=log)
-        has_token = bool(token)
+    if missing:
+        missing_keys = ",".join(sorted(set(missing)))
+        raise ConfigError(
+            f"OIDC enabled but missing_keys=[{missing_keys}]",
+            code="oidc.env.missing",
+            component="oidc",
+        )
+
+    if req_url and not req_url.startswith("https://"):
+        raise ConfigError(
+            "OIDC token request URL must be https: ACTIONS_ID_TOKEN_REQUEST_URL",
+            code="oidc.request_url.invalid",
+            component="oidc",
+        )
+
+    token = fetch_github_id_token(audience or "", logger=log)
+    if not token:
+        raise ConfigError(
+            "OIDC token acquisition failed: provider=github",
+            code="oidc.token.missing",
+            component="oidc",
+        )
+    has_token = True
 
     log.info(
         "oidc.context",

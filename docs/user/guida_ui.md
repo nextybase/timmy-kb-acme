@@ -250,7 +250,7 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
 4. **Anteprima Docker (HonKit)** *(facoltativa)*
    - **Cosa fa:** avvia un container che serve il sito statico generato da `book/`.
    - **Quando usarla:** per QA visivo prima della pubblicazione; chiudi il container al termine.
-   - **Log stub:** puoi impostare `PREVIEW_LOG_DIR` con path relativi o assoluti; se il percorso non e raggiungibile la UI mostra un warning con il motivo e salva comunque i log in `logs/preview/` dentro al repository.
+   - **Log stub:** imposta `PREVIEW_LOG_DIR` con path relativi o assoluti. Se il percorso non esiste o non e scrivibile la preview si ferma con errore esplicito (nessun fallback).
 
 - La pagina Semantica e accessibile da stato **pronto** in poi (con PDF in `raw/`).
 - La **Preview/finishing** resta vincolata agli stati **arricchito/finito**.

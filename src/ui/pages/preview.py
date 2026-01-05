@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from pipeline.env_utils import get_int
+from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from semantic.api import get_paths
@@ -118,28 +119,40 @@ def _resolve_preview_dir(base_setting: Path) -> Path:
 
 
 def _preview_log_path(slug: str) -> Path:
-    base_setting = Path(os.getenv("PREVIEW_LOG_DIR", "logs/preview"))
+    raw_setting = (os.getenv("PREVIEW_LOG_DIR") or "").strip()
+    if not raw_setting:
+        raise ConfigError(
+            "PREVIEW_LOG_DIR non impostata.",
+            code="preview.log_dir.missing",
+            component="preview",
+        )
+    base_setting = Path(raw_setting)
     try:
         safe_dir = _resolve_preview_dir(base_setting)
     except Exception as exc:
-        fallback_msg = (
-            "Percorso personalizzato per i log preview non valido. "
-            f"Uso il percorso predefinito {DEFAULT_PREVIEW_LOG_DIR}."
+        raise ConfigError(
+            f"PREVIEW_LOG_DIR non valida: {base_setting}",
+            code="preview.log_dir.invalid",
+            component="preview",
+        ) from exc
+    if not safe_dir.exists():
+        raise ConfigError(
+            f"PREVIEW_LOG_DIR non esiste: {safe_dir}",
+            code="preview.log_dir.missing",
+            component="preview",
         )
-        _preview_stub_warning(fallback_msg, error=exc, base=base_setting)
-        safe_dir = DEFAULT_PREVIEW_LOG_DIR
-    try:
-        safe_dir.mkdir(parents=True, exist_ok=True)
-    except Exception as exc:
-        fallback_dir = DEFAULT_PREVIEW_LOG_DIR
-        if safe_dir != fallback_dir:
-            fallback_msg = (
-                "Impossibile creare la directory personalizzata per i log preview. "
-                f"Uso il percorso predefinito {fallback_dir}."
-            )
-            _preview_stub_warning(fallback_msg, error=exc, base=safe_dir)
-        fallback_dir.mkdir(parents=True, exist_ok=True)
-        safe_dir = fallback_dir
+    if not safe_dir.is_dir():
+        raise ConfigError(
+            f"PREVIEW_LOG_DIR non è una directory: {safe_dir}",
+            code="preview.log_dir.not_dir",
+            component="preview",
+        )
+    if not os.access(safe_dir, os.W_OK):
+        raise ConfigError(
+            f"PREVIEW_LOG_DIR non è scrivibile: {safe_dir}",
+            code="preview.log_dir.not_writable",
+            component="preview",
+        )
     return Path(ensure_within_and_resolve(safe_dir, safe_dir / f"{slug}.log"))
 
 

@@ -9,7 +9,7 @@ Si applica sia all'ambiente locale sia all'esecuzione CI (GitHub Actions).
 |--------|-----------------------------------------|---------------------------|
 | **Meta** | `meta.client_name`, `meta.semantic_mapping_yaml`, `meta.vision_statement_pdf`, `meta.N_VER`, `meta.DATA_VER` |  |
 | **OpenAI** | `ai.openai.timeout: 120`<br>`ai.openai.max_retries: 2`<br>`ai.openai.http2_enabled: false` | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_PROJECT` |
-| **Vision** | `ai.vision.model: gpt-4o-mini-2024-07-18`<br>`ai.vision.engine: assistants`<br>`ai.vision.snapshot_retention_days: 30`<br>`ai.vision.assistant_id_env: OBNEXT_ASSISTANT_ID` (solo il nome ENV) | `OBNEXT_ASSISTANT_ID`, `ASSISTANT_ID` |
+| **Vision** | `ai.vision.model: gpt-4o-mini-2024-07-18`<br>`ai.vision.engine: assistants`<br>`ai.vision.snapshot_retention_days: 30`<br>`ai.vision.assistant_id_env: OBNEXT_ASSISTANT_ID` (solo il nome ENV) | `OBNEXT_ASSISTANT_ID` |
 | **UI** | `ui.skip_preflight`, `ui.allow_local_only`, `ui.admin_local_mode` |  |
 | **Retriever** | `pipeline.retriever.auto_by_budget`, `pipeline.retriever.throttle.latency_budget_ms`, `candidate_limit`, `parallelism`, `sleep_ms_between_calls` |  |
 | **Cache RAW** | `pipeline.raw_cache.ttl_seconds`, `pipeline.raw_cache.max_entries` |  |
@@ -120,9 +120,9 @@ Campi YAML vs env:
 - Env risolti: i valori puntati da `audience_env`, `role_env`, `token_request_url_env`,
   `token_request_token_env` (oltre a `ACTIONS_ID_TOKEN_REQUEST_*` in GitHub Actions).
 
-Comportamento: se `enabled=false` la funzione ritorna `enabled: False` senza errore; se i
-valori env richiesti mancano, la gestione e' best-effort e non solleva ConfigError
-in `ensure_oidc_context` (evidenza: `src/pipeline/oidc_utils.py`).
+Comportamento: se `enabled=false` la funzione ritorna `enabled: False` senza errore; se
+`enabled=true` la risoluzione OIDC è fail-fast e solleva `ConfigError` quando
+mancano variabili richieste o il token non è ottenibile (evidenza: `src/pipeline/oidc_utils.py`).
 
 Lo script `tools/ci/oidc_probe.py` richiama `ensure_oidc` e fallisce quando
 `ci_required=true` ma mancano i prerequisiti: e eseguito automaticamente in CI quando
