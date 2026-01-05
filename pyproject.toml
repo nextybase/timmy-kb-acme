@@ -29,7 +29,7 @@ dependencies = [
 # Extra opzionale per le funzionalità Google Drive (usato da: pip install .[drive])
 drive = [
     "google-api-python-client~=2.171.0",
-    "google-auth-httplib2~=0.2.0",
+    "google-auth-httplib2~=0.3.0",
     "google-auth-oauthlib~=1.2.0",
     "google-auth~=2.34",
     "httplib2~=0.22.0",
