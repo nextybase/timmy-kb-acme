@@ -1,0 +1,217 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
+import json
+import os
+import shutil
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from pipeline.context import ClientContext, validate_slug
+from pipeline.exceptions import ConfigError
+from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.yaml_utils import yaml_read
+from ui import clients_store
+
+try:
+    from pipeline.drive_utils import delete_drive_file, get_drive_service
+except Exception:  # pragma: no cover - dipendenze Drive opzionali
+    delete_drive_file = None
+    get_drive_service = None
+
+_DRIVE_ROOT_KEY = "drive_folder_id"
+
+
+def _resolve_workspace_root(slug: str) -> Path:
+    """Risoluzione deterministica della root workspace (<repo_root>/output/timmy-kb-<slug>)."""
+    env_root = os.environ.get("REPO_ROOT_DIR")
+    repo_root = Path(__file__).resolve().parents[1]
+    if env_root:
+        try:
+            repo_root = Path(str(env_root)).expanduser().resolve()
+        except Exception:
+            raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root}", slug=slug)
+    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
+    return ensure_within_and_resolve(repo_root, workspace_root)
+
+
+def _require_config_yaml(slug: str, workspace_root: Path) -> Path:
+    config_path = workspace_root / "config" / "config.yaml"
+    config_path = ensure_within_and_resolve(workspace_root, config_path)
+    if not config_path.exists():
+        raise ConfigError("config.yaml mancante nel workspace cliente.", slug=slug, file_path=str(config_path))
+    return config_path
+
+
+def _load_config_payload(config_path: Path, *, workspace_root: Path, slug: str) -> Dict[str, Any]:
+    try:
+        raw = yaml_read(workspace_root, config_path, encoding="utf-8", use_cache=False)
+    except ConfigError:
+        raise
+    except Exception as exc:
+        raise ConfigError(f"Lettura config.yaml fallita: {exc}", slug=slug, file_path=str(config_path)) from exc
+    if not isinstance(raw, dict):
+        raise ConfigError("config.yaml non valido: atteso mapping.", slug=slug, file_path=str(config_path))
+    return dict(raw)
+
+
+def _require_drive_root_id(config: Dict[str, Any], *, slug: str, config_path: Path) -> str:
+    value = str(config.get(_DRIVE_ROOT_KEY) or "").strip()
+    if not value:
+        raise ConfigError(
+            f"ID Drive mancante in config.yaml: {_DRIVE_ROOT_KEY}",
+            slug=slug,
+            file_path=str(config_path),
+        )
+    return value
+
+
+def _require_drive_utils() -> None:
+    if not callable(get_drive_service) or not callable(delete_drive_file):
+        raise ConfigError(
+            "Dipendenze Drive non disponibili: installa gli extra Drive (pip install .[drive])."
+        )
+
+
+def _remove_registry_entry(slug: str) -> tuple[bool, Optional[str]]:
+    try:
+        entries = clients_store.load_clients()
+        remaining = [e for e in entries if e.slug.strip().lower() != slug.strip().lower()]
+        if len(remaining) == len(entries):
+            return False, None
+        clients_store.save_clients(remaining)
+        return True, None
+    except Exception as exc:
+        return False, f"registry_remove_failed: {exc}"
+
+
+def _clear_ui_state(slug: str) -> tuple[bool, Optional[str]]:
+    path = clients_store.get_ui_state_path()
+    if not path.exists():
+        return False, None
+    try:
+        raw_text = read_text_safe(path.parent, path, encoding="utf-8")
+        payload = json.loads(raw_text or "{}")
+        if not isinstance(payload, dict):
+            raise ConfigError("ui_state.json non valido: atteso mapping.")
+        current = str(payload.get("active_slug") or "").strip().lower()
+        if current != slug.strip().lower():
+            return False, None
+        payload["active_slug"] = ""
+        safe_write_text(path, json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8", atomic=True)
+        return True, None
+    except Exception as exc:
+        return False, f"ui_state_clear_failed: {exc}"
+
+
+def _remove_semantic_progress(slug: str) -> tuple[bool, Optional[str]]:
+    db_dir, _ = clients_store.get_registry_paths()
+    target = ensure_within_and_resolve(db_dir, db_dir / "semantic_progress" / f"{slug}.json")
+    if not target.exists():
+        return False, None
+    try:
+        target.unlink()
+        return True, None
+    except Exception as exc:
+        return False, f"semantic_progress_remove_failed: {exc}"
+
+
+def _remove_ownership(slug: str) -> tuple[bool, Optional[str]]:
+    db_dir, _ = clients_store.get_registry_paths()
+    target = ensure_within_and_resolve(db_dir, db_dir / "clients" / slug)
+    if not target.exists():
+        return False, None
+    try:
+        shutil.rmtree(target, ignore_errors=False)
+        return True, None
+    except Exception as exc:
+        return False, f"ownership_remove_failed: {exc}"
+
+
+def _remove_workspace_dir(workspace_root: Path) -> tuple[bool, Optional[str]]:
+    target = ensure_within_and_resolve(workspace_root, workspace_root)
+    if not target.exists():
+        return True, None
+    try:
+        shutil.rmtree(target, ignore_errors=False)
+        return True, None
+    except Exception as exc:
+        return False, f"workspace_remove_failed: {exc}"
+
+
+def perform_cleanup(slug: str, *, client_name: Optional[str] = None) -> Dict[str, Any]:
+    """Esegue cleanup locale + registry + Drive. Ritorna un report con exit_code."""
+    validate_slug(slug)
+    logger = get_structured_logger("tools.clean_client_workspace", context={"slug": slug})
+
+    workspace_root = _resolve_workspace_root(slug)
+    config_path = _require_config_yaml(slug, workspace_root)
+    _require_drive_utils()
+
+    config_payload = _load_config_payload(config_path, workspace_root=workspace_root, slug=slug)
+    drive_root_id = _require_drive_root_id(config_payload, slug=slug, config_path=config_path)
+
+    context = ClientContext.load(slug=slug, require_env=True)
+    drive_error: Optional[str] = None
+    drive_deleted = False
+    try:
+        service = get_drive_service(context)
+        delete_drive_file(service, drive_root_id, redact_logs=bool(context.redact_logs))
+        drive_deleted = True
+    except Exception as exc:
+        drive_error = str(exc)
+        logger.warning("tools.clean_client_workspace.drive_failed", extra={"slug": slug, "error": drive_error})
+
+    errors: list[str] = []
+    registry_removed, registry_err = _remove_registry_entry(slug)
+    if registry_err:
+        errors.append(registry_err)
+    ui_state_cleared, ui_state_err = _clear_ui_state(slug)
+    if ui_state_err:
+        errors.append(ui_state_err)
+    semantic_progress_removed, semantic_err = _remove_semantic_progress(slug)
+    if semantic_err:
+        errors.append(semantic_err)
+    ownership_removed, ownership_err = _remove_ownership(slug)
+    if ownership_err:
+        errors.append(ownership_err)
+    local_removed, local_err = _remove_workspace_dir(workspace_root)
+    if local_err:
+        errors.append(local_err)
+
+    if local_err:
+        exit_code = 4
+    elif drive_error:
+        exit_code = 3
+    elif errors:
+        exit_code = 2
+    else:
+        exit_code = 0
+
+    return {
+        "exit_code": exit_code,
+        "slug": slug,
+        "client_name": client_name,
+        "drive_deleted": drive_deleted,
+        "drive_error": drive_error,
+        "drive_folder_id": drive_root_id,
+        "registry_removed": registry_removed,
+        "ui_state_cleared": ui_state_cleared,
+        "semantic_progress_removed": semantic_progress_removed,
+        "ownership_removed": ownership_removed,
+        "local_removed": local_removed,
+        "errors": errors,
+    }
+
+
+def run_cleanup(slug: str, assume_yes: bool = True) -> int:
+    """Compat CLI: ritorna exit_code senza prompt."""
+    if not assume_yes:
+        raise ConfigError("Modalita interattiva non supportata in tools.clean_client_workspace.")
+    result = perform_cleanup(slug)
+    return int(result.get("exit_code", 1))
+
+
+__all__ = ["perform_cleanup", "run_cleanup"]
