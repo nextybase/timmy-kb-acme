@@ -24,7 +24,7 @@ def test_embedding_error_is_logged_and_fall_back(tmp_path: Path, caplog: pytest.
     book.mkdir(parents=True, exist_ok=True)
     (book / "a.md").write_text("# A\nBody", encoding="utf-8")
 
-    ctx = type("C", (), dict(base_dir=base, md_dir=book, slug="dummy"))()
+    ctx = type("C", (), dict(base_dir=base, md_dir=book, repo_root_dir=base, slug="dummy"))()
     logger = get_structured_logger("tests.index.emb_error", context=ctx)
 
     caplog.set_level(logging.INFO, logger="tests.index.emb_error")

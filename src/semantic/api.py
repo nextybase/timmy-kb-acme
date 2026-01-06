@@ -188,14 +188,14 @@ def _run_build_workflow(
     per evitare cross-contaminazione tra run consecutivi nella stessa process e rilasciare memoria.
     """
 
-    ctx_base = cast(Path, getattr(context, "base_dir", None))
-    layout: WorkspaceLayout | None = None
-    if getattr(context, "repo_root_dir", None) is not None:
-        with workspace_validation_policy(skip_validation=True):
-            layout = WorkspaceLayout.from_context(cast(Any, context))
-    elif ctx_base is not None:
-        layout = WorkspaceLayout.from_workspace(Path(ctx_base), slug=slug, skip_validation=True)
-    base_dir = ctx_base if ctx_base is not None else (layout.base_dir if layout else get_paths(slug)["base"])
+    if getattr(context, "repo_root_dir", None) is None:
+        raise ConfigError(
+            "Contesto privo di repo_root_dir: impossibile risolvere il workspace in modo deterministico.",
+            slug=slug,
+        )
+    with workspace_validation_policy(skip_validation=True):
+        layout = WorkspaceLayout.from_context(cast(Any, context))
+    base_dir = layout.base_dir
 
     def _wrap(stage_name: str, func: Callable[[], Any]) -> Any:
         if stage_wrapper is None:
@@ -355,22 +355,15 @@ def index_markdown_to_db(
     chunk_records: Sequence[ChunkRecord] | None = None,
 ) -> int:
     """Indice i Markdown presenti in book/ nel DB, delegando al servizio dedicato."""
-    ctx_base = getattr(context, "base_dir", None)
-    layout = None
-    if getattr(context, "repo_root_dir", None) is not None:
-        with workspace_validation_policy(skip_validation=True):
-            layout = WorkspaceLayout.from_context(cast(Any, context))
-    elif ctx_base is not None:
-        layout = WorkspaceLayout.from_workspace(Path(ctx_base), slug=slug, skip_validation=True)
-    paths = get_paths(slug) if layout is None else None
-    base_dir = cast(
-        Path,
-        getattr(context, "base_dir", None) or (layout.base_dir if layout is not None else paths["base"]),
-    )
-    book_dir = cast(
-        Path,
-        getattr(context, "md_dir", None) or (layout.book_dir if layout is not None else paths["book"]),
-    )
+    if getattr(context, "repo_root_dir", None) is None:
+        raise ConfigError(
+            "Contesto privo di repo_root_dir: impossibile risolvere il workspace in modo deterministico.",
+            slug=slug,
+        )
+    with workspace_validation_policy(skip_validation=True):
+        layout = WorkspaceLayout.from_context(cast(Any, context))
+    base_dir = layout.base_dir
+    book_dir = layout.book_dir
     store = KbStore.for_slug(slug=slug, base_dir=base_dir, db_path=db_path)
     effective_db_path = store.effective_db_path()
     return cast(

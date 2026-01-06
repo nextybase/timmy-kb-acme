@@ -12,6 +12,7 @@ from semantic import embedding_service
 
 class _Ctx:
     def __init__(self, base: Path, slug: str = "proj"):
+        self.repo_root_dir = base
         self.base_dir = base
         self.raw_dir = base / "raw"
         self.md_dir = base / "book"

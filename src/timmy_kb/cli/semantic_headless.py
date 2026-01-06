@@ -6,12 +6,13 @@ import argparse
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Dict, List, TypeVar, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary
 from pipeline.tracing import start_root_trace
-from semantic.api import get_paths, require_reviewed_vocab
+from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from semantic.api import require_reviewed_vocab
 from semantic.convert_service import convert_markdown
 from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
 
@@ -52,8 +53,14 @@ def build_markdown_headless(
     converted: List[Path] = convert_markdown(ctx, log, slug=slug)
 
     # 2) Caricamento vocabolario canonico: usa ctx.base_dir se presente, altrimenti get_paths(...)
-    ctx_base = getattr(ctx, "base_dir", None)
-    base = ctx_base if isinstance(ctx_base, Path) else get_paths(slug)["base"]
+    if getattr(ctx, "repo_root_dir", None) is None:
+        raise ConfigError(
+            "Contesto privo di repo_root_dir: impossibile risolvere il workspace in modo deterministico.",
+            slug=slug,
+        )
+    with workspace_validation_policy(skip_validation=True):
+        layout = WorkspaceLayout.from_context(cast(Any, ctx))
+    base = layout.base_dir
     vocab = require_reviewed_vocab(base, log, slug=slug)
 
     # 3) Arricchimento frontmatter: esegui SEMPRE anche con vocab vuoto

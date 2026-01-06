@@ -232,6 +232,15 @@ def _delayed_down(delay: float, *, logger: logging.Logger) -> None:
 @pytest.fixture(scope="session", autouse=True)
 def observability_stack_fixture():
     logger = logging.getLogger("tests.observability.stack")
+    env_flag = os.getenv("TEST_OBSERVABILITY")
+    enabled = env_flag not in {None, "", "0", "false", "False"}
+    if not enabled:
+        logger.info(
+            "osservability.stack.skipped",
+            extra={"reason": "TEST_OBSERVABILITY not enabled"},
+        )
+        yield
+        return
     if not OBSERVABILITY_COMPOSE.exists():
         logger.debug("docker compose per osservabilità mancante; salto stack")
         yield
@@ -258,9 +267,7 @@ def observability_stack_fixture():
     if started:
         t = threading.Thread(target=_delayed_down, args=(5.0,), kwargs={"logger": logger}, daemon=True)
         t.start()
-        t.join(timeout=15.0)
-        if t.is_alive():
-            logger.warning("osservability.down.timeout", extra={"timeout_s": 15.0})
+        logger.info("osservability.down.scheduled", extra={"delay_s": 5.0})
 
 
 # Import diretto dello script: repo root deve essere nel PYTHONPATH quando lanci pytest

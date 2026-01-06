@@ -27,7 +27,7 @@ def test_index_logs_skip_empty_file(tmp_path: Path, caplog: pytest.LogCaptureFix
     (book / "ok.md").write_text("# Title\nBody", encoding="utf-8")
 
     # Context minimo
-    ctx = type("C", (), dict(base_dir=base, md_dir=book, slug="dummy"))()
+    ctx = type("C", (), dict(base_dir=base, md_dir=book, repo_root_dir=base, slug="dummy"))()
     logger = get_structured_logger("tests.index.skip_empty", context=ctx)
 
     caplog.set_level(logging.INFO, logger="tests.index.skip_empty")

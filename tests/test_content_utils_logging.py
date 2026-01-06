@@ -83,7 +83,11 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
         _fake_ensure_within_and_resolve,
     )
 
-    ctx = type("C", (), {"base_dir": base, "raw_dir": raw, "md_dir": book, "slug": "dummy"})()
+    ctx = type(
+        "C",
+        (),
+        {"base_dir": base, "repo_root_dir": base, "raw_dir": raw, "md_dir": book, "slug": "dummy"},
+    )()
     caplog.set_level(logging.WARNING)
     convert_files_to_structured_markdown(ctx)
 

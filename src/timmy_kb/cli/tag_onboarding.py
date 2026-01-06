@@ -60,6 +60,7 @@ from pipeline.path_utils import (  # STRONG guard SSoT
 )
 from pipeline.tracing import start_root_trace
 from pipeline.types import TaggingPayload
+from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
 from semantic import nlp_runner
 from semantic.tags_validator import validate_tags_reviewed as validate_tags_payload
 from semantic.tags_validator import write_validation_report as write_validation_report_payload
@@ -381,8 +382,9 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
         run_id=run_id,
         stage="validate",
     )
-    base_dir = Path(getattr(context, "base_dir", None) or getattr(context, "repo_root_dir")).resolve()
-    semantic_candidate = getattr(context, "semantic_dir", base_dir / "semantic")
+    layout = _require_layout(context)
+    base_dir = layout.base_dir
+    semantic_candidate = layout.semantic_dir
     try:
         semantic_dir = ensure_within_and_resolve(base_dir, semantic_candidate)
     except PathTraversalError:
@@ -496,6 +498,16 @@ def _should_proceed(*, non_interactive: bool, proceed_after_csv: bool, logger: l
     return True
 
 
+def _require_layout(context: ClientContextProtocol | ClientContext) -> WorkspaceLayout:
+    if getattr(context, "repo_root_dir", None) is None:
+        raise ConfigError(
+            "Contesto privo di repo_root_dir: impossibile risolvere il workspace in modo deterministico.",
+            slug=getattr(context, "slug", None),
+        )
+    with workspace_validation_policy(skip_validation=True):
+        return WorkspaceLayout.from_context(cast(Any, context))
+
+
 def tag_onboarding_main(
     slug: str,
     *,
@@ -601,12 +613,11 @@ def _resolve_cli_paths(
 ) -> tuple[Path, Path, Path, Path]:
     """Calcola i percorsi CLI garantendo path-safety rispetto al contesto cliente."""
 
-    base_dir = Path(getattr(context, "base_dir", None) or getattr(context, "repo_root_dir")).resolve()
-    raw_base = getattr(context, "raw_dir", None) or (base_dir / "raw")
-    raw_candidate = Path(raw_override) if raw_override else raw_base
+    layout = _require_layout(context)
+    base_dir = layout.base_dir
+    raw_candidate = Path(raw_override) if raw_override else layout.raw_dir
     raw_dir = ensure_within_and_resolve(base_dir, raw_candidate)
-    semantic_base = getattr(context, "semantic_dir", None) or (base_dir / "semantic")
-    semantic_dir = ensure_within_and_resolve(base_dir, semantic_base)
+    semantic_dir = ensure_within_and_resolve(base_dir, layout.semantic_dir)
 
     db_candidate = Path(db_override) if db_override else (semantic_dir / "tags.db")
     db_path = ensure_within_and_resolve(base_dir, db_candidate)
