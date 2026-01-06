@@ -32,7 +32,7 @@ from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_
 from ui.errors import to_user_message
 from ui.imports import getattr_if_callable, import_first
 from ui.utils import set_slug
-from ui.utils.context_cache import get_client_context
+from ui.utils.context_cache import get_client_context, invalidate_client_context
 from ui.utils.html import esc_url_component
 from ui.utils.merge import deep_merge_dict
 from ui.utils.repo_root import get_repo_root
@@ -247,13 +247,6 @@ def _mirror_repo_config_into_client(
             )
         except Exception:
             pass
-
-
-class _UIContext:
-    """Contesto minimo per Vision con base_dir già validato."""
-
-    def __init__(self, layout: WorkspaceLayout) -> None:
-        self.base_dir = layout.base_dir
 
 
 def _ui_logger() -> logging.Logger:
@@ -546,7 +539,9 @@ if current_phase == UI_PHASE_INIT:
 
             # 5) Vision
             ui_logger = _ui_logger()
-            ctx = _UIContext(layout)
+            invalidate_client_context(s)
+            # Ricarica il contesto reale dopo le scritture della config.
+            ctx = get_client_context(s, require_env=False, force_reload=True)
             with status_guard(
                 "Eseguo Vision…",
                 expanded=True,
