@@ -32,7 +32,7 @@ def test_readme_and_summary_respect_mapping(tmp_path: Path) -> None:
     semantic_dir.mkdir(parents=True, exist_ok=True)
 
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
-    mapping_yaml = "areas:\n" "  - key: area-uno\n" "    descrizione: Descrizione Area Uno\n"
+    mapping_yaml = "semantic_tagger: {}\n" "areas:\n" "  - key: area-uno\n" "    descrizione: Descrizione Area Uno\n"
     (semantic_dir / "semantic_mapping.yaml").write_text(mapping_yaml, encoding="utf-8")
 
     # Prepara una struttura book con markdown annidato
@@ -65,6 +65,7 @@ def test_readme_includes_entity_table(tmp_path: Path) -> None:
 
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
     mapping_yaml = (
+        "semantic_tagger: {}\n"
         "areas:\n"
         "  - key: area-uno\n"
         "    descrizione: Descrizione Area Uno\n"

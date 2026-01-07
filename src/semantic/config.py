@@ -89,20 +89,18 @@ class SemanticConfig:
 
 
 def _safe_load_yaml(p: Path) -> dict[str, Any]:
-    """Carica YAML come dict.
-
-    Se il file o PyYAML non ci sono, ritorna {}.
-    Non solleva eccezioni: il chiamante ha già fallback robusti.
-    """
-    if not p or yaml is None:
-        return {}
+    """Carica YAML come dict in modo strict per semantic_mapping.yaml."""
+    if yaml is None:
+        raise ConfigError("PyYAML non disponibile per semantic_mapping.yaml.", file_path=str(p))
+    if not p.exists():
+        raise ConfigError("semantic_mapping.yaml non trovato.", file_path=str(p))
     try:
-        if not p.exists():
-            return {}
-        data = yaml_read(p.parent, p) or {}
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+        data = yaml_read(p.parent, p)
+    except Exception as exc:
+        raise ConfigError("Errore lettura semantic_mapping.yaml.", file_path=str(p)) from exc
+    if not isinstance(data, dict):
+        raise ConfigError("semantic_mapping.yaml deve essere un mapping YAML.", file_path=str(p))
+    return data
 
 
 def _coerce_bool(x: Any, default: bool) -> bool:
@@ -195,8 +193,16 @@ def _load_client_settings(base_dir: Path | Any) -> dict[str, Any]:
         try:
             settings = load_client_settings(base_dir)
             return cast(dict[str, Any], settings.as_dict())
-        except Exception:
-            return {}
+        except ConfigError:
+            raise
+        except Exception as exc:
+            config_path = getattr(base_dir, "config_path", None)
+            if config_path:
+                file_path = str(config_path)
+            else:
+                base_dir_path = Path(getattr(base_dir, "base_dir", None) or ".").resolve()
+                file_path = str((base_dir_path / "config" / "config.yaml").resolve())
+            raise ConfigError("Errore lettura config.yaml.", file_path=file_path) from exc
 
     base_dir = Path(base_dir).resolve()
     config_path = (base_dir / "config" / "config.yaml").resolve()
@@ -204,9 +210,9 @@ def _load_client_settings(base_dir: Path | Any) -> dict[str, Any]:
         settings = PipelineSettings.load(base_dir, config_path=config_path)
         return cast(dict[str, Any], settings.as_dict())
     except ConfigError:
-        return {}
-    except Exception:
-        return {}
+        raise
+    except Exception as exc:
+        raise ConfigError("Errore lettura config.yaml.", file_path=str(config_path)) from exc
 
 
 def load_semantic_config(base_dir: Path | Any, *, overrides: Optional[dict[str, Any]] = None) -> SemanticConfig:
@@ -223,23 +229,36 @@ def load_semantic_config(base_dir: Path | Any, *, overrides: Optional[dict[str, 
     base_dir_path = Path(getattr(ctx, "base_dir", None) or base_dir).resolve()
     semantic_dir = (base_dir_path / "semantic").resolve()
     raw_dir = (base_dir_path / "raw").resolve()
+    config_path = (base_dir_path / "config" / "config.yaml").resolve()
+
+    # semantic_mapping.yaml -> strict: deve esistere e validare prima dei merge
+    mapping_path = semantic_dir / "semantic_mapping.yaml"
+    mapping_all = _safe_load_yaml(mapping_path)
 
     # 1) Defaults hardcoded
     acc: dict[str, Any] = dict(_DEFAULTS)
 
     # 2) config.yaml -> semantic_defaults (chiavi ammesse in _ALLOWED_KEYS)
     cfg_all = _load_client_settings(base_dir)
+    if (
+        isinstance(cfg_all, dict)
+        and "semantic_defaults" in cfg_all
+        and not isinstance(cfg_all.get("semantic_defaults"), dict)
+    ):
+        raise ConfigError("semantic_defaults deve essere un mapping YAML.", file_path=str(config_path))
     defaults_from_cfg = _normalize_tagger_section(
         (cfg_all.get("semantic_defaults") or {}) if isinstance(cfg_all, dict) else {}
     )
     acc = _merge(acc, defaults_from_cfg)
 
     # 3) semantic_mapping.yaml -> semantic_tagger
-    mapping_path = semantic_dir / "semantic_mapping.yaml"
-    mapping_all = _safe_load_yaml(mapping_path)
 
-    semantic_tagger_raw = mapping_all.get("semantic_tagger") if isinstance(mapping_all, dict) else {}
-    semantic_tagger = _normalize_tagger_section(semantic_tagger_raw if isinstance(semantic_tagger_raw, dict) else {})
+    if "semantic_tagger" not in mapping_all:
+        raise ConfigError("semantic_mapping.yaml manca della chiave semantic_tagger.", file_path=str(mapping_path))
+    semantic_tagger_raw = mapping_all.get("semantic_tagger")
+    if not isinstance(semantic_tagger_raw, dict):
+        raise ConfigError("semantic_tagger deve essere un mapping YAML.", file_path=str(mapping_path))
+    semantic_tagger = _normalize_tagger_section(semantic_tagger_raw)
 
     acc = _merge(acc, semantic_tagger)
 

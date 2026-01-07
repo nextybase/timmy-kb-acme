@@ -62,9 +62,7 @@ def _require_drive_root_id(config: Dict[str, Any], *, slug: str, config_path: Pa
 
 def _require_drive_utils() -> None:
     if not callable(get_drive_service) or not callable(delete_drive_file):
-        raise ConfigError(
-            "Dipendenze Drive non disponibili: installa gli extra Drive (pip install .[drive])."
-        )
+        raise ConfigError("Dipendenze Drive non disponibili: installa gli extra Drive (pip install .[drive]).")
 
 
 def _remove_registry_entry(slug: str) -> tuple[bool, Optional[str]]:
