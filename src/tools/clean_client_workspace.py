@@ -37,14 +37,6 @@ def _resolve_workspace_root(slug: str) -> Path:
     return ensure_within_and_resolve(repo_root, workspace_root)
 
 
-def _require_config_yaml(slug: str, workspace_root: Path) -> Path:
-    config_path = workspace_root / "config" / "config.yaml"
-    config_path = ensure_within_and_resolve(workspace_root, config_path)
-    if not config_path.exists():
-        raise ConfigError("config.yaml mancante nel workspace cliente.", slug=slug, file_path=str(config_path))
-    return config_path
-
-
 def _load_config_payload(config_path: Path, *, workspace_root: Path, slug: str) -> Dict[str, Any]:
     try:
         raw = yaml_read(workspace_root, config_path, encoding="utf-8", use_cache=False)
@@ -147,22 +139,30 @@ def perform_cleanup(slug: str, *, client_name: Optional[str] = None) -> Dict[str
     logger = get_structured_logger("tools.clean_client_workspace", context={"slug": slug})
 
     workspace_root = _resolve_workspace_root(slug)
-    config_path = _require_config_yaml(slug, workspace_root)
-    _require_drive_utils()
-
-    config_payload = _load_config_payload(config_path, workspace_root=workspace_root, slug=slug)
-    drive_root_id = _require_drive_root_id(config_payload, slug=slug, config_path=config_path)
-
-    context = ClientContext.load(slug=slug, require_env=True)
     drive_error: Optional[str] = None
     drive_deleted = False
-    try:
-        service = get_drive_service(context)
-        delete_drive_file(service, drive_root_id, redact_logs=bool(context.redact_logs))
-        drive_deleted = True
-    except Exception as exc:
-        drive_error = str(exc)
-        logger.warning("tools.clean_client_workspace.drive_failed", extra={"slug": slug, "error": drive_error})
+    drive_root_id: Optional[str] = None
+
+    config_path = ensure_within_and_resolve(workspace_root, workspace_root / "config" / "config.yaml")
+    if config_path.exists():
+        try:
+            config_payload = _load_config_payload(config_path, workspace_root=workspace_root, slug=slug)
+            drive_root_id = _require_drive_root_id(config_payload, slug=slug, config_path=config_path)
+        except Exception as exc:
+            drive_error = f"drive_config_invalid: {exc}"
+    else:
+        drive_error = "missing_config_yaml"
+
+    if drive_root_id and drive_error is None:
+        try:
+            _require_drive_utils()
+            context = ClientContext.load(slug=slug, require_env=True)
+            service = get_drive_service(context)
+            delete_drive_file(service, drive_root_id, redact_logs=bool(context.redact_logs))
+            drive_deleted = True
+        except Exception as exc:
+            drive_error = str(exc)
+            logger.warning("tools.clean_client_workspace.drive_failed", extra={"slug": slug, "error": drive_error})
 
     errors: list[str] = []
     registry_removed, registry_err = _remove_registry_entry(slug)
