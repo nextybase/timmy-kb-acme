@@ -45,8 +45,8 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
     seen_aliases: Dict[str, Set[str]] = defaultdict(set)
 
     def _append_alias(canon_value: Any, alias_value: Any) -> None:
-        canon = str(canon_value)
-        alias = str(alias_value)
+        canon = str(canon_value).strip().casefold()
+        alias = str(alias_value).strip()
         if not canon or not alias:
             return
         if alias in seen_aliases[canon]:
@@ -108,7 +108,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
         for row in rows:
             if not isinstance(row, Mapping):
                 continue
-            name = str(row.get("name") or row.get("canonical") or "").strip()
+            name = str(row.get("name") or row.get("canonical") or "").strip().casefold()
             if not name:
                 continue
             raw_action = str(row.get("action", "")).strip()

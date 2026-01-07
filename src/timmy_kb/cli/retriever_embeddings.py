@@ -118,11 +118,16 @@ def _coerce_candidate_vector(
 def _materialize_query_vector(
     params: QueryParams,
     embeddings_client: EmbeddingsClient,
+    *,
+    embedding_model: str | None = None,
 ) -> tuple[Sequence[float] | None, float]:
     """Calcola l'embedding della query e restituisce (vettore, ms)."""
     t0 = time.time()
     try:
-        q_raw = embeddings_client.embed_texts([params.query])
+        if embedding_model:
+            q_raw = embeddings_client.embed_texts([params.query], model=embedding_model)
+        else:
+            q_raw = embeddings_client.embed_texts([params.query])
     except Exception as exc:
         t_ms = (time.time() - t0) * 1000.0
         LOGGER.warning(

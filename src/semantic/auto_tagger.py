@@ -34,7 +34,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -138,7 +138,12 @@ def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
 # ------------------------------ API principali ------------------------------- #
 
 
-def _extract_semantic_candidates_heuristic(raw_dir: Path, cfg: SemanticConfig) -> dict[str, dict[str, Any]]:
+def _extract_semantic_candidates_heuristic(
+    raw_dir: Path,
+    cfg: SemanticConfig,
+    *,
+    pdfs: Iterable[Path] | None = None,
+) -> dict[str, dict[str, Any]]:
     """Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename."""
     raw_dir = Path(raw_dir).resolve()
     base_dir = Path(cfg.base_dir).resolve()
@@ -148,7 +153,7 @@ def _extract_semantic_candidates_heuristic(raw_dir: Path, cfg: SemanticConfig) -
 
     candidates: dict[str, dict[str, Any]] = {}
 
-    for pdf_path in _iter_pdf_files(raw_dir):
+    for pdf_path in (pdfs or _iter_pdf_files(raw_dir)):
         try:
             rel_from_base = pdf_path.relative_to(base_dir)
         except ValueError:
@@ -229,9 +234,14 @@ def _merge_spacy_candidates(
     return merged
 
 
-def extract_semantic_candidates(raw_dir: Path, cfg: SemanticConfig) -> dict[str, dict[str, Any]]:
+def extract_semantic_candidates(
+    raw_dir: Path,
+    cfg: SemanticConfig,
+    *,
+    safe_pdfs: Sequence[Path] | None = None,
+) -> dict[str, dict[str, Any]]:
     """Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename e opzionalmente SpaCy."""
-    candidates = _extract_semantic_candidates_heuristic(raw_dir, cfg)
+    candidates = _extract_semantic_candidates_heuristic(raw_dir, cfg, pdfs=safe_pdfs)
 
     backend_env = os.getenv("TAGS_NLP_BACKEND", cfg.nlp_backend).strip().lower()
     if backend_env == "spacy":
