@@ -34,7 +34,7 @@ PyGithub==2.3.0
 docker==7.0.0
 
 # NLP/RAG
-openai==2.3.0
+openai==2.14.0
 httpx==0.28.1
 tiktoken==0.7.0
 sentence-transformers==2.7.0
