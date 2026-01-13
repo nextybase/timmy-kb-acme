@@ -10,12 +10,13 @@ from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve
 from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from semantic.auto_tagger import extract_semantic_candidates
 from semantic.auto_tagger import render_tags_csv as _render_tags_csv
 from semantic.config import load_semantic_config as _load_semantic_config
 from semantic.normalizer import normalize_tags as _normalize_tags
 from semantic.tags_io import write_tagging_readme as _write_tagging_readme
 from semantic.types import SemanticContextProtocol as ClientContextType
-from storage.tags_store import DocEntityRecord
+from storage.tags_store import DocEntityRecord, derive_db_path_from_yaml_path
 from storage.tags_store import ensure_schema_v2 as _ensure_tags_schema_v2
 from storage.tags_store import get_conn as _get_tags_conn
 from storage.tags_store import save_doc_entities as _save_doc_entities
@@ -132,18 +133,15 @@ def _apply_folder_terms(
 
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
     """Costruisce `tags_raw.csv` dal workspace corrente applicando arricchimento NLP (DB + Spacy)."""
-    ctx_base = getattr(context, "base_dir", None)
-    layout: WorkspaceLayout | None = None
-    if getattr(context, "repo_root_dir", None) is not None:
-        with workspace_validation_policy(skip_validation=True):
-            layout = WorkspaceLayout.from_context(cast(Any, context))
-    elif ctx_base is not None:
-        layout = WorkspaceLayout.from_workspace(Path(ctx_base), slug=slug, skip_validation=True)
-    else:
-        with workspace_validation_policy(skip_validation=True):
-            layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
-    base_dir = cast(Path, ctx_base or layout.base_dir)
-    raw_dir = cast(Path, getattr(context, "raw_dir", None) or layout.raw_dir)
+    if getattr(context, "repo_root_dir", None) is None:
+        raise ConfigError(
+            "Context privo di repo_root_dir: impossibile risolvere WorkspaceLayout.",
+            slug=slug,
+        )
+    with workspace_validation_policy(skip_validation=True):
+        layout = WorkspaceLayout.from_context(cast(Any, context))
+    base_dir = layout.base_dir
+    raw_dir = layout.raw_dir
     semantic_dir = layout.semantic_dir
     csv_path = semantic_dir / "tags_raw.csv"
 
@@ -154,15 +152,14 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
     with phase_scope(logger, stage="build_tags_csv", customer=slug) as m:
         semantic_dir.mkdir(parents=True, exist_ok=True)
         cfg = _load_semantic_config(base_dir)
-        from semantic import api as semantic_api
-
-        candidates = semantic_api._extract_candidates(raw_dir, cfg)
+        candidates = extract_semantic_candidates(raw_dir, cfg)
         candidates = _normalize_tags(candidates, cfg.mapping)
         doc_entities = _collect_doc_entities(candidates)
 
         # Arricchimento con top-terms NLP (se disponibili in tags.db)
+        tags_db_path: Path | None = None
         try:
-            tags_db_path = Path(semantic_api._derive_tags_db_path(semantic_dir / "tags_reviewed.yaml"))
+            tags_db_path = Path(derive_db_path_from_yaml_path(semantic_dir / "tags_reviewed.yaml"))
             tags_db_path = ensure_within_and_resolve(semantic_dir, tags_db_path)
             folder_terms = _load_folder_terms(tags_db_path, slug=slug)
             if folder_terms:
@@ -174,7 +171,11 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         except Exception as exc:
             logger.exception(
                 "semantic.tags_csv.enrichment_failed",
-                extra={"slug": slug, "error": str(exc), "tags_db": str(tags_db_path)},
+                extra={
+                    "slug": slug,
+                    "error": str(exc),
+                    "tags_db": str(tags_db_path) if tags_db_path else None,
+                },
             )
             raise ConfigError("Arricchimento tag fallito", slug=slug) from exc
 

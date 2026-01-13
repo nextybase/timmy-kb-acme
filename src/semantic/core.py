@@ -15,6 +15,7 @@ from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths, read_text_safe
+from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
 from semantic.document_ingest import DocumentContent, read_document
 from semantic.vocab_loader import load_reviewed_vocab
 
@@ -46,14 +47,18 @@ def compile_pdf_to_yaml(pdf_path: Path, yaml_path: Path) -> None:
 class _CtxProto:
     base_dir: Path
     md_dir: Path
+    repo_root_dir: Path
     slug: Optional[str]
 
 
 def _list_markdown_files(context: _CtxProto, logger: logging.Logger) -> List[Path]:
-    if not getattr(context, "md_dir", None) or not getattr(context, "base_dir", None):
-        raise PipelineError("Contesto incompleto: md_dir/base_dir mancanti", slug=getattr(context, "slug", None))
+    if not getattr(context, "md_dir", None) or not getattr(context, "repo_root_dir", None):
+        raise PipelineError("Contesto incompleto: md_dir/repo_root_dir mancanti", slug=getattr(context, "slug", None))
+    with workspace_validation_policy(skip_validation=True):
+        layout = WorkspaceLayout.from_context(context)
+    base_dir = layout.base_dir
     try:
-        safe_md_dir = ensure_within_and_resolve(context.base_dir, context.md_dir)
+        safe_md_dir = ensure_within_and_resolve(base_dir, context.md_dir)
     except Exception as exc:
         raise PipelineError("Path non sicuro", slug=context.slug, file_path=context.md_dir) from exc
     if not safe_md_dir.exists() or not safe_md_dir.is_dir():

@@ -36,7 +36,7 @@ def test__list_markdown_files_happy_path(tmp_path: Path) -> None:
     (md / "a.md").write_text("A", encoding="utf-8")
     (md / "c.txt").write_text("X", encoding="utf-8")
 
-    ctx = DummyCtx(base_dir=base, md_dir=md)
+    ctx = DummyCtx(base_dir=base, md_dir=md, repo_root_dir=base)
     files = _list_markdown_files(
         cast(Any, ctx),
         get_structured_logger("tests.semantic_extractor.list_md", context=ctx),
@@ -61,10 +61,10 @@ def test__list_markdown_files_unsafe_path_raises(tmp_path: Path) -> None:
     md_outside.mkdir()
     with pytest.raises(PipelineError):
         _ = _list_markdown_files(
-            cast(Any, DummyCtx(base_dir=base, md_dir=md_outside)),
+            cast(Any, DummyCtx(base_dir=base, md_dir=md_outside, repo_root_dir=base)),
             get_structured_logger(
                 "tests.semantic_extractor.list_md",
-                context=DummyCtx(base_dir=base, md_dir=md_outside),
+                context=DummyCtx(base_dir=base, md_dir=md_outside, repo_root_dir=base),
             ),
         )
 
@@ -76,10 +76,10 @@ def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
     # md does not exist
     with pytest.raises(InputDirectoryMissing):
         _ = _list_markdown_files(
-            cast(Any, DummyCtx(base_dir=base, md_dir=md)),
+            cast(Any, DummyCtx(base_dir=base, md_dir=md, repo_root_dir=base)),
             get_structured_logger(
                 "tests.semantic_extractor.list_md",
-                context=DummyCtx(base_dir=base, md_dir=md),
+                context=DummyCtx(base_dir=base, md_dir=md, repo_root_dir=base),
             ),
         )
 

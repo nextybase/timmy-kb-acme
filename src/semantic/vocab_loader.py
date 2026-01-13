@@ -332,6 +332,8 @@ def load_reviewed_vocab(
         return {}
 
     if _load_tags_reviewed is None:
+        if strict:
+            raise ConfigError("Loader tags_store mancante in modalità strict.", file_path=db_path)
         logger.warning(
             "semantic.vocab.tags_store_missing",
             extra={"slug": slug, "file_path": str(db_path)},

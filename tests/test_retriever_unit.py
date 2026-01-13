@@ -218,7 +218,7 @@ def test_search_with_config_passes_throttle(monkeypatch: pytest.MonkeyPatch):
     assert throttle.parallelism == 3
     assert throttle.sleep_ms_between_calls == 25
     assert throttle.latency_budget_ms == 150
-    assert captured["throttle_key"] == f"{params.slug}:{params.scope}"
+    assert captured["throttle_key"] == f"{params.slug}::{params.scope}"
 
 
 def test_rank_candidates_respects_deadline():

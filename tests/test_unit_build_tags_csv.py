@@ -101,7 +101,7 @@ def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeyp
     )
 
     monkeypatch.setattr(
-        "semantic.api._derive_tags_db_path",
+        "semantic.tagging_service.derive_db_path_from_yaml_path",
         lambda yaml_path: base_dir.parent / "escape" / "tags.db",
     )
 
@@ -135,7 +135,7 @@ def test_build_tags_csv_writes_doc_entities_db(tmp_path: Path, monkeypatch: pyte
             }
         }
 
-    monkeypatch.setattr("semantic.api._extract_candidates", _fake_candidates)
+    monkeypatch.setattr("semantic.tagging_service.extract_semantic_candidates", _fake_candidates)
 
     context = TestClientCtx(
         slug=slug,

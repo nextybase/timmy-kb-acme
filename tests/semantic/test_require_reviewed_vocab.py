@@ -15,7 +15,7 @@ def _make_loader(
     *,
     module_name: str = "semantic.vocab_loader",
 ) -> callable[[Path, logging.Logger], dict[str, dict[str, list[str]]]]:
-    def _loader(_: Path, __: logging.Logger) -> dict[str, dict[str, list[str]]]:
+    def _loader(_: Path, __: logging.Logger, **_kwargs: object) -> dict[str, dict[str, list[str]]]:
         return result
 
     _loader.__module__ = module_name

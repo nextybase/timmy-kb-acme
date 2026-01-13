@@ -573,7 +573,7 @@ def search_with_config(
     """
     effective = with_config_or_budget(params, config)
     throttle_cfg = throttle_mod._normalize_throttle_settings(throttle_mod._build_throttle_settings(config))
-    throttle_key = f"{params.slug}:{params.scope}"
+    throttle_key = f"{params.slug}::{params.scope}"
     return search(
         effective,
         embeddings_client,
