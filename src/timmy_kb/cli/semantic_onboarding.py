@@ -19,7 +19,7 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.observability_config import get_observability_settings
-from pipeline.path_utils import iter_safe_paths
+from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths
 from pipeline.tracing import start_root_trace
 from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
 from semantic.api import require_reviewed_vocab  # noqa: F401  # esposto per monkeypatch nei test CLI
@@ -112,7 +112,8 @@ def main() -> int:
 
             # 3) Costruisci il Knowledge Graph dei tag (Tag KG Builder)
             semantic_dir = layout.semantic_dir
-            tags_raw_path = semantic_dir / "tags_raw.json"
+            # Path-safety: blocca traversal/symlink fuori semantic_dir.
+            tags_raw_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.json")
             if tags_raw_path.exists():
                 with phase_scope(logger, stage="cli.tag_kg_builder", customer=slug):
                     build_kg_for_workspace(base_dir, namespace=slug)

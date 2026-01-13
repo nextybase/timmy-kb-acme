@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -84,3 +85,34 @@ def test_main_bubbles_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     exit_code = cli.main()
 
     assert exit_code == exit_code_for(ConfigError("missing", slug="dummy"))
+
+
+def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    args = argparse.Namespace(slug="dummy", no_preview=False, non_interactive=True)
+    monkeypatch.setattr(cli, "_parse_args", lambda: args)
+
+    ctx = _ctx(tmp_path / "output" / "dummy")
+    monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))
+    monkeypatch.setattr(cli, "run_semantic_pipeline", lambda *a, **k: (ctx.base_dir, [], []))
+
+    layout = SimpleNamespace(semantic_dir=ctx.semantic_dir, book_dir=ctx.md_dir, base_dir=ctx.base_dir)
+    monkeypatch.setattr(cli.WorkspaceLayout, "from_context", classmethod(lambda cls, c: layout))
+
+    layout.semantic_dir.mkdir(parents=True, exist_ok=True)
+    (layout.semantic_dir / "tags_raw.json").write_text("{}", encoding="utf-8")
+
+    called: dict[str, Path] = {}
+
+    def _ensure(base_dir: Path, candidate: Path) -> Path:
+        called["base"] = base_dir
+        called["candidate"] = candidate
+        return candidate
+
+    monkeypatch.setattr(cli, "ensure_within_and_resolve", _ensure)
+    monkeypatch.setattr(cli, "build_kg_for_workspace", lambda *a, **k: None)
+
+    exit_code = cli.main()
+
+    assert exit_code == 0
+    assert called["base"] == layout.semantic_dir
+    assert called["candidate"] == layout.semantic_dir / "tags_raw.json"
