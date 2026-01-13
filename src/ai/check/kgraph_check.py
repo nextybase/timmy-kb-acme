@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from ai.kgraph import invoke_kgraph_messages
 from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
 
-LOGGER = logging.getLogger("ai.check.kgraph")
+LOGGER = get_structured_logger("ai.check.kgraph")
 
 
 def run_kgraph_dummy_check(
