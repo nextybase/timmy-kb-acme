@@ -7,6 +7,7 @@ import pytest
 
 from pipeline.logging_utils import get_structured_logger
 from semantic.vocab_loader import load_reviewed_vocab
+from pipeline.exceptions import ConfigError
 
 
 def _mk_workspace(tmp_path: Path) -> Path:
@@ -43,6 +44,20 @@ def test_load_vocab_empty_db_warns(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     out = capsys.readouterr().out
     assert "semantic.vocab.db_empty" in out
     assert f"slug={base.name}" in out
+
+
+def test_load_vocab_empty_db_strict_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base = _mk_workspace(tmp_path)
+    db = base / "semantic" / "tags.db"
+    db.write_bytes(b"")
+
+    import semantic.vocab_loader as vl
+
+    monkeypatch.setattr(vl, "load_tags_reviewed_db", lambda p: {}, raising=True)
+
+    logger = get_structured_logger("test.vocab.empty.strict")
+    with pytest.raises(ConfigError, match="Vocabolario canonico vuoto"):
+        load_reviewed_vocab(base, logger, strict=True)
 
 
 def test_load_vocab_valid_info(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):

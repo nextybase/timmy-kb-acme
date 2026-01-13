@@ -359,6 +359,8 @@ def load_reviewed_vocab(
             file_path=db_path,
             canon_count=0,
         )
+        if strict:
+            raise ConfigError("Vocabolario canonico vuoto (tags.db).", file_path=db_path)
         return {}
 
     _log_vocab_event(
