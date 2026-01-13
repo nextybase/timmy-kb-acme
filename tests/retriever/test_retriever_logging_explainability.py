@@ -8,6 +8,7 @@ from typing import Any, List
 import pytest
 
 from tests.conftest import DUMMY_SLUG
+from pipeline.exceptions import PipelineError
 from timmy_kb.cli.retriever import QueryParams, search
 
 
@@ -89,8 +90,26 @@ def test_response_manifest_event_emitted(
     manifest_event = next((rec for rec in caplog.records if rec.getMessage() == "retriever.response.manifest"), None)
     assert manifest_event is not None
     assert getattr(manifest_event, "response_id") == "resp-manifest"
-    assert Path(getattr(manifest_event, "manifest_path")).name == "resp-manifest.json"
+    manifest_path = Path(getattr(manifest_event, "manifest_path"))
+    assert manifest_path.name == "resp-manifest.json"
+    assert manifest_path.exists()
     assert getattr(manifest_event, "evidence_ids")[0]["chunk_id"] == "c1"
+
+
+def test_response_manifest_write_failure_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", _fake_candidates_with_lineage, raising=True)
+    params = QueryParams(db_path=None, slug=DUMMY_SLUG, scope="kb", query="hello world", k=1, candidate_limit=600)
+    client = _DummyEmbeddingsClient([0.1, 0.1, 0.1])
+
+    def _boom(*_a: object, **_k: object) -> Path:
+        raise PermissionError("readonly")
+
+    monkeypatch.setattr("timmy_kb.cli.retriever_manifest.safe_write_manifest", _boom, raising=True)
+
+    with pytest.raises(PipelineError, match="Manifest explainability non scritto"):
+        search(params, client, response_id="resp-fail", embedding_model="embed-model", explain_base_dir=tmp_path)
 
 
 def test_retriever_logging_handles_missing_lineage(
