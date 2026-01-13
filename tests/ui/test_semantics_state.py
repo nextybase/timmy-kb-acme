@@ -138,7 +138,7 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sem, "convert_markdown", _convert)
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
-    monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {"tag": True})
+    monkeypatch.setattr(sem, "require_reviewed_vocab", lambda base_dir, logger, *, slug: {"tag": True})
 
     def _enrich(ctx, logger, vocab, slug=None, **kwargs):
         logger.info("enrich", extra={"slug": slug})
@@ -328,7 +328,7 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
 
     # vocabolario e arricchimento simulati
-    monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {"ok": True})
+    monkeypatch.setattr(sem, "require_reviewed_vocab", lambda base_dir, logger, *, slug: {"ok": True})
     monkeypatch.setattr(
         sem,
         "enrich_frontmatter",
@@ -388,7 +388,13 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
     monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
-    monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {})
+    monkeypatch.setattr(
+        sem,
+        "require_reviewed_vocab",
+        lambda base_dir, logger, *, slug: (_ for _ in ()).throw(
+            ConfigError("Vocabolario canonico assente.", slug=slug)
+        ),
+    )
 
     sem._run_enrich("dummy-srl")
 
@@ -668,7 +674,7 @@ def test_retry_logged_and_gates_checked(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx)
     monkeypatch.setattr(sem, "enrich_frontmatter", lambda ctx, logger, vocab, slug, **kwargs: [])
-    monkeypatch.setattr(sem, "load_reviewed_vocab", lambda base_dir, logger: {"tag": True})
+    monkeypatch.setattr(sem, "require_reviewed_vocab", lambda base_dir, logger, *, slug: {"tag": True})
 
     sem._run_enrich("dummy")
     sem._run_enrich("dummy")

@@ -513,8 +513,15 @@ def _plan_pdf_groups(
     )
 
 
-def _cleanup_orphan_markdown(target: Path, written: set[Path]) -> None:
-    """Rimuove i markdown non più associati ai PDF, preservando README/SUMMARY."""
+def _cleanup_orphan_markdown(
+    target: Path,
+    written: set[Path],
+    *,
+    logger: logging.Logger | None = None,
+) -> None:
+    """Rimuove i markdown non piu associati ai PDF, preservando README/SUMMARY."""
+    log = logger or get_structured_logger("pipeline.content_utils")
+    removed = 0
     for candidate in iter_safe_paths(target, include_dirs=False, include_files=True, suffixes=(".md",)):
         low = candidate.name.lower()
         if low in {"readme.md", "summary.md"}:
@@ -523,11 +530,22 @@ def _cleanup_orphan_markdown(target: Path, written: set[Path]) -> None:
             ensure_within(target, candidate)
             try:
                 candidate.unlink(missing_ok=True)
+                removed += 1
             except TypeError:
                 try:
                     candidate.unlink()
                 except FileNotFoundError:
-                    pass
+                    continue
+                else:
+                    removed += 1
+    if removed > 0:
+        try:
+            log.info(
+                "pipeline.content.orphan_deleted",
+                extra={"path": str(target), "count": int(removed)},
+            )
+        except Exception:
+            pass
 
 
 # -----------------------------
@@ -790,7 +808,7 @@ def convert_files_to_structured_markdown(
         for pdf in safe_list:
             written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg, slug=slug))
 
-    _cleanup_orphan_markdown(target, written)
+    _cleanup_orphan_markdown(target, written, logger=logger)
 
     log_frontmatter_cache_stats(
         logger,

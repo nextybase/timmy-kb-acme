@@ -21,7 +21,6 @@ from pipeline.qa_evidence import QA_EVIDENCE_FILENAME as PIPELINE_QA_EVIDENCE_FI
 from pipeline.qa_evidence import load_qa_evidence
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.api import get_paths  # noqa: F401 - usato dai test tramite monkeypatch
-from semantic.api import load_reviewed_vocab  # noqa: F401
 from semantic.api import require_reviewed_vocab
 from semantic.book_readiness import is_book_ready
 from semantic.convert_service import convert_markdown
@@ -157,12 +156,7 @@ def _get_canonical_vocab(
     slug: str,
 ) -> dict[str, dict[str, Sequence[str]]]:
     """Restituisce il vocabolario canonico o solleva ConfigError."""
-
-    vocab = cast(dict[str, dict[str, Sequence[str]]], load_reviewed_vocab(base_dir, logger))
-    if vocab:
-        return vocab
-    required = cast(dict[str, dict[str, Sequence[str]]], require_reviewed_vocab(base_dir, logger, slug=slug))
-    return required
+    return cast(dict[str, dict[str, Sequence[str]]], require_reviewed_vocab(base_dir, logger, slug=slug))
 
 
 def _qa_evidence_path(layout: WorkspaceLayout) -> Path:

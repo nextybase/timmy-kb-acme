@@ -253,7 +253,11 @@ def search(
             )
             return []
         try:
-            query_vector, t_emb_ms = embeddings_mod._materialize_query_vector(params, embeddings_client)
+            query_vector, t_emb_ms = embeddings_mod._materialize_query_vector(
+                params,
+                embeddings_client,
+                embedding_model=embedding_model,
+            )
         except RetrieverError:
             return []
         if query_vector is None:

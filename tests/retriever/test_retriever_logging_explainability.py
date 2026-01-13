@@ -15,8 +15,10 @@ class _DummyEmbeddingsClient:
     def __init__(self, vector: List[float]) -> None:
         self._vector = vector
         self.model = "embed-model"
+        self.last_model: str | None = None
 
-    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+    def embed_texts(self, texts: list[str], *, model: str | None = None) -> list[list[float]]:
+        self.last_model = model
         return [self._vector for _ in texts]
 
 

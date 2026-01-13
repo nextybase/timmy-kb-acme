@@ -21,6 +21,7 @@ class FakeEmb:
 
     def __init__(self) -> None:
         self.calls: list[Sequence[str]] = []
+        self.last_model: str | None = None
 
     def embed_texts(
         self,
@@ -30,6 +31,7 @@ class FakeEmb:
     ) -> Sequence[Sequence[float]]:
         """Ritorna un embedding unitario e registra le chiamate per l'asserzione."""
         self.calls.append(tuple(texts))
+        self.last_model = model
         return [[1.0, 0.0]]
 
 
@@ -62,10 +64,11 @@ def test_search_uses_query_params_and_limit(monkeypatch, tmp_path: Path):
     )
     emb = FakeEmb()
 
-    out = retr.search(params, emb)
+    out = retr.search(params, emb, embedding_model="text-embedding-3-large")
 
     # embeddings chiamato con la query attesa
     assert emb.calls and emb.calls[-1] == ("hello",)
+    assert emb.last_model == "text-embedding-3-large"
     # pass-through di QueryParams verso fetch_candidates
     assert seen == {
         "slug": DUMMY_SLUG,
