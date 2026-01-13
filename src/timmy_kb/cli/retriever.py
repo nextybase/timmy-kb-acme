@@ -21,6 +21,7 @@ Design:
 
 from __future__ import annotations
 
+import logging
 import time
 from contextlib import nullcontext
 from dataclasses import MISSING, replace
@@ -51,6 +52,20 @@ _THROTTLE_REGISTRY = throttle_mod._THROTTLE_REGISTRY
 _normalize_throttle_settings = throttle_mod._normalize_throttle_settings
 _deadline_from_settings = throttle_mod._deadline_from_settings
 reset_throttle_registry = throttle_mod.reset_throttle_registry
+
+
+def _log_logging_failure(event: str, exc: Exception, *, extra: Mapping[str, Any] | None = None) -> None:
+    payload = {"event": event, "error": repr(exc)}
+    if extra:
+        payload.update(extra)
+    try:
+        LOGGER.warning("retriever.log_failed", extra=payload)
+    except Exception:
+        logging.getLogger("timmy_kb.retriever").warning(
+            "retriever.log_failed event=%s error=%r",
+            event,
+            exc,
+        )
 
 
 def _throttle_guard(key: str, settings: Optional[ThrottleSettings], *, deadline: float | None = None):
@@ -556,9 +571,16 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
     if lim and lim > 0:
         safe_lim = max(MIN_CANDIDATE_LIMIT, min(int(lim), MAX_CANDIDATE_LIMIT))
         try:
-            LOGGER.info("limit.source=config", extra={"limit": int(lim)})
-        except Exception:
-            pass
+            LOGGER.info(
+                "limit.source=config",
+                extra={"limit": int(safe_lim), "limit_requested": int(lim)},
+            )
+        except Exception as exc:
+            _log_logging_failure(
+                "limit.source=config",
+                exc,
+                extra={"limit": int(safe_lim), "limit_requested": int(lim)},
+            )
         if safe_lim != int(lim):
             LOGGER.warning(
                 "limit.clamped",
