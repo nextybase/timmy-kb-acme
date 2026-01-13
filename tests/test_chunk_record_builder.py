@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from pipeline.content_utils import build_chunk_records_from_markdown_files
+from pipeline.exceptions import PipelineError
 
 
 def test_build_chunk_records_from_markdown_files(tmp_path: Path) -> None:
@@ -46,3 +49,26 @@ def test_build_chunk_records_heading_chunking(tmp_path: Path) -> None:
     repeat = build_chunk_records_from_markdown_files(slug, [md_file], chunking="heading")
     assert first["id"] == repeat[0]["id"]
     assert second["id"] == repeat[1]["id"]
+
+
+def test_build_chunk_records_rejects_paths_outside_base(tmp_path: Path) -> None:
+    slug = "dummy"
+    base_dir = tmp_path / "base"
+    base_dir.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("Fuori", encoding="utf-8")
+
+    with pytest.raises(PipelineError, match="Markdown path fuori perimetro"):
+        build_chunk_records_from_markdown_files(slug, [outside], base_dir=base_dir)
+
+
+def test_build_chunk_records_accepts_paths_inside_base(tmp_path: Path) -> None:
+    slug = "dummy"
+    base_dir = tmp_path / "base"
+    base_dir.mkdir()
+    inside = base_dir / "inside.md"
+    inside.write_text("Dentro", encoding="utf-8")
+
+    records = build_chunk_records_from_markdown_files(slug, [inside], base_dir=base_dir)
+    assert len(records) == 1
+    assert records[0]["source_path"] == "inside.md"

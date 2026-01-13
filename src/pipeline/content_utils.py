@@ -832,13 +832,23 @@ def build_chunk_records_from_markdown_files(
     resolved_base = base_path.resolve() if base_path is not None else None
     for raw_path in md_paths:
         path = raw_path if isinstance(raw_path, Path) else Path(raw_path)
+        safe_path = path
+        if resolved_base is not None:
+            try:
+                safe_path = ensure_within_and_resolve(resolved_base, path)
+            except PathTraversalError as exc:
+                raise PipelineError(
+                    "Markdown path fuori perimetro.",
+                    slug=slug,
+                    file_path=str(path),
+                ) from exc
         try:
-            file_meta, body = read_frontmatter(path.parent, path, encoding="utf-8", use_cache=True)
+            file_meta, body = read_frontmatter(safe_path.parent, safe_path, encoding="utf-8", use_cache=True)
             text = (body or "").lstrip("\ufeff")
         except Exception:
             file_meta = {}
-            text = read_text_safe(path.parent, path, encoding="utf-8")
-        source_path = _format_source_path(path, resolved_base)
+            text = read_text_safe(safe_path.parent, safe_path, encoding="utf-8")
+        source_path = _format_source_path(safe_path, resolved_base)
 
         if chunking == "heading":
             segments = _segment_markdown_by_heading(text)
