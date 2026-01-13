@@ -226,6 +226,25 @@ def search(
 
         # Soft-fail per input non utili
         if params.k == 0:
+            try:
+                LOGGER.info(
+                    "retriever.query.skipped",
+                    extra={
+                        "slug": params.slug,
+                        "scope": params.scope,
+                        "reason": "k_is_zero",
+                    },
+                )
+            except Exception as exc:
+                LOGGER.warning(
+                    "retriever.query.skipped_log_failed",
+                    extra={
+                        "slug": params.slug,
+                        "scope": params.scope,
+                        "reason": "k_is_zero",
+                        "error": repr(exc),
+                    },
+                )
             return []
         if not params.query.strip():
             LOGGER.warning(
