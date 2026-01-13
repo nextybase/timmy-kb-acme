@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Optional
@@ -11,11 +10,12 @@ import yaml
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.env_utils import ensure_dotenv_loaded
 from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from semantic.vision_provision import debug_analyze_vision_sections_from_yaml, provision_from_vision_with_config
 from tools.dummy.bootstrap import ensure_dummy_vision_pdf
 
-LOGGER = logging.getLogger("ai.check.vision")
+LOGGER = get_structured_logger("ai.check.vision")
 
 
 def _load_workspace_config(workspace: Path) -> Dict[str, Any]:
