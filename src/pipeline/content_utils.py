@@ -383,7 +383,7 @@ def _write_markdown_for_pdf(
         "title": _titleize(pdf_path.stem),
         "source_category": rel_pdf.parent.as_posix() or None,
         "source_file": rel_pdf.name,
-        "created_at": existing_created_at or datetime.utcnow().isoformat(timespec="seconds"),
+        "created_at": existing_created_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "tags_raw": tags_sorted,
     }
     for key, value in existing_meta.items():

@@ -153,7 +153,7 @@ def _extract_semantic_candidates_heuristic(
 
     candidates: dict[str, dict[str, Any]] = {}
 
-    for pdf_path in (pdfs or _iter_pdf_files(raw_dir)):
+    for pdf_path in pdfs or _iter_pdf_files(raw_dir):
         try:
             rel_from_base = pdf_path.relative_to(base_dir)
         except ValueError:

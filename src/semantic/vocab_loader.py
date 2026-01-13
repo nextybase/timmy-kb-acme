@@ -58,6 +58,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
         synonym_map: dict[str, list[str]] = defaultdict(list)
         synonym_seen: dict[str, set[str]] = defaultdict(set)
         merge_map: dict[str, str] = {}
+        display_names: dict[str, str] = {}
 
         def _normalize_synonyms(raw: Any) -> list[str]:
             if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
@@ -108,9 +109,11 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
         for row in rows:
             if not isinstance(row, Mapping):
                 continue
-            name = str(row.get("name") or row.get("canonical") or "").strip().casefold()
-            if not name:
+            raw_name = str(row.get("name") or row.get("canonical") or "").strip()
+            if not raw_name:
                 continue
+            name = raw_name.casefold()
+            display_names.setdefault(name, raw_name)
             raw_action = str(row.get("action", "")).strip()
             action = raw_action.lower()
             synonym_map.setdefault(name, [])
@@ -120,15 +123,18 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
                 _record_synonym(name, alias)
             if action.startswith("merge_into:"):
                 parts = raw_action.split(":", 1)
-                target = parts[1].strip() if len(parts) > 1 else ""
-                if target:
-                    merge_map[name] = target
+                target_raw = parts[1].strip() if len(parts) > 1 else ""
+                if target_raw:
+                    target_norm = target_raw.casefold()
+                    merge_map[name] = target_norm
+                    display_names.setdefault(target_norm, target_raw)
 
         # Deduce merge relationships for canonical entries that appear as aliases elsewhere.
         for canon, aliases in list(synonym_map.items()):
             for alias in aliases:
-                if alias in synonym_map and alias != canon and alias not in merge_map:
-                    merge_map[alias] = canon
+                alias_norm = alias.casefold()
+                if alias_norm in synonym_map and alias_norm != canon and alias_norm not in merge_map:
+                    merge_map[alias_norm] = canon
 
         all_names = set(synonym_map.keys()) | set(merge_map.keys()) | set(merge_map.values())
         for name in all_names:
@@ -137,11 +143,11 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
                 continue
             _ensure_target(target)
             if name != target:
-                _add_final_alias(target, name)
+                _add_final_alias(target, display_names.get(name, name))
             for alias in synonym_map.get(name, []):
                 _add_final_alias(target, alias)
 
-        return {canon: {"aliases": aliases} for canon, aliases in final_aliases.items()}
+        return {display_names.get(canon, canon): {"aliases": aliases} for canon, aliases in final_aliases.items()}
 
     # 1) già normalizzato o dizionario con chiave speciale 'tags'
     if isinstance(data, Mapping):
@@ -262,12 +268,18 @@ def _log_vocab_event(
         )
 
 
-def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, list[str]]]:
+def load_reviewed_vocab(
+    base_dir: Path,
+    logger: logging.Logger,
+    *,
+    strict: bool = False,
+) -> Dict[str, Dict[str, list[str]]]:
     """
     Carica (se presente) il vocabolario consolidato per l'enrichment da semantic/tags.db.
 
     Regole:
     - Se `tags.db` non esiste: restituisce `{}` e registra un log informativo (enrichment disabilitato).
+      Con `strict=True` solleva `ConfigError`.
     - Errori di path (traversal/symlink) o apertura DB: `ConfigError` con metadati utili.
     - Dati letti adattati a: {canonical: {"aliases": [str,...]}}.
     """
@@ -286,6 +298,8 @@ def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dic
             file_path=db_path,
             canon_count=0,
         )
+        if strict:
+            raise ConfigError("Vocabolario canonico assente (tags.db).", file_path=db_path)
         return {}
 
     if _load_tags_reviewed is None:

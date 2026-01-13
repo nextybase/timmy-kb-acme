@@ -190,9 +190,9 @@ def search(
     deadline = throttle_mod._deadline_from_settings(throttle_cfg)
     validation_mod._validate_params_logged(params)
     if throttle_mod._deadline_exceeded(deadline):
-        LOGGER.info(
-            "retriever.query.budget_exceeded",
-            extra={"slug": params.slug, "scope": params.scope},
+        LOGGER.warning(
+            "retriever.throttle.deadline",
+            extra={"slug": params.slug, "scope": params.scope, "stage": "preflight"},
         )
         return []
     throttle_ctx = (
@@ -527,7 +527,7 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
     except Exception:
         lim = None
     if lim and lim > 0:
-        safe_lim = max(1, min(int(lim), 5000))
+        safe_lim = max(MIN_CANDIDATE_LIMIT, min(int(lim), MAX_CANDIDATE_LIMIT))
         try:
             LOGGER.info("limit.source=config", extra={"limit": int(lim)})
         except Exception:

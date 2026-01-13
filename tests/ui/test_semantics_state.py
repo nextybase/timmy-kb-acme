@@ -395,7 +395,7 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     assert errors and "vocabolario canonico assente" in errors[0].lower()
     assert captions and "estrazione tag" in captions[0].lower()
     assert state_calls == [("dummy-srl", "pronto")]
-    assert links and links[-1][0] == "manage"
+    assert links and links[-1][0] == sem.PagePaths.MANAGE
 
 
 def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):

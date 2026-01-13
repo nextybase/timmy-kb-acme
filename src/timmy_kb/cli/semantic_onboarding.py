@@ -55,7 +55,9 @@ def main() -> int:
     # ENTRYPOINT BOOTSTRAP — consentito: CLI standalone usa la repo root per il workspace.
     get_repo_root()
     args = _parse_args()
-    slug: str = args.slug
+    slug: str = args.slug.strip()
+    if not slug:
+        raise ConfigError("Slug vuoto non valido per semantic_onboarding.")
     run_id = uuid.uuid4().hex
     settings = get_observability_settings()
     logger = get_structured_logger(

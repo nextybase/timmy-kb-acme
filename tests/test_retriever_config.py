@@ -120,7 +120,7 @@ def test_with_config_or_budget_config_value() -> None:
     p = _typed_params()
     cfg = {"retriever": {"throttle": {"candidate_limit": "6000"}}}
     out = with_config_or_budget(p, cfg)
-    assert out.candidate_limit == 5000  # clamp enforced to limit range
+    assert out.candidate_limit == 6000
 
 
 def test_with_config_or_budget_fallback_default() -> None:

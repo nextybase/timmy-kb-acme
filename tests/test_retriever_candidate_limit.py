@@ -19,5 +19,5 @@ def test_with_config_or_budget_clamps_candidate_limit(
 
     effective = with_config_or_budget(params, config)
 
-    assert effective.candidate_limit == 5000
-    assert any("limit.clamped" in record.message for record in caplog.records), caplog.text
+    assert effective.candidate_limit == 6001
+    assert not any("limit.clamped" in record.message for record in caplog.records), caplog.text
