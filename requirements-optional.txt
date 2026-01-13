@@ -156,7 +156,7 @@ pydantic-core==2.18.2
     # via
     #   -c constraints.txt
     #   pydantic
-pypdf==6.4.0
+pypdf==6.6.0
     # via
     #   -c constraints.txt
     #   -r requirements-optional.in
@@ -271,7 +271,7 @@ typing-extensions==4.12.2
     #   pydantic-core
     #   torch
     #   typer
-urllib3==2.6.0
+urllib3==2.6.3
     # via
     #   -c constraints.txt
     #   requests

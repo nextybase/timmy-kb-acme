@@ -249,11 +249,11 @@ pyjwt[crypto]==2.10.1
     # via pygithub
 pymupdf==1.26.5
     # via -r requirements.in
-pynacl==1.6.0
+pynacl==1.6.2
     # via pygithub
 pyparsing==3.2.5
     # via httplib2
-pypdf==6.4.0
+pypdf==6.6.0
     # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via pandas
@@ -403,7 +403,7 @@ tzdata==2025.3
     # via pandas
 uritemplate==4.2.0
     # via google-api-python-client
-urllib3==2.6.0
+urllib3==2.6.3
     # via
     #   docker
     #   pygithub
