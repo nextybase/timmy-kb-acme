@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Union, cast
 
 from ..exceptions import ConfigError, DriveUploadError
 from ..logging_utils import get_structured_logger
-from ..path_utils import sanitize_filename
+from ..path_utils import ensure_within_and_resolve, sanitize_filename, validate_slug
 
 logger = get_structured_logger("pipeline.drive.upload")
 
@@ -425,19 +425,22 @@ def create_local_raw_children_from_yaml(
     base_root: Union[str, Path] = "output",
 ) -> List[Path]:
     """Crea **solo** le sottocartelle immediate di `raw/` in locale, leggendo lo YAML."""
+    validate_slug(slug)
     mapping = _read_yaml_structure(yaml_path)
     raw_names = _extract_structural_raw_names(mapping)
 
-    base_dir = Path(base_root) / f"timmy-kb-{slug}" / "raw"
-    _ensure_dir(base_dir)
+    base_root_path = Path(base_root).resolve()
+    base_dir = ensure_within_and_resolve(base_root_path, base_root_path / f"timmy-kb-{slug}")
+    raw_dir = ensure_within_and_resolve(base_dir, base_dir / "raw")
+    _ensure_dir(raw_dir)
 
     written: List[Path] = []
     for name in raw_names:
-        p = base_dir / name
+        p = ensure_within_and_resolve(raw_dir, raw_dir / name)
         _ensure_dir(p)
         written.append(p)
 
-    logger.info("local.raw_children.created", extra={"count": len(written), "base": str(base_dir)})
+    logger.info("local.raw_children.created", extra={"count": len(written), "base": str(raw_dir)})
     return written
 
 
@@ -451,15 +454,19 @@ def create_local_base_structure(
     slug = getattr(context, "slug", None)
     if not isinstance(slug, str) or not slug:
         raise DriveUploadError("Contesto privo di slug: impossibile creare struttura locale.")
+    validate_slug(slug)
 
     base_dir_hint = getattr(context, "base_dir", None)
-    base_dir = Path(str(base_dir_hint)) if base_dir_hint else Path(base_root) / f"timmy-kb-{slug}"
-    base_dir = base_dir.resolve()
+    if base_dir_hint:
+        base_dir = Path(str(base_dir_hint)).resolve()
+    else:
+        base_root_path = Path(base_root).resolve()
+        base_dir = ensure_within_and_resolve(base_root_path, base_root_path / f"timmy-kb-{slug}")
 
-    raw_dir = base_dir / "raw"
-    book_dir = base_dir / "book"
-    config_dir = base_dir / "config"
-    semantic_dir = base_dir / "semantic"
+    raw_dir = ensure_within_and_resolve(base_dir, base_dir / "raw")
+    book_dir = ensure_within_and_resolve(base_dir, base_dir / "book")
+    config_dir = ensure_within_and_resolve(base_dir, base_dir / "config")
+    semantic_dir = ensure_within_and_resolve(base_dir, base_dir / "semantic")
 
     _ensure_dir(base_dir)
     for path in (raw_dir, book_dir, config_dir, semantic_dir):
