@@ -14,7 +14,7 @@ import yaml
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import is_safe_subpath, iter_safe_paths, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths, read_text_safe
 from semantic.document_ingest import DocumentContent, read_document
 from semantic.vocab_loader import load_reviewed_vocab
 
@@ -52,24 +52,26 @@ class _CtxProto:
 def _list_markdown_files(context: _CtxProto, logger: logging.Logger) -> List[Path]:
     if not getattr(context, "md_dir", None) or not getattr(context, "base_dir", None):
         raise PipelineError("Contesto incompleto: md_dir/base_dir mancanti", slug=getattr(context, "slug", None))
-    if not is_safe_subpath(context.md_dir, context.base_dir):
-        raise PipelineError("Path non sicuro", slug=context.slug, file_path=context.md_dir)
-    if not context.md_dir.exists() or not context.md_dir.is_dir():
-        raise InputDirectoryMissing(f"Directory markdown non valida: {context.md_dir}", slug=context.slug)
+    try:
+        safe_md_dir = ensure_within_and_resolve(context.base_dir, context.md_dir)
+    except Exception as exc:
+        raise PipelineError("Path non sicuro", slug=context.slug, file_path=context.md_dir) from exc
+    if not safe_md_dir.exists() or not safe_md_dir.is_dir():
+        raise InputDirectoryMissing(f"Directory markdown non valida: {safe_md_dir}", slug=context.slug)
     files = sorted(
         iter_safe_paths(
-            context.md_dir,
+            safe_md_dir,
             include_dirs=False,
             include_files=True,
             suffixes=(".md",),
         ),
-        key=lambda p: p.relative_to(context.md_dir).as_posix().lower(),
+        key=lambda p: p.relative_to(safe_md_dir).as_posix().lower(),
     )
     logger.info(
         "semantic.files.found",
         extra={
             "slug": context.slug,
-            "file_path": str(context.md_dir),
+            "file_path": str(safe_md_dir),
             "count": len(files),
         },
     )

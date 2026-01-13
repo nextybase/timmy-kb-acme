@@ -445,11 +445,15 @@ def with_config_candidate_limit(
         cfg_lim = None
 
     if cfg_lim is not None and cfg_lim > 0:
+        safe_lim = max(MIN_CANDIDATE_LIMIT, min(int(cfg_lim), MAX_CANDIDATE_LIMIT))
         try:
-            LOGGER.info("limit.source=config", extra={"limit": int(cfg_lim)})
+            LOGGER.info(
+                "limit.source=config",
+                extra={"limit": int(safe_lim), "limit_requested": int(cfg_lim)},
+            )
         except Exception:
             pass
-        return replace(params, candidate_limit=int(cfg_lim))
+        return replace(params, candidate_limit=int(safe_lim))
     try:
         LOGGER.info("limit.source=default", extra={"limit": int(default_lim)})
     except Exception:

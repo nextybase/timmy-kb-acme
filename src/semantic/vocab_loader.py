@@ -59,6 +59,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
         synonym_seen: dict[str, set[str]] = defaultdict(set)
         merge_map: dict[str, str] = {}
         display_names: dict[str, str] = {}
+        case_conflicts: set[str] = set()
 
         def _normalize_synonyms(raw: Any) -> list[str]:
             if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
@@ -113,6 +114,20 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
             if not raw_name:
                 continue
             name = raw_name.casefold()
+            existing_display = display_names.get(name)
+            if existing_display and existing_display != raw_name and name not in case_conflicts:
+                case_conflicts.add(name)
+                try:
+                    LOGGER.warning(
+                        "semantic.vocab.canonical_case_conflict",
+                        extra={
+                            "canonical_norm": name,
+                            "canonical": existing_display,
+                            "canonical_new": raw_name,
+                        },
+                    )
+                except Exception:
+                    pass
             display_names.setdefault(name, raw_name)
             raw_action = str(row.get("action", "")).strip()
             action = raw_action.lower()
@@ -127,6 +142,20 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
                 if target_raw:
                     target_norm = target_raw.casefold()
                     merge_map[name] = target_norm
+                    existing_target = display_names.get(target_norm)
+                    if existing_target and existing_target != target_raw and target_norm not in case_conflicts:
+                        case_conflicts.add(target_norm)
+                        try:
+                            LOGGER.warning(
+                                "semantic.vocab.canonical_case_conflict",
+                                extra={
+                                    "canonical_norm": target_norm,
+                                    "canonical": existing_target,
+                                    "canonical_new": target_raw,
+                                },
+                            )
+                        except Exception:
+                            pass
                     display_names.setdefault(target_norm, target_raw)
 
         # Deduce merge relationships for canonical entries that appear as aliases elsewhere.

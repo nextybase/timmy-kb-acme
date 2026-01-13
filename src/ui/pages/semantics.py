@@ -167,7 +167,10 @@ def _get_canonical_vocab(
 
 def _qa_evidence_path(layout: WorkspaceLayout) -> Path:
     """Percorso marker QA (contratto: log pre-commit/pytest salvati sotto logs/)."""
-    return layout.log_dir / QA_EVIDENCE_FILENAME
+    logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
+    if logs_dir is None:
+        raise ConfigError("Directory log mancante per QA evidence.")
+    return logs_dir / QA_EVIDENCE_FILENAME
 
 
 def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
@@ -248,7 +251,10 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
     ctx, logger, layout = _make_ctx_and_logger(slug)
     qa_marker = _qa_evidence_path(layout)
     try:
-        evidence = load_qa_evidence(layout.log_dir)
+        logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
+        if logs_dir is None:
+            raise ConfigError("Directory log mancante per QA evidence.")
+        evidence = load_qa_evidence(logs_dir)
     except ConfigError as exc:
         reason = "qa_evidence_missing" if exc.code == "qa_evidence_missing" else "qa_evidence_invalid"
         log_gate_event(
