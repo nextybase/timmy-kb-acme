@@ -320,7 +320,8 @@
     "rosetta",
     "nconten",
     "pathlib",
-    "artefacts"
+    "artefacts",
+    "retrocompatibilità"
   ],
   "flagWords": [
     "�",

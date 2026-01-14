@@ -273,6 +273,220 @@ make ci-safe     # qa-safe + pytest
 # Ambientesenza install: esegui i test con PYTHONPATH=src pytest -q
 ```
 
+## Product-grade tools
+### Import policy, feature gating, fail-fast rules
+
+Questa sezione definisce gli **standard obbligatori** per tutti i *tools di prodotto*
+(script, generatori, smoke, maintenance) inclusi nello stack Timmy-KB.
+
+I tools **non sono utilita di sviluppo**: fanno parte del prodotto e devono rispettare
+gli stessi requisiti del core (pipeline, CLI, UI) in termini di **determinismo,
+auditabilita e bassa entropia**.
+
+Il file `tools/gen_dummy_kb.py` e il **riferimento canonico** per l'implementazione
+di questi standard.
+
+---
+
+### Principio generale
+
+Un tool di prodotto **non puo cambiare comportamento a causa di incidenti**
+(bug, import falliti, dipendenze rotte).
+
+Un cambiamento di comportamento e ammesso **solo** quando deriva da:
+- feature intenzionalmente abilitate/disabilitate;
+- configurazione esplicita;
+- flag dichiarati.
+
+Sono vietate:
+- degradazioni silenziose;
+- modalita implicite;
+- fallback non dichiarati.
+
+---
+
+### Import policy
+
+#### Dipendenze richieste (required)
+
+Le dipendenze che fanno parte dello stack predeterminato (es. `yaml`,
+`pipeline.env_utils`, `pipeline.file_utils`) **devono essere sempre presenti**.
+
+Regole:
+- se l'import fallisce -> **fail-fast immediato**;
+- nessuno shim o implementazione alternativa;
+- errore chiaro che segnali installazione incompleta o corrotta.
+
+#### Feature opzionali
+
+Una feature e opzionale **solo se e parte del contratto di prodotto**
+(es. integrazione Drive).
+
+Regole:
+- sugli import opzionali e ammesso **solo**
+  `ImportError` / `ModuleNotFoundError`;
+- qualunque altra eccezione deve propagare (bug = stop);
+- l'assenza della feature deve essere trattata come *feature non disponibile*,
+  non come errore generico.
+
+E vietato:
+- usare `except Exception` sugli import;
+- disabilitare feature per cause accidentali.
+
+---
+
+### Feature gating esplicito
+
+Ogni tool di prodotto deve determinare **una sola volta all'avvio**
+la propria modalita di esecuzione.
+
+La decisione puo dipendere esclusivamente da:
+- flag espliciti (es. `--with-drive`, `--no-drive`);
+- configurazione;
+- disponibilita prevista dei moduli.
+
+Esempio (Drive):
+- `auto`: Drive abilitato solo se modulo e prerequisiti sono presenti;
+- `force_on`: Drive obbligatorio -> se non attivabile, errore;
+- `force_off`: Drive sempre disabilitato.
+
+La modalita **non deve mai cambiare durante l'esecuzione**.
+
+---
+
+### Runtime preflight deterministico
+
+Ogni tool deve eseguire un **preflight deterministico** che produca uno stato
+di runtime esplicito (es. `RuntimeMode`) contenente:
+- modalita di esecuzione;
+- motivazioni delle scelte;
+- matrice delle feature disponibili.
+
+Il preflight:
+- non ha side-effect;
+- e riproducibile a parita di configurazione;
+- governa l'intera esecuzione del tool.
+
+---
+
+### Summary one-line obbligatorio
+
+Ogni tool di prodotto deve emettere:
+- una **summary one-line** all'inizio;
+- la **stessa summary** alla fine dell'esecuzione.
+
+La summary deve indicare almeno:
+- stato delle feature principali (es. Drive, cleanup, registry);
+- motivazioni delle eventuali disabilitazioni.
+
+Esempio:
+```
+gen_dummy_kb.mode drive=OFF reason=missing DRIVE_ID,SERVICE_ACCOUNT_FILE; cleanup=ON; registry=OFF
+```
+
+Questo garantisce auditabilita, confrontabilita tra run e diagnosi rapida.
+
+---
+
+### Fail-fast come regola
+
+Un tool di prodotto **deve terminare immediatamente** quando:
+- una dipendenza required e mancante;
+- una feature richiesta esplicitamente non e attivabile;
+- un import fallisce per cause non previste;
+- viene violato il contratto dichiarato.
+
+E vietato:
+- "andare avanti lo stesso";
+- mascherare errori come modalita alternative;
+- introdurre retrocompatibilità o shim non necessari.
+
+---
+
+### Riferimento
+
+`tools/gen_dummy_kb.py` costituisce il **baseline ufficiale**
+per la qualita dei tools di prodotto.
+
+Ogni nuovo tool **deve allinearsi a questo modello**.
+
+## Semantic content extraction
+### Prod vs Dummy/Test: execution contract
+
+Questa sezione definisce il **contratto operativo** per l'estrazione dei contenuti
+(in particolare PDF e componenti NLP) all'interno della pipeline semantica.
+  
+L'obiettivo e garantire **determinismo e bassa entropia in produzione**, mantenendo
+al contempo modalita di bootstrap, dummy e testing esplicitamente dichiarate.
+
+---
+
+### Principio generale
+
+L'estrazione dei contenuti semantici (es. testo da PDF) **influisce direttamente**
+sugli artefatti di enrichment (chunk, excerpt, ranking, tagging).
+  
+Di conseguenza:
+- in **Produzione** l'estrazione e parte del core semantico;
+- in **Dummy/Test** puo essere degradata *solo se dichiarato esplicitamente*.
+
+E vietato qualsiasi comportamento "best-effort" non governato da un flag o da una modalita esplicita.
+
+---
+
+### Modalita di esecuzione
+
+#### Produzione (Prod)
+
+In modalita Produzione:
+- i moduli di estrazione (PDF/NLP) sono **dipendenze richieste**;
+- l'assenza di un modulo o un fallimento di estrazione **deve causare fail-fast**;
+- non sono ammessi fallback silenziosi (`None`, output vuoto, log a livello debug).
+
+Se l'estrazione non e possibile secondo contratto, la pipeline **deve terminare**
+con errore esplicito e tracciabile.
+
+---
+
+#### Dummy / Test / Bootstrap
+
+In modalita Dummy/Test:
+- e ammesso un comportamento *best-effort* sull'estrazione dei contenuti;
+- l'estrazione puo essere:
+  - disabilitata,
+  - parzialmente disponibile,
+  - sostituita da fallback semantici di base.
+
+Questa modalita e valida **solo se attivata esplicitamente** tramite flag o contesto
+(es. `Disabilita Enrichment`, `Disabilita Semantic`, modalita Dummy KB).
+
+Il sistema deve:
+- dichiarare chiaramente la modalita in uso;
+- tracciarla nei log e nella summary di esecuzione;
+- evitare che questa modalita emerga per incidente (import falliti, eccezioni generiche).
+
+---
+
+### Regole di implementazione
+
+- Gli import dei moduli di estrazione in **Prod** devono essere strict  
+  (`ImportError` / `ModuleNotFoundError` -> stop).
+- I fallback (es. ritorno `None` o contenuto vuoto) sono ammessi **solo** in modalita
+  Dummy/Test dichiarata.
+- E vietato catturare `Exception` per degradare automaticamente il comportamento.
+- Ogni run deve rendere visibile:
+  - modalita (Prod vs Dummy/Test),
+  - stato dell'estrazione,
+  - motivazione di eventuali disabilitazioni.
+
+---
+
+### Riferimento
+
+Queste regole si applicano a tutta la pipeline di content extraction
+(es. funzioni di estrazione PDF, NLP utilities, chunking iniziale)
+e sono complementari alle regole sui *product-grade tools*.
+
 ## Interfacciarsi correttamente agli Assistant OpenAI con l'SDK interno
 
 Questa sezione descrive il modo corretto per collegare gli script del framework NeXT agli assistant OpenAI usando lo SDK interno (`ai.client_factory`, `client.responses.create`, modello-only).
@@ -488,22 +702,3 @@ log.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
 ## Contributi
 - PR piccole, commit atomici, messaggi chiari (imperativo al presente).
 - Ogni modifica di comportamento va coperta da test.
-
-## Guardie operative v0.x
-
-### Drive optional / local-first ingestion
-- On Windows and in the CLI flows, source PDFs live under `output/<slug>/raw` (the standard workspace) and the ingest logic reads them through `WorkspaceLayout`/`ensure_within` to keep paths safe.
-- The configuration key `ingest_provider` (with the legacy `skip_drive` fallback) selects `drive` or `local`; no override means Drive remains the default behavior, while `ingest_provider: local` or `skip_drive: true` enable the local-first flow without touching the user experience. Segnale: nessun segnale/log esplicito documentato.
-- In local-first mode just copy the PDFs under `output/<slug>/raw` or pass `--local-path` to the `tag_onboarding_raw` CLI so no Drive credentials are required.
-
-### Rosetta predisposta
-- The flag `rosetta.enabled` (default `false` in `config/config.yaml`) keeps the guard disabled; the provider stays `openai` and the implementation is the stub `OpenAIRosettaClient` used in v0.x.
-- To exercise Rosetta for internal experiments set `rosetta.enabled: true` in the client config; the hook will log `prototimmy.rosetta_consult_attempt`/`prototimmy.rosetta_consult_error` but does not alter the UX.
-- Rosetta reuses the same `run_id`/`slug` as ProtoTimmy and only logs counters such as `assertions_count`, `metadata_summary`, or `candidate_fields_count`, never raw payloads.
-
-### Logging provenance-ready
-- Structured logs always include keys like `event`, `slug`, `run_id`, `status`, `artifact_id`, `assertion_id`, `trace_id`, `step_id` (if available) and counters such as `assertions_count` or `metadata_fields_count`.
-- Missing attributes are omitted, and raw assertions/candidates are never logged; only summaries and counts are allowed.
-- Both guards share `get_structured_logger` and surface errors through events such as `prototimmy.rosetta_consult_error` or `ingest_provider.*` for easier diagnosis.
-
-_Note_: `tests/test_config_defaults.py` verifies that Rosetta stays disabled by default and that `drive` remains the implicit ingest provider when the client does not define `ingest_provider`.
