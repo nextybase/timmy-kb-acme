@@ -34,8 +34,8 @@ class _Env:
 def _setup_environment(monkeypatch: pytest.MonkeyPatch, env: _Env) -> None:
     slug = "dummy"
     monkeypatch.setattr("ui.gating.get_active_slug", lambda: slug, raising=False)
-    monkeypatch.setattr("ui.gating.raw_ready", lambda _slug: (env.raw_ready, None), raising=False)
-    monkeypatch.setattr("ui.gating.tagging_ready", lambda _slug: (env.tagging_ready, None), raising=False)
+    monkeypatch.setattr("ui.gating.raw_ready", lambda _slug, **_kwargs: (env.raw_ready, None), raising=False)
+    monkeypatch.setattr("ui.gating.tagging_ready", lambda _slug, **_kwargs: (env.tagging_ready, None), raising=False)
     monkeypatch.setattr("ui.gating.get_state", lambda _slug: env.state, raising=False)
     monkeypatch.setattr("ui.gating.page_specs", _fake_page_specs, raising=False)
 

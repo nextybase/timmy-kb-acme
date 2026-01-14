@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import sys
+import types
 from contextlib import nullcontext
 
 import pytest
@@ -125,3 +127,59 @@ def test_run_preflight_flow_sets_flag_when_skipped_persistently() -> None:
     assert calls["run_preflight"] == 0
     assert st.session_state.get("preflight_ok") is True
     assert st._rerun_called is False
+
+
+def test_hydrate_query_defaults_missing_route_state_stops(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stub = StreamlitStub()
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
+
+    original_import = onboarding_ui.importlib.import_module
+
+    def _import(name: str):
+        if name == "ui.utils.route_state":
+            raise ImportError("missing route_state")
+        return original_import(name)
+
+    monkeypatch.setattr(onboarding_ui.importlib, "import_module", _import, raising=True)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError):
+            onboarding_ui._hydrate_query_defaults()
+
+    assert stub.error_messages
+    assert any("Router UI non disponibile" in msg for msg in stub.error_messages)
+    assert any("ui.route_state.import_failed" in record.getMessage() for record in caplog.records)
+
+
+def test_hydrate_query_defaults_runtime_error_stops(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stub = StreamlitStub()
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
+
+    route_state = types.SimpleNamespace()
+
+    def _get_tab(_default: str) -> str:
+        raise RuntimeError("boom")
+
+    route_state.get_tab = _get_tab
+    route_state.get_slug_from_qp = lambda: None
+
+    monkeypatch.setattr(
+        onboarding_ui.importlib,
+        "import_module",
+        lambda name: route_state if name == "ui.utils.route_state" else None,
+        raising=True,
+    )
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError):
+            onboarding_ui._hydrate_query_defaults()
+
+    assert stub.error_messages
+    assert any("Errore nel routing UI" in msg for msg in stub.error_messages)
+    assert any("ui.route_state.hydration_failed" in record.getMessage() for record in caplog.records)

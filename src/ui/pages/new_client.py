@@ -78,26 +78,41 @@ else:
     _ensure_drive_minimal = None
 
 
-def _load_repo_settings() -> Optional[Settings]:
+def _load_repo_settings() -> Settings:
     try:
         return Settings.load(get_repo_root())
-    except Exception:
-        return None
+    except Exception as exc:
+        LOGGER.error(
+            "ui.new_client.settings_load_failed",
+            extra={"error": str(exc)},
+        )
+        raise ConfigError(
+            "Impossibile caricare la configurazione: modalita runtime non determinabile.",
+        ) from exc
 
 
 def _resolve_ui_allow_local_only() -> bool:
     settings_obj = _load_repo_settings()
-    if settings_obj is None:
-        return True
     try:
         return bool(settings_obj.ui_allow_local_only)
-    except Exception:
-        return True
+    except Exception as exc:
+        LOGGER.error(
+            "ui.new_client.ui_allow_local_only_failed",
+            extra={"error": str(exc)},
+        )
+        raise ConfigError(
+            "Impossibile leggere ui_allow_local_only dalla configurazione.",
+        ) from exc
 
 
 def ui_allow_local_only_enabled() -> bool:
     """Legge (o rilegge) il flag ui_allow_local_only dal settings runtime."""
-    return _resolve_ui_allow_local_only()
+    try:
+        return _resolve_ui_allow_local_only()
+    except ConfigError as exc:
+        st.error(f"{exc} Interrompo l'onboarding.")
+        st.stop()
+        raise
 
 
 LOGGER = get_structured_logger("ui.new_client")

@@ -110,7 +110,7 @@ def _dir_mtime(p: Path) -> float:
         return 0.0
 
 
-def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
+def has_raw_pdfs(slug: Optional[str], *, strict: bool = False) -> Tuple[bool, Optional[Path]]:
     """
     Verifica se esistono PDF entro raw/ per lo slug dato.
     - TTL cache breve (3s) su risultati POSITIVI (evita caching negativo).
@@ -148,6 +148,8 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
         first = next(iter_pdfs_safe(raw_dir, use_cache=True, cache_ttl_s=_UI_RAW_CACHE_TTL), None)
         has_pdf = first is not None
     except Exception as e:
+        if strict:
+            raise
         # Non scrivere cache negative su errore: segnala e rientra
         try:
             _log.warning(
@@ -178,7 +180,7 @@ def has_raw_pdfs(slug: Optional[str]) -> Tuple[bool, Optional[Path]]:
     return has_pdf, raw_dir
 
 
-def raw_ready(slug: Optional[str]) -> tuple[bool, Optional[Path]]:
+def raw_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, Optional[Path]]:
     """
     Predicate canonico per raw_ready: richiede layout/config validi e almeno un PDF in raw/.
     Ritorna (ready, raw_dir) per logging/gating.
@@ -186,15 +188,17 @@ def raw_ready(slug: Optional[str]) -> tuple[bool, Optional[Path]]:
     try:
         layout = get_ui_workspace_layout(slug or "", require_env=False)
     except Exception:
+        if strict:
+            raise
         return False, None
-    ready, raw_dir = has_raw_pdfs(slug)
+    ready, raw_dir = has_raw_pdfs(slug, strict=strict)
     # `has_raw_pdfs` giù verifica slug/layout; il controllo su config/layout è quindi implicito.
     if not ready:
         return False, raw_dir or layout.raw_dir
     return True, raw_dir or layout.raw_dir
 
 
-def tagging_ready(slug: Optional[str]) -> tuple[bool, Optional[Path]]:
+def tagging_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, Optional[Path]]:
     """
     Predicate canonico per tagging_ready:
     - richiede raw_ready
@@ -204,12 +208,14 @@ def tagging_ready(slug: Optional[str]) -> tuple[bool, Optional[Path]]:
     """
     if get_tags_env_config().is_stub:
         return False, None
-    raw_ok, raw_dir = raw_ready(slug)
+    raw_ok, raw_dir = raw_ready(slug, strict=strict)
     if not raw_ok:
         return False, raw_dir
     try:
         layout = get_ui_workspace_layout(slug or "", require_env=False)
     except Exception:
+        if strict:
+            raise
         return False, None
     semantic_dir = layout.semantic_dir
     tags_db = layout.tags_db or (semantic_dir / "tags.db")
@@ -218,20 +224,24 @@ def tagging_ready(slug: Optional[str]) -> tuple[bool, Optional[Path]]:
         db_ok = tags_db.exists()
         yaml_ok = tags_yaml.exists() and tags_yaml.stat().st_size > 0
     except Exception:
+        if strict:
+            raise
         return False, semantic_dir
     if not (db_ok and yaml_ok):
         return False, semantic_dir
-    if not _tags_db_has_terms(tags_db):
+    if not _tags_db_has_terms(tags_db, strict=strict):
         return False, semantic_dir
-    if not _tags_yaml_has_terms(tags_yaml):
+    if not _tags_yaml_has_terms(tags_yaml, strict=strict):
         return False, semantic_dir
     return True, semantic_dir
 
 
-def _tags_db_has_terms(db_path: Path) -> bool:
+def _tags_db_has_terms(db_path: Path, *, strict: bool = False) -> bool:
     try:
         data = _load_tags_reviewed(str(db_path))
     except Exception:
+        if strict:
+            raise
         return False
     tags = data.get("tags") if isinstance(data, dict) else None
     if not isinstance(tags, list):
@@ -246,10 +256,12 @@ def _tags_db_has_terms(db_path: Path) -> bool:
     return False
 
 
-def _tags_yaml_has_terms(yaml_path: Path) -> bool:
+def _tags_yaml_has_terms(yaml_path: Path, *, strict: bool = False) -> bool:
     try:
         data = _load_tags_yaml(yaml_path)
     except Exception:
+        if strict:
+            raise
         return False
     result = _validate_tags_reviewed(data)
     if result.get("errors"):

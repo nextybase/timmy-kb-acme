@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import json
+import logging
+import sys
 from typing import Optional
 
 import pytest
 
 import ui.gating as gating
+from tests.ui.streamlit_stub import StreamlitStub
 from ui.gating import GateState, PagePaths, visible_page_specs
 
 
@@ -33,11 +36,11 @@ def test_visible_page_specs_hides_semantics_without_raw_or_tagging(
 ) -> None:
     monkeypatch.setattr(gating, "get_active_slug", lambda: slug, raising=False)
 
-    def _fake_raw_ready(slug_value: str) -> tuple[bool, Optional[str]]:
+    def _fake_raw_ready(slug_value: str, **_kwargs: object) -> tuple[bool, Optional[str]]:
         assert slug_value == (slug or slug_value)
         return raw_ready, None
 
-    def _fake_tagging_ready(slug_value: str) -> tuple[bool, Optional[str]]:
+    def _fake_tagging_ready(slug_value: str, **_kwargs: object) -> tuple[bool, Optional[str]]:
         assert slug_value == (slug or slug_value)
         return tagging_ready, None
 
@@ -60,8 +63,8 @@ def test_semantics_hidden_logs_once(monkeypatch: pytest.MonkeyPatch) -> None:
     dummy_logger = DummyLogger()
     monkeypatch.setattr(gating, "_LOGGER", dummy_logger, raising=False)
     monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
-    monkeypatch.setattr(gating, "raw_ready", lambda _slug: (False, None), raising=False)
-    monkeypatch.setattr(gating, "tagging_ready", lambda _slug: (False, None), raising=False)
+    monkeypatch.setattr(gating, "raw_ready", lambda _slug, **_kwargs: (False, None), raising=False)
+    monkeypatch.setattr(gating, "tagging_ready", lambda _slug, **_kwargs: (False, None), raising=False)
 
     gates = GateState(drive=True, vision=True, tags=True)
     visible_page_specs(gates)
@@ -123,3 +126,41 @@ def test_gate_capability_manifest_matches_compute_gates(tmp_path, monkeypatch: p
     assert payload["gates"]["drive"]["available"] == gates.drive
     assert payload["gates"]["vision"]["available"] == gates.vision
     assert payload["gates"]["tags"]["available"] == gates.tags
+
+
+def test_visible_page_specs_stops_on_raw_ready_error(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stub = StreamlitStub()
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
+    monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
+    monkeypatch.setattr(gating, "raw_ready", lambda _slug, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    gates = GateState(drive=True, vision=True, tags=True)
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError):
+            visible_page_specs(gates)
+
+    assert any("Errore nel gating UI" in msg for msg in stub.error_messages)
+    assert any("ui.gating.raw_ready_failed" in record.getMessage() for record in caplog.records)
+
+
+def test_visible_page_specs_stops_on_state_error(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stub = StreamlitStub()
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
+    monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
+    monkeypatch.setattr(gating, "raw_ready", lambda _slug, **_kwargs: (True, None), raising=False)
+    monkeypatch.setattr(gating, "tagging_ready", lambda _slug, **_kwargs: (True, None), raising=False)
+    monkeypatch.setattr(gating, "get_state", lambda _slug: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    gates = GateState(drive=True, vision=True, tags=True)
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError):
+            visible_page_specs(gates)
+
+    assert any("Errore nel gating UI" in msg for msg in stub.error_messages)
+    assert any("ui.gating.state_failed" in record.getMessage() for record in caplog.records)

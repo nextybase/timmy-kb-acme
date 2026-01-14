@@ -149,3 +149,53 @@ def test_ui_allow_local_only_reloads_settings(monkeypatch: pytest.MonkeyPatch) -
 
     assert new_client.ui_allow_local_only_enabled() is True
     assert new_client.ui_allow_local_only_enabled() is False
+
+
+def test_ui_allow_local_only_settings_load_failure_stops(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stub = _make_st()
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
+    register_streamlit_runtime(monkeypatch, stub)
+    sys.modules.pop("ui.pages.new_client", None)
+    import ui.pages.new_client as new_client
+
+    def _boom(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError("settings load failed")
+
+    monkeypatch.setattr(new_client.Settings, "load", _boom, raising=True)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError):
+            new_client.ui_allow_local_only_enabled()
+
+    assert stub.error_messages
+    assert any("Impossibile caricare la configurazione" in msg for msg in stub.error_messages)
+    assert any("ui.new_client.settings_load_failed" in record.getMessage() for record in caplog.records)
+
+
+def test_ui_allow_local_only_read_failure_stops(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    stub = _make_st()
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
+    register_streamlit_runtime(monkeypatch, stub)
+    sys.modules.pop("ui.pages.new_client", None)
+    import ui.pages.new_client as new_client
+
+    class _BadSettings:
+        @property
+        def ui_allow_local_only(self) -> bool:
+            raise RuntimeError("read failed")
+
+    monkeypatch.setattr(new_client.Settings, "load", lambda *_a, **_k: _BadSettings(), raising=True)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError):
+            new_client.ui_allow_local_only_enabled()
+
+    assert stub.error_messages
+    assert any("Impossibile leggere ui_allow_local_only" in msg for msg in stub.error_messages)
+    assert any("ui.new_client.ui_allow_local_only_failed" in record.getMessage() for record in caplog.records)

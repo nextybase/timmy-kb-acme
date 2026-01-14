@@ -200,6 +200,18 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     """
     Ritorna la mappa {gruppo: [PageSpec, ...]} filtrata in base ai gate.
     """
+
+    def _stop_gating_error(event: str, message: str, *, slug: str | None, error: Exception) -> None:
+        _LOGGER.error(
+            event,
+            extra={"slug": slug or "", "path": "", "error": str(error)},
+        )
+        from ui.utils.stubs import get_streamlit
+
+        st = get_streamlit()
+        st.error(message)
+        st.stop()
+
     groups: dict[str, list[PageSpec]] = {}
     slug: str | None
     raw_ready_flag = False
@@ -208,22 +220,48 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     state_norm = ""
     try:
         slug = get_active_slug()
-    except Exception:
-        slug = None
+    except Exception as exc:
+        _stop_gating_error(
+            "ui.gating.slug_failed",
+            "Errore nel routing UI: impossibile determinare lo slug attivo.",
+            slug=None,
+            error=exc,
+        )
+        return {}
     if slug:
         try:
-            ready, _path = raw_ready(slug)
+            ready, _path = raw_ready(slug, strict=True)
             raw_ready_flag = bool(ready)
-            tagging_ready_flag, _ = tagging_ready(slug)
-        except Exception:
-            raw_ready_flag = False
-            tagging_ready_flag = False
+        except Exception as exc:
+            _stop_gating_error(
+                "ui.gating.raw_ready_failed",
+                "Errore nel gating UI: impossibile valutare lo stato RAW.",
+                slug=slug,
+                error=exc,
+            )
+            return {}
+        try:
+            tagging_ready_flag, _ = tagging_ready(slug, strict=True)
+        except Exception as exc:
+            _stop_gating_error(
+                "ui.gating.tagging_ready_failed",
+                "Errore nel gating UI: impossibile valutare lo stato tagging.",
+                slug=slug,
+                error=exc,
+            )
+            return {}
         try:
             state_value = get_state(slug) or ""
             state_norm = state_value.strip().lower()
             semantic_ready = state_norm in SEMANTIC_READY_STATES
-        except Exception:
-            semantic_ready = False
+        except Exception as exc:
+            _stop_gating_error(
+                "ui.gating.state_failed",
+                "Errore nel gating UI: impossibile leggere lo stato cliente.",
+                slug=slug,
+                error=exc,
+            )
+            return {}
     slug_key = slug or "<none>"
     last_state = _LAST_RAW_READY.get(slug_key)
     if not raw_ready_flag and last_state is not False:

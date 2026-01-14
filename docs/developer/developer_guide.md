@@ -415,7 +415,7 @@ Ogni nuovo tool **deve allinearsi a questo modello**.
 
 Questa sezione definisce il **contratto operativo** per l'estrazione dei contenuti
 (in particolare PDF e componenti NLP) all'interno della pipeline semantica.
-  
+
 L'obiettivo e garantire **determinismo e bassa entropia in produzione**, mantenendo
 al contempo modalita di bootstrap, dummy e testing esplicitamente dichiarate.
 
@@ -425,7 +425,7 @@ al contempo modalita di bootstrap, dummy e testing esplicitamente dichiarate.
 
 L'estrazione dei contenuti semantici (es. testo da PDF) **influisce direttamente**
 sugli artefatti di enrichment (chunk, excerpt, ranking, tagging).
-  
+
 Di conseguenza:
 - in **Produzione** l'estrazione e parte del core semantico;
 - in **Dummy/Test** puo essere degradata *solo se dichiarato esplicitamente*.
@@ -469,7 +469,7 @@ Il sistema deve:
 
 ### Regole di implementazione
 
-- Gli import dei moduli di estrazione in **Prod** devono essere strict  
+- Gli import dei moduli di estrazione in **Prod** devono essere strict
   (`ImportError` / `ModuleNotFoundError` -> stop).
 - I fallback (es. ritorno `None` o contenuto vuoto) sono ammessi **solo** in modalita
   Dummy/Test dichiarata.

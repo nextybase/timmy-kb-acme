@@ -96,7 +96,7 @@ def test_tagging_ready_requires_db_and_yaml(tmp_path: Path, monkeypatch: pytest.
         "get_ui_workspace_layout",
         lambda *_a, **_k: SimpleNamespace(semantic_dir=sem_dir, tags_db=tags_db, raw_dir=tmp_path / "raw"),
     )
-    monkeypatch.setattr(ws, "raw_ready", lambda _slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(ws, "raw_ready", lambda _slug, **_kwargs: (True, tmp_path / "raw"))
 
     ready, path = ws.tagging_ready("dummy")
     assert ready is True
@@ -128,7 +128,7 @@ def test_tagging_ready_false_when_tags_empty(tmp_path: Path, monkeypatch: pytest
         "get_ui_workspace_layout",
         lambda *_a, **_k: SimpleNamespace(semantic_dir=sem_dir, tags_db=tags_db, raw_dir=tmp_path / "raw"),
     )
-    monkeypatch.setattr(ws, "raw_ready", lambda _slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(ws, "raw_ready", lambda _slug, **_kwargs: (True, tmp_path / "raw"))
 
     ready, _ = ws.tagging_ready("dummy")
     assert ready is False
@@ -158,7 +158,7 @@ def test_tagging_ready_false_in_stub_mode(tmp_path: Path, monkeypatch: pytest.Mo
         "get_ui_workspace_layout",
         lambda *_a, **_k: SimpleNamespace(semantic_dir=sem_dir, tags_db=tags_db, raw_dir=tmp_path / "raw"),
     )
-    monkeypatch.setattr(ws, "raw_ready", lambda _slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(ws, "raw_ready", lambda _slug, **_kwargs: (True, tmp_path / "raw"))
 
     ready, _ = ws.tagging_ready("dummy")
     assert ready is False

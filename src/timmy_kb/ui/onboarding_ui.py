@@ -8,6 +8,7 @@ Onboarding UI entrypoint (Beta 1.0).
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 from typing import Any
@@ -149,24 +150,32 @@ def _ensure_streamlit_api(st_module: StreamlitLike) -> None:
 def _hydrate_query_defaults() -> None:
     """Hydrate defaults for query parameters without forzare ?tab=home nell'URL."""
     try:
-        from ui.utils.route_state import get_slug_from_qp as _get_slug
-        from ui.utils.route_state import get_tab as _get_tab
-    except Exception:
+        route_state = importlib.import_module("ui.utils.route_state")
+        _get_slug = getattr(route_state, "get_slug_from_qp")
+        _get_tab = getattr(route_state, "get_tab")
+    except Exception as exc:
+        LOGGER.error(
+            "ui.route_state.import_failed",
+            extra={"error": str(exc)},
+        )
+        from ui.utils.stubs import get_streamlit
 
-        def _noop_tab(*_args: object, **_kwargs: object) -> None:
-            return None
-
-        def _noop_slug(*_args: object, **_kwargs: object) -> None:
-            return None
-
-        _ = _noop_tab("home")
-        _ = _noop_slug()
-        return
+        st = get_streamlit()
+        st.error("Router UI non disponibile: impossibile inizializzare i parametri di query.")
+        st.stop()
     try:
         _ = _get_tab("home")
         _ = _get_slug()
-    except Exception:
-        return
+    except Exception as exc:
+        LOGGER.error(
+            "ui.route_state.hydration_failed",
+            extra={"error": str(exc)},
+        )
+        from ui.utils.stubs import get_streamlit
+
+        st = get_streamlit()
+        st.error("Errore nel routing UI: impossibile leggere i parametri di query.")
+        st.stop()
 
 
 def _truthy(v: object) -> bool:
