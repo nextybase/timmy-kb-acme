@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from semantic.vocab_loader import load_reviewed_vocab
-from pipeline.exceptions import ConfigError
 
 
 def _mk_workspace(tmp_path: Path) -> Path:
