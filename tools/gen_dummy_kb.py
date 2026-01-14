@@ -21,13 +21,39 @@ import logging
 import os
 import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, List, Optional, TextIO, TypedDict
 
-try:
-    import yaml
-except Exception:
-    yaml = None  # type: ignore
+def _strict_optional_import(
+    module_name: str,
+    *,
+    feature_name: str,
+    attrs: Optional[Dict[str, str]] = None,
+) -> tuple[Optional[ModuleType], Dict[str, Any], Optional[str]]:
+    try:
+        module = importlib.import_module(module_name)
+    except (ImportError, ModuleNotFoundError):
+        return None, {}, f"{feature_name}.missing_module:{module_name}"
+    except Exception as exc:
+        raise RuntimeError(f"Errore import {feature_name} ({module_name}): {exc}") from exc
+    values: Dict[str, Any] = {}
+    if attrs:
+        for public_name, attr_name in attrs.items():
+            try:
+                values[public_name] = getattr(module, attr_name)
+            except AttributeError as exc:
+                raise AttributeError(
+                    f"Errore import {feature_name}: attributo mancante {attr_name} in {module_name}"
+                ) from exc
+    return module, values, None
+
+
+_yaml_mod, _yaml_attrs, _yaml_import_error = _strict_optional_import("yaml", feature_name="yaml")
+if _yaml_mod is None:
+    raise SystemExit(f"yaml mancante: {_yaml_import_error}")
+yaml = _yaml_mod  # type: ignore
 
 from pipeline.paths import get_repo_root
 
@@ -131,61 +157,61 @@ _vision_mod = importlib.import_module("ui.services.vision_provision")
 run_vision = getattr(_vision_mod, "run_vision")
 
 # Drive runner (opzionale). Se non presente → si prosegue senza Drive.
-try:
-    _drive_mod = importlib.import_module("ui.services.drive_runner")
-    ensure_drive_minimal_and_upload_config = getattr(_drive_mod, "ensure_drive_minimal_and_upload_config", None)
-    build_drive_from_mapping = getattr(_drive_mod, "build_drive_from_mapping", None)
-    emit_readmes_for_raw = getattr(_drive_mod, "emit_readmes_for_raw", None)
-except Exception:
-    ensure_drive_minimal_and_upload_config = None
-    build_drive_from_mapping = None
-    emit_readmes_for_raw = None
+_drive_mod, _drive_attrs, _drive_import_error = _strict_optional_import(
+    "ui.services.drive_runner",
+    feature_name="drive_runner",
+    attrs={
+        "ensure_drive_minimal_and_upload_config": "ensure_drive_minimal_and_upload_config",
+        "build_drive_from_mapping": "build_drive_from_mapping",
+        "emit_readmes_for_raw": "emit_readmes_for_raw",
+    },
+)
+ensure_drive_minimal_and_upload_config = _drive_attrs.get("ensure_drive_minimal_and_upload_config")
+build_drive_from_mapping = _drive_attrs.get("build_drive_from_mapping")
+emit_readmes_for_raw = _drive_attrs.get("emit_readmes_for_raw")
 
-try:
-    from tools.clean_client_workspace import perform_cleanup as _perform_cleanup  # type: ignore
-except Exception:  # pragma: no cover - il cleanup completo può non essere disponibile in ambienti ridotti
-    _perform_cleanup = None  # type: ignore[assignment]
+_cleanup_mod, _cleanup_attrs, _cleanup_import_error = _strict_optional_import(
+    "tools.clean_client_workspace",
+    feature_name="cleanup",
+    attrs={"perform_cleanup": "perform_cleanup"},
+)
+_perform_cleanup = _cleanup_attrs.get("perform_cleanup")  # type: ignore[assignment]
 
 # Registry UI (clienti)
-try:
-    from ui.clients_store import ClientEntry, set_state, upsert_client  # type: ignore
-except Exception:
-    ClientEntry = None
-    upsert_client = None
-    set_state = None
+_registry_mod, _registry_attrs, _registry_import_error = _strict_optional_import(
+    "ui.clients_store",
+    feature_name="ui_registry",
+    attrs={"ClientEntry": "ClientEntry", "set_state": "set_state", "upsert_client": "upsert_client"},
+)
+ClientEntry = _registry_attrs.get("ClientEntry")
+upsert_client = _registry_attrs.get("upsert_client")
+set_state = _registry_attrs.get("set_state")
 
 # Util pipeline (facoltative)
-try:
-    from pipeline.config_utils import get_client_config  # type: ignore
-except Exception:
-    get_client_config = None
+_config_mod, _config_attrs, _config_import_error = _strict_optional_import(
+    "pipeline.config_utils",
+    feature_name="config_utils",
+    attrs={"get_client_config": "get_client_config"},
+)
+get_client_config = _config_attrs.get("get_client_config")
 
-try:
-    from pipeline.context import ClientContext  # type: ignore
-except Exception:
-    ClientContext = None
+_context_mod, _context_attrs, _context_import_error = _strict_optional_import(
+    "pipeline.context",
+    feature_name="client_context",
+    attrs={"ClientContext": "ClientContext"},
+)
+ClientContext = _context_attrs.get("ClientContext")
 
 try:
     from pipeline.env_utils import ensure_dotenv_loaded, get_env_var  # type: ignore
-except Exception:
-
-    def ensure_dotenv_loaded() -> None:  # type: ignore
-        return
-
-    def get_env_var(name: str, default: str | None = None, **_: object) -> str | None:
-        return os.environ.get(name, default)
-
+except (ImportError, ModuleNotFoundError) as exc:
+    raise SystemExit(f"pipeline.env_utils mancante: {exc}") from exc
 
 try:
     from pipeline.file_utils import safe_write_bytes as _safe_write_bytes  # type: ignore
     from pipeline.file_utils import safe_write_text as _safe_write_text  # type: ignore
-except Exception:
-
-    def _safe_write_text(path: Path, text: str, *, encoding="utf-8", atomic=False) -> None:  # type: ignore
-        raise RuntimeError("safe_write_text unavailable: install pipeline.file_utils dependency")  # pragma: no cover
-
-    def _safe_write_bytes(path: Path, data: bytes, *, atomic=False) -> None:  # type: ignore
-        raise RuntimeError("safe_write_bytes unavailable: install pipeline.file_utils dependency")  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as exc:
+    raise SystemExit(f"pipeline.file_utils mancante: {exc}") from exc
 
 
 # Compat: test_gen_dummy_kb_import_safety si aspetta che gli attributi pubblici siano None finché non si esegue il tool.
@@ -193,10 +219,11 @@ safe_write_text = None  # type: ignore
 safe_write_bytes = None  # type: ignore
 _fin_import_csv = None  # type: ignore
 
-try:
-    from storage import tags_store as _tags_store  # type: ignore
-except Exception:  # pragma: no cover - opzionale
-    _tags_store = None  # type: ignore[assignment]
+_tags_store_mod, _tags_store_attrs, _tags_store_import_error = _strict_optional_import(
+    "storage.tags_store",
+    feature_name="tags_store",
+)
+_tags_store = _tags_store_mod  # type: ignore[assignment]
 
 
 def _ensure_dependencies() -> None:
@@ -208,10 +235,12 @@ def _ensure_dependencies() -> None:
     safe_write_text = _safe_write_text  # type: ignore
     safe_write_bytes = _safe_write_bytes  # type: ignore
 
-    try:
-        from finance.api import import_csv as fin_import_csv  # type: ignore
-    except Exception:
-        fin_import_csv = None
+    _finance_mod, _finance_attrs, _finance_import_error = _strict_optional_import(
+        "finance.api",
+        feature_name="finance_api",
+        attrs={"import_csv": "import_csv"},
+    )
+    fin_import_csv = _finance_attrs.get("import_csv")
     _fin_import_csv = fin_import_csv  # type: ignore
 
     _ensure_dependencies._done = True  # type: ignore[attr-defined]
@@ -365,6 +394,66 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     return ap.parse_args(argv)
 
 
+@dataclass(frozen=True)
+class RuntimeMode:
+    drive_enabled: bool
+    reasons: List[str]
+    feature_matrix: Dict[str, bool]
+
+
+def _compute_runtime_mode(
+    *,
+    drive_request: str,
+    drive_module_available: bool,
+    drive_id: Optional[str],
+    service_account_file: Optional[str],
+    cleanup_available: bool,
+    registry_available: bool,
+    config_utils_available: bool,
+    context_available: bool,
+    tags_store_available: bool,
+) -> RuntimeMode:
+    reasons: List[str] = []
+    if drive_request == "force_off":
+        reasons.append("user_disabled")
+        drive_enabled = False
+    elif not drive_module_available:
+        reasons.append("drive_module_missing")
+        drive_enabled = False
+    else:
+        missing: List[str] = []
+        if not drive_id:
+            missing.append("DRIVE_ID")
+        if not service_account_file:
+            missing.append("SERVICE_ACCOUNT_FILE")
+        if missing:
+            reasons.append(f"missing {','.join(missing)}")
+            drive_enabled = False
+        else:
+            reasons.append("enabled")
+            drive_enabled = True
+
+    feature_matrix = {
+        "cleanup": cleanup_available,
+        "registry": registry_available,
+        "config_utils": config_utils_available,
+        "context": context_available,
+        "tags_store": tags_store_available,
+        "drive_module": drive_module_available,
+    }
+    return RuntimeMode(drive_enabled=drive_enabled, reasons=reasons, feature_matrix=feature_matrix)
+
+
+def _format_mode_summary(mode: RuntimeMode) -> str:
+    drive_state = "ON" if mode.drive_enabled else "OFF"
+    reason = ",".join(mode.reasons) if mode.reasons else "none"
+    parts = [f"gen_dummy_kb.mode drive={drive_state} reason={reason}"]
+    for key in ("cleanup", "registry"):
+        value = "ON" if mode.feature_matrix.get(key, False) else "OFF"
+        parts.append(f"{key}={value}")
+    return "; ".join(parts)
+
+
 def build_payload(
     *,
     slug: str,
@@ -432,7 +521,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     slug = args.slug.strip()
     client_name = (args.name or f"Dummy {slug}").strip()
-    enable_drive = (not args.no_drive) or args.with_drive
+    drive_request = "force_on" if args.with_drive else "force_off" if args.no_drive else "auto"
     enable_vision = not args.no_vision
     enable_semantic = not args.no_semantic
     enable_enrichment = not args.no_enrichment
@@ -451,10 +540,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if records_hint is not None and not args.no_vision:
         enable_vision = False
-        enable_drive = False
+        drive_request = "force_off"
 
     if not args.with_drive and (args.base_dir or args.clients_db):
-        enable_drive = False
+        drive_request = "force_off"
         if not args.no_vision:
             enable_vision = False
 
@@ -489,7 +578,27 @@ def main(argv: Optional[list[str]] = None) -> int:
         mode_label = "deep" if args.deep_testing else "smoke"
         logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
         logger.setLevel(logging.INFO)
-        logger.info("tools.gen_dummy_kb.mode", extra={"mode": mode_label})
+        mode = _compute_runtime_mode(
+            drive_request=drive_request,
+            drive_module_available=ensure_drive_minimal_and_upload_config is not None,
+            drive_id=get_env_var("DRIVE_ID"),
+            service_account_file=get_env_var("SERVICE_ACCOUNT_FILE"),
+            cleanup_available=callable(_perform_cleanup),
+            registry_available=ClientEntry is not None and upsert_client is not None,
+            config_utils_available=get_client_config is not None,
+            context_available=ClientContext is not None,
+            tags_store_available=_tags_store is not None,
+        )
+        mode_summary = _format_mode_summary(mode)
+        logger.info(mode_summary, extra={"mode": mode_label, "runtime_mode": mode.__dict__})
+        if drive_request == "force_on" and not mode.drive_enabled:
+            logger.error(
+                "tools.gen_dummy_kb.drive_prereq_missing",
+                extra={"slug": slug, "reason": mode.reasons},
+            )
+            emit_structure({"error": "Drive richiesto ma prerequisiti mancanti", "mode": mode.__dict__}, stream=sys.stderr)
+            return 1
+        enable_drive = mode.drive_enabled
 
         if workspace_override:
             for child in ("raw", "semantic", "book", "logs", "config"):
@@ -497,11 +606,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         try:
             with workspace_validation_policy(skip_validation=True):
-                try:
-                    import pipeline.workspace_layout as _wl
-                    _wl._SKIP_VALIDATION = True
-                except Exception:
-                    pass
+                import pipeline.workspace_layout as _wl
+                _wl._SKIP_VALIDATION = True
                 workspace_root = workspace_override or _client_base(slug)
                 for child in ("raw", "semantic", "book", "logs", "config"):
                     (workspace_root / child).mkdir(parents=True, exist_ok=True)
@@ -518,6 +624,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                     deep_testing=args.deep_testing,
                 )
             emit_structure(payload)
+            logger.info(_format_mode_summary(mode), extra={"mode": mode_label, "runtime_mode": mode.__dict__})
             return 0
         except Exception as exc:
             if HardCheckError is not None and isinstance(exc, HardCheckError):
