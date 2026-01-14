@@ -52,7 +52,7 @@ cymem==2.0.11
     #   preshed
     #   spacy
     #   thinc
-filelock==3.20.1
+filelock>=3.12.2
     # via
     #   -c constraints.txt
     #   huggingface-hub
