@@ -41,7 +41,12 @@ def _load_latest_run(conn: sqlite3.Connection) -> dict[str, str] | None:
     return {"run_id": str(row[0]), "started_at": str(row[1])}
 
 
-def _load_latest_decisions(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+def _load_latest_decisions(conn: sqlite3.Connection, *, run_id: str) -> list[dict[str, Any]]:
+    if sqlite3.sqlite_version_info < (3, 25, 0):
+        raise ConfigError(
+            "ledger-status richiede window functions: "
+            f"versione={sqlite3.sqlite_version} minima=3.25.0 richiesta",
+        )
     rows = conn.execute(
         """
         SELECT gate_name, verdict, from_state, to_state, decided_at, subject, evidence_json, decision_id
@@ -60,10 +65,12 @@ def _load_latest_decisions(conn: sqlite3.Connection) -> list[dict[str, Any]]:
                     ORDER BY decided_at DESC, decision_id DESC
                 ) AS rn
             FROM decisions
+            WHERE run_id = ?
         )
         WHERE rn = 1
         ORDER BY gate_name ASC
-        """
+        """,
+        (run_id,),
     ).fetchall()
     return [
         {
@@ -79,16 +86,17 @@ def _load_latest_decisions(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     ]
 
 
-def _load_current_state(conn: sqlite3.Connection) -> str:
+def _load_current_state(conn: sqlite3.Connection, *, run_id: str) -> str:
     row = conn.execute(
         """
         SELECT to_state
         FROM decisions
-        WHERE verdict = ?
+        WHERE run_id = ?
+          AND verdict = ?
         ORDER BY decided_at DESC, decision_id DESC
         LIMIT 1
         """,
-        (decision_ledger.DECISION_ALLOW,),
+        (run_id, decision_ledger.DECISION_ALLOW),
     ).fetchone()
     if row is None or row[0] is None:
         return "UNKNOWN"
@@ -160,8 +168,11 @@ def _collect_status(slug: str) -> dict[str, Any]:
     conn.row_factory = sqlite3.Row
     try:
         latest_run = _load_latest_run(conn)
-        current_state = _load_current_state(conn)
-        decisions = _load_latest_decisions(conn)
+        if latest_run is None:
+            return {"slug": slug, "latest_run": None, "current_state": "UNKNOWN", "gates": []}
+        run_id = str(latest_run["run_id"])
+        current_state = _load_current_state(conn, run_id=run_id)
+        decisions = _load_latest_decisions(conn, run_id=run_id)
     except sqlite3.Error as exc:
         raise PipelineError(f"Errore lettura ledger: {exc}", slug=slug, file_path=db_path) from exc
     finally:

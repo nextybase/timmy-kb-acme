@@ -56,16 +56,15 @@ L’esecuzione end-to-end è consentita **solo** tramite flag esplicito
 👉 Dettagli operativi e implicazioni di audit:
 **[Strict vs Dummy – Guida Operativa](docs/strict_vs_dummy_beta.md)**.
 
-## 🧭 Beta: State Model (Decision Ledger)
+## ✅ Beta: State Model (Decision Ledger = SSoT)
 
-In Beta, lo **stato del workspace** non è dedotto dal successo dell’ultima
-esecuzione ma è **derivato esclusivamente dal _Decision Ledger_**.
+In Beta, il `workspace_state` è derivato esclusivamente dal Decision Ledger (SSoT).
+Lo stato canonico è ancorato alla `latest_run` (regressione ammessa).
+Nessun motore di stato separato: niente ricomposizioni tra run.
+Il modello di stato è la specifica per stati, transizioni e regole di derivazione.
+Usalo per interpretare il ledger in modo deterministico.
+👉 **[State Model (Beta 1.0)](docs/developer/state_model.md)**.
 
-Lo stato canonico rappresenta *ciò che è verificabilmente vero* nel workspace;
-l’esito dell’ultima run è informazione di **salute**, non di stato.
-
-👉 Modello di stato e regole di interpretazione:  
-**[State Model – Beta 1.0](docs/developer/state_model.md)**
 
 ### Igiene workspace
 - I derivatives runtime restano fuori dal controllo versione e fuori dalla repo root: `output/`, `logs/`, `.timmy_kb/`, `.streamlit/`, cache pytest/ruff/mypy e `node_modules/` sono ignorati.
