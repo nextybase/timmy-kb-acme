@@ -1,124 +1,214 @@
-# Security & Compliance Guide
+# Security & Compliance Guide (Beta 1.0)
 
-Questa pagina descrive le policy operative per proteggere il repository `timmy-kb-acme`.
+Questa pagina definisce le **policy operative di sicurezza e compliance**
+per il repository `timmy-kb-acme`.
+
+Il documento è **normativo** per la Beta 1.0:
+- non descrive “best practice opzionali”,
+- non introduce fallback impliciti,
+- non autorizza degradazioni silenziose del runtime.
+
+Ogni violazione delle policy qui definite deve produrre
+un errore esplicito o uno stop governato.
+
+---
 
 ## Gestione dei segreti
 
-- **Secret Manager (consigliato)**: archivia i valori sensibili (API key, token Slack, ecc.)
-  in GitHub Actions Secrets oppure in un Secret Manager dedicato.
-- **OIDC (preferito)**: sostituisci le credenziali statiche con ruoli federati.
-  Nel workflow `ci.yaml` trovi un blocco commentato che usa
-  `aws-actions/configure-aws-credentials@<PIN_SHA>` con le variabili
-  `TIMMY_SERVICE_NAME` e `TIMMY_ENV`. Abilitando il ruolo OIDC non è più necessario salvare
-  access key nel repository.
-- **Fallback**: i secrets esistenti restano supportati; assicurati però di ruotarli periodicamente. Segnale: nessun segnale/log esplicito documentato.
+### Principi generali (Beta 1.0)
+- I segreti **non devono mai** essere versionati nel repository.
+- Ogni meccanismo di risoluzione dei segreti deve essere:
+  - esplicito,
+  - verificabile,
+  - auditabile.
+- L’assenza o l’invalidità di un segreto **non è recuperabile automaticamente**.
 
-## OIDC config (local & CI)
+### Modalità ammesse
 
-- Imposta la sezione `security.oidc` in `config/config.yaml` (provider, variabili `_env`).
-- Valorizza le ENV in `.env`/Repository Variables (`OIDC_*`, `VAULT_*`).
-- Quando `security.oidc.enabled=true`, la risoluzione OIDC è fail-fast: se mancano
-  variabili richieste o il token non è ottenibile, il processo fallisce con errore
-  esplicito (nessun best-effort).
-- Lo step "OIDC probe (optional)" in `ci.yaml` esegue `tools/ci/oidc_probe.py` quando la variabile `GITHUB_OIDC_AUDIENCE` e valorizzata.
-- Consulta [docs/configurazione.md](configurazione.md) per il dettaglio completo.
-- Per rendere la pipeline hard imposta in `config/config.yaml`:
+#### Secret Manager (consigliato)
+- Archivia i valori sensibili (API key, token Slack, ecc.) in:
+  - GitHub Actions Secrets, oppure
+  - un Secret Manager dedicato.
+- I secret sono risolti **a runtime** e non persistono su disco.
+
+#### OIDC (preferito)
+- Le credenziali statiche sono sostituite da ruoli federati.
+- Nel workflow `ci.yaml` è disponibile un blocco OIDC basato su:
+  `aws-actions/configure-aws-credentials@<PIN_SHA>`.
+- Le variabili `TIMMY_SERVICE_NAME` e `TIMMY_ENV` sono obbligatorie.
+- Quando OIDC è attivo:
+  - non è consentito l’uso di access key statiche,
+  - l’autenticazione è **fail-fast**.
+
+#### Modalità senza OIDC (esplicita, non fallback)
+- Se `security.oidc.enabled=false`, l’uso di secret statici è
+  una **scelta dichiarata di configurazione**, non un fallback.
+- Questa modalità:
+  - deve essere documentata nel contesto di deployment,
+  - resta soggetta a rotazione e scanning obbligatori.
+- Non esiste alcuna modalità “best-effort” o automatica.
+
+---
+
+## OIDC Configuration (Local & CI)
+
+- Configura `security.oidc` in `config/config.yaml`
+  (provider, audience, variabili `_env`).
+- Valorizza le ENV in `.env` o Repository Variables:
+  `OIDC_*`, `VAULT_*`.
+- Quando `security.oidc.enabled=true`:
+  - la risoluzione OIDC è **fail-fast**,
+  - variabili mancanti o token non ottenibile ⇒ errore esplicito.
+- Lo step **OIDC probe** in `ci.yaml` esegue `tools/ci/oidc_probe.py`
+  solo se `GITHUB_OIDC_AUDIENCE` è valorizzata.
+- Per rendere OIDC obbligatorio in CI:
   ```yaml
   security:
     oidc:
       ci_required: true
   ```
+- Consultare `docs/configurazione.md` per il dettaglio completo.
 
-## Secret scanning
+---
+
+## Secret Scanning
 
 - Workflow dedicato: `.github/workflows/secret-scan.yml`.
-  Esegue `gitleaks detect --report-format sarif` e carica il report su GitHub Code Scanning.
-- **Required status check**: abilita `Secret Scan` insieme a `CI` nelle branch protection rules.
-- Per una scansione locale:
-  ```bash
-  gitleaks detect --source . --no-git
-  ```
+- Esegue `gitleaks detect --report-format sarif`.
+- Il report è caricato su GitHub Code Scanning.
 
-## Dependency scanning
+### Vincoli Beta 1.0
+- `Secret Scan` è **required status check** su `main`.
+- Una violazione blocca il merge.
+- Non sono ammesse deroghe silenziose.
 
-- Workflow `.github/workflows/dependency-scan.yml` esegue `pip-audit` su `requirements.txt` e `requirements-dev.txt`
-  ad ogni PR su `main`/`dev` e settimanalmente (`cron`).
-- Il risultato SARIF viene caricato su GitHub Code Scanning; il job fallisce se ci sono CVE non ignorate.
-- Per gestire falsi positivi, usa il file `.pip-audit-ignore` ed aggiorna questa sezione indicando la motivazione della deroga.
-- Esecuzione locale:
-  ```bash
-  pip install pip-audit
-  pip-audit -r requirements.txt -r requirements-dev.txt
-  ```
+### Esecuzione locale
+```bash
+gitleaks detect --source . --no-git
+```
 
-## Pre-commit hooks
+---
 
-- Il file `.pre-commit-config.yaml` include i controlli per gitleaks e `detect-secrets`
-  (baseline `.secrets.baseline`).
-- Installa gli hook una tantum:
-  ```bash
-  pip install pre-commit
+## Dependency Scanning
+
+- Workflow `.github/workflows/dependency-scan.yml`:
+  - esegue `pip-audit` su `requirements.txt` e `requirements-dev.txt`,
+  - su ogni PR verso `main`/`dev` e su base settimanale.
+- Il job fallisce in presenza di CVE non ignorate.
+
+### Gestione eccezioni
+- I falsi positivi vanno dichiarati in `.pip-audit-ignore`
+  con motivazione esplicita.
+- Le eccezioni sono **auditabili** e versionate.
+
+### Esecuzione locale
+```bash
+pip install pip-audit
+pip-audit -r requirements.txt -r requirements-dev.txt
+```
+
+---
+
+## Pre-commit Hooks
+
+- `.pre-commit-config.yaml` include:
+  - `gitleaks`,
+  - `detect-secrets` (baseline `.secrets.baseline`).
+- Installazione locale:
+```bash
+pip install pre-commit
 pre-commit install --hook-type pre-commit
-  ```
-- Per rigenerare la baseline vuota:
-  ```bash
-  detect-secrets scan --baseline .secrets.baseline
-  ```
+```
+- Rigenerazione baseline:
+```bash
+detect-secrets scan --baseline .secrets.baseline
+```
 
-## Docker & container hardening
+---
 
-- Workflow `.github/workflows/docker-lint.yml` esegue `hadolint` su ogni Dockerfile del repo (PR + weekly).
-  Attualmente il repository non contiene Dockerfile; il job riporta il salto ma resta attivo per future integrazioni.
-- Linee guida per i Dockerfile:
-  - usa immagini base minimali (`python:3.11-slim`, distroless dove possibile);
-  - aggiungi `USER app` o equivalente per evitare l'esecuzione come `root`;
-  - elimina tool di build al termine (`apt-get purge`, `rm -rf /var/lib/apt/lists/*`);
-  - leggi i secret esclusivamente da variabili a runtime (non `ENV`/`ARG` hardcoded).
-- Per i `docker-compose`/stack assicurati che i secret provengano da GitHub Secrets o Secret Manager esterni.
-- Esecuzione locale di `hadolint`:
-  ```bash
-  hadolint path/to/Dockerfile
-  ```
+## Docker & Container Hardening
 
-## Protezione dei branch
+- Workflow `.github/workflows/docker-lint.yml`:
+  - esegue `hadolint` su ogni Dockerfile (PR + weekly).
+- Anche in assenza di Dockerfile, il controllo resta attivo.
 
-Configura la regola su `main` (GitHub a Settings a Branches):
+### Linee guida normative
+- Immagini base minimali (`python:3.11-slim`, distroless se possibile).
+- Esecuzione non-root (`USER app`).
+- Rimozione tool di build a fine stage.
+- I secret **non** devono essere:
+  - hardcoded,
+  - passati via `ENV` o `ARG`.
+
+### Esecuzione locale
+```bash
+hadolint path/to/Dockerfile
+```
+
+---
+
+## Protezione dei Branch
+
+Configurazione raccomandata su `main`:
 
 1. **Require a pull request before merging**
    - Minimum 1 approval
    - Dismiss stale reviews
    - Require conversation resolution
-2. **Require status checks to pass before merging**
+2. **Require status checks**
    - `CI`
    - `Secret Scan`
-3. **Include administrators** (Enforce for administrators)
-4. **Restrict who can write** (solo bot o release manager)
-5. *(Facoltativo)* Require signed commits
+3. **Include administrators**
+4. **Restrict who can write**
+   - solo bot o release manager
+5. *(Opzionale)* Require signed commits
 
-Script opzionale (`tools/apply_branch_protection.sh`) mostra i comandi `gh api`
-per applicare automaticamente la policy (non eseguire in CI).
+Script opzionale:
+`tools/apply_branch_protection.sh` (uso manuale, non in CI).
+
+---
 
 ## Logging & Alerting
 
-- Tutti i moduli devono usare `pipeline.logging_utils.get_structured_logger`.
-- Il logging redige automaticamente header sensibili (`Authorization`, `x-access-token`) e
-  maschera pattern comuni.
-- Evita di serializzare payload completi o variabili di ambiente. In caso di dubbio,
-  passa gli extra nel campo `extra={...}` dopo averli filtrati.
-- Per alert in tempo reale abilita un ricevitore (Slack/Sentry) o usa i campi `trace_id`/`span_id`
-  generati quando `TIMMY_OTEL_ENDPOINT` A  impostato (vedi `docs/observability.md`).
+- Tutti i moduli devono usare
+  `pipeline.logging_utils.get_structured_logger`.
+- Header sensibili (`Authorization`, `x-access-token`) sono mascherati.
+- È vietato serializzare:
+  - payload completi,
+  - variabili d’ambiente non filtrate.
+- In caso di dubbio, usare `extra={...}` filtrato.
 
-## Query rapide (Loki / Grafana)
+### Tracing
+- Se `TIMMY_OTEL_ENDPOINT` è impostato:
+  - vengono generati `trace_id` e `span_id`.
+- Vedi `docs/observability.md`.
 
-- Log di errori di fase:
-  ```logql
-  {job="timmy-kb", event="phase_failed"}
-  ```
-- Ricerca per cliente e modulo semantic:
-  ```logql
-  {slug="acme"} |~ "semantic.index"
-  ```
+---
 
-Mantieni questi documenti sincronizzati con gli aggiornamenti dei workflow: qualsiasi cambiamento
-alle pipeline CI/CD deve essere riflesso sia nelle branch protection rules sia nelle istruzioni
-di secret management.
+## Query Operative (Loki / Grafana)
+
+- Errori di fase:
+```logql
+{job="timmy-kb", event="phase_failed"}
+```
+
+- Ricerca per workspace e semantic module:
+```logql
+{slug="acme"} |~ "semantic.index"
+```
+
+---
+
+## Clausola di Coerenza
+Ogni modifica a:
+- workflow CI/CD,
+- policy di sicurezza,
+- meccanismi di autenticazione,
+
+**deve** essere riflessa:
+- in questo documento,
+- nelle branch protection rules,
+- nei file di configurazione.
+
+La divergenza tra comportamento e questa guida
+è da considerarsi **non conforme** alla Beta 1.0.

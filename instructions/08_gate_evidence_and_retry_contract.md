@@ -1,34 +1,154 @@
 # 08 — Gate Evidence and Retry Contract (SSoT)
+
 **Status:** ACTIVE
-**Scope:** formalizzazione di Evidence Gate PASS, predicate derived states (`raw_ready`, `tagging_ready`), policy di retry/resume e collegamento QA Gate → stato `finito`. Il binding lifecycle↔workspace↔gate↔event è definito in `instructions/06_promptchain_workspace_mapping.md`.
-**Authority:** costruito su `instructions/05_pipeline_workspace_state_machine.md`, `instructions/06_promptchain_workspace_mapping.md`, `instructions/07_gate_checklists.md` e `instructions/02_prompt_chain_lifecycle.md`. Questo documento definisce i contratti dei gate, non la logica di binding.
+**Authority:** Single Source of Truth (SSoT)
+**Scope:** definizione normativa dei contratti dei Gate
+(Evidence / Skeptic / QA), del modello di evidenza,
+dei predicate di stato e della policy di retry/resume.
 
-## Evidence Gate — PASS Artifacts (Log-based)
-| Transition | Required log event(s) | Producer module |
-|---|---|---|
-| `bootstrap → raw_ready` | `pre_onboarding.workspace.created`, `context.config.bootstrap`, `pipeline.paths.repo_root.detected` | `pre_onboarding`, `pipeline.context`, `pipeline.paths` |
-| `raw_ready → tagging_ready` | `ui.semantics.gating_allowed`, `ui.semantics.gating_blocked` transitions to allowed | `src/ui/pages/semantics.py` |
-| `tagging_ready → pronto` | `ui.semantics.state_update_failed` absent, `semantic.book.frontmatter` log | `semantic.api`, `ui.pages.semantics` |
-| `pronto → arricchito` | `semantic.book.frontmatter` updated, `load_reviewed_vocab` success log | `semantic.api`, `ui.pages.semantics` |
-| `arricchito → finito` | `context.step.status` updates to “summary”, absence of `ui.semantics.state_update_failed` | `pipeline.context`, `ui.pages.semantics` |
-| `finito → out-of-scope` | `pipeline.github_utils.phase_started`/`phase_completed`, absence of `phase_failed` | `pipeline.github_utils` |
-*Nota:* l’Evidence Gate si basa su log strutturati; dove manca un evento canonico si annota “non formalizzato” nel rispettivo modulo.
+Il binding lifecycle ↔ workspace ↔ gate ↔ Decision Record
+è definito in `instructions/06_promptchain_workspace_mapping.md`.
 
-## Derived State Predicates
-- **raw_ready:** `has_raw_pdfs(slug)` restituisce `True` *e* il layout (`WorkspaceLayout`) esiste con directory `raw/` e config validi; la derivazione viene ricavata a runtime, non persiste su disco.
-- **tagging_ready:** `semantic/tags.db` esiste, `tags_reviewed.yaml` è presente e aggiornato, `has_raw_pdfs` continua a restituire `True`; è un derived state inferito dagli artefatti, non vincolato a un’unica predicate codice.
-- Entrambi rimangono derived states (non persistenti) e sono validati dall’Engineering Gatekeeper tramite il Control Plane prima di attivare la transizione successiva.
+Questo documento **non definisce flussi**:
+definisce **le condizioni formali che permettono ai gate di attestare uno stato**.
 
-## Retry / Resume Contract
-- Una ripetizione post-fallimento (`_run_convert`, `_run_enrich`, `_run_summary`) è considerata una *nuova esecuzione sullo stesso stato* (richiamata da instructions/05: “in assenza di policy formale…”).
-- Evidence richiesta per retry: artefatti precedenti ancora intatti (`raw/`, `book/`, `semantic/tags.db`), log `context.step.status` che indica “retry in corso” o “reset di stato”.
-- Retry è BLOCCATO se: `WorkspaceLayoutInvalid`, `WorkspaceNotFound`, o `ConfigError` persistono senza essere risolti; in tal caso serve intervento manuale (HiTL) e il gate restituisce BLOCK.
+---
 
-## QA Gate ↔ Workspace State
-- Il QA Gate è prerequisito per dichiarare lo stato `finito`: prima della transizione `arricchito → finito` occorre presentare `pre-commit run --all-files` + `pytest -q` con esito PASS e i relativi log strutturati. L’applicabilità dei gate per transizione è definita in `instructions/06_promptchain_workspace_mapping.md`.
-- L’Evidence per QA include l’output dei comandi, il report `context.step.status` aggiornato e `semantic.book.frontmatter` privo di errori; solo dopo il passaggio QA l’Engineering Gatekeeper tramite OCP-plane può consentire `finito`.
+## Principi Fondativi (Beta 1.0)
+- **Ogni transizione di stato produce un Decision Record append-only.**
+- Nessun gate produce “PASS impliciti” o dedotti da log.
+- I log sono **evidenze**, non artefatti di verità.
+- In assenza di Decision Record, **la transizione non è avvenuta**.
+- Retry ≠ resume: ogni retry è una **nuova run attestata**.
+
+---
+
+## Decision Record (Artefatto Canonico)
+
+Il **Decision Record** è l’unico output normativo dei gate.
+
+### Schema minimo obbligatorio
+- `decision_id` (univoco, append-only)
+- `run_id`
+- `slug`
+- `from_state`
+- `to_state` (presente solo se PASS)
+- `verdict` (`PASS | BLOCK | FAIL | PASS_WITH_CONDITIONS`)
+- `actor` (`gatekeeper:<name>` | `timmy`)
+- `timestamp` (UTC)
+- `evidence_refs[]` (puntatori a log e/o artefatti)
+- `stop_code` (obbligatorio se BLOCK/FAIL)
+
+I log e i file **non sostituiscono** mai questo record.
+
+---
+
+## Evidence Model (Log & Artefact as Evidence)
+
+### Regola generale
+- I gate **non validano eventi**.
+- I gate validano **affermazioni verificabili**, supportate da evidenze.
+
+### Tipologie di evidenza ammesse
+- **Artefatti**: file, directory, database, report QA.
+- **Log strutturati**: eventi osservabili, non ambigui, non contraddittori.
+- **Segnali di contesto**: es. ledger scrivibile, path-safe, config valida.
+
+Se un’evidenza non è formalizzata:
+- il Gatekeeper **deve** indicarlo nel Decision Record (`evidence_gap`).
+
+---
+
+## Predicate di Stato (Beta 1.0 – Normativi)
+
+### `raw_ready`
+Stato **attestabile** se e solo se:
+- WorkspaceLayout valido e completo.
+- Directory canoniche presenti: `raw/`, `config/`, `semantic/`, ledger.
+- `config/config.yaml` valido.
+- Ledger scrivibile.
+
+**Nota normativa**
+- La presenza di PDF **non** definisce lo stato.
+- I PDF sono prerequisito per azioni successive, non per lo stato.
+
+---
+
+### `tagging_ready`
+Stato **attestabile** se e solo se:
+- `semantic/tags.db` esiste ed è coerente.
+- `tags_reviewed.yaml` presente (checkpoint HiTL).
+- Artefatti semanticamente allineati.
+
+**Predicate unica**
+- Questa condizione è unica e non sostituibile.
+- Implementazioni multiple devono convergere su questa definizione.
+
+---
+
+## Evidence Gate — Contratto Normativo
+
+L’Evidence Gate:
+- valuta **coerenza strutturale e presenza delle evidenze**;
+- **non decide avanzamenti**;
+- produce sempre un Decision Record.
+
+### Evidence minime per transizione
+| Transizione | Evidenze minime richieste |
+|------------|---------------------------|
+| `WORKSPACE_BOOTSTRAP → SEMANTIC_INGEST` | WorkspaceLayout valido, config valida, ledger scrivibile |
+| `SEMANTIC_INGEST → FRONTMATTER_ENRICH` | `semantic/tags.db`, `tags_reviewed.yaml` |
+| `FRONTMATTER_ENRICH → VISUALIZATION_REFRESH` | draft markdown + mapping semantico |
+| `VISUALIZATION_REFRESH → PREVIEW_READY` | KG + preview artefacts |
+| `PREVIEW_READY → COMPLETE` | artefatti finali completi |
+
+---
+
+## Retry / Resume Contract (Beta 1.0)
+
+### Regola fondamentale
+**Ogni retry è una nuova run.**
+
+Non esiste:
+- retry silenzioso,
+- resume implicito,
+- “stessa esecuzione”.
+
+### Condizioni per retry ammesso
+- Artefatti precedenti **ancora integri**.
+- Nessuna violazione strutturale (layout, config, scope).
+- Nuovo `run_id` e nuovo Decision Record.
+
+### Retry BLOCCATO se
+- `WorkspaceLayoutInvalid`
+- `WorkspaceNotFound`
+- `ConfigError` persistente
+
+In questi casi:
+- verdict = `BLOCK`
+- `stop_code = HITL_REQUIRED`
+- decisione demandata a Timmy (HiTL).
+
+---
+
+## QA Gate ↔ Stato `COMPLETE`
+
+- Il QA Gate è **necessario ma non sufficiente** per completare la pipeline.
+- Requisiti minimi QA:
+  - `pre-commit run --all-files` → PASS
+  - `pytest -q` → PASS
+  - report QA disponibili come evidenza
+
+Solo dopo:
+1. QA Gate produce Decision Record PASS
+2. Evidence + Skeptic Gate confermano coerenza finale
+3. Timmy/Gatekeeper può attestare `COMPLETE`
+
+La transizione a `COMPLETE` è **essa stessa un Decision Record**.
+
+---
 
 ## Non-goals
-- Non introduce nuovi stati (usa quelli definiti in instructions/05).
-- Non modifica codice o logiche operative (documenta solo i contratti).
-- Non automatizza le decisioni del gate; resta un documento per l’assistente Engineering Gatekeeper via OCP-plane.
+- Non introduce nuovi stati.
+- Non definisce implementazioni o logging dettagliato.
+- Non automatizza decisioni: i gate **attestano**, non eseguono.

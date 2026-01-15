@@ -1,76 +1,169 @@
-# 07 — Modular Gate Checklists (for Engineering Gatekeeper via OCP-plane)
+# 07 — Modular Gate Checklists (Engineering Gatekeeper / OCP-plane)
+
 **Status:** ACTIVE
-**Scope:** checklist cognitive per decisioni PASS / PASS WITH CONDITIONS / BLOCK sulle transizioni workspace, rivolte all’Engineering Gatekeeper (assistant AI) che opera attraverso l’OCP-plane. Il binding lifecycle↔workspace↔gate↔event è definito in `instructions/06_promptchain_workspace_mapping.md`.
-**Authority:** si basa sui contratti di `instructions/05_pipeline_workspace_state_machine.md`, `instructions/06_promptchain_workspace_mapping.md` e `instructions/02_prompt_chain_lifecycle.md`. Questo documento fornisce checklist operative, non logica di binding.
+**Authority:** Operational checklist, subordinate to SSoT
+**Scope:** checklist cognitive e operative per supportare decisioni
+PASS / PASS_WITH_CONDITIONS / BLOCK sulle transizioni di stato del workspace.
 
-## Global Rules
-- Modulare: un modulo per ciascuna transizione workspace (05), usato prima di decidere PASS/BLOCK.
-- Il Gatekeeper OCP-role lavora tramite il Control Plane (OCP-plane); non esegue azioni, valuta artefatti/segni.
-- Le evidenze devono essere verificabili (file, log, segnali); se un artefatto non è formalizzato, si annota “non formalizzato”.
-- L’applicabilità dei gate per transizione è definita in `instructions/06_promptchain_workspace_mapping.md`.
+Questo documento **non definisce** binding, stati o semantica di avanzamento.
+Fornisce **strumenti di valutazione** per l’Engineering Gatekeeper (AI),
+che opera esclusivamente tramite OCP-plane.
 
-## Modulo 1 — bootstrap → raw_ready
-- **Gate coinvolti:** Evidence Gate (layout integrity) + Skeptic Gate (OCP supervision)
-- **Evidence anchors:** `output/timmy-kb-<slug>/raw/`, `config/config.yaml`, log `pre_onboarding.workspace.created`, `context.config.bootstrap` (Evidence Gate).
-- **Checklist:**
-  1. Integrità artefatti/layout: `config/config.yaml` esiste e `raw/` è diretto da WorkspaceLayout?
-  2. Coerenza stato workspace: WorkspaceLayout segnala “bootstrap” valido?
-  3. Scope safety: tutti i path passano da `ensure_within*`?
-  4. Osservabilità: log `context.config.bootstrap` e `pipeline.paths.repo_root.detected` confermano la creazione?
-  5. Stop/HiTL: `WorkspaceLayoutInvalid`/`WorkspaceNotFound` → BLOCK; aspettarsi repair `bootstrap_client_workspace`.
+Riferimenti normativi:
+- `instructions/05_pipeline_workspace_state_machine.md`
+- `instructions/06_promptchain_workspace_mapping.md`
+- `instructions/08_gate_evidence_and_retry_contract.md`
+- `instructions/02_prompt_chain_lifecycle.md`
 
-## Modulo 2 — raw_ready → tagging_ready
-- **Gate:** Skeptic Gate (Gatekeeper + OCP) dopo Evidence Gate
-- **Evidence anchors:** `semantic/tags_raw.csv`, `tags_reviewed.yaml`, `semantic/tags.db`, segnale `has_raw_pdfs`.
-- **Checklist:**
-  1. Artefatti: `semantic/tags_raw.csv` è presente e coerente? `tags_reviewed.yaml` esiste e non è vuoto?
-  2. Stato workspace: raw_ready era TRUE (hanno PDF)?
-  3. Scope safety: raw dentro `ensure_within` e `semantic` sotto layout?
-  4. Osservabilità: log `ui.semantics.gating_allowed`/`blocked` e `ui.semantics.state_update_failed` riflettono gating?
-  5. Stop/HiTL: `_raise_semantic_unavailable` → BLOCK; azione attesa: caricare PDF o ripetere `tag_onboarding`.
+---
 
-## Modulo 3 — tagging_ready → pronto
-- **Gate:** Evidence Gate (Codex) + Skeptic Gate (OCP)
-- **Evidence anchors:** Markdown `book/`, log `ui.semantics.gating_allowed`, `has_raw_pdfs`.
-- **Checklist:**
-  1. Artefatti: `book/` contiene i nuovi `.md`? `semantic/book.frontmatter` loggato?
-  2. Stato workspace: tagging_ready confermato dai checkpoint?
-  3. Scope safety: conversione passa per `semantic.api` e `ensure_within`?
-  4. Osservabilità: `_run_convert` logga `ui.semantics.state_update_failed` solo se errore?
-  5. Stop/HiTL: `_raise_semantic_unavailable` se raw non ready → BLOCK; azione: sistemare raw o `tags.db`.
+## Principi Globali (Beta 1.0)
+- Ogni modulo corrisponde a **una singola transizione di stato**.
+- Le checklist **non producono stato**: supportano l’emissione di un Decision Record.
+- Il Gatekeeper:
+  - non esegue azioni,
+  - non modifica artefatti,
+  - valuta solo **evidenze verificabili**.
+- Ogni verdict (PASS / BLOCK / FAIL / PASS_WITH_CONDITIONS) deve essere
+  formalizzato tramite **Decision Record append-only**.
+- L’applicabilità dei gate per ciascuna transizione è definita in
+  `instructions/06_promptchain_workspace_mapping.md`.
 
-## Modulo 4 — pronto → arricchito
-- **Gate:** Skeptic Gate (Gatekeeper + OCP)
-- **Evidence anchors:** `semantic/tags.db` aggiornato, log `semantic.book.frontmatter`, `load_reviewed_vocab`.
-- **Checklist:**
-  1. Artefatti: Vocabulary caricato con `load_reviewed_vocab`? Cloud?
-  2. Stato workspace: stato `pronto` registrato in `_update_client_state`?
-  3. Scope safety: `enrich_frontmatter` usa solo `pipeline.*` pubblici?
-  4. Osservabilità: evento `ui.semantics.state_update_failed` non duplicato?
-  5. Stop/HiTL: `ConfigError` ⇒ BLOCK; azione: rifare tag e rigenerare vocab.
+---
 
-## Modulo 5 — arricchito → finito
-- **Gate:** Evidence Gate (Codex) + QA Gate (diff/report)
-- **Evidence anchors:** `README.md`, `SUMMARY.md`, log `ui.semantics.state_update_failed`, `context.step.status`.
-- **Checklist:**
-  1. Artefatti: README/SUMMARY sono freschi e path-safe?
-  2. Stato workspace: stato `arricchito` confermato da `_update_client_state`?
-  3. Scope safety: `write_summary_and_readme` ha usato `safe_write_*`?
-  4. Osservabilità: `context.step.status` segnala success?
-  5. Stop/HiTL: fallimento `write_summary_and_readme` → BLOCK; azione: correggere frontmatter/mapping.
+## Modulo 1 — `WORKSPACE_BOOTSTRAP → SEMANTIC_INGEST`
 
-## Modulo 6 — finito → out-of-scope handover
-- **Gate:** QA Gate finale (`pre-commit run --all-files`, `pytest -q`) + Skeptic Gate (OCP)
-- **Evidence anchors:** report QA, log `pipeline.github_utils.phase_started/completed`, `phase_failed`.
-- **Checklist:**
-  1. Artefatti: QA log (`pre-commit`, `pytest`) esibiti?
-  2. Stato workspace: `finito` confermato?
-  3. Scope safety: push to GitHub rispetta `GIT_FORCE_ALLOWED_BRANCHES`?
-  4. Osservabilità: `phase_started`/`phase_completed` mostrano successo?
-  5. Stop/HiTL: `phase_failed` → BLOCK; azione: correggere errori CI e ripetere QA.
+**Gate richiesti:**
+- Evidence Gate (layout & artefatti)
+- Skeptic Gate (OCP supervision)
 
-## Gaps & TODO
-- Mancano PASS artifact formali per Evidence Gate su ogni transizione (`raw_ready`, `tagging_ready`).
-- derived states (raw_ready/tagging_ready) non hanno una predicate unica nel codice; “non formalizzato”.
-- Retry/resume dopo fallimento non è definito; documentare la policy (solo log warning attuali).
-- Il binding QA↔FINITO e l’applicabilità dei gate sono definiti in `instructions/06_promptchain_workspace_mapping.md`.
+**Evidence anchors (minimi):**
+- Directory `raw/`, `config/`, `semantic/`, ledger
+- `config/config.yaml`
+- Log: `pre_onboarding.workspace.created`, `context.config.bootstrap`
+
+**Checklist:**
+1. **Layout integrity**
+   WorkspaceLayout ha creato tutte le directory canoniche?
+2. **Config validity**
+   `config/config.yaml` esiste ed è leggibile?
+3. **Scope safety**
+   Tutti i path sono validati via `ensure_within*`?
+4. **Ledger readiness**
+   Il ledger è scrivibile (condizione necessaria per Decision Record)?
+5. **Stop / BLOCK**
+   `WorkspaceLayoutInvalid` o `WorkspaceNotFound` ⇒ BLOCK
+   Azione attesa: rigenerare workspace (`bootstrap_client_workspace`).
+
+---
+
+## Modulo 2 — `SEMANTIC_INGEST → FRONTMATTER_ENRICH`
+
+**Gate richiesti:**
+- Evidence Gate
+- Skeptic Gate (OCP)
+
+**Evidence anchors:**
+- `semantic/tags.db`
+- `tags_reviewed.yaml`
+- Raw PDFs presenti in `raw/`
+
+**Checklist:**
+1. **Artefatti semantici**
+   `semantic/tags.db` esiste ed è coerente?
+2. **Checkpoint HiTL**
+   `tags_reviewed.yaml` presente e valido?
+3. **Input readiness**
+   `raw/` contiene PDF validi (condizione di azione, non di stato)?
+4. **Scope safety**
+   Artefatti sotto layout canonico?
+5. **Stop / BLOCK**
+   Tagging incompleto o input assente ⇒ BLOCK
+   Azione attesa: caricare PDF o ripetere ingest.
+
+---
+
+## Modulo 3 — `FRONTMATTER_ENRICH → VISUALIZATION_REFRESH`
+
+**Gate richiesti:**
+- Evidence Gate
+- Skeptic Gate (OCP)
+
+**Evidence anchors:**
+- `book/*.md` (draft)
+- Log `semantic.book.frontmatter`
+
+**Checklist:**
+1. **Frontmatter generation**
+   I markdown draft sono stati prodotti?
+2. **Semantic coherence**
+   Frontmatter allineato a `semantic/tags.db`?
+3. **Scope safety**
+   Conversione effettuata tramite API pubbliche e path-safe?
+4. **Observability**
+   Eventi di errore non silenziati?
+5. **Stop / BLOCK**
+   Incoerenza semantica ⇒ BLOCK
+   Azione attesa: correggere mapping/tag.
+
+---
+
+## Modulo 4 — `VISUALIZATION_REFRESH → PREVIEW_READY`
+
+**Gate richiesti:**
+- Evidence Gate
+- Skeptic Gate (OCP)
+
+**Evidence anchors:**
+- `semantic/kg.tags.*`
+- Draft finali `README.md`, `SUMMARY.md`
+
+**Checklist:**
+1. **KG generation**
+   Artefatti di visualizzazione presenti e aggiornati?
+2. **Preview completeness**
+   README/SUMMARY coerenti con KG?
+3. **Scope safety**
+   Generazione avvenuta solo su path canonici?
+4. **Observability**
+   Log di generazione completi e non contraddittori?
+5. **Stop / BLOCK**
+   Preview incompleta o KG incoerente ⇒ BLOCK
+   Azione attesa: rigenerare visualizzazione.
+
+---
+
+## Modulo 5 — `PREVIEW_READY → COMPLETE`
+
+**Gate richiesti:**
+- QA Gate
+- Evidence Gate
+- Skeptic Gate (OCP)
+
+**Evidence anchors:**
+- Artefatti finali in `book/` e `semantic/`
+- Report QA
+
+**Checklist:**
+1. **Artefatti finali**
+   Markdown e KG presenti e path-safe?
+2. **QA results**
+   QA Gate ha prodotto verdict PASS?
+3. **Consistency**
+   Nessuna discrepanza tra preview e output finale?
+4. **Observability**
+   Tutti i verdict sono tracciati?
+5. **Stop / BLOCK / FAIL**
+   QA failure ⇒ FAIL
+   Azione attesa: correzione e nuova run.
+
+---
+
+## Regole di Chiusura
+- Ogni modulo produce **esattamente un verdict**.
+- Ogni verdict produce **un Decision Record**.
+- Nessun modulo può:
+  - dedurre stato,
+  - aggiornare stato,
+  - regredire stato.
+- In assenza di Decision Record, **la transizione non è avvenuta**.

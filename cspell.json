@@ -321,7 +321,8 @@
     "nconten",
     "pathlib",
     "artefacts",
-    "retrocompatibilità"
+    "retrocompatibilità",
+    "auditabili"
   ],
   "flagWords": [
     "�",
