@@ -322,7 +322,8 @@
     "pathlib",
     "artefacts",
     "retrocompatibilità",
-    "auditabili"
+    "auditabili",
+    "misconfig"
   ],
   "flagWords": [
     "�",

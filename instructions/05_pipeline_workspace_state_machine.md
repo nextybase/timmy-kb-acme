@@ -30,6 +30,7 @@
 - Every state transition produces a **Decision Record (append-only)**:
   `PASS | BLOCK | FAIL | PASS_WITH_CONDITIONS`.
 - Artefact existence alone **never** advances the pipeline.
+- Allowed action families **do not imply** permission to advance state.
 - State regression is **forbidden**:
   failures produce new Decision Records; the current state remains unchanged.
 - Retry always means **new run, new record**, never rollback.
@@ -41,10 +42,14 @@
 | State | Entry Condition (normative) | Required Artefacts (evidence) | Allowed Actions (family) | Exit Condition |
 |------|-----------------------------|--------------------------------|--------------------------|----------------|
 | `WORKSPACE_BOOTSTRAP` | Intent registered; workspace slug resolved | Workspace layout created via `WorkspaceLayout` (`raw/`, `config/`, `semantic/`, ledger) | `REGISTER_*`, `VALIDATE_*` (layout, config, ledger) | Gatekeepers attest workspace integrity → `SEMANTIC_INGEST` |
-| `SEMANTIC_INGEST` | Workspace integrity attested | Raw PDFs present, `config/config.yaml`, optional `tags_reviewed.yaml` | `VALIDATE_*`, `GENERATE_*` (semantic extraction, indexing) | Semantic Gatekeepers attest `tags.db` validity → `FRONTMATTER_ENRICH` |
+| `SEMANTIC_INGEST` | Workspace integrity attested | Raw PDFs present, `config/config.yaml` | `VALIDATE_*`, `GENERATE_*` (semantic extraction, indexing) | Semantic Gatekeepers attest `tags.db` validity → `FRONTMATTER_ENRICH` |
 | `FRONTMATTER_ENRICH` | Semantic layer attested | Draft frontmatter (`book/*.md`), draft `README.md`, `SUMMARY.md` | `VALIDATE_*` (frontmatter, semantic coherence) | Gatekeepers attest frontmatter correctness → `VISUALIZATION_REFRESH` |
 | `VISUALIZATION_REFRESH` | Frontmatter attested | Preview artefacts (`semantic/kg.tags.*`, final README/SUMMARY drafts) | `GENERATE_*` (visual previews, vision mappings) | Gatekeepers/OCP attest KG + preview → `PREVIEW_READY` |
-| `PREVIEW_READY` | Preview artefacts attested | Final `book/` + `semantic/` artefacts | `VALIDATE_*` (final QA checks) | On PASS: pipeline complete |
+| `PREVIEW_READY` | Preview artefacts attested | Final `book/` + `semantic/` artefacts | `VALIDATE_*` (final QA checks) | On PASS: pipeline eligible for completion |
+
+**Nota normativa**
+- `COMPLETE` is **not a pipeline state**.
+- It is a **closure act**, attested via Decision Record, once all requirements are satisfied.
 
 ---
 
@@ -58,7 +63,7 @@
 - `VISUALIZATION_REFRESH → PREVIEW_READY`
   Requires Decision Record confirming preview artefacts and KG alignment.
 - `PREVIEW_READY → COMPLETE`
-  Pipeline complete once enriched markdown **and** validated KG are attested.
+  Closure Decision Record emitted once enriched markdown **and** validated KG are attested.
 
 ---
 
@@ -71,6 +76,7 @@ All stops produce a **Decision Record** and do **not** modify the current state.
 | `missing_inputs` | Domain Gatekeeper | `ContractError` | Supply missing artefacts | New run from same state |
 | `unsupported_action` | Gatekeeper / OCP | `HITL_REQUIRED` | Revise Work Order | Resume after explicit approval |
 | `hitl_block` | OCP / Timmy | `HITL_REQUIRED` | Human decision via Timmy | Resume from same state |
+| `invariant_violation` | Gatekeeper / Timmy | `PolicyViolation` | Correct design/config mismatch | New run only after correction |
 
 ---
 
@@ -99,4 +105,5 @@ All stops produce a **Decision Record** and do **not** modify the current state.
 - [ ] Frontmatter drafts validated (`FRONTMATTER_ENRICH`).
 - [ ] Preview and KG artefacts validated (`VISUALIZATION_REFRESH`).
 - [ ] Enriched markdown + validated KG attested.
+- [ ] Closure Decision Record emitted (`COMPLETE`).
 - [ ] Agency transition ProtoTimmy → Timmy recorded.
