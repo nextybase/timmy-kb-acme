@@ -33,9 +33,7 @@ def _open_readonly(db_path: Path, *, slug: str) -> sqlite3.Connection:
 
 
 def _load_latest_run(conn: sqlite3.Connection) -> dict[str, str] | None:
-    row = conn.execute(
-        "SELECT run_id, started_at FROM runs ORDER BY started_at DESC, run_id DESC LIMIT 1"
-    ).fetchone()
+    row = conn.execute("SELECT run_id, started_at FROM runs ORDER BY started_at DESC, run_id DESC LIMIT 1").fetchone()
     if row is None:
         return None
     return {"run_id": str(row[0]), "started_at": str(row[1])}
@@ -44,8 +42,7 @@ def _load_latest_run(conn: sqlite3.Connection) -> dict[str, str] | None:
 def _load_latest_decisions(conn: sqlite3.Connection, *, run_id: str) -> list[dict[str, Any]]:
     if sqlite3.sqlite_version_info < (3, 25, 0):
         raise ConfigError(
-            "ledger-status richiede window functions: "
-            f"versione={sqlite3.sqlite_version} minima=3.25.0 richiesta",
+            "ledger-status richiede window functions: " f"versione={sqlite3.sqlite_version} minima=3.25.0 richiesta",
         )
     rows = conn.execute(
         """

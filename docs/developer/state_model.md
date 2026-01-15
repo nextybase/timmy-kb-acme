@@ -1,7 +1,7 @@
 # State Model (Beta 1.0)
 
 ## Scopo
-Questo documento definisce il **modello di stato** del sistema in Beta 1.0 e il **contratto operativo** con cui lo stato viene derivato in modo deterministico dal **Decision Ledger** (SSoT).  
+Questo documento definisce il **modello di stato** del sistema in Beta 1.0 e il **contratto operativo** con cui lo stato viene derivato in modo deterministico dal **Decision Ledger** (SSoT).
 Non introduce un “motore di stato”: formalizza **termini, stati, transizioni e regole di interpretazione** per ridurre ambiguità ed entropia.
 
 ---
@@ -9,7 +9,7 @@ Non introduce un “motore di stato”: formalizza **termini, stati, transizioni
 ## Definizioni (SSoT-first)
 
 ### Workspace State (stato canonico)
-Lo **stato del workspace** è la proiezione del **dato verificabile**:  
+Lo **stato del workspace** è la proiezione del **dato verificabile**:
 **`workspace_state` è derivato esclusivamente dal Decision Ledger e ancorato alla `latest_run`**.
 
 Interpretazione: “cosa è *vero adesso* nel workspace”, perché la `latest_run` è quella che ha definito l’assetto corrente degli artefatti.
@@ -25,7 +25,7 @@ Lo **stato dell’ultima run** descrive “cosa è successo nell’ultima esecuz
 - `latest_run` (run_id + started_at)
 - `last_run_verdict` (ALLOW/DENY) e relativo gate/stage, se disponibile
 
-Interpretazione: “l’ultima esecuzione è andata bene o male?”.  
+Interpretazione: “l’ultima esecuzione è andata bene o male?”.
 Non sostituisce il `workspace_state`.
 
 > Regola: **lo stato canonico è sempre `workspace_state`** e deriva dalla `latest_run`. La run più recente è anche il riferimento per la telemetria/health.

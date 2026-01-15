@@ -1,7 +1,7 @@
 # State Model (Beta 1.0)
 
 ## Scopo
-Questo documento definisce il **modello di stato** del sistema in Beta 1.0 e il **contratto operativo** con cui lo stato viene derivato in modo deterministico dal **Decision Ledger** (SSoT).  
+Questo documento definisce il **modello di stato** del sistema in Beta 1.0 e il **contratto operativo** con cui lo stato viene derivato in modo deterministico dal **Decision Ledger** (SSoT).
 Non introduce un “motore di stato”: formalizza **termini, stati, transizioni e regole di interpretazione** per ridurre ambiguità ed entropia.
 
 ---
@@ -9,7 +9,7 @@ Non introduce un “motore di stato”: formalizza **termini, stati, transizioni
 ## Definizioni (SSoT-first)
 
 ### Workspace State (stato canonico)
-Lo **stato del workspace** è la proiezione del **dato verificabile**:  
+Lo **stato del workspace** è la proiezione del **dato verificabile**:
 **`workspace_state` = `to_state` dell’ultima decisione `ALLOW`**, ordinata per `decided_at` e tie-breaker `decision_id`.
 
 Interpretazione: “cosa è *vero adesso* nel workspace”, indipendentemente dall’esito dell’ultima run.
@@ -19,7 +19,7 @@ Lo **stato dell’ultima run** descrive “cosa è successo nell’ultima esecuz
 - `latest_run` (run_id + started_at)
 - `last_run_verdict` (ALLOW/DENY) e relativo gate/stage, se disponibile
 
-Interpretazione: “l’ultima esecuzione è andata bene o male?”.  
+Interpretazione: “l’ultima esecuzione è andata bene o male?”.
 Non sostituisce il `workspace_state`.
 
 > Regola: **lo stato canonico è sempre `workspace_state`**. La run più recente è informazione di salute/telemetria.
@@ -68,7 +68,7 @@ Errori:
 Una decisione `ALLOW` indica che la transizione è considerata **completata** e che gli artefatti previsti per quello stato sono stati **persistiti**.
 
 ### DENY
-Una decisione `DENY` indica un **tentativo fallito**.  
+Una decisione `DENY` indica un **tentativo fallito**.
 `to_state` in `DENY` rappresenta il **target della transizione**, non lo stato raggiunto.
 
 > Regola: lo stato del workspace **non avanza mai** a causa di un `DENY`.

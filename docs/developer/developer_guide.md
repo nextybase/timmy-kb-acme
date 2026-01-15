@@ -282,7 +282,7 @@ raggiungibile è `TAGS_CSV_READY`.
 L’esecuzione end-to-end con stub è consentita **solo** tramite flag esplicito
 `--dummy` ed è sempre **tracciata nel _Decision Ledger_**.
 
-👉 Per i dettagli operativi e le implicazioni di audit, vedi  
+👉 Per i dettagli operativi e le implicazioni di audit, vedi
 **[Strict vs Dummy – Guida Operativa](../strict_vs_dummy_beta.md)**.
 
 ## ✅ Beta: State Model (Decision Ledger = SSoT)
