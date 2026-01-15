@@ -44,6 +44,18 @@ python -m timmy_kb.cli.semantic_onboarding --slug acme --non-interactive
 ```
 Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user/user_guide.md). Il flusso termina con la preview locale via Docker/HonKit (pipeline `honkit_preview`).
 
+## ⚠️ Beta constraint: Strict vs Dummy mode
+
+In Beta, il flusso di onboarding è **strict by default**:
+la generazione degli stub semantici è **disabilitata** e lo stato massimo
+raggiungibile è `TAGS_CSV_READY`.
+
+L’esecuzione end-to-end è consentita **solo** tramite flag esplicito
+`--dummy` ed è sempre **tracciata nel _Decision Ledger_**.
+
+👉 Dettagli operativi e implicazioni di audit:
+**[Strict vs Dummy – Guida Operativa](docs/strict_vs_dummy_beta.md)**.
+
 ### Igiene workspace
 - I derivatives runtime restano fuori dal controllo versione e fuori dalla repo root: `output/`, `logs/`, `.timmy_kb/`, `.streamlit/`, cache pytest/ruff/mypy e `node_modules/` sono ignorati.
 - Se compaiono nel working tree, rimuovili prima di eseguire un commit o spostali fuori dal repository. Vedi [Developer Guide](docs/developer/developer_guide.md) (ALERT / Workspace Discipline).

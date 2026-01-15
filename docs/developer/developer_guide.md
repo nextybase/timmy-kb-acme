@@ -273,6 +273,18 @@ make ci-safe     # qa-safe + pytest
 # Ambientesenza install: esegui i test con PYTHONPATH=src pytest -q
 ```
 
+## ⚠️ Beta: Strict vs Dummy mode
+
+Durante la Beta, il flusso di *`tag_onboarding`* è **strict by default**:
+la generazione degli stub semantici è **bloccata** e lo stato massimo
+raggiungibile è `TAGS_CSV_READY`.
+
+L’esecuzione end-to-end con stub è consentita **solo** tramite flag esplicito
+`--dummy` ed è sempre **tracciata nel _Decision Ledger_**.
+
+👉 Per i dettagli operativi e le implicazioni di audit, vedi  
+**[Strict vs Dummy – Guida Operativa](../strict_vs_dummy_beta.md)**.
+
 ## Product-grade tools
 ### Import policy, feature gating, fail-fast rules
 

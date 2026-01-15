@@ -22,8 +22,11 @@ class _DummyCtx(SimpleNamespace):
 def _make_ctx(tmp_path: Path, slug: str = "dummy") -> _DummyCtx:
     base = tmp_path / "output" / f"timmy-kb-{slug}"
     book = base / "book"
+    config_dir = base / "config"
     base.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
     return _DummyCtx(base_dir=base, md_dir=book, repo_root_dir=base, slug=slug)
 
 

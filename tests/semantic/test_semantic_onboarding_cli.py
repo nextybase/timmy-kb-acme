@@ -15,6 +15,9 @@ from timmy_kb.cli import semantic_onboarding as cli
 
 def _ctx(base_dir: Path) -> TestClientCtx:
     book_dir = base_dir / "book"
+    config_dir = base_dir / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
     return TestClientCtx(
         slug="dummy",
         base_dir=base_dir,
@@ -22,7 +25,7 @@ def _ctx(base_dir: Path) -> TestClientCtx:
         raw_dir=base_dir / "raw",
         md_dir=book_dir,
         semantic_dir=base_dir / "semantic",
-        config_dir=base_dir / "config",
+        config_dir=config_dir,
     )
 
 
@@ -95,7 +98,13 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
     monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))
     monkeypatch.setattr(cli, "run_semantic_pipeline", lambda *a, **k: (ctx.base_dir, [], []))
 
-    layout = SimpleNamespace(semantic_dir=ctx.semantic_dir, book_dir=ctx.md_dir, base_dir=ctx.base_dir)
+    layout = SimpleNamespace(
+        semantic_dir=ctx.semantic_dir,
+        book_dir=ctx.md_dir,
+        base_dir=ctx.base_dir,
+        config_path=ctx.config_dir / "config.yaml",
+        slug=ctx.slug,
+    )
     monkeypatch.setattr(cli.WorkspaceLayout, "from_context", classmethod(lambda cls, c: layout))
 
     layout.semantic_dir.mkdir(parents=True, exist_ok=True)

@@ -38,7 +38,9 @@ Punti chiave:
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import hashlib
+import json
 import logging
 import os
 import uuid
@@ -65,6 +67,7 @@ from semantic import nlp_runner
 from semantic.tags_validator import validate_tags_reviewed as validate_tags_payload
 from semantic.tags_validator import write_validation_report as write_validation_report_payload
 from semantic.types import ClientContextProtocol
+from storage import decision_ledger
 from storage.tags_store import clear_doc_terms, derive_db_path_from_yaml_path, ensure_schema_v2, get_conn, has_doc_terms
 from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
 from storage.tags_store import upsert_document, upsert_folder
@@ -87,6 +90,25 @@ def _obs_kwargs() -> dict[str, Any]:
         "redact_logs": settings.redact_logs,
         "enable_tracing": settings.tracing_enabled,
     }
+
+
+def _utc_now_iso() -> str:
+    return _dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _build_ledger_evidence(layout: WorkspaceLayout, *, dummy_mode: bool) -> str:
+    payload = {
+        "slug": layout.slug,
+        "workspace_root": str(layout.base_dir),
+        "config_path": str(layout.config_path),
+        "dummy_mode": bool(dummy_mode),
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _is_beta_strict() -> bool:
+    flag = os.getenv("TIMMY_BETA_STRICT", "").strip().lower()
+    return flag in {"1", "true", "yes", "on"}
 
 
 def copy_from_local(*args: Any, **kwargs: Any) -> None:
@@ -515,10 +537,12 @@ def tag_onboarding_main(
     local_path: Optional[str] = None,
     non_interactive: bool = False,
     proceed_after_csv: bool = False,
+    dummy_mode: bool = False,
     run_id: Optional[str] = None,
 ) -> None:
     """Orchestratore della fase di *Tag Onboarding*."""
 
+    run_id = run_id or uuid.uuid4().hex
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
 
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=_prompt, logger=early_logger)
@@ -534,6 +558,17 @@ def tag_onboarding_main(
     )
 
     context = resources.context
+    layout = _require_layout(context)
+    ledger_conn = None
+    ledger_conn = decision_ledger.open_ledger(layout)
+    decision_ledger.start_run(
+        ledger_conn,
+        run_id=run_id,
+        slug=slug,
+        started_at=_utc_now_iso(),
+    )
+    dummy_mode = bool(dummy_mode)
+    evidence_json = _build_ledger_evidence(layout, dummy_mode=dummy_mode)
 
     payload: TaggingPayload = {
         "workspace_slug": slug,
@@ -554,52 +589,137 @@ def tag_onboarding_main(
         "cli.tag_onboarding.started",
         extra={"slug": payload["workspace_slug"], "source": payload["source"]},
     )
+    current_stage = "source"
 
     # Sorgente di PDF
 
-    if source == "drive":
+    try:
+        if source == "drive":
+            current_stage = "source_drive"
+            _ensure_drive_utils_available()
+            download_from_drive(context, logger, raw_dir=raw_dir, non_interactive=non_interactive)
+        elif source == "local":
+            current_stage = "source_local"
+            copy_from_local(
+                logger,
+                raw_dir=raw_dir,
+                local_path=local_path,
+                non_interactive=non_interactive,
+                context=context,
+            )
+        else:
+            raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
 
-        _ensure_drive_utils_available()
-        download_from_drive(context, logger, raw_dir=raw_dir, non_interactive=non_interactive)
+        current_stage = "csv_phase"
+        csv_path = emit_csv_phase(context, logger, slug=slug, raw_dir=raw_dir, semantic_dir=semantic_dir)
 
-    # B) LOCALE
+        current_stage = "checkpoint"
+        if not _should_proceed(non_interactive=non_interactive, proceed_after_csv=proceed_after_csv, logger=logger):
+            decision_ledger.record_decision(
+                ledger_conn,
+                decision_id=uuid.uuid4().hex,
+                run_id=run_id,
+                slug=slug,
+                gate_name="tag_onboarding",
+                from_state="WORKSPACE_READY",
+                to_state="TAGS_CSV_READY",
+                verdict=decision_ledger.DECISION_ALLOW,
+                subject="tag_onboarding",
+                decided_at=_utc_now_iso(),
+                evidence_json=evidence_json,
+                rationale="ok",
+            )
+            return
 
-    elif source == "local":
+        if not dummy_mode:
+            decision_ledger.record_decision(
+                ledger_conn,
+                decision_id=uuid.uuid4().hex,
+                run_id=run_id,
+                slug=slug,
+                gate_name="tag_onboarding",
+                from_state="WORKSPACE_READY",
+                to_state="TAGS_CSV_READY",
+                verdict=decision_ledger.DECISION_ALLOW,
+                subject="tag_onboarding",
+                decided_at=_utc_now_iso(),
+                evidence_json=evidence_json,
+                rationale="checkpoint_proceeded_no_stub",
+            )
+            return
 
-        copy_from_local(
-            logger,
-            raw_dir=raw_dir,
-            local_path=local_path,
-            non_interactive=non_interactive,
-            context=context,
+        if _is_beta_strict():
+            decision_ledger.record_decision(
+                ledger_conn,
+                decision_id=uuid.uuid4().hex,
+                run_id=run_id,
+                slug=slug,
+                gate_name="tag_onboarding",
+                from_state="WORKSPACE_READY",
+                to_state="TAGS_CSV_READY",
+                verdict=decision_ledger.DECISION_ALLOW,
+                subject="tag_onboarding",
+                decided_at=_utc_now_iso(),
+                evidence_json=evidence_json,
+                rationale="checkpoint_proceeded_no_stub",
+            )
+            return
+
+        current_stage = "stub_phase"
+        emit_stub_phase(semantic_dir, csv_path, logger, context=context)
+        proceed_after_csv_flag = bool(payload["extra"]["proceed_after_csv"]) if payload["extra"] else False
+        logger.info(
+            "cli.tag_onboarding.completed",
+            extra={
+                "slug": payload["workspace_slug"],
+                "source": payload["source"],
+                "proceed_after_csv": proceed_after_csv_flag,
+            },
         )
-
-    else:
-
-        raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
-
-    # Fase 1: CSV in semantic/
-
-    csv_path = emit_csv_phase(context, logger, slug=slug, raw_dir=raw_dir, semantic_dir=semantic_dir)
-
-    # Checkpoint HiTL
-
-    if not _should_proceed(non_interactive=non_interactive, proceed_after_csv=proceed_after_csv, logger=logger):
-
-        return
-
-    # Fase 2: stub in semantic/
-
-    emit_stub_phase(semantic_dir, csv_path, logger, context=context)
-    proceed_after_csv_flag = bool(payload["extra"]["proceed_after_csv"]) if payload["extra"] else False
-    logger.info(
-        "cli.tag_onboarding.completed",
-        extra={
-            "slug": payload["workspace_slug"],
-            "source": payload["source"],
-            "proceed_after_csv": proceed_after_csv_flag,
-        },
-    )
+        decision_ledger.record_decision(
+            ledger_conn,
+            decision_id=uuid.uuid4().hex,
+            run_id=run_id,
+            slug=slug,
+            gate_name="tag_onboarding",
+            from_state="WORKSPACE_READY",
+            to_state="TAGS_READY",
+            verdict=decision_ledger.DECISION_ALLOW,
+            subject="tag_onboarding",
+            decided_at=_utc_now_iso(),
+            evidence_json=evidence_json,
+            rationale="ok_dummy_mode",
+        )
+    except Exception as exc:
+        try:
+            decision_ledger.record_decision(
+                ledger_conn,
+                decision_id=uuid.uuid4().hex,
+                run_id=run_id,
+                slug=slug,
+                gate_name="tag_onboarding",
+                from_state="WORKSPACE_READY",
+                to_state="TAGS_READY",
+                verdict=decision_ledger.DECISION_DENY,
+                subject="tag_onboarding",
+                decided_at=_utc_now_iso(),
+                evidence_json=evidence_json,
+                rationale=str(exc).splitlines()[:1][0] if str(exc) else "error",
+            )
+        except Exception as ledger_exc:
+            logger.exception(
+                "cli.tag_onboarding.ledger_deny_failed",
+                extra={
+                    "slug": slug,
+                    "run_id": run_id,
+                    "stage": current_stage,
+                    "error": str(ledger_exc).splitlines()[:1],
+                },
+            )
+        raise
+    finally:
+        if ledger_conn is not None:
+            ledger_conn.close()
 
 
 # ───────────────────────────── CLI ──────────────────────────────────────────────────────────────
@@ -655,6 +775,11 @@ def _parse_args() -> argparse.Namespace:
         "--proceed",
         action="store_true",
         help="In non-interattivo: prosegue anche alla fase 2 (stub semantico)",
+    )
+    p.add_argument(
+        "--dummy",
+        action="store_true",
+        help="Abilita la modalita dummy end-to-end (consente la generazione degli stub).",
     )
 
     p.add_argument(
@@ -831,6 +956,7 @@ def main(args: argparse.Namespace) -> int | None:
                 local_path=args.local_path,
                 non_interactive=args.non_interactive,
                 proceed_after_csv=bool(args.proceed),
+                dummy_mode=bool(args.dummy),
                 run_id=run_id,
             )
             return 0

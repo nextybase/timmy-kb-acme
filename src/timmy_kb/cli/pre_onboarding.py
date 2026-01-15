@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import json
 import logging
 import shutil
 import uuid
@@ -60,6 +61,7 @@ from pipeline.tracing import start_root_trace
 from pipeline.types import WorkflowResult
 from pipeline.workspace_bootstrap import bootstrap_client_workspace as _pipeline_bootstrap_client_workspace
 from pipeline.workspace_layout import WorkspaceLayout
+from storage import decision_ledger
 
 bootstrap_client_workspace = _pipeline_bootstrap_client_workspace
 
@@ -294,6 +296,19 @@ def _prepare_context_and_logger(
     logger.info("cli.pre_onboarding.config_loaded", extra={"slug": context.slug, "path": str(context.config_path)})
     logger.info("cli.pre_onboarding.started", extra={"slug": context.slug})
     return context, logger, client_name
+
+
+def _utc_now_iso() -> str:
+    return _dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _build_ledger_evidence(layout: WorkspaceLayout) -> str:
+    payload = {
+        "slug": layout.slug,
+        "workspace_root": str(layout.base_dir),
+        "config_path": str(layout.config_path),
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 def _create_local_structure(context: ClientContext, logger: logging.Logger, *, client_name: str) -> Path:
@@ -582,6 +597,7 @@ def pre_onboarding_main(
 ) -> None:
     """Esegue la fase di pre-onboarding per il cliente indicato (orchestratore sottile)."""
     require_env = not dry_run
+    run_id = run_id or uuid.uuid4().hex
 
     context, logger, client_name = _prepare_context_and_logger(
         slug,
@@ -589,6 +605,15 @@ def pre_onboarding_main(
         require_env=require_env,
         run_id=run_id,
         client_name=client_name,
+    )
+    layout = WorkspaceLayout.from_context(context)
+    ledger_conn = None
+    ledger_conn = decision_ledger.open_ledger(layout)
+    decision_ledger.start_run(
+        ledger_conn,
+        run_id=run_id,
+        slug=context.slug,
+        started_at=_utc_now_iso(),
     )
 
     current_stage = "local_structure"
@@ -606,6 +631,20 @@ def pre_onboarding_main(
                     "config": str(config_path),
                 },
             )
+            decision_ledger.record_decision(
+                ledger_conn,
+                decision_id=uuid.uuid4().hex,
+                run_id=run_id,
+                slug=context.slug,
+                gate_name="pre_onboarding",
+                from_state="NEW",
+                to_state="WORKSPACE_READY",
+                verdict=decision_ledger.DECISION_ALLOW,
+                subject="workspace_bootstrap",
+                decided_at=_utc_now_iso(),
+                evidence_json=_build_ledger_evidence(layout),
+                rationale="ok",
+            )
             return
 
         current_stage = "drive_phase"
@@ -619,7 +658,46 @@ def pre_onboarding_main(
             require_env=require_env,
         )
         logger.info("cli.pre_onboarding.completed", extra={"slug": context.slug, "artifacts": 1})
+        decision_ledger.record_decision(
+            ledger_conn,
+            decision_id=uuid.uuid4().hex,
+            run_id=run_id,
+            slug=context.slug,
+            gate_name="pre_onboarding",
+            from_state="NEW",
+            to_state="WORKSPACE_READY",
+            verdict=decision_ledger.DECISION_ALLOW,
+            subject="workspace_bootstrap",
+            decided_at=_utc_now_iso(),
+            evidence_json=_build_ledger_evidence(layout),
+            rationale="ok",
+        )
     except Exception as exc:
+        try:
+            decision_ledger.record_decision(
+                ledger_conn,
+                decision_id=uuid.uuid4().hex,
+                run_id=run_id,
+                slug=context.slug,
+                gate_name="pre_onboarding",
+                from_state="NEW",
+                to_state="WORKSPACE_READY",
+                verdict=decision_ledger.DECISION_DENY,
+                subject="workspace_bootstrap",
+                decided_at=_utc_now_iso(),
+                evidence_json=_build_ledger_evidence(layout),
+                rationale=str(exc).splitlines()[:1][0] if str(exc) else "error",
+            )
+        except Exception as ledger_exc:
+            logger.exception(
+                "cli.pre_onboarding.ledger_deny_failed",
+                extra={
+                    "slug": context.slug,
+                    "run_id": run_id,
+                    "stage": current_stage,
+                    "error": str(ledger_exc).splitlines()[:1],
+                },
+            )
         logger.exception(
             "cli.pre_onboarding.failed",
             extra={
@@ -629,6 +707,9 @@ def pre_onboarding_main(
             },
         )
         raise
+    finally:
+        if ledger_conn is not None:
+            ledger_conn.close()
 
 
 # ------------------------------------ CLI ENTRYPOINT ------------------------------------
