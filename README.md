@@ -56,6 +56,17 @@ L’esecuzione end-to-end è consentita **solo** tramite flag esplicito
 👉 Dettagli operativi e implicazioni di audit:
 **[Strict vs Dummy – Guida Operativa](docs/strict_vs_dummy_beta.md)**.
 
+## 🧭 Beta: State Model (Decision Ledger)
+
+In Beta, lo **stato del workspace** non è dedotto dal successo dell’ultima
+esecuzione ma è **derivato esclusivamente dal _Decision Ledger_**.
+
+Lo stato canonico rappresenta *ciò che è verificabilmente vero* nel workspace;
+l’esito dell’ultima run è informazione di **salute**, non di stato.
+
+👉 Modello di stato e regole di interpretazione:  
+**[State Model – Beta 1.0](docs/developer/state_model.md)**
+
 ### Igiene workspace
 - I derivatives runtime restano fuori dal controllo versione e fuori dalla repo root: `output/`, `logs/`, `.timmy_kb/`, `.streamlit/`, cache pytest/ruff/mypy e `node_modules/` sono ignorati.
 - Se compaiono nel working tree, rimuovili prima di eseguire un commit o spostali fuori dal repository. Vedi [Developer Guide](docs/developer/developer_guide.md) (ALERT / Workspace Discipline).

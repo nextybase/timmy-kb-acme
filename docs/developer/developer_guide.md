@@ -285,6 +285,17 @@ L’esecuzione end-to-end con stub è consentita **solo** tramite flag esplicito
 👉 Per i dettagli operativi e le implicazioni di audit, vedi  
 **[Strict vs Dummy – Guida Operativa](../strict_vs_dummy_beta.md)**.
 
+## 🧭 Beta: State Model (SSoT)
+
+Durante la Beta, lo **stato del sistema non è inferito dal flusso di esecuzione**  
+ma è **derivato esclusivamente dal _Decision Ledger_** (Single Source of Truth).
+
+Lo stato canonico è il *Workspace State* (ultimo `ALLOW`), mentre l’esito
+dell’ultima esecuzione è trattato come **telemetria / health**.
+
+👉 Modello di stato completo e contratto operativo:  
+**[State Model – Beta 1.0](state_model.md)**.
+
 ## Product-grade tools
 ### Import policy, feature gating, fail-fast rules
 
