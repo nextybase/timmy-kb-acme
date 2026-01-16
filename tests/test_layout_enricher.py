@@ -85,7 +85,7 @@ def test_max_nodes_respected(base_yaml, constraints_dict):
     proposal = suggest_layout(base_yaml, "strategy governance roadmap processi kpi dati", tight)
     # Con 3 nodi max, la proposta sarà piccola (top + 2 figli o solo pochi nodi)
     # In realtà suggest_layout applica il budget contando i figli; qui controlliamo che non esploda.
-    # Se supera, la funzione solleverà in validazione: quindi l’esistenza del dict è sufficiente.
+    # Se supera, la funzione solleverà in validazione: quindi l'esistenza del dict è sufficiente.
     assert isinstance(proposal, dict)
 
 

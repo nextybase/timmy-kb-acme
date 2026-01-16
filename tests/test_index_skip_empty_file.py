@@ -38,7 +38,7 @@ def test_index_logs_skip_empty_file(tmp_path: Path, caplog: pytest.LogCaptureFix
     # Potrebbe essere >=1 a seconda della logica di chunking; basta che indicizzi il file non-vuoto
     assert inserted >= 1
 
-    # Deve comparire l’evento per-file sul markdown vuoto
+    # Deve comparire l'evento per-file sul markdown vuoto
     recs = [r for r in caplog.records if getattr(r, "event", r.getMessage()) == "semantic.index.skip_empty_file"]
     assert recs, "Evento semantic.index.skip_empty_file non trovato"
     assert any("empty.md" in str(getattr(r, "file_path", "")) for r in recs)

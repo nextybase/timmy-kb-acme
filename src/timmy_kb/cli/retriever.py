@@ -544,7 +544,7 @@ def with_config_candidate_limit(
     Nota: se il chiamante imposta esplicitamente il valore uguale al default
     (4000), questa funzione non può distinguerlo dal caso 'non impostato' e
     applicherà il config. In tal caso, evitare questa funzione oppure passare un
-    valore diverso dal default per esprimere l’intento.
+    valore diverso dal default per esprimere l'intento.
     """
     default_lim = _default_candidate_limit()
 
@@ -721,7 +721,7 @@ def preview_effective_candidate_limit(
 
     Ritorna (limit, source, budget_ms) dove `source`
     {"explicit", "auto_by_budget", "config", "default"}.
-    Utile per la UI per mostrare un’etichetta: "Limite stimato: N".
+    Utile per la UI per mostrare un'etichetta: "Limite stimato: N".
     """
     default_lim = _default_candidate_limit()
 

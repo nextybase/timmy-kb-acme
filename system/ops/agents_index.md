@@ -1,4 +1,4 @@
-# AGENTS Index – Shared Policies for All Agents
+# AGENTS Index - Shared Policies for All Agents
 
 This index gathers the shared policies that every agent must follow in the repository. Avoid duplicating rules: the individual `AGENTS.md` files under their respective areas should contain only the minimal, scope-specific overrides and point back to this index for everything else.
 

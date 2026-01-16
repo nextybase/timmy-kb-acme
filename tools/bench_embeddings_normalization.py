@@ -297,7 +297,7 @@ def main() -> int:
                 )
         except Exception:
             pass
-        print("âš ï¸Ž regression")
+        print("âš ï¸Ž regression")
         return 0
 
 

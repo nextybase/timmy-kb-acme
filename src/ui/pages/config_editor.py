@@ -287,7 +287,7 @@ def main() -> None:
     ctx, settings = _load_context_and_settings(slug)
     data = settings.as_dict()
 
-    st.subheader(f"Config & Settings – {slug}")
+    st.subheader(f"Config & Settings - {slug}")
     st.info(
         "Questa pagina gestisce le impostazioni applicative del workspace. "
         "I segreti restano in .env e sono referenziati da chiavi *_env.",

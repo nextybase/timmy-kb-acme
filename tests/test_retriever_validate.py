@@ -8,7 +8,7 @@ import pytest
 
 import timmy_kb.cli.retriever as r
 from tests.conftest import DUMMY_SLUG
-from timmy_kb.cli.retriever import QueryParams, RetrieverError, search  # <— usa la stessa classe del modulo sotto test
+from timmy_kb.cli.retriever import QueryParams, RetrieverError, search  # <- usa la stessa classe del modulo sotto test
 
 
 class DummyEmbeddings:

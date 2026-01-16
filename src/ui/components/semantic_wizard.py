@@ -65,7 +65,7 @@ def _render_step_row(
 
     # Colonna 1: titolo e descrizione
     with col_desc:
-        st.markdown(f"**Passo {step_number} – {title}**")
+        st.markdown(f"**Passo {step_number} - {title}**")
         st.caption(description)
 
     # Colonna 2: pulsante
@@ -212,7 +212,7 @@ def render_semantic_wizard(
     _render_step_row(
         step_number=4,
         step_id=STEP_PREVIEW,
-        title="Vai all’anteprima Docker (HonKit)",
+        title="Vai all'anteprima Docker (HonKit)",
         description=(
             "Apri la pagina di preview Docker per controllare la knowledge base " "così come la vedranno gli utenti."
         ),

@@ -124,7 +124,7 @@ def build_generic_vision_template_pdf(load_sections: Callable[[], Iterable[dict]
             story.append(Paragraph(text, normal))
             story.append(Spacer(1, 0.4 * cm))
 
-        story.append(Paragraph("Vision Statement – Template generico", styles["Title"]))
+        story.append(Paragraph("Vision Statement - Template generico", styles["Title"]))
         story.append(Spacer(1, 0.8 * cm))
 
         sections = load_sections() or []
@@ -155,20 +155,20 @@ def build_generic_vision_template_pdf(load_sections: Callable[[], Iterable[dict]
         else:
             add_title("Vision")
             add_paragraph(
-                "In questa sezione il cliente descrive la propria Vision, ovvero l’orizzonte di lungo periodo "
-                "verso cui tende l’organizzazione. La Vision dovrebbe rispondere alla domanda: "
-                "«In che tipo di realtà vogliamo contribuire a vivere tra 5–10 anni grazie al nostro lavoro "
-                "e all’uso dell’Intelligenza Artificiale?».",
+                "In questa sezione il cliente descrive la propria Vision, ovvero l'orizzonte di lungo periodo "
+                "verso cui tende l'organizzazione. La Vision dovrebbe rispondere alla domanda: "
+                "«In che tipo di realtà vogliamo contribuire a vivere tra 5-10 anni grazie al nostro lavoro "
+                "e all'uso dell'Intelligenza Artificiale?».",
             )
             add_title("Mission")
             add_paragraph(
-                "Qui va descritta la Mission, cioè il modo concreto in cui l’organizzazione intende agire "
+                "Qui va descritta la Mission, cioè il modo concreto in cui l'organizzazione intende agire "
                 "per avvicinarsi alla Vision. La Mission risponde tipicamente a: "
                 "«Cosa facciamo, per chi lo facciamo e con quali modalità operative?».",
             )
             add_title("Framework Etico")
             add_paragraph(
-                "In questa parte vanno indicati i principi etici che guidano l’uso dell’AI e dei dati: "
+                "In questa parte vanno indicati i principi etici che guidano l'uso dell'AI e dei dati: "
                 "trasparenza, tracciabilità, supervisione umana, sostenibilità, inclusione, gestione dei bias, "
                 "adesione alle normative (es. AI Act) e alle policy interne. "
                 "Il Framework Etico deve chiarire quali pratiche sono accettabili e quali no.",
@@ -187,10 +187,10 @@ def build_generic_vision_template_pdf(load_sections: Callable[[], Iterable[dict]
                 "In questa sezione il cliente descrive il contesto in cui opera il progetto: "
                 "settore di attività (es. PMI, scuola, PA, territorio), tipologia di utenti coinvolti, "
                 "lingue di lavoro, normative chiave di riferimento (es. regolamenti di settore, privacy, "
-                "linee guida interne). L’obiettivo è fornire al sistema un quadro di riferimento sintetico ma chiaro.",
+                "linee guida interne). L'obiettivo è fornire al sistema un quadro di riferimento sintetico ma chiaro.",
             )
             add_paragraph(
-                "Questo documento funge da contratto semantico tra l’organizzazione e il sistema: "
+                "Questo documento funge da contratto semantico tra l'organizzazione e il sistema: "
                 "non deve essere perfetto, ma sufficientemente chiaro da permettere di individuare "
                 "le aree tematiche principali e gli obiettivi del progetto.",
             )

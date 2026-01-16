@@ -1,4 +1,4 @@
-# Runbook Codex – Timmy KB (v1.0 Beta)
+# Runbook Codex - Timmy KB (v1.0 Beta)
 
 > This runbook is the operational guide for working safely and effectively on the Timmy KB repository with an agent-first, HiTL approach. It serves as the day-to-day reference for flows; design details live in the supporting documents cited below.
 
@@ -37,7 +37,7 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](../.
 - Before any work, the Codex agent loads the three SSoT documents (`system/ops/agents_index.md`, the relevant `AGENTS.md`, and `~/.codex/AGENTS.md`) and uses `.codex/PROMPTS.md` as the API.
 - The recommended entry point is the Onboarding Task Codex; it inflicts a plan-first, micro-PR, QA-compliant workflow and insists on updating the documentation and AGENTS matrix when touched.
 - Codex flows must remain consistent with the policies in this runbook and the AGENTS matrix.
-- Poiché il workstream finisce solo con un Prompt Closure, ogni Prompt Chain viene chiusa solo dopo il **Closure Protocol** (`.codex/CLOSURE_AND_SKEPTIC.md`), che lega Prompt N+1 (Codex) e lo Skeptic Gate post N+1 (OCP), talvolta indicato come “N+1′” senza essere una fase distinta.
+- Poiché il workstream finisce solo con un Prompt Closure, ogni Prompt Chain viene chiusa solo dopo il **Closure Protocol** (`.codex/CLOSURE_AND_SKEPTIC.md`), che lega Prompt N+1 (Codex) e lo Skeptic Gate post N+1 (OCP), talvolta indicato come "N+1′" senza essere una fase distinta.
 - Per la separazione Netta tra canale User e Dev, consultare `.codex/USER_DEV_SEPARATION.md` e rispettare i guardrail `tests/architecture/test_facade_imports.py` e `tests/architecture/test_dev_does_not_import_ui.py` prima di chiudere la catena.
 
 ### Codex integration
@@ -55,9 +55,9 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](../.
 - I micro-agent (Codex incluso) eseguono i task sotto Work Order Envelope (OK / NEED_INPUT / CONTRACT_ERROR) come indicato da `instructions/`; mantengono trace e logging della pipeline senza assumere decisioni operative.
 
 ### Governance: non-fatal solo nella Prompt Chain
-- **Perché ammesso:** nel dominio Prompt Chain l’errore è cognitivo (scopo, template, piano) e viene gestito da Evidence Gate + Skeptic Gate: OCP può imporre PASS/PASS WITH CONDITIONS/BLOCK e fermare la sequenza se le evidenze non sono complete.
+- **Perché ammesso:** nel dominio Prompt Chain l'errore è cognitivo (scopo, template, piano) e viene gestito da Evidence Gate + Skeptic Gate: OCP può imporre PASS/PASS WITH CONDITIONS/BLOCK e fermare la sequenza se le evidenze non sono complete.
 - **Perché vietato nel runtime:** pipeline/semantic/storage/ui/metrics operano sul perimetro cliente; qui le failure infrastrutturali devono essere **strict** o almeno emettere segnali deterministici e tracciabili (log/eventi/exit code). La degradazione silenziosa è proibita.
-- **Effetto sullo Skeptic Gate:** OCP tratta qualsiasi violazione di strictness runtime come condizione di BLOCK: la catena si ferma finché non esiste evidenza che l’errore sia gestito in modo esplicito e osservabile. Il non-fatal resta confinato alle fasi agentiche, mai al runtime.
+- **Effetto sullo Skeptic Gate:** OCP tratta qualsiasi violazione di strictness runtime come condizione di BLOCK: la catena si ferma finché non esiste evidenza che l'errore sia gestito in modo esplicito e osservabile. Il non-fatal resta confinato alle fasi agentiche, mai al runtime.
 
 ---
 
@@ -284,8 +284,8 @@ References: [.codex/CHECKLISTS](../../.codex/CHECKLISTS.md).
 
 ## 15) Troubleshooting
 
-- **Drive doesn’t download PDFs:** regenerate the README in `raw/`, verify permissions and `DRIVE_ID`.
-- **HonKit preview doesn’t start:** check Docker and the port availability.
+- **Drive doesn't download PDFs:** regenerate the README in `raw/`, verify permissions and `DRIVE_ID`.
+- **HonKit preview doesn't start:** check Docker and the port availability.
 - **Conversion failures:** ensure valid PDFs exist within the allowed perimeter (avoid symlinks).
 - **Spell-check/docs mismatch:** run cSpell on the docs and align frontmatter/title versions.
 - **Model inconsistency:** check `config/config.yaml` and `get_vision_model()`.

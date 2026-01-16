@@ -274,7 +274,7 @@ def run_vision(
     if preview_prompt:
         st = get_streamlit()
         with st.container(border=True):
-            st.subheader("Anteprima prompt inviato all’Assistant")
+            st.subheader("Anteprima prompt inviato all'Assistant")
             st.caption("Verifica il testo generato. Premi **Prosegui** per continuare.")
             if prepared_prompt is None:
                 preferred_config = resolve_vision_config(ctx, override_model=model)

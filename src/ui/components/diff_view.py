@@ -38,7 +38,7 @@ def _build_local_index(raw_dir: Path) -> Dict[str, Dict[str, Any]]:
     if not raw_dir.exists():
         return index
 
-    # Indichiamo sempre la radice "raw" (come fa l’indice Drive)
+    # Indichiamo sempre la radice "raw" (come fa l'indice Drive)
     index["raw"] = {"type": "dir", "size": None, "mtime": _safe_mtime(raw_dir)}
 
     for directory in iter_safe_paths(raw_dir, include_dirs=True, include_files=False):

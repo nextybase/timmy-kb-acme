@@ -233,7 +233,7 @@ def _render_entities_section(mapping_data: Dict[str, Any], st: Any) -> None:
     vocab = _global_vocab()
 
     if entities:
-        st.markdown("### Entità rilevanti (da l’assistant)")
+        st.markdown("### Entità rilevanti (da l'assistant)")
         rows: List[str] = ["| Entità | Categoria | Codice |", "| --- | --- | --- |"]
         out_of_vocab = False
         for ent in entities:

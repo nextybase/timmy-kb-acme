@@ -55,7 +55,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    # ENTRYPOINT BOOTSTRAP — consentito: CLI standalone usa la repo root per il workspace.
+    # ENTRYPOINT BOOTSTRAP - consentito: CLI standalone usa la repo root per il workspace.
     get_repo_root()
     args = _parse_args()
     slug: str = args.slug.strip()

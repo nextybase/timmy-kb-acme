@@ -41,7 +41,7 @@ def _render_counts(base_dir: Path | None) -> None:
 
 
 def _render_logs(base_dir: Path | None, slug: Optional[str]) -> None:
-    """Mostra la coda del log più recente e offre il download dell’archivio."""
+    """Mostra la coda del log più recente e offre il download dell'archivio."""
     with st.expander("Log", expanded=False):
         if not base_dir:
             st.info("Seleziona un cliente per mostrare i dettagli.")

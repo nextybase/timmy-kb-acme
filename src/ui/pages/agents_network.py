@@ -435,7 +435,7 @@ def _render_agents_tree(tree: AgentsTree) -> None:
                     key=f"agent_node::{area}::{node.rel_path}",
                 ):
                     _open_markdown_modal(
-                        title=f"{area} – {node.file_label}",
+                        title=f"{area} - {node.file_label}",
                         rel_path=node.rel_path,
                     )
 
@@ -452,7 +452,7 @@ def _render_codex_docs_panel() -> None:
     """
     st.markdown("#### Documenti Codex & integrazione")
     st.caption(
-        "Accesso rapido ai documenti che governano l’integrazione di Codex e la rete degli agent. "
+        "Accesso rapido ai documenti che governano l'integrazione di Codex e la rete degli agent. "
         "Ogni pulsante apre il relativo Markdown."
     )
 

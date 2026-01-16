@@ -6,7 +6,7 @@ from pipeline.paths import get_repo_root
 
 def bootstrap_repo_src():
     """
-    ENTRYPOINT BOOTSTRAP — consentito.
+    ENTRYPOINT BOOTSTRAP - consentito.
 
     Determina la repo root per l'entrypoint.
     """

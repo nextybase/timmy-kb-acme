@@ -12,7 +12,7 @@ def to_user_message(exc: Exception) -> Tuple[str, str, Optional[str]]:
     msg = str(exc).strip()
     lower = msg.lower()
 
-    # Vision HALT (HaltError) – spesso contiene info sulle sezioni mancanti
+    # Vision HALT (HaltError) - spesso contiene info sulle sezioni mancanti
     if exc.__class__.__name__.lower() == "halterror":
         caption = None
         missing = ""

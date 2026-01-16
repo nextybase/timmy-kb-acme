@@ -9,8 +9,8 @@ Funzioni:
 Legge file di testo, li divide in chunk, calcola le embedding e le salva in SQLite
 tramite kb_db.insert_chunks. Salta i file binari. Registra un riepilogo nei log.
 
-Nota Vision: il flusso Vision è ora **inline-only** e delega tutta l’elaborazione
-all’Assistant preconfigurato. Non esistono più modalità vector/attachments/fallback.
+Nota Vision: il flusso Vision è ora **inline-only** e delega tutta l'elaborazione
+all'Assistant preconfigurato. Non esistono più modalità vector/attachments/fallback.
 """
 
 from __future__ import annotations

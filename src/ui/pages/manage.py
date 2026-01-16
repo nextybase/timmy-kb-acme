@@ -591,6 +591,6 @@ if slug:
     # helper sections removed
     if (get_client_state(slug) or "").strip().lower() == "arricchito":
         # Sostituisce anchor HTML interno con API native di navigazione
-        link_label = "📌 Prosegui con l’arricchimento semantico"
+        link_label = "📌 Prosegui con l'arricchimento semantico"
         st.page_link(PagePaths.SEMANTICS, label=link_label)
     _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)

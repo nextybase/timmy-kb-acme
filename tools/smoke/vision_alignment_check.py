@@ -130,7 +130,7 @@ def main() -> None:
 
     # 1) Import schema reale dal modulo Vision
     try:
-        # stesso loader usato dall’app
+        # stesso loader usato dall'app
         from semantic.vision_provision import _load_vision_schema  # type: ignore[attr-defined]
     except Exception as e:
         _print_json(

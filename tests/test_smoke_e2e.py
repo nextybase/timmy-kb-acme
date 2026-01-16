@@ -51,7 +51,7 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     # Genera PDF 'cattivi'
     long_name = ("very_long_name_" * 8)[:150] + ".pdf"
-    weird_name = "nome con caratteri strani – è ß Ω 😊 [v1].pdf"
+    weird_name = "nome con caratteri strani - è ß Ω 😊 [v1].pdf"
     ctrl_text = "Test RTL ‎‏‎‏‎ (RLO/LRM) + combining é̄̀̈ + symbols §¶"
 
     # La pipeline si aspetta PDF dentro sottocartelle di categoria: usa 'misc/'

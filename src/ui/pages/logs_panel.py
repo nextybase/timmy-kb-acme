@@ -262,7 +262,7 @@ def _render_tracing_controls(
         )
     state = get_tracing_state()
     st.caption(
-        f"Tracing – preferenze: {'ON' if state.enabled_in_prefs else 'OFF'}, "
+        f"Tracing - preferenze: {'ON' if state.enabled_in_prefs else 'OFF'}, "
         f"endpoint: {'OK' if state.endpoint_present else 'MANCANTE'}, "
         f"librerie OTEL: {'OK' if state.otel_installed else 'NON INSTALLATE'}."
     )
@@ -469,7 +469,7 @@ def _render_global_logs_view() -> None:
         selected = st.selectbox(
             "File di log",
             options=files,
-            format_func=lambda info: f"{info.name} — {info.human_mtime}",
+            format_func=lambda info: f"{info.name} - {info.human_mtime}",
         )
     with col_rows:
         max_rows = st.slider(

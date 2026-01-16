@@ -12,7 +12,7 @@
 - Codex executes exactly one action per prompt: apply a micro-PR, provide a diff/report, and declare QA outcomes before pausing.
 - After Codex responds, OCP evaluates and issues the next prompt (or the closing prompt): no batching, no unsolicited follow-ups, no prompt skipping.
 - Every prompt turn must reference this protocol so that all participants remain aligned and the chain remains reproducible.
-- **Skeptic Gate (MUST):** after each operational output by Codex (Prompt 1..N and Prompt N+1) the OCP conducts the Skeptic Gate as a decision act; the chain advances only with Decision=PASS, PASS WITH CONDITIONS imposes constraints, BLOCK stops the next phase. The “N+1′” label indicates only the Skeptic Gate after Prompt N+1, not a distinct phase.
+- **Skeptic Gate (MUST):** after each operational output by Codex (Prompt 1..N and Prompt N+1) the OCP conducts the Skeptic Gate as a decision act; the chain advances only with Decision=PASS, PASS WITH CONDITIONS imposes constraints, BLOCK stops the next phase. The "N+1′" label indicates only the Skeptic Gate after Prompt N+1, not a distinct phase.
 - **Evidence Gate:** Prompt 1..N does not advance until the Codex response includes the Active Rules memo, the unified diff, the structured report, and the required QA; the OCP halts the chain without these artifacts.
 - **Hard rule OPS/RUN authorization:** no OPS/RUN operational prompt (Phase 1..N or Prompt N+1) may be sent to Codex without an explicit human confirmation recorded by the OCP. The OCP remains the sole owner of the decision to send the prompt, must document it in the report, and activate it before Codex receives instructions. Codex must not request or interpret approvals; it must only respect scope/path-safety and produce the Active Rules memo + diff/report/QA. If the OCP confirmation is missing, the Skeptic Gate blocks progression and the prompt is invalid.
 
@@ -26,11 +26,11 @@
 ## 4. Prompt Chain Phase Model
 The Prompt Chain unfolds in three clearly delimited phases that map to numbered prompts. Each phase carries a precise mandate, acceptable actions, and deliverables.
 
-### 4.1 Phase 0 – Analytical, read-only prompts (Prompt 0, 0x)
+### 4.1 Phase 0 - Analytical, read-only prompts (Prompt 0, 0x)
 
 **Normative clarification (v1.1):** Prompt 0x (0a, 0b, … 0n) are not legacy, fallback, or deprecated. They are a formal extension of Phase 0 and an integral part of controlled uncertainty reduction.
 
-#### Phase 0 — Purpose
+#### Phase 0 - Purpose
 Phase 0 exists to:
 - build a shared, verifiable understanding of the system;
 - identify constraints, risks, and objectives;
@@ -38,7 +38,7 @@ Phase 0 exists to:
 
 Phase 0 does not aim at exhaustiveness; it aims at mapping the relevant ignorance.
 
-#### Prompt 0 — Official entrypoint (role and limits)
+#### Prompt 0 - Official entrypoint (role and limits)
 Prompt 0 is the official entrypoint into the Prompt Chain. It is valid even when the output is:
 - incomplete information;
 - a list of open questions;
@@ -46,7 +46,7 @@ Prompt 0 is the official entrypoint into the Prompt Chain. It is valid even when
 
 A Prompt 0 that declares missing information is a correct outcome, not a failure.
 
-#### Prompt 0x — Exploratory Prompts
+#### Prompt 0x - Exploratory Prompts
 Prompt 0x prompts are Phase 0 read-only deep-dives, used exclusively during Phase 0.
 Their purpose is to close specific uncertainties that emerged from:
 - Prompt 0;
@@ -72,7 +72,7 @@ This declaration is a governance act and a prerequisite to issuing any operation
 #### Non-return rule (important)
 Once the operational phase starts (Prompt 1), the emergence of new structural uncertainties must not be resolved via new Prompt 0x prompts; it is a BLOCK condition for the Prompt Chain.
 
-### 4.2 Phase 1..N – Operational micro-PR prompts
+### 4.2 Phase 1..N - Operational micro-PR prompts
 - Purpose: implement scoped changes defined by the OCP while honoring path safety, template structure, and the Active Rules memo.
 - Each prompt must emit a unified diff, a structured report, a DoD section, and at least `pytest -q -k "not slow"` (or a justified alternative) before moving forward.
 - Codex must apply changes only to the files declared in the prompt, document assumptions, and run targeted tests when requested.
@@ -111,7 +111,7 @@ CONSTRAINTS: ...
 STOP RULE: ...
 ```
 
-    The `ROLE: Codex` line must precede any operational detail: without it the OCP considers the prompt incomplete and the Skeptic Gate will not authorize progression. The template blocks advancement when `ROLE` is missing or replaced, preventing prompts copied from OCP or other sources from improperly assuming Codex’s role. Evidence Gate and Skeptic Gate verify that the block is present before assessing content, limits, and risks.
+    The `ROLE: Codex` line must precede any operational detail: without it the OCP considers the prompt incomplete and the Skeptic Gate will not authorize progression. The template blocks advancement when `ROLE` is missing or replaced, preventing prompts copied from OCP or other sources from improperly assuming Codex's role. Evidence Gate and Skeptic Gate verify that the block is present before assessing content, limits, and risks.
 
   ## 7. Protocol Violations (do not do)
 - Breaking the Planner→OCP→Codex→OCP→Planner turn order or issuing multiple actions per prompt.
@@ -121,7 +121,7 @@ STOP RULE: ...
 - Omitting the Active Rules memo or failing to document QA attempts and retries.
 - Adding unsolicited end-of-task questions or prompts for extra checks not requested by the OCP.
 
-## 8. Part A – Governance (Planner + OCP)
+## 8. Part A - Governance (Planner + OCP)
 
 ### 8.1 Actors
 - **Human/Planner:** defines the business goals, constraints, and success criteria and authorizes OPS/RUN prompts; it does not modify the repository or run commands.
@@ -141,10 +141,10 @@ STOP RULE: ...
 ### 8.4 Prompt Chain lifecycle
 - **Kick-off:** Human/Planner decides on the chain; Onboarding Task codifies the plan and loads the SSoT; only after this may the OCP issue Prompt 0.
 - **Execution:** OCP issues prompts sequentially; Codex responds with one micro-PR (diff + report + intermediate QA), then waits for the next prompt. Each operational response includes the memo from section 6 and confirms compliance with the turn-based protocol.
-- **Closure:** OCP issues Prompt N+1 with final QA requirements; Codex runs `pytest -q` and `pre-commit run --all-files` (repeating up to ten times if needed), documents every rerun, summarizes the entire chain, records the Retrospective PASS (optional notes/TODO), and ends with a one-line Italian commit message. The post-N+1 Skeptic Gate (sometimes labeled “N+1′”) remains a governance gate, not a phase.
+- **Closure:** OCP issues Prompt N+1 with final QA requirements; Codex runs `pytest -q` and `pre-commit run --all-files` (repeating up to ten times if needed), documents every rerun, summarizes the entire chain, records the Retrospective PASS (optional notes/TODO), and ends with a one-line Italian commit message. The post-N+1 Skeptic Gate (sometimes labeled "N+1′") remains a governance gate, not a phase.
 - If QA fails more than twice per prompt, Codex rewrites the patch and retries; after the third failure, Codex explicitly requests guidance from the OCP.
 
-## 9. Part B – Operational Contract for Codex
+## 9. Part B - Operational Contract for Codex
 
 ### 9.1 What is a Prompt Chain for Codex?
 - A sequence of numbered prompts aligned to the Phase model; Codex must execute only the current prompt and never anticipate future phases.
@@ -169,8 +169,8 @@ STOP RULE: ...
 ### 9.5 Anti-patterns
 - Combining unrelated domains in the same prompt, touching unspecified files, adding spurious context outside the template, or neglecting the memo/language/phase guardrails.
 
-## 10. Codex Smoke Chain – Diagnostic Test
-- Objective: simulate a miniature Prompt Chain (S0–S4) to prove turn-taking, memo awareness, QA policy, escalation limits, Italian language, and pre-check validation without editing the repo.
+## 10. Codex Smoke Chain - Diagnostic Test
+- Objective: simulate a miniature Prompt Chain (S0-S4) to prove turn-taking, memo awareness, QA policy, escalation limits, Italian language, and pre-check validation without editing the repo.
 - Flow:
   - S0: OCP sends a toy prompt; Codex acknowledges the Active Rules memo.
   - S1: Codex describes how it would pre-check a mock diff with no files changed.
