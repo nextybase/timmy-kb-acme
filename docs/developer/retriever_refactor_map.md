@@ -80,7 +80,7 @@ Canonical gate events (BLOCK/FAIL) that could be emitted later:
 - On budget exhaustion causing empty results: `skeptic_gate_blocked` (if policy requires).
 Note: no PASS events are planned.
 
-## 3) Risks of splitting modules
+## 4) Risks of splitting modules
 Behavioral risks:
 - Changing ordering or thresholds in `_rank_candidates` can alter scores/ranking.
 - Moving throttling logic can change latency behavior or semaphore timing.
@@ -91,7 +91,7 @@ Test risks and preserving green suite:
 - Manifest path and content used in explainability tests must remain stable.
 - Maintain deterministic ordering (`sorted` and heap behavior) to avoid flaky tests.
 
-## 4) Proposed micro-PR sequence (C1..Cn)
+## 5) Proposed micro-PR sequence (C1..Cn)
 1) C1: "Extract throttling helpers"
    - Scope: isolate `_ThrottleState/_ThrottleRegistry/_throttle_guard` into a helper module.
    - Tests: `pytest -q -k "retriever and not slow"`.
