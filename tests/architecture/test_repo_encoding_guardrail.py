@@ -1,10 +1,19 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _git_path() -> str:
+    git_path = shutil.which("git")
+    if not git_path:
+        raise RuntimeError("Impossibile trovare il binario git.")
+    return git_path
+
 
 TEXT_EXTENSIONS = {
     ".py",
@@ -41,8 +50,9 @@ MOJIBAKE_TOKENS = {
 
 
 def _iter_tracked_text_files() -> list[Path]:
+    git_path = _git_path()
     output = subprocess.check_output(
-        ["git", "ls-files"],
+        [git_path, "ls-files"],
         cwd=REPO_ROOT,
         text=True,
         encoding="utf-8",
@@ -101,9 +111,6 @@ def test_repo_encoding_guardrail() -> None:
         findings.append((rel_path, 1, "UTF8_DECODE_ERROR"))
 
     if findings:
-        lines = [
-            f"{path}:{line_no} {label}"
-            for path, line_no, label in sorted(findings)
-        ]
+        lines = [f"{path}:{line_no} {label}" for path, line_no, label in sorted(findings)]
         report = ["Encoding guardrail violations:"] + lines
         raise AssertionError("\n".join(report))

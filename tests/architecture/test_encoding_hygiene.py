@@ -1,10 +1,19 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _git_path() -> str:
+    git_path = shutil.which("git")
+    if not git_path:
+        raise RuntimeError("Impossibile trovare il binario git.")
+    return git_path
+
 
 _SUSPICIOUS_CHARS_PY = {
     "\u2018": "U+2018",
@@ -26,10 +35,11 @@ _SUSPICIOUS_TOKENS = {
 
 
 def _resolve_base_commit() -> str:
+    git_path = _git_path()
     for target in ("origin/main", "main"):
         try:
             return subprocess.check_output(
-                ["git", "merge-base", "HEAD", target],
+                [git_path, "merge-base", "HEAD", target],
                 cwd=REPO_ROOT,
                 text=True,
                 encoding="utf-8",
@@ -41,8 +51,9 @@ def _resolve_base_commit() -> str:
 
 def _iter_delta_targets() -> list[Path]:
     base_commit = _resolve_base_commit()
+    git_path = _git_path()
     output = subprocess.check_output(
-        ["git", "diff", "--name-only", base_commit, "HEAD"],
+        [git_path, "diff", "--name-only", base_commit, "HEAD"],
         cwd=REPO_ROOT,
         text=True,
         encoding="utf-8",
@@ -70,9 +81,7 @@ def test_repo_encoding_hygiene() -> None:
             decode_errors.append(rel_path)
             continue
 
-        suspicious_chars = (
-            _SUSPICIOUS_CHARS_PY if path.suffix == ".py" else _SUSPICIOUS_CHARS_MD
-        )
+        suspicious_chars = _SUSPICIOUS_CHARS_PY if path.suffix == ".py" else _SUSPICIOUS_CHARS_MD
         for line_no, line in enumerate(text.splitlines(), start=1):
             for ch, label in suspicious_chars.items():
                 if ch in line:
@@ -90,4 +99,4 @@ def test_repo_encoding_hygiene() -> None:
             report.append("Suspicious Unicode tokens:")
             for path, line_no, label in sorted(suspicious):
                 report.append(f"- {path}:{line_no} {label}")
-        assert False, "\n".join(report)
+        raise AssertionError("\n".join(report))

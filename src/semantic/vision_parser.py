@@ -35,10 +35,10 @@ def _clean_text(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text or "")
     replacements = {
         "\u2019": "'",
-        "“": '"',
-        "”": '"',
-        "–": "-",
-        "—": "-",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2013": "-",
+        "\u2014": "-",
         "\u2022": "-",
         "\u2011": "-",
         "🔹": "-",
@@ -168,7 +168,7 @@ def _split_goal_baskets(goal_text: str) -> Dict[str, List[str]]:
 
     formatted = _format_bullets(goal_text)
     pattern = re.compile(
-        r"^-+\s*Goal\s*(\d+)\s*[-–]?\s*(.*?)(?=\n-+\s*Goal\s*\d+|\Z)",
+        r"^-+\s*Goal\s*(\d+)\s*[-\u2013]?\s*(.*?)(?=\n-+\s*Goal\s*\d+|\Z)",
         re.IGNORECASE | re.DOTALL | re.MULTILINE,
     )
     for match in pattern.finditer(formatted):

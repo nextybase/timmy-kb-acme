@@ -110,7 +110,7 @@ _HEADER_VARIANTS: Dict[str, List[str]] = {
     "Contesto Operativo": ["Contesto Operativo", "Contesto operativo"],
 }
 
-# Etichette “friendly” per messaggi d’errore
+# Etichette "friendly" per messaggi d'errore
 _DISPLAY_LABEL: Dict[str, str] = {
     "Vision": "Vision",
     "Mission": "Mission",
@@ -249,7 +249,7 @@ def _build_run_instructions(use_kb: bool) -> str:
     schema_snippet = json.dumps(schema, ensure_ascii=False, indent=2)
 
     prefix_lines = [
-        "Sei il modulo NeXT – Vision → Semantic Mapping.",
+        "Sei il modulo NeXT - Vision → Semantic Mapping.",
         "Ricevi il Vision Statement del cliente e DEVI restituire UN SOLO oggetto JSON",
         "che rispetta esattamente lo schema VisionOutput riportato qui sotto.",
         "",
