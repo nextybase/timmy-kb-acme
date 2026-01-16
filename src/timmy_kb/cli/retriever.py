@@ -53,6 +53,13 @@ _normalize_throttle_settings = throttle_mod._normalize_throttle_settings
 _deadline_from_settings = throttle_mod._deadline_from_settings
 reset_throttle_registry = throttle_mod.reset_throttle_registry
 
+ERR_DEADLINE_EXCEEDED = "retriever_deadline_exceeded"
+ERR_INVALID_K = "retriever_invalid_k"
+ERR_INVALID_QUERY = "retriever_invalid_query"
+ERR_EMBEDDING_FAILED = "retriever_embedding_failed"
+ERR_EMBEDDING_INVALID = "retriever_embedding_invalid"
+ERR_BUDGET_HIT_PARTIAL = "retriever_budget_hit_partial"
+
 
 def _log_logging_failure(event: str, exc: Exception, *, extra: Mapping[str, Any] | None = None) -> None:
     payload = {"event": event, "error": repr(exc)}
@@ -66,6 +73,21 @@ def _log_logging_failure(event: str, exc: Exception, *, extra: Mapping[str, Any]
             event,
             exc,
         )
+
+
+def _apply_error_context(exc: RetrieverError, *, code: str, **extra: Any) -> RetrieverError:
+    if getattr(exc, "code", None) is None:
+        setattr(exc, "code", code)
+    for key, value in extra.items():
+        if value is not None and not hasattr(exc, key):
+            setattr(exc, key, value)
+    return exc
+
+
+def _raise_retriever_error(message: str, *, code: str, **extra: Any) -> None:
+    err = RetrieverError(message)
+    _apply_error_context(err, code=code, **extra)
+    raise err
 
 
 def _throttle_guard(key: str, settings: Optional[ThrottleSettings], *, deadline: float | None = None):
@@ -203,13 +225,23 @@ def search(
     """
     throttle_cfg = throttle_mod._normalize_throttle_settings(throttle)
     deadline = throttle_mod._deadline_from_settings(throttle_cfg)
-    validation_mod._validate_params_logged(params)
+    try:
+        validation_mod._validate_params_logged(params)
+    except RetrieverError as exc:
+        _apply_error_context(exc, code="retriever_invalid_params", slug=params.slug, scope=params.scope)
+        raise
     if throttle_mod._deadline_exceeded(deadline):
         LOGGER.warning(
             "retriever.throttle.deadline",
             extra={"slug": params.slug, "scope": params.scope, "stage": "preflight"},
         )
-        return []
+        _raise_retriever_error(
+            "latency budget exceeded",
+            code=ERR_DEADLINE_EXCEEDED,
+            slug=params.slug,
+            scope=params.scope,
+            stage="preflight",
+        )
     throttle_ctx = (
         _throttle_guard(throttle_key or params.slug or "retriever", throttle_cfg, deadline=deadline)
         if throttle_cfg
@@ -260,7 +292,12 @@ def search(
                         "error": repr(exc),
                     },
                 )
-            return []
+            _raise_retriever_error(
+                "k is zero",
+                code=ERR_INVALID_K,
+                slug=params.slug,
+                scope=params.scope,
+            )
         if not params.query.strip():
             LOGGER.warning(
                 "retriever.query.invalid",
@@ -270,7 +307,12 @@ def search(
                     "reason": "empty_query",
                 },
             )
-            return []
+            _raise_retriever_error(
+                "empty query",
+                code=ERR_INVALID_QUERY,
+                slug=params.slug,
+                scope=params.scope,
+            )
         budget_hit = False
 
         t_total_start = time.time()
@@ -285,17 +327,29 @@ def search(
                     "stage": "embedding",
                 },
             )
-            return []
+            _raise_retriever_error(
+                "latency budget exceeded",
+                code=ERR_DEADLINE_EXCEEDED,
+                slug=params.slug,
+                scope=params.scope,
+                stage="embedding",
+            )
         try:
             query_vector, t_emb_ms = embeddings_mod._materialize_query_vector(
                 params,
                 embeddings_client,
                 embedding_model=embedding_model,
             )
-        except RetrieverError:
-            return []
+        except RetrieverError as exc:
+            _apply_error_context(exc, code=ERR_EMBEDDING_FAILED, slug=params.slug, scope=params.scope)
+            raise
         if query_vector is None:
-            return []
+            _raise_retriever_error(
+                "invalid embedding",
+                code=ERR_EMBEDDING_INVALID,
+                slug=params.slug,
+                scope=params.scope,
+            )
         try:
             LOGGER.info(
                 "retriever.query.embedded",
@@ -321,7 +375,13 @@ def search(
                     "stage": "embedding",
                 },
             )
-            return []
+            _raise_retriever_error(
+                "latency budget exceeded",
+                code=ERR_DEADLINE_EXCEEDED,
+                slug=params.slug,
+                scope=params.scope,
+                stage="embedding",
+            )
 
         # 2) Caricamento candidati dal DB
         if throttle_mod._deadline_exceeded(deadline):
@@ -333,7 +393,13 @@ def search(
                     "stage": "fetch_candidates",
                 },
             )
-            return []
+            _raise_retriever_error(
+                "latency budget exceeded",
+                code=ERR_DEADLINE_EXCEEDED,
+                slug=params.slug,
+                scope=params.scope,
+                stage="fetch_candidates",
+            )
         candidates, t_fetch_ms = _load_candidates(params)
         fetch_budget_hit = throttle_mod._deadline_exceeded(deadline)
         try:
@@ -360,7 +426,13 @@ def search(
                     "stage": "fetch_candidates",
                 },
             )
-            return []
+            _raise_retriever_error(
+                "latency budget exceeded",
+                code=ERR_DEADLINE_EXCEEDED,
+                slug=params.slug,
+                scope=params.scope,
+                stage="fetch_candidates",
+            )
 
         # 3) Scoring + ranking deterministico
         (
@@ -443,6 +515,16 @@ def search(
                         "stage": "ranking",
                     },
                 )
+
+        if budget_hit:
+            _raise_retriever_error(
+                "latency budget exceeded during ranking",
+                code=ERR_BUDGET_HIT_PARTIAL,
+                slug=params.slug,
+                scope=params.scope,
+                stage="ranking",
+                partial_results=scored_items,
+            )
 
         return scored_items
 

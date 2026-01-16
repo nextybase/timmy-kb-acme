@@ -11,6 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
+import pytest
+
 import timmy_kb.cli.retriever as retr
 from tests.conftest import DUMMY_SLUG
 from timmy_kb.cli.retriever import QueryParams
@@ -146,7 +148,7 @@ def test_search_skips_invalid_candidate_embeddings(monkeypatch):
 
 
 def test_search_empty_query_embedding_returns_empty(monkeypatch):
-    """Se l'embedding della query risulta vuoto, ritorna []."""
+    """Se l'embedding della query risulta vuoto, alza un errore esplicito."""
 
     import timmy_kb.cli.retriever as retr
 
@@ -168,8 +170,9 @@ def test_search_empty_query_embedding_returns_empty(monkeypatch):
         candidate_limit=retr.MIN_CANDIDATE_LIMIT,
     )
 
-    out = retr.search(params, EmptyEmb())
-    assert out == []
+    with pytest.raises(retr.RetrieverError) as exc:
+        retr.search(params, EmptyEmb())
+    assert getattr(exc.value, "code", None) == retr.ERR_EMBEDDING_INVALID
 
 
 def test_search_accepts_deque_embedding(monkeypatch):

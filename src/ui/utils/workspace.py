@@ -2,6 +2,7 @@
 # src/ui/utils/workspace.py
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple
@@ -27,6 +28,16 @@ st: Any = _st  # st rimane Any; accessi protetti da guardie runtime
 _log = get_structured_logger("ui.workspace")
 _LAYOUT_CACHE: dict[str, WorkspaceLayout] = {}
 _UI_RAW_CACHE_TTL = 3.0  # secondi, garantisce feedback rapido in UI
+
+
+def _log_workspace_failure(event: str, exc: Exception, *, extra: dict[str, object] | None = None) -> None:
+    payload = {"error": repr(exc)}
+    if extra:
+        payload.update(extra)
+    try:
+        _log.warning(event, extra=payload)
+    except Exception:
+        logging.getLogger("ui.workspace").warning("%s error=%r", event, exc)
 
 
 def _load_context_layout(slug: str) -> Optional[WorkspaceLayout]:
@@ -187,9 +198,14 @@ def raw_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, Optio
     """
     try:
         layout = get_ui_workspace_layout(slug or "", require_env=False)
-    except Exception:
+    except Exception as exc:
         if strict:
             raise
+        _log_workspace_failure(
+            "ui.workspace.raw_ready_failed",
+            exc,
+            extra={"slug": slug or "", "stage": "layout", "strict": bool(strict)},
+        )
         return False, None
     ready, raw_dir = has_raw_pdfs(slug, strict=strict)
     # `has_raw_pdfs` giù verifica slug/layout; il controllo su config/layout è quindi implicito.
@@ -213,9 +229,14 @@ def tagging_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, O
         return False, raw_dir
     try:
         layout = get_ui_workspace_layout(slug or "", require_env=False)
-    except Exception:
+    except Exception as exc:
         if strict:
             raise
+        _log_workspace_failure(
+            "ui.workspace.tagging_ready_failed",
+            exc,
+            extra={"slug": slug or "", "stage": "layout", "strict": bool(strict)},
+        )
         return False, None
     semantic_dir = layout.semantic_dir
     tags_db = layout.tags_db or (semantic_dir / "tags.db")
@@ -223,25 +244,35 @@ def tagging_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, O
     try:
         db_ok = tags_db.exists()
         yaml_ok = tags_yaml.exists() and tags_yaml.stat().st_size > 0
-    except Exception:
+    except Exception as exc:
         if strict:
             raise
+        _log_workspace_failure(
+            "ui.workspace.tagging_ready_failed",
+            exc,
+            extra={"slug": slug or "", "stage": "io", "strict": bool(strict)},
+        )
         return False, semantic_dir
     if not (db_ok and yaml_ok):
         return False, semantic_dir
-    if not _tags_db_has_terms(tags_db, strict=strict):
+    if not _tags_db_has_terms(tags_db, strict=strict, slug=slug):
         return False, semantic_dir
-    if not _tags_yaml_has_terms(tags_yaml, strict=strict):
+    if not _tags_yaml_has_terms(tags_yaml, strict=strict, slug=slug):
         return False, semantic_dir
     return True, semantic_dir
 
 
-def _tags_db_has_terms(db_path: Path, *, strict: bool = False) -> bool:
+def _tags_db_has_terms(db_path: Path, *, strict: bool = False, slug: Optional[str] = None) -> bool:
     try:
         data = _load_tags_reviewed(str(db_path))
-    except Exception:
+    except Exception as exc:
         if strict:
             raise
+        _log_workspace_failure(
+            "ui.workspace.tags_db_read_failed",
+            exc,
+            extra={"slug": slug or "", "path": str(db_path)},
+        )
         return False
     tags = data.get("tags") if isinstance(data, dict) else None
     if not isinstance(tags, list):
@@ -256,12 +287,17 @@ def _tags_db_has_terms(db_path: Path, *, strict: bool = False) -> bool:
     return False
 
 
-def _tags_yaml_has_terms(yaml_path: Path, *, strict: bool = False) -> bool:
+def _tags_yaml_has_terms(yaml_path: Path, *, strict: bool = False, slug: Optional[str] = None) -> bool:
     try:
         data = _load_tags_yaml(yaml_path)
-    except Exception:
+    except Exception as exc:
         if strict:
             raise
+        _log_workspace_failure(
+            "ui.workspace.tags_yaml_read_failed",
+            exc,
+            extra={"slug": slug or "", "path": str(yaml_path)},
+        )
         return False
     result = _validate_tags_reviewed(data)
     if result.get("errors"):

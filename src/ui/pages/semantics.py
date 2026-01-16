@@ -44,6 +44,22 @@ ALLOWED_STATES = SEMANTIC_ENTRY_STATES
 QA_EVIDENCE_FILENAME = PIPELINE_QA_EVIDENCE_FILENAME  # marker minimo: output pre-commit/pytest (vedi instructions/08)
 
 
+def _log_semantics_failure(
+    logger: logging.Logger,
+    event: str,
+    exc: Exception,
+    *,
+    extra: dict[str, object] | None = None,
+) -> None:
+    payload = {"error": repr(exc)}
+    if extra:
+        payload.update(extra)
+    try:
+        logger.warning(event, extra=payload)
+    except Exception:
+        logging.getLogger("ui.semantics").warning("%s error=%r", event, exc)
+
+
 def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger, WorkspaceLayout]:
     run_id = uuid.uuid4().hex
     logger = get_structured_logger("ui.semantics", run_id=run_id)
@@ -69,13 +85,12 @@ def _update_client_state(slug: str, target_state: str, logger: logging.Logger) -
             fields={"slug": slug, "state_id": target_state},
         )
     except Exception as exc:
-        try:
-            logger.warning(
-                "ui.semantics.state_update_failed",
-                extra={"slug": slug, "target_state": target_state, "error": str(exc)},
-            )
-        except Exception:
-            pass
+        _log_semantics_failure(
+            logger,
+            "ui.semantics.state_update_failed",
+            exc,
+            extra={"slug": slug, "target_state": target_state},
+        )
     finally:
         cache_key = (slug or "<none>").strip().lower()
         _GATE_CACHE.pop(cache_key, None)
@@ -116,8 +131,13 @@ def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[st
                 "tagging_ready": bool(tags_ok),
             },
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        _log_semantics_failure(
+            _GATING_LOG,
+            "ui.semantics.gating_allowed_log_failed",
+            exc,
+            extra={"slug": slug or "", "state": state or "n/d"},
+        )
     return result
 
 
@@ -133,8 +153,13 @@ def _run_convert(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
                 "qa_gate_retry",
                 fields={"slug": slug, "state_id": get_state(slug) or "", "action_id": "convert"},
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        _log_semantics_failure(
+            logger,
+            "ui.semantics.step_status_failed",
+            exc,
+            extra={"slug": slug, "action_id": "convert", "status": "start", "retry": bool(is_retry)},
+        )
     with status_guard(
         "Converto PDF in Markdown...",
         expanded=True,
@@ -145,8 +170,13 @@ def _run_convert(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             status.update(label=f"Conversione completata ({len(files)} file di contenuto).", state="complete")
     try:
         ctx.set_step_status("convert", "done")
-    except Exception:
-        pass
+    except Exception as exc:
+        _log_semantics_failure(
+            logger,
+            "ui.semantics.step_status_failed",
+            exc,
+            extra={"slug": slug, "action_id": "convert", "status": "done"},
+        )
     _update_client_state(slug, "pronto", logger)
 
 
@@ -194,15 +224,22 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
                 "qa_gate_retry",
                 fields={"slug": slug, "state_id": get_state(slug) or "", "action_id": "enrich"},
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        _log_semantics_failure(
+            logger,
+            "ui.semantics.step_status_failed",
+            exc,
+            extra={"slug": slug, "action_id": "enrich", "status": "start", "retry": bool(is_retry)},
+        )
     try:
         vocab = _get_canonical_vocab(base_dir, logger, slug=slug)
     except ConfigError as exc:
-        try:
-            logger.warning("ui.semantics.vocab_missing", extra={"slug": slug, "error": str(exc)})
-        except Exception:
-            pass
+        _log_semantics_failure(
+            logger,
+            "ui.semantics.vocab_missing",
+            exc,
+            extra={"slug": slug},
+        )
         _update_client_state(slug, "pronto", logger)
         st.error("Arricchimento non eseguito: vocabolario canonico assente (`semantic/tags.db`).")
         st.caption("Apri **Gestisci cliente -> Estrai tag** e completa l'estrazione tag per rigenerare il DB.")
@@ -218,8 +255,13 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             status.update(label=f"Frontmatter aggiornato ({len(touched)} file).", state="complete")
     try:
         ctx.set_step_status("enrich", "done")
-    except Exception:
-        pass
+    except Exception as exc:
+        _log_semantics_failure(
+            logger,
+            "ui.semantics.step_status_failed",
+            exc,
+            extra={"slug": slug, "action_id": "enrich", "status": "done"},
+        )
     _update_client_state(slug, "arricchito", logger)
 
 
@@ -290,8 +332,13 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
                 "qa_gate_retry",
                 fields={"slug": slug or "", "state_id": get_state(slug) or "", "action_id": "summary"},
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        _log_semantics_failure(
+            logger,
+            "ui.semantics.step_status_failed",
+            exc,
+            extra={"slug": slug, "action_id": "summary", "status": "start", "retry": bool(is_retry)},
+        )
     with status_guard(
         "Genero SUMMARY.md e README.md...",
         expanded=True,
@@ -302,8 +349,13 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             status.update(label="SUMMARY.md e README.md generati.", state="complete")
     try:
         ctx.set_step_status("summary", "done")
-    except Exception:
-        pass
+    except Exception as exc:
+        _log_semantics_failure(
+            logger,
+            "ui.semantics.step_status_failed",
+            exc,
+            extra={"slug": slug, "action_id": "summary", "status": "done"},
+        )
     _update_client_state(slug, "finito", logger)
 
 
@@ -314,7 +366,13 @@ def _go_preview() -> None:
     """
     try:
         st.switch_page(PagePaths.PREVIEW)
-    except Exception:
+    except Exception as exc:
+        _log_semantics_failure(
+            LOGGER,
+            "ui.semantics.preview_switch_failed",
+            exc,
+            extra={"target": str(PagePaths.PREVIEW)},
+        )
         return
 
 
@@ -362,8 +420,13 @@ def _log_gating_block(
                 "reason": reason or "",
             },
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        _log_semantics_failure(
+            _GATING_LOG,
+            "ui.semantics.gating_block_log_failed",
+            exc,
+            extra={"slug": slug or "", "state": state or "n/d"},
+        )
 
 
 def _raise_semantic_unavailable(slug: str | None, state: str, raw_ready: bool, raw_dir: Path | None) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import json
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -42,6 +43,16 @@ _CAPABILITY_SCHEMA_VERSION = 1
 _CAPABILITY_FILENAME = "gate_capabilities.json"
 
 
+def _log_gating_failure(event: str, exc: Exception, *, extra: dict[str, object] | None = None) -> None:
+    payload = {"error": repr(exc)}
+    if extra:
+        payload.update(extra)
+    try:
+        _LOGGER.warning(event, extra=payload)
+    except Exception:
+        logging.getLogger("ui.gating").warning("%s error=%r", event, exc)
+
+
 def reset_gating_cache(slug: str | None = None) -> None:
     """Resetta le cache gating per lo slug indicato (o completamente se slug=None)."""
     if slug is None:
@@ -74,9 +85,23 @@ def _module_available(module_name: str, *, attr: str | None = None) -> bool:
         return True
     try:
         module = importlib.import_module(module_name)
-    except Exception:
+    except Exception as exc:
+        _log_gating_failure(
+            "ui.gating.module_import_failed",
+            exc,
+            extra={"module": module_name, "attr": attr or ""},
+        )
         return False
-    return callable(getattr(module, attr, None))
+    try:
+        target = getattr(module, attr)
+    except Exception as exc:
+        _log_gating_failure(
+            "ui.gating.module_attr_failed",
+            exc,
+            extra={"module": module_name, "attr": attr},
+        )
+        return False
+    return callable(target)
 
 
 @dataclass(frozen=True)

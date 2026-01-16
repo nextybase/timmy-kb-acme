@@ -5,6 +5,8 @@ import math
 from pathlib import Path
 from typing import Sequence
 
+import pytest
+
 import timmy_kb.cli.retriever as retr
 from timmy_kb.cli.retriever import QueryParams
 
@@ -33,11 +35,12 @@ def test_topk_k_zero(monkeypatch, tmp_path: Path):
     contents = ["a", "b", "c"]
     scores = [0.9, 0.8, 0.7]
     monkeypatch.setattr(retr, "fetch_candidates", _mk_stub_candidates(contents, scores))
-    out = retr.search(
-        QueryParams(tmp_path / "kb.sqlite", "p", "s", "q", k=0, candidate_limit=retr.MIN_CANDIDATE_LIMIT),
-        FakeEmb(),
-    )
-    assert out == []
+    with pytest.raises(retr.RetrieverError) as exc:
+        retr.search(
+            QueryParams(tmp_path / "kb.sqlite", "p", "s", "q", k=0, candidate_limit=retr.MIN_CANDIDATE_LIMIT),
+            FakeEmb(),
+        )
+    assert getattr(exc.value, "code", None) == retr.ERR_INVALID_K
 
 
 def test_topk_small_k_with_ties_stable(monkeypatch, tmp_path: Path):

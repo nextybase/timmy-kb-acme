@@ -6,8 +6,9 @@ from typing import Any
 
 import pytest
 
+import timmy_kb.cli.retriever as retr
 from tests.conftest import DUMMY_SLUG
-from timmy_kb.cli.retriever import QueryParams, search
+from timmy_kb.cli.retriever import QueryParams, RetrieverError, search
 
 
 class _DummyEmbeddingsClient:
@@ -37,10 +38,10 @@ def test_search_logs_empty_query(caplog: pytest.LogCaptureFixture) -> None:
     params = _base_params("   ")
     client = _DummyEmbeddingsClient([[0.1, 0.2]])
 
-    with caplog.at_level(logging.WARNING):
-        results = search(params, client)
+    with caplog.at_level(logging.WARNING), pytest.raises(RetrieverError) as exc:
+        search(params, client)
 
-    assert results == []
+    assert getattr(exc.value, "code", None) == retr.ERR_INVALID_QUERY
     record = next(
         (
             rec
@@ -58,10 +59,10 @@ def test_search_logs_empty_embedding(caplog: pytest.LogCaptureFixture) -> None:
     params = _base_params("ciao")
     client = _DummyEmbeddingsClient([])
 
-    with caplog.at_level(logging.WARNING):
-        results = search(params, client)
+    with caplog.at_level(logging.WARNING), pytest.raises(RetrieverError) as exc:
+        search(params, client)
 
-    assert results == []
+    assert getattr(exc.value, "code", None) == retr.ERR_EMBEDDING_INVALID
     record = next(
         (
             rec
@@ -82,10 +83,10 @@ def test_search_logs_embedding_failure(caplog: pytest.LogCaptureFixture) -> None
         def embed_texts(self, texts: list[str]) -> list[list[float]]:
             raise RuntimeError("boom")
 
-    with caplog.at_level(logging.WARNING):
-        results = search(params, _BoomClient())
+    with caplog.at_level(logging.WARNING), pytest.raises(RetrieverError) as exc:
+        search(params, _BoomClient())
 
-    assert results == []
+    assert getattr(exc.value, "code", None) == retr.ERR_EMBEDDING_FAILED
     record = next(
         (rec for rec in reversed(caplog.records) if rec.getMessage() == "retriever.query.embed_failed"),
         None,
