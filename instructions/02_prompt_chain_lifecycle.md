@@ -1,4 +1,4 @@
-Agency & Orchestration Model — v1.0 — Prompt Chain Lifecycle
+Agency & Orchestration Model - v1.0 - Prompt Chain Lifecycle
 
 ## Scopo e perimetro
 - Il presente documento descrive la timeline delle fasi della Prompt Chain, vista narrativa lineare.
@@ -12,7 +12,7 @@ Agency & Orchestration Model — v1.0 — Prompt Chain Lifecycle
 - **Output richiesto:** plan operativo con intenti registrati, coverage Gatekeeper, HiTL impliciti annotati.
 - **Azioni consentite:** analisi policy, consultazione AGENTS, definizione REGISTER_INTENT/REGISTER_ACTION preliminari.
 - **Azioni vietate:** esecuzioni dirette, bypass di HiTL, assegnazione/invocazione di micro-agent.
-- **Attori coinvolti:** Timmy/ProtoTimmy (decide); Domain Gatekeepers (consigliano vincoli, condizionano coverage e segnalano limiti)—micro-agent non partecipa.
+- **Attori coinvolti:** Timmy/ProtoTimmy (decide); Domain Gatekeepers (consigliano vincoli, condizionano coverage e segnalano limiti)-micro-agent non partecipa.
 
 ### MICRO_PLANNING
 - **Obiettivo:** dettagliare sotto-prompts e selezionare micro-agent per ogni Action registrata.
@@ -22,7 +22,7 @@ Agency & Orchestration Model — v1.0 — Prompt Chain Lifecycle
 - **Attori coinvolti:**
   - Timmy/ProtoTimmy (coordina e seleziona/assegna micro-agent; unico attore autorizzato a farlo).
   - Engineering Gatekeeper/OCP e altri Domain Gatekeepers (forniscono vincoli e segnalano limiti; non decidono la selezione).
-- **Nota operativa:** ogni modifica all’assegnazione di micro-agent dopo questa fase richiede HiTL esplicito (es. `REGISTER_INTENT`, `REGISTER_ACTION`, `stop_code == "HITL_REQUIRED"`).
+- **Nota operativa:** ogni modifica all'assegnazione di micro-agent dopo questa fase richiede HiTL esplicito (es. `REGISTER_INTENT`, `REGISTER_ACTION`, `stop_code == "HITL_REQUIRED"`).
 
 ### VALIDATION
 - **Obiettivo:** assicurare che prompt e Action rispettino policy e guardrail (semantic, compliance, gate).
@@ -51,14 +51,14 @@ Agency & Orchestration Model — v1.0 — Prompt Chain Lifecycle
 - **Attori coinvolti:** Domain Gatekeepers (valutano), Engineering Gatekeeper/OCP (gates), Timmy (approva), micro-agent può eseguire VALIDATE_* per QA.
 
 ### CLOSURE
-- **Obiettivo:** archiviare la Prompt Chain, aggiornare evidenze e notificare l’utente.
+- **Obiettivo:** archiviare la Prompt Chain, aggiornare evidenze e notificare l'utente.
 - **Output richiesto:** summary, log closure, evidenza HiTL soddisfatta.
 - **Azioni consentite:** registrazione record, comunicazione `message_for_ocp`, chiusura fase.
 - **Azioni vietate:** nuove execution, cambi di coverage senza HiTL.
 - **Attori coinvolti:** Timmy (chiude), Domain Gatekeepers (confermano), micro-agent non partecipa.
 
 ## Regole di linearità globale
-- Avanzamento solo quando l’output richiesto della fase precedente è disponibile e validato.
+- Avanzamento solo quando l'output richiesto della fase precedente è disponibile e validato.
 - Ritorno a fasi precedenti è permesso esclusivamente tramite Action esplicita (es. `REGISTER_INTENT` aggiornato) e HiTL confermato.
 
 ## Ricorsività locale controllata
@@ -79,7 +79,7 @@ Agency & Orchestration Model — v1.0 — Prompt Chain Lifecycle
 - CLOSURE: summary logging e HiTL confirmation.
 - Nessuna Action fuori fase è valida.
 
-## State Machine (Opzione B) — Tabella Transizioni
+## State Machine (Opzione B) - Tabella Transizioni
 | STATE | EVENT | GUARD | ACTIONS ALLOWED | OUTPUT/ARTEFATTI | NEXT_STATE | NOTES |
 | --- | --- | --- | --- | --- | --- | --- |
 | PHASE_PLANNING | INTENT_REGISTERED | intent e coverage documentati, HiTL annotato, allowed_actions definiti | `REGISTER_INTENT`, `REGISTER_ACTION` preliminari | intent registry aggiornato, coverage file | PHASE_MICRO_PLANNING | `message_for_ocp` legacy registra il passaggio |
@@ -99,7 +99,7 @@ Agency & Orchestration Model — v1.0 — Prompt Chain Lifecycle
 - **Sequenza:** MICRO_PLANNING (definizione Action GENERATE_*), EXECUTION (micro-agent genera file), QA (VALIDATE_* sul contenuto), CLOSURE (summaries).
 - **Regola obbligatoria:** ogni prompt operativo verifica `instructions/` prima di agire per evitare divergence.
 
-## Appendice — Stop & HiTL (Mini-C)
+## Appendice - Stop & HiTL (Mini-C)
 - stop_conditions:
   - HITL_REQUIRED:
       trigger: `stop_code == "HITL_REQUIRED"` o `_CODEX_HITL_KEY` impostato dopo invalidazioni.
@@ -117,7 +117,7 @@ Agency & Orchestration Model — v1.0 — Prompt Chain Lifecycle
       trigger: Entrypoint Guard senza ack.
       owner: Engineering Gatekeeper/OCP.
       required_human_action: conferma di conformità e log.
-      resume_rule: PHASE_PLANNING o PHASE_MICRO_PLANNING a seconda dell’ambito.
+      resume_rule: PHASE_PLANNING o PHASE_MICRO_PLANNING a seconda dell'ambito.
       resume_phase: PHASE_MICRO_PLANNING
   - TAG_APPROVAL_REQUIRED:
       trigger: revisione tag necessaria (invalid metadata).

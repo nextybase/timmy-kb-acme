@@ -12,7 +12,7 @@
 - [ ] Path-safety & scritture **atomiche** dove si scrive su filesystem
 - [ ] Nessun side-effect a import-time nei moduli runtime
 - [ ] Doc aggiornate (README / docs/* / system/*) e CHANGELOG aggiornato se necessario
-      **(blocking)** — indica in descrizione `Docs: ...`
+      **(blocking)** - indica in descrizione `Docs: ...`
 - [ ] Test/coverage ok (`pytest`) e type-check ok (`mypy`)
 - [ ] QA locale eseguita:
   - [ ] `pre-commit run --all-files`
@@ -24,7 +24,7 @@
 
 ---
 
-## Beta DoD — Determinismo & Low Entropy
+## Beta DoD - Determinismo & Low Entropy
 
 ### Contratto di osservabilità (retriever.*)
 Se questa PR tocca **direttamente o indirettamente** il retriever:
@@ -40,9 +40,9 @@ Se questa PR tocca **direttamente o indirettamente** il retriever:
 
 ### Contratto semantico
 - [ ] La PR **non introduce** nuovi casi in cui:
-  - “no match”
-  - “errore gestito”
-  - “budget/deadline”
+  - "no match"
+  - "errore gestito"
+  - "budget/deadline"
 
   collassano nello stesso comportamento **senza evento disambiguante**.
 
@@ -53,7 +53,7 @@ Se questa PR tocca **direttamente o indirettamente** il retriever:
 Docs:
 
 Branch protection & required checks:
-vedi `docs/security.md` — CI / Secret Scan **devono essere verdi** prima del merge.
+vedi `docs/security.md` - CI / Secret Scan **devono essere verdi** prima del merge.
 
 ---
 

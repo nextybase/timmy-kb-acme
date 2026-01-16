@@ -9,10 +9,10 @@ Questo documento **non introduce semantica nuova**:
 vincola e rende coerenti definizioni già presenti nei documenti sorgente.
 
 Fonti normative:
-- `instructions/02_prompt_chain_lifecycle.md` — lifecycle e action families
-- `instructions/05_pipeline_workspace_state_machine.md` — stati workspace
-- `instructions/07_gate_checklists.md` — checklist operative dei gate
-- `instructions/08_gate_evidence_and_retry_contract.md` — Evidence / QA / Skeptic Gate
+- `instructions/02_prompt_chain_lifecycle.md` - lifecycle e action families
+- `instructions/05_pipeline_workspace_state_machine.md` - stati workspace
+- `instructions/07_gate_checklists.md` - checklist operative dei gate
+- `instructions/08_gate_evidence_and_retry_contract.md` - Evidence / QA / Skeptic Gate
 
 Se esiste un conflitto, **prevale questo documento** come binding SSoT.
 
@@ -59,7 +59,7 @@ Riferimenti:
 
 **Nota normativa**
 - Le lifecycle phases **non avanzano** lo stato del workspace.
-- Le lifecycle phases governano il *processo decisionale*, non l’attestazione.
+- Le lifecycle phases governano il *processo decisionale*, non l'attestazione.
 
 ---
 
@@ -88,7 +88,7 @@ Riferimento:
 
 ### Regola fondamentale
 **Ogni transizione di stato produce sempre un Decision Record append-only.**
-Non esistono transizioni “silenziose”.
+Non esistono transizioni "silenziose".
 
 | Gate | Verdict ammessi | Output normativo |
 |-----|-----------------|------------------|

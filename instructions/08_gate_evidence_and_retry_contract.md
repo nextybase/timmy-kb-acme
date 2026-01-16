@@ -1,4 +1,4 @@
-# 08 — Gate Evidence and Retry Contract (SSoT)
+# 08 - Gate Evidence and Retry Contract (SSoT)
 
 **Status:** ACTIVE
 **Authority:** Single Source of Truth (SSoT)
@@ -16,7 +16,7 @@ definisce **le condizioni formali che permettono ai gate di attestare uno stato*
 
 ## Principi Fondativi (Beta 1.0)
 - **Ogni transizione di stato produce un Decision Record append-only.**
-- Nessun gate produce “PASS impliciti” o dedotti da log.
+- Nessun gate produce "PASS impliciti" o dedotti da log.
 - I log sono **evidenze**, non artefatti di verità.
 - In assenza di Decision Record, **la transizione non è avvenuta**.
 - Retry ≠ resume: ogni retry è una **nuova run attestata**.
@@ -25,7 +25,7 @@ definisce **le condizioni formali che permettono ai gate di attestare uno stato*
 
 ## Decision Record (Artefatto Canonico)
 
-Il **Decision Record** è l’unico output normativo dei gate.
+Il **Decision Record** è l'unico output normativo dei gate.
 
 ### Schema minimo obbligatorio
 - `decision_id` (univoco, append-only)
@@ -83,12 +83,12 @@ La persistenza **non cambia schema** e mappa i campi normativi nel ledger così:
 - **Log strutturati**: eventi osservabili, non ambigui, non contraddittori.
 - **Segnali di contesto**: es. ledger scrivibile, path-safe, config valida.
 
-Se un’evidenza non è formalizzata:
+Se un'evidenza non è formalizzata:
 - il Gatekeeper **deve** indicarlo nel Decision Record (`evidence_gap`).
 
 ---
 
-## Predicate di Stato (Beta 1.0 – Normativi)
+## Predicate di Stato (Beta 1.0 - Normativi)
 
 ### `raw_ready`
 Stato **attestabile** se e solo se:
@@ -115,9 +115,9 @@ Stato **attestabile** se e solo se:
 
 ---
 
-## Evidence Gate — Contratto Normativo
+## Evidence Gate - Contratto Normativo
 
-L’Evidence Gate:
+L'Evidence Gate:
 - valuta **coerenza strutturale e presenza delle evidenze**;
 - **non decide avanzamenti**;
 - produce sempre un Decision Record.
@@ -141,7 +141,7 @@ L’Evidence Gate:
 Non esiste:
 - retry silenzioso,
 - resume implicito,
-- “stessa esecuzione”.
+- "stessa esecuzione".
 
 ### Condizioni per retry ammesso
 - Artefatti precedenti **ancora integri**.

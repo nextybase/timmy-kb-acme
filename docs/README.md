@@ -1,12 +1,12 @@
 # Documentazione Timmy-KB
 
-Questa cartella contiene **documentazione pensata prima di tutto per esseri umani**: serve a orientarsi, capire come usare e come contribuire a Timmy‑KB, ed è strutturata per essere leggibile anche da agenti e strumenti automatici (in particolare ADR e documenti di contesto).
+Questa cartella contiene **documentazione pensata prima di tutto per esseri umani**: serve a orientarsi, capire come usare e come contribuire a Timmy-KB, ed è strutturata per essere leggibile anche da agenti e strumenti automatici (in particolare ADR e documenti di contesto).
 
 > **Nota importante**
 > I file in `docs/` sono **esplicativi e descrittivi**, non normativi.
 > Le regole vincolanti e la governance formale vivono in `MANIFEST.md` e in `instructions/*`; `docs/policies/*` contiene regole derivate/applicative e resta subordinato a quelle fonti.
 
-L’organizzazione della documentazione riflette lo stesso principio adottato dal sistema:
+L'organizzazione della documentazione riflette lo stesso principio adottato dal sistema:
 **separare contesto, regole e operatività** per ridurre ambiguità ed entropia.
 
 ---
@@ -18,14 +18,14 @@ L’organizzazione della documentazione riflette lo stesso principio adottato da
 Qui trovi solo documenti di orientamento rapido:
 - questo `README`,
 - gli *quickstart* per utenti e sviluppatori,
-- l’indice generale della documentazione.
+- l'indice generale della documentazione.
 
 Nessuna regola vive qui: serve per capire **da dove partire**.
 
 ---
 
 ### `docs/user/`
-Documentazione per **chi usa Timmy‑KB**.
+Documentazione per **chi usa Timmy-KB**.
 
 Contiene guide operative e descrittive:
 - uso della UI,
@@ -37,7 +37,7 @@ Questi file descrivono **comportamenti osservabili del sistema**, non policy o v
 ---
 
 ### `docs/developer/`
-Documentazione per **chi sviluppa o mantiene Timmy‑KB**.
+Documentazione per **chi sviluppa o mantiene Timmy-KB**.
 
 Include:
 - guide tecniche,
@@ -67,7 +67,7 @@ Se un comportamento viola un file in `policies/`, è da considerarsi un errore n
 Documentazione di **contesto e allineamento concettuale**.
 
 Qui vivono documenti che:
-- collegano Timmy‑KB al framework NeXT,
+- collegano Timmy-KB al framework NeXT,
 - chiariscono cosa è implementato e cosa no,
 - definiscono i boundary concettuali del progetto.
 
@@ -92,4 +92,4 @@ Un percorso consigliato:
 3. `policies/` se devi verificare regole e vincoli.
 4. `context/` se devi valutare allineamento concettuale, limiti e responsabilità.
 
-Questa separazione è intenzionale: evita sovrapposizioni, riduce interpretazioni errate e mantiene la documentazione coerente con l’architettura del sistema.
+Questa separazione è intenzionale: evita sovrapposizioni, riduce interpretazioni errate e mantiene la documentazione coerente con l'architettura del sistema.

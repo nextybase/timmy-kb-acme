@@ -1,8 +1,8 @@
-# Arricchimento semantico — Flusso completo (UI / CLI) — Beta 1.0
+# Arricchimento semantico - Flusso completo (UI / CLI) - Beta 1.0
 
 Timmy-KB è un ambiente di **governo e orchestrazione**.
 Questa sezione descrive il **funzionamento tecnico dello strumento di arricchimento semantico**,
-che opera entro l’envelope epistemico definito dal sistema, supporta HiTL
+che opera entro l'envelope epistemico definito dal sistema, supporta HiTL
 e **non prende decisioni autonome di avanzamento o stato**.
 
 Le decisioni di stato sono sempre demandate a:
@@ -22,7 +22,7 @@ Le decisioni di stato sono sempre demandate a:
   - avvio della run tecnica di estrazione.
 
 **Nota normativa**
-- L’innesco UI **non modifica alcuno stato workspace**.
+- L'innesco UI **non modifica alcuno stato workspace**.
 - Produce solo evidenze e log per i gate successivi.
 
 ---
@@ -37,7 +37,7 @@ Le decisioni di stato sono sempre demandate a:
   - `heuristic`
 
 ### Policy Beta 1.0
-- L’uso di `heuristic` è **una scelta esplicita**, non un fallback automatico.
+- L'uso di `heuristic` è **una scelta esplicita**, non un fallback automatico.
 - Se `nlp_backend=spacy` e SpaCy **non è disponibile o fallisce**:
   - la run tecnica **deve fallire**,
   - viene prodotto evento strutturato,
@@ -120,7 +120,7 @@ Questi artefatti sono **input per il Gatekeeper**, non output decisionali.
 
 ## 5) Revisione HiTL e consolidamento
 
-- Modal “Revisione keyword (tags_raw.csv)”:
+- Modal "Revisione keyword (tags_raw.csv)":
   - editing manuale,
   - salvataggio.
 - Azione **Abilita**:
@@ -157,7 +157,7 @@ Anche questa fase **non attesta stato**.
 
 ## 7) Decisione di avanzamento (fuori scope del tool)
 
-L’avanzamento a stati come `FRONTMATTER_ENRICH`, `VISUALIZATION_REFRESH`, `PREVIEW_READY`
+L'avanzamento a stati come `FRONTMATTER_ENRICH`, `VISUALIZATION_REFRESH`, `PREVIEW_READY`
 avviene **solo** se:
 - i gate richiesti emettono Decision Record PASS,
 - secondo quanto definito in:

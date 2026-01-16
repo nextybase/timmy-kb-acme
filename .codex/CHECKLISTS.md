@@ -17,10 +17,10 @@
 - Codex answers must be in Italian for every Prompt Chain turn; documentation and templates remain English.
 
 ### Senior Reviewer Checklist
-- For non-trivial updates (new features, security/I/O logic, integrations), run the “Dev task with Senior review” prompt in `.codex/PROMPTS.md` before inviting Codex.
-- Prepare a summary message following the “Prepare the Senior review request” prompt.
+- For non-trivial updates (new features, security/I/O logic, integrations), run the "Dev task with Senior review" prompt in `.codex/PROMPTS.md` before inviting Codex.
+- Prepare a summary message following the "Prepare the Senior review request" prompt.
 - Share context, change summary, QA pipeline results, and major doubts/trade-offs with the Senior Reviewer.
-- Incorporate (or discuss) the Senior Reviewer’s feedback before finishing work on protected branches.
+- Incorporate (or discuss) the Senior Reviewer's feedback before finishing work on protected branches.
 
 ---
 
@@ -43,7 +43,7 @@
 - UI gating must remain a **UX affordance**, not a state machine:
   presence of `raw/` may enable tabs, but **does not attest** `raw_ready`.
 - Any workflow state advancement requires a Decision Record emitted by Gatekeepers/Timmy.
-- Validate Docker preview port numbers (1–65535) and use safe container names.
+- Validate Docker preview port numbers (1-65535) and use safe container names.
 - `semantic/tags.db` is an **artefact/evidence store**, not the runtime SSoT.
   Runtime SSoT for transitions is the append-only Decision Record / ledger.
 

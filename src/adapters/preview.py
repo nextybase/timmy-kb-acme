@@ -43,7 +43,7 @@ class _PreviewContext(Protocol):
 
 def _default_container_name(context: _PreviewContext | object) -> str:
     slug = getattr(context, "slug", "kb")
-    # hardening: slug “docker-friendly”
+    # hardening: slug "docker-friendly"
     safe_slug = re.sub(r"[^a-zA-Z0-9_.-]+", "-", str(slug)).strip("-") or "kb"
     return f"gitbook-{safe_slug}"
 
@@ -106,7 +106,7 @@ def start_preview(
             context,
             port=port,
             container_name=cname,
-            wait_on_exit=False,  # sempre detached per semplicità dell’orchestratore
+            wait_on_exit=False,  # sempre detached per semplicità dell'orchestratore
             redact_logs=redact,
         )
         logger.info(
@@ -140,7 +140,7 @@ def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> No
         logger.debug("adapter.preview.stop.skip_no_name", extra={"container": None})
         return
 
-    # Validazione “soft”: se non valido, log avviso e interrompiamo (best-effort)
+    # Validazione "soft": se non valido, log avviso e interrompiamo (best-effort)
     if not _CONTAINER_RE.match(container_name):
         logger.warning(
             "adapter.preview.stop.invalid_name",

@@ -22,7 +22,7 @@ Dove:
 - score: somma pesata per tag (semplice)
 - sources: JSON con evidenze {"path":[...], "filename":[...]}
 
-Nota: modulo “puro” (niente input()/sys.exit()). La scrittura CSV è **atomica**
+Nota: modulo "puro" (niente input()/sys.exit()). La scrittura CSV è **atomica**
 (`safe_write_text`) e path-safe (guardie `ensure_within`).
 """
 
@@ -91,7 +91,7 @@ def _score_and_rank(
 
     - path: peso 1.0
     - filename: peso 0.6
-    Deduplica preservando l'ordine di “forza” (path prima).
+    Deduplica preservando l'ordine di "forza" (path prima).
     """
     stopset = set(s.strip().lower() for s in (stop or []) if s)
     weights: dict[str, float] = {}

@@ -5,11 +5,11 @@ Per ogni `clients/<slug>/ownership.yaml` si definisce l'ownership tenant-aware c
 
 ### Schema YAML
 
-- `superadmin` *(stringa, obbligatorio)* – identità privilegiata (es. `@nextybase/ops`) sempre responsabile delle escalation.
-- `ownership` *(mappatura, obbligatoria)* – chi ha ownership per i ruoli canonici.
-  - `user` *(lista di stringhe, anche vuota)* – owner delle attività UI per il tenant.
-  - `dev` *(lista di stringhe, anche vuota)* – owner delle automazioni CLI/tools per il tenant.
-  - `architecture` *(lista di stringhe, anche vuota)* – owner dei guardrail e della compliance architetturale per il tenant.
+- `superadmin` *(stringa, obbligatorio)* - identità privilegiata (es. `@nextybase/ops`) sempre responsabile delle escalation.
+- `ownership` *(mappatura, obbligatoria)* - chi ha ownership per i ruoli canonici.
+  - `user` *(lista di stringhe, anche vuota)* - owner delle attività UI per il tenant.
+  - `dev` *(lista di stringhe, anche vuota)* - owner delle automazioni CLI/tools per il tenant.
+  - `architecture` *(lista di stringhe, anche vuota)* - owner dei guardrail e della compliance architetturale per il tenant.
 
 È vietato definire ruoli diversi da `user`, `dev`, `architecture` e `superadmin`.
 

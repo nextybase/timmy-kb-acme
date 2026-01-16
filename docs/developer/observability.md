@@ -4,7 +4,7 @@ Questa guida completa la documentazione di logging già integrata nel progetto
 (`observability/docker-compose.yaml`, `observability/promtail-config.yaml`).
 
 Per Beta 1.0 valgono invarianti di governance:
-- nessun “best-effort” silenzioso;
+- nessun "best-effort" silenzioso;
 - nessun fallback implicito;
 - ogni degrado operativo deve essere **esplicito, osservabile e bloccante** quando impatta la qualità/completezza degli artefatti.
 
@@ -24,9 +24,9 @@ Per Beta 1.0 valgono invarianti di governance:
 - Se `GRAFANA_ADMIN_PASSWORD` è assente:
   - lo stack può avviarsi a livello Docker (comportamento del compose),
   - ma il sistema è **non conforme** e va trattato come **misconfiguration**.
-- In modalità Beta 1.0, l’assenza di password configurata deve produrre:
-  - un warning esplicito in UI/CLI (“observability.misconfig.grafana_password_missing”),
-  - e deve bloccare l’abilitazione dei pulsanti dashboard se usati come strumenti operativi.
+- In modalità Beta 1.0, l'assenza di password configurata deve produrre:
+  - un warning esplicito in UI/CLI ("observability.misconfig.grafana_password_missing"),
+  - e deve bloccare l'abilitazione dei pulsanti dashboard se usati come strumenti operativi.
 
 I file di log raccolti includono sia i workspace (`/var/timmy/output/timmy-kb-*/logs/*.log`)
 sia i log globali (`/var/timmy/global-logs/*.log`).
@@ -38,7 +38,7 @@ Le pipeline di Promtail promuovono come label principali:
 
 Eventi utili:
 - `ui.semantics.*` eventi di gating (`ui.semantics.gating_blocked` / `ui.semantics.gating_allowed`)
-- `run_id` viene estratto anche dai log UI globali (`.timmy_kb/logs/ui.log`) generati da l’entrypoint Streamlit.
+- `run_id` viene estratto anche dai log UI globali (`.timmy_kb/logs/ui.log`) generati da l'entrypoint Streamlit.
 - Se OTEL è attivo compaiono anche `trace_id`/`span_id` nel log (non come label) e possono essere usati in Grafana per correlazione trace/log.
 
 > Nota: le stage `replace` in `promtail-config.yaml` oscurano automaticamente
@@ -67,7 +67,7 @@ Eventi utili:
 ## Correlazione tracing (`trace_id` / `span_id`)
 
 `pipeline/logging_utils.py` integra opzionalmente OpenTelemetry. Se abiliti
-l’endpoint OTLP:
+l'endpoint OTLP:
 
 ```bash
 export TIMMY_OTEL_ENDPOINT="http://localhost:4318/v1/traces"
@@ -75,7 +75,7 @@ export TIMMY_SERVICE_NAME="timmy-kb"
 export TIMMY_ENV="production"
 ```
 
-L’applicazione manda gli span all’OTEL Collector locale (`TIMMY_OTEL_ENDPOINT`)
+L'applicazione manda gli span all'OTEL Collector locale (`TIMMY_OTEL_ENDPOINT`)
 che inoltra i dati a Tempo via OTLP gRPC. Nei log compariranno i campi
 `trace_id` e `span_id`; Grafana sfrutta il datasource Tempo e la feature
 `tracesToLogs` per seguire la catena trace → log (grazie ai label `slug`,
@@ -121,11 +121,11 @@ Verifica:
   Start/Stop restano disabilitati fino a quel momento.
 - Quando Docker è disponibile, i pulsanti `Start Stack` e `Stop Stack` invocano le funzioni
   in `tools/observability_stack.py` per lanciare `docker compose up -d` o `docker compose down`.
-- Se l’avvio fallisce, la UI deve mostrare errore esplicito (non warning generico) e loggare
-  un evento strutturato `observability.stack.start_failed` con l’errore sintetico.
+- Se l'avvio fallisce, la UI deve mostrare errore esplicito (non warning generico) e loggare
+  un evento strutturato `observability.stack.start_failed` con l'errore sintetico.
 
 I valori vengono letti in tempo reale e non ci sono side effect: basta aggiornare `.env`
-(o i `TIMMY_*` dei container) e riavviare l’interfaccia.
+(o i `TIMMY_*` dei container) e riavviare l'interfaccia.
 
 ---
 
@@ -143,7 +143,7 @@ per avviare lo stack e:
 python tools/observability_stack.py stop
 ```
 
-per fermarlo. Lo script stampa l’output del `docker compose` e restituisce exit code `0`
+per fermarlo. Lo script stampa l'output del `docker compose` e restituisce exit code `0`
 solo in caso di successo.
 
 Le opzioni `--env-file` / `--compose-file` permettono di sovrascrivere rispettivamente
@@ -172,7 +172,7 @@ Grafana sfrutta `trace_id`, `span_id`, `slug`, `run_id`, `phase` e `decision_typ
 
 ## Human override spans (HiTL)
 
-Ogni volta che l’amministratore UI salva/rigenera `tags_reviewed.yaml`,
+Ogni volta che l'amministratore UI salva/rigenera `tags_reviewed.yaml`,
 il codice deve emettere un decision span con:
 - `decision_type=human_override`
 - `phase=ui.manage.tags_yaml`
@@ -180,12 +180,12 @@ il codice deve emettere un decision span con:
 - `previous_value` / `new_value`
 - `status` (`success` / `failed`) e `reason`
 
-Ogni cambio di stato deve essere tracciato come decisione (non come “side effect”),
+Ogni cambio di stato deve essere tracciato come decisione (non come "side effect"),
 per mantenere audit completo.
 
 ---
 
-## Policy Beta 1.0 su “fallback” e resilienza semantica
+## Policy Beta 1.0 su "fallback" e resilienza semantica
 
 In Beta 1.0 non sono ammessi downgrade silenziosi.
 Le condizioni sotto sono ammesse solo se **esplicite e governate**.
@@ -195,15 +195,15 @@ Le condizioni sotto sono ammesse solo se **esplicite e governate**.
   - produrre evento strutturato `semantic.vocab_loader.unavailable`,
   - verdict di gate: `BLOCK` con `stop_code=HITL_REQUIRED`,
   - richiesta intervento (non stub automatico).
-- La modalità “stub” è ammessa solo in contesti **test-only** esplicitamente dichiarati,
+- La modalità "stub" è ammessa solo in contesti **test-only** esplicitamente dichiarati,
   mai in run normative.
 
 ### Embedding provider error
 - Se `_compute_embeddings_for_markdown` riceve errore dal provider:
   - produrre evento `semantic.index.embedding_error`,
-  - **FAIL** della run (stop governato) se l’embedding è richiesto per gli artefatti finali,
+  - **FAIL** della run (stop governato) se l'embedding è richiesto per gli artefatti finali,
   - consentire retry come nuova run dopo correzione.
-- Non è ammesso “continuare” restituendo `(None, 0)` come comportamento normale Beta 1.0.
+- Non è ammesso "continuare" restituendo `(None, 0)` come comportamento normale Beta 1.0.
 
 ---
 
@@ -218,7 +218,7 @@ Le condizioni sotto sono ammesse solo se **esplicite e governate**.
 
 ## Tracing doctor
 
-- Il pannello Log UI può offrire un pulsante “Verifica tracing” che:
+- Il pannello Log UI può offrire un pulsante "Verifica tracing" che:
   - emette un trace diagnostico (`trace_kind=diagnostic`)
   - con `phase=observability.tracing.doctor`
   - e un log `observability.tracing.test_span_emitted`.

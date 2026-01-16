@@ -1,8 +1,8 @@
-# Micro-agent Work Order Envelope — v1.0
+# Micro-agent Work Order Envelope - v1.0
 
 ## Scope & Non-goals
 - Defines the normative Work Order Envelope contract that micro-agents (Codex included) must obey.
-- Non-goal: this document does not describe implementation helpers, repo modules, or UI behavior—those appear elsewhere once the envelope is fulfilled.
+- Non-goal: this document does not describe implementation helpers, repo modules, or UI behavior-those appear elsewhere once the envelope is fulfilled.
 
 ## Role Positioning
 - Micro-agents execute under Work Order Envelope guidance issued by Domain Gatekeepers/OCP and authorized by Timmy/ProtoTimmy.

@@ -117,8 +117,8 @@ vision_pdf = layout.vision_pdf
 ## Percorsi del workspace e WorkspaceLayout
 
 Tutti i componenti (CLI, interfaccia web, servizi, pipeline semantica) devono ottenere i percorsi del workspace esclusivamente tramite `WorkspaceLayout`. La costruzione manuale dei percorsi del workspace è vietata. Questo vale, in particolare, per le directory `raw/`, `semantic/`, `book/`, `logs/`, `config/` e per i file di mapping. `WorkspaceLayout` garantisce:
-- un’unica fonte di verità per la struttura delle directory,
-- l’applicazione sistematica dei controlli di sicurezza (`ensure_within` / `ensure_within_and_resolve`),
+- un'unica fonte di verità per la struttura delle directory,
+- l'applicazione sistematica dei controlli di sicurezza (`ensure_within` / `ensure_within_and_resolve`),
 - la coerenza tra orchestratori CLI e UI,
 - la riduzione del rischio di drift e regressioni silenziose.
 
@@ -136,15 +136,15 @@ log_file = ctx.base_dir / "logs" / "log.txt"
 Qualsiasi nuovo modulo introdotto nel progetto deve usare `WorkspaceLayout` per risolvere il workspace. Non sono ammessi fallback manuali basati su concatenazioni di stringhe o `Path.join` sui percorsi del workspace. Gli helper `resolve_raw_dir` e `workspace_root` non sono più disponibili: ogni path deve venire da `WorkspaceLayout` e ogni creazione/riparazione dal trio `pipeline.workspace_bootstrap.*`.
 In particolare i flussi che toccano Google Drive devono leggere gli `ID` (`drive_folder_id`, `drive_raw_folder_id`, `drive_contrattualistica_folder_id`) già registrati in `config.yaml` e passarli a `pipeline.drive.upload.create_drive_structure_from_yaml`, che aggiorna solo le cartelle mancanti sotto il `raw` esistente anziché ricrearlo da zero.
 
-La risoluzione workspace è fail-fast: chi richiama `WorkspaceLayout.from_context`, `WorkspaceLayout.from_slug` o `WorkspaceLayout.from_workspace` in runtime deve aspettarsi `WorkspaceNotFound`, `WorkspaceLayoutInvalid` o `WorkspaceLayoutInconsistent` e non provare a creare o riparare il layout. Solo `bootstrap_client_workspace`, `bootstrap_dummy_workspace` e `migrate_or_repair_workspace` possono intervenire per rigenerare directory mancanti o sincronizzare asset semantic; i runtime devono limitarsi a loggare l’errore e restituirlo all’orchestratore.
+La risoluzione workspace è fail-fast: chi richiama `WorkspaceLayout.from_context`, `WorkspaceLayout.from_slug` o `WorkspaceLayout.from_workspace` in runtime deve aspettarsi `WorkspaceNotFound`, `WorkspaceLayoutInvalid` o `WorkspaceLayoutInconsistent` e non provare a creare o riparare il layout. Solo `bootstrap_client_workspace`, `bootstrap_dummy_workspace` e `migrate_or_repair_workspace` possono intervenire per rigenerare directory mancanti o sincronizzare asset semantic; i runtime devono limitarsi a loggare l'errore e restituirlo all'orchestratore.
 
-Per esempi operativi completi e per seguire il flusso slug → `ClientContext` → `WorkspaceLayout`, rimanda alla sezione “Workspace SSoT (WorkspaceLayout)” del Developer Guide.
+Per esempi operativi completi e per seguire il flusso slug → `ClientContext` → `WorkspaceLayout`, rimanda alla sezione "Workspace SSoT (WorkspaceLayout)" del Developer Guide.
 
 ---
 
 ## 6) Error handling
 - Usa eccezioni **specifiche** del dominio quando presenti (es. `ConfigError`, `PreviewError`).
-- Per i problemi sui workspace utilizza `WorkspaceNotFound`, `WorkspaceLayoutInvalid` e `WorkspaceLayoutInconsistent`: i runtime in RUNTIME o in modalità standard devono lasciarli propagare, mentre `bootstrap_client_workspace`, `bootstrap_dummy_workspace` e `migrate_or_repair_workspace` sono gli unici flussi autorizzati a rilevare l’errore e intervenire per riparare o ricreare il workspace.
+- Per i problemi sui workspace utilizza `WorkspaceNotFound`, `WorkspaceLayoutInvalid` e `WorkspaceLayoutInconsistent`: i runtime in RUNTIME o in modalità standard devono lasciarli propagare, mentre `bootstrap_client_workspace`, `bootstrap_dummy_workspace` e `migrate_or_repair_workspace` sono gli unici flussi autorizzati a rilevare l'errore e intervenire per riparare o ricreare il workspace.
 - Non catturare eccezioni generiche senza rilanciarle/loggarle.
 - Nei moduli interni e vietato usare `sys.exit()`/`input()`; solo gli orchestratori CLI gestiscono il processo.
 - Mappa gli esiti in **exit codes** standard laddove previsto (0/2/30/40).

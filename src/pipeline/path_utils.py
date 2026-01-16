@@ -621,7 +621,7 @@ def normalize_path(path: Path) -> Path:
 
 
 def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_") -> str:
-    """Pulisce un nome file per l’uso su filesystem.
+    """Pulisce un nome file per l'uso su filesystem.
 
     Operazioni:
     - normalizzazione Unicode (NFKC)
@@ -650,7 +650,7 @@ def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_
         # Comprimi e ripulisci i separatori
         s = _compress_replacement(s, replacement).strip(replacement)
 
-        # Troncamento “morbido”
+        # Troncamento "morbido"
         if max_length and len(s) > int(max_length):
             s = s[: int(max_length)].rstrip(replacement)
 
@@ -694,7 +694,7 @@ def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Pat
 
     Criterio: confronto case-insensitive sul path relativo a `base` (se fornita),
     altrimenti sul path assoluto risolto. I path non risolvibili vengono gestiti
-    con fallback non-eccezionale e inclusi comunque nell’ordinamento.
+    con fallback non-eccezionale e inclusi comunque nell'ordinamento.
     """
     strict = _is_strict()
     items: List[Tuple[str, Path]] = []

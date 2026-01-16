@@ -1,4 +1,4 @@
-# Pipeline State Machine — v1.0
+# Pipeline State Machine - v1.0
 
 ## Scope & Non-goals
 - Defines the normative foundation pipeline states that produce semantically enriched markdown and the validated knowledge graph.

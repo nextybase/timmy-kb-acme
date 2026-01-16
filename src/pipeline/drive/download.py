@@ -102,7 +102,7 @@ def _walk_drive_tree(service: Any, root_id: str) -> Iterable[Tuple[List[str], Di
             mime = it.get("mimeType")
             if mime == MIME_FOLDER:
                 stack.append((it["id"], parts + [name]))
-                yield (parts, it)  # opzionale: superficie per chi vuole “vedere” anche le cartelle
+                yield (parts, it)  # opzionale: superficie per chi vuole "vedere" anche le cartelle
             else:
                 yield (parts, it)
 
@@ -206,7 +206,7 @@ def download_drive_pdfs_to_local(
     Args:
         service: client Drive v3 già autenticato (googleapiclient).
         remote_root_folder_id: ID della cartella radice su Drive.
-        local_root_dir: cartella locale “raw/” dentro la sandbox cliente.
+        local_root_dir: cartella locale "raw/" dentro la sandbox cliente.
         progress: se True, logga avanzamento al 10/20/.../100%.
         context: ClientContext opzionale per log arricchiti (slug, base_dir, redact).
         redact_logs: se True, redige ID sensibili nei log.

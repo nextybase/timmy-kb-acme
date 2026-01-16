@@ -1,4 +1,4 @@
-# Gatekeepers Contracts — v1.0
+# Gatekeepers Contracts - v1.0
 
 ## Scope & Non-goals
 - Defines the contractual obligations for Domain Gatekeepers and the Engineering Gatekeeper (OCP role) within the Prompt Chain.

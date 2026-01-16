@@ -1,4 +1,4 @@
-# 07 — Modular Gate Checklists (Engineering Gatekeeper / OCP-plane)
+# 07 - Modular Gate Checklists (Engineering Gatekeeper / OCP-plane)
 
 **Status:** ACTIVE
 **Authority:** Operational checklist, subordinate to SSoT
@@ -6,7 +6,7 @@
 PASS / PASS_WITH_CONDITIONS / BLOCK sulle transizioni di stato del workspace.
 
 Questo documento **non definisce** binding, stati o semantica di avanzamento.
-Fornisce **strumenti di valutazione** per l’Engineering Gatekeeper (AI),
+Fornisce **strumenti di valutazione** per l'Engineering Gatekeeper (AI),
 che opera esclusivamente tramite OCP-plane.
 
 Riferimenti normativi:
@@ -19,19 +19,19 @@ Riferimenti normativi:
 
 ## Principi Globali (Beta 1.0)
 - Ogni modulo corrisponde a **una singola transizione di stato**.
-- Le checklist **non producono stato**: supportano l’emissione di un Decision Record.
+- Le checklist **non producono stato**: supportano l'emissione di un Decision Record.
 - Il Gatekeeper:
   - non esegue azioni,
   - non modifica artefatti,
   - valuta solo **evidenze verificabili**.
 - Ogni verdict (PASS / BLOCK / FAIL / PASS_WITH_CONDITIONS) deve essere
   formalizzato tramite **Decision Record append-only**.
-- L’applicabilità dei gate per ciascuna transizione è definita in
+- L'applicabilità dei gate per ciascuna transizione è definita in
   `instructions/06_promptchain_workspace_mapping.md`.
 
 ---
 
-## Modulo 1 — `WORKSPACE_BOOTSTRAP → SEMANTIC_INGEST`
+## Modulo 1 - `WORKSPACE_BOOTSTRAP → SEMANTIC_INGEST`
 
 **Gate richiesti:**
 - Evidence Gate (layout & artefatti)
@@ -57,7 +57,7 @@ Riferimenti normativi:
 
 ---
 
-## Modulo 2 — `SEMANTIC_INGEST → FRONTMATTER_ENRICH`
+## Modulo 2 - `SEMANTIC_INGEST → FRONTMATTER_ENRICH`
 
 **Gate richiesti:**
 - Evidence Gate
@@ -83,7 +83,7 @@ Riferimenti normativi:
 
 ---
 
-## Modulo 3 — `FRONTMATTER_ENRICH → VISUALIZATION_REFRESH`
+## Modulo 3 - `FRONTMATTER_ENRICH → VISUALIZATION_REFRESH`
 
 **Gate richiesti:**
 - Evidence Gate
@@ -108,7 +108,7 @@ Riferimenti normativi:
 
 ---
 
-## Modulo 4 — `VISUALIZATION_REFRESH → PREVIEW_READY`
+## Modulo 4 - `VISUALIZATION_REFRESH → PREVIEW_READY`
 
 **Gate richiesti:**
 - Evidence Gate
@@ -133,7 +133,7 @@ Riferimenti normativi:
 
 ---
 
-## Modulo 5 — `PREVIEW_READY → COMPLETE`
+## Modulo 5 - `PREVIEW_READY → COMPLETE`
 
 **Gate richiesti:**
 - QA Gate

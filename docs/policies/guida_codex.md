@@ -5,28 +5,28 @@
 La separazione dei canali User (Streamlit + `ui.services`) e Dev (`timmy_kb.cli.*`, `tools/*`, `src/api/*`) è codificata nello SSoT [.codex/USER_DEV_SEPARATION.md](../../.codex/USER_DEV_SEPARATION.md); rispettare quel contratto prima di toccare nuovi entrypoint o import multipli.
 Ogni cambio deve inoltre passare i guardrail `tests/architecture/test_facade_imports.py` e `tests/architecture/test_dev_does_not_import_ui.py` per assicurare che User e Dev non condividano import proibiti.
 
-La modalità principale e consigliata per usare Codex nel progetto NeXT/Timmy-KB è tramite la **Prompt Chain** orchestrata da l’**OCP (OrchestratoreChainPrompt)**.
+La modalità principale e consigliata per usare Codex nel progetto NeXT/Timmy-KB è tramite la **Prompt Chain** orchestrata da l'**OCP (OrchestratoreChainPrompt)**.
 
-L’idea di base:
-- L’utente (tu) definisce lo scopo del lavoro.
-- L’OCP traduce questo obiettivo nel protocollo Planner → OCP → Codex → OCP → Planner, con Phase 0 (analisi read-only), Phase 1..N (micro-PR operativi) e Prompt N+1 (QA finale e riepilogo in italiano).
+L'idea di base:
+- L'utente (tu) definisce lo scopo del lavoro.
+- L'OCP traduce questo obiettivo nel protocollo Planner → OCP → Codex → OCP → Planner, con Phase 0 (analisi read-only), Phase 1..N (micro-PR operativi) e Prompt N+1 (QA finale e riepilogo in italiano).
 - Ogni prompt viene inviato a Codex **uno alla volta**, come micro-PR con memo Active Rules, QA intermedia e finale, e risposte sempre in italiano, mentre la documentazione di riferimento resta in inglese.
 
 ### 1.1 Come funziona la Prompt Chain
 
-1. **Prompt 0 – Onboarding (Phase 0)**
+1. **Prompt 0 - Onboarding (Phase 0)**
    - Fornisce il contesto generale (repo, obiettivi, regole attive) senza toccare il filesystem.
    - Ricorda a Codex di leggere gli SSoT chiave: `.github/codex-instructions.md`, `system/specs/promptchain_spec.md`, `system/ops/agents_index.md`, gli `AGENTS.md` di area e `.codex/PROMPTS.md`.
-   - Definisce l’obiettivo della catena (es. refactor, feature, hardening QA) e conferma il piano operativo con risposta in italiano.
+   - Definisce l'obiettivo della catena (es. refactor, feature, hardening QA) e conferma il piano operativo con risposta in italiano.
 
 2. **Prompt 0x - Analisi e allineamento (Phase 0)**
    - Codex lavora in sola lettura, mappa dipendenze/rischi e non produce diff né lancia QA.
-   - L’OCP mostra il riepilogo all’utente (HiTL) per confermare o restringere lo scope prima di passare ai prompt operativi.
+   - L'OCP mostra il riepilogo all'utente (HiTL) per confermare o restringere lo scope prima di passare ai prompt operativi.
 
 3. **Prompt operativi (1..N) - Phase 1..N**
    - Ogni prompt ha uno scope ristretto: una modifica singola, un refactor piccolo, un fix mirato.
    - I prompt operativi iniziano con il memo Active Rules (path safety, micro-PR, zero side effects, QA intermedia `pytest -q -k "not slow"`, lingua italiana) definito in `.codex/PROMPTS.md`.
-   - Prima di qualsiasi altra sezione, ogni prompt — anche quelli di Phase 0 o di finalizzazione — deve presentare il blocco canonico (`ROLE: Codex`, `PHASE`, `SCOPE`, `ACTIVE RULES MEMO`, `EXPECTED OUTPUTS`, `TESTS`, `CONSTRAINTS`, `STOP RULE`): il `ROLE` deve essere il primo elemento e indicare espressamente `Codex`, così da evitare confusione di ruolo.
+   - Prima di qualsiasi altra sezione, ogni prompt - anche quelli di Phase 0 o di finalizzazione - deve presentare il blocco canonico (`ROLE: Codex`, `PHASE`, `SCOPE`, `ACTIVE RULES MEMO`, `EXPECTED OUTPUTS`, `TESTS`, `CONSTRAINTS`, `STOP RULE`): il `ROLE` deve essere il primo elemento e indicare espressamente `Codex`, così da evitare confusione di ruolo.
    - In ciascuno step Codex prepara la patch, applica il pre-check statico (no I/O raw/import privati/path hardcoded/patch non atomiche), esegue QA intermedia, e fornisce diff/report/risultato in italiano.
 
 4. **Prompt finale di QA (Prompt N+1)**
@@ -36,7 +36,7 @@ L’idea di base:
 5. **Codex Smoke Chain**
    - È una mini-catena diagnostica che simula il comportamento di Codex senza modificare i file.
    - Serve per verificare che: le Regole Attive siano comprese, la QA venga interpretata correttamente, il pre-check statico sia attivo e la Language Policy (italiano) sia rispettata.
-   - Può essere usata come “test rapido” della Prompt Chain dopo modifiche ai meta-file.
+   - Può essere usata come "test rapido" della Prompt Chain dopo modifiche ai meta-file.
 
 ### 1.2 Quando usare la Prompt Chain
 
@@ -60,7 +60,7 @@ La UI resta un layer di presentazione: non ha autorità decisionale e non sostit
 
 ## 2. Uso diretto di Codex in VS Code
 
-Oltre alla Prompt Chain orchestrata, puoi usare Codex direttamente in VS Code attraverso l’estensione dedicata.
+Oltre alla Prompt Chain orchestrata, puoi usare Codex direttamente in VS Code attraverso l'estensione dedicata.
 
 ### 2.1 Modalità di Codex
 
@@ -71,7 +71,7 @@ Oltre alla Prompt Chain orchestrata, puoi usare Codex direttamente in VS Code at
 
 2. **Agent (consigliato)**
    - Legge i file, propone patch, esegue comandi nella working directory.
-   - È la modalità standard per sviluppo guidato da l’agente su questo repo.
+   - È la modalità standard per sviluppo guidato da l'agente su questo repo.
 
 3. **Agent (Full Access)**
    - Include accesso alla rete e meno prompt di conferma.
@@ -79,9 +79,9 @@ Oltre alla Prompt Chain orchestrata, puoi usare Codex direttamente in VS Code at
 
 ### 2.2 Setup di base
 
-- Installa l’estensione Codex in VS Code dal Marketplace.
+- Installa l'estensione Codex in VS Code dal Marketplace.
 - Accedi con account ChatGPT (Plus/Pro/Team/Enterprise) o API key.
-- Su Windows è consigliato l’uso di WSL; macOS e Linux sono pienamente supportati.
+- Su Windows è consigliato l'uso di WSL; macOS e Linux sono pienamente supportati.
 
 Config consigliata in `~/.codex/config.toml` (semplificata):
 
@@ -120,12 +120,12 @@ Per ottenere il massimo da Codex (sia in Chat che in Agent), alcune tecniche di 
   - *"Tocca solo questo file; se servono modifiche ad altri file, proponi uno step successivo, non farle in automatico."*
 
 - Pretendi un diff chiaro:
-  - *"Mostra il diff completo e spiegami a parole l’impatto di ogni blocco di cambiamento."*
+  - *"Mostra il diff completo e spiegami a parole l'impatto di ogni blocco di cambiamento."*
 
 ### 3.3 Prompt con QA esplicita
 
 - Integra sempre una richiesta di QA mirata:
-  - *"Dopo la modifica esegui `pytest -q -k test_nome_relativo` e riportami l’esito."*
+  - *"Dopo la modifica esegui `pytest -q -k test_nome_relativo` e riportami l'esito."*
   - *"Se i test falliscono, prova una sola volta a correggere; se fallisce ancora, fermati e chiedi indicazioni."*
 
 - Per task più grossi, agganciati al workflow standard:
@@ -134,7 +134,7 @@ Per ottenere il massimo da Codex (sia in Chat che in Agent), alcune tecniche di 
 ### 3.4 Prompt per spiegazioni e revisione
 
 - Chiedi sempre una spiegazione breve ma chiara:
-  - *"Spiega perché questa soluzione è coerente con `.codex/CONSTITUTION.md` e con gli `AGENTS.md` dell’area."*
+  - *"Spiega perché questa soluzione è coerente con `.codex/CONSTITUTION.md` e con gli `AGENTS.md` dell'area."*
   - *"Indica cosa controlleresti in review, se fossi tu il Senior Reviewer."*
 
 Queste tecniche funzionano sia in Prompt Chain che in uso diretto: la differenza è che nella Prompt Chain sono **strutturate**, mentre in uso diretto sei tu a costruirle ogni volta.
@@ -143,9 +143,9 @@ Queste tecniche funzionano sia in Prompt Chain che in uso diretto: la differenza
 
 ## 4. Workflow consigliato: Codex + Prompt Chain + Senior Reviewer
 
-Un flusso “sano” e ripetibile può essere:
+Un flusso "sano" e ripetibile può essere:
 
-1. **Definisci l’obiettivo**
+1. **Definisci l'obiettivo**
    - Cosa vuoi ottenere? Refactor? Nuova feature? Hardening di un servizio?
    - Quali file/servizi saranno coinvolti?
 
@@ -172,10 +172,10 @@ Un flusso “sano” e ripetibile può essere:
 La catena attiva per proteggere `docs/` e `README.md` da mojibake si basa su tre livelli di controllo:
 
 - **`tools/fix_mojibake.py`** gestisce le sostituzioni note (dash, virgolette, accenti, ecc.), prova prima la decodifica UTF-8 e poi CP1252 e normalizza solo quando il testo cambia davvero. Qualsiasi nuova sequenza segnalata dai test va aggiunta qui e documentata.
-- **`tests/encoding/test_docs_encoding.py`** è il test locale che esegue `apply_replacements` in dry-run, controlla `docs/**/*.md` + `README.md` e fallisce con un messaggio leggibile nel momento in cui lo script propone una modifica: l’intento è intercettare il mojibake prima del commit/PR (attivazione manuale con `pytest tests/encoding/test_docs_encoding.py`).
-- **Job CI “Docs UTF-8/accents normalization check”** (`.github/workflows/ci.yaml`) rilancia lo stesso script e fallisce se `git diff` segnala cambiamenti; così la seconda linea di difesa entra in funzione anche se il test locale viene saltato.
+- **`tests/encoding/test_docs_encoding.py`** è il test locale che esegue `apply_replacements` in dry-run, controlla `docs/**/*.md` + `README.md` e fallisce con un messaggio leggibile nel momento in cui lo script propone una modifica: l'intento è intercettare il mojibake prima del commit/PR (attivazione manuale con `pytest tests/encoding/test_docs_encoding.py`).
+- **Job CI "Docs UTF-8/accents normalization check"** (`.github/workflows/ci.yaml`) rilancia lo stesso script e fallisce se `git diff` segnala cambiamenti; così la seconda linea di difesa entra in funzione anche se il test locale viene saltato.
 
-**Cosa NON fa la guardia:** non è un controllo esaustivo, riceve solo i pattern presenti in `REPLACEMENTS`, quindi mojibake nuovi resta un falso negativo e va segnalato ufficialmente. Non c’è un hook pre-commit automatico; la regola è applicare il test prima del commit e affidarsi al job CI come fallback. Segnale: il job CI fallisce se rileva modifiche.
+**Cosa NON fa la guardia:** non è un controllo esaustivo, riceve solo i pattern presenti in `REPLACEMENTS`, quindi mojibake nuovi resta un falso negativo e va segnalato ufficialmente. Non c'è un hook pre-commit automatico; la regola è applicare il test prima del commit e affidarsi al job CI come fallback. Segnale: il job CI fallisce se rileva modifiche.
 
 **Istruzioni operative quando il test fallisce:**
 
@@ -200,7 +200,7 @@ La catena attiva per proteggere `docs/` e `README.md` da mojibake si basa su tre
 
 - Passa alla modalità Agent quando:
   - il piano è chiaro,
-  - hai definito l’area di intervento,
+  - hai definito l'area di intervento,
   - vuoi che Codex scriva davvero codice, lanci QA, aggiorni documentazione.
 
 - Ricorda sempre di chiedere:

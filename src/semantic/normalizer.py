@@ -16,7 +16,7 @@ Ordine di applicazione
 3. synonyms → se il tag corrisponde a un sinonimo, sostituisce con il canonico
 4. canonical → forza alias verso canonical definito
 
-Note d’implementazione
+Note d'implementazione
 ----------------------
 - Tutti i confronti sono case-insensitive: normalizziamo a lowercase sia chiavi sia valori.
 - `synonyms` accetta sia lista che singolo valore: viene coerzionato a lista di stringhe lower.

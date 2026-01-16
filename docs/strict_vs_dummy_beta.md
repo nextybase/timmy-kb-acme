@@ -1,9 +1,9 @@
-# Modalità **Strict** e **Dummy** – Guida Operativa (Beta 1.0)
+# Modalità **Strict** e **Dummy** - Guida Operativa (Beta 1.0)
 
 ## Scopo del documento
 Questo documento definisce **in modo operativo** il comportamento delle modalità **Strict** e **Dummy** nei flussi di onboarding (in particolare *tag_onboarding*), chiarendo **cosa è consentito**, **cosa è vietato** e **come viene tracciato nel Decision Ledger**.
 
-L’obiettivo è evitare **ambiguità di stato**, **generazione implicita di artefatti** e **degrado silenzioso** durante la Beta.
+L'obiettivo è evitare **ambiguità di stato**, **generazione implicita di artefatti** e **degrado silenzioso** durante la Beta.
 
 ---
 
@@ -11,7 +11,7 @@ L’obiettivo è evitare **ambiguità di stato**, **generazione implicita di art
 
 - Il **Decision Ledger è la Single Source of Truth (SSoT)**.
 - Ogni avanzamento di stato deve corrispondere a **lavoro realmente completato**.
-- Nessuna generazione di artefatti “di comodo” nel percorso operativo standard.
+- Nessuna generazione di artefatti "di comodo" nel percorso operativo standard.
 - Ogni eccezione consentita deve essere:
   - **esplicita**
   - **auditabile**
@@ -22,7 +22,7 @@ L’obiettivo è evitare **ambiguità di stato**, **generazione implicita di art
 ## Modalità Strict (`TIMMY_BETA_STRICT`)
 
 ### Attivazione
-Variabile d’ambiente:
+Variabile d'ambiente:
 ```bash
 TIMMY_BETA_STRICT=1
 ```
@@ -83,7 +83,7 @@ timmy-kb tag-onboarding ... --dummy
 
 ---
 
-## Regola d’oro
+## Regola d'oro
 > Se nel Ledger leggi `TAGS_READY`, sai con certezza che è stato usato `--dummy`.
 
 ---

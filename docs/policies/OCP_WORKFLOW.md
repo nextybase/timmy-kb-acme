@@ -1,6 +1,6 @@
 # OCP → Codex Workflow
 
-1. **Scopo**: l’OCP traduce piani in Prompt numerati, Codex applica micro-PR con diff/report/QA, l’umano mantiene il merge gate e non esegue codice.
+1. **Scopo**: l'OCP traduce piani in Prompt numerati, Codex applica micro-PR con diff/report/QA, l'umano mantiene il merge gate e non esegue codice.
 2. **Regola base**: `main` riceve modifiche solo via PR; vedere docs/security.md per richieste di branch protection (`CI`, `Secret Scan`, approval). Nessuna scrittura diretta su `main`.
 3. **Mapping Prompt → Commit**:
    - Prompt 0: analisi read-only, nessun file modificato.
@@ -21,5 +21,5 @@
    - Note HiTL compilate (reviewer, domande aperte, verifiche rimaste).
 7. **Flusso operativo**:
    - Codex applica la patch, produce diff/report/QA, e si ferma.
-   - L’OCP valuta evidenze e alimenta lo Skeptic Gate; solo PASS libera il prompt successivo.
+   - L'OCP valuta evidenze e alimenta lo Skeptic Gate; solo PASS libera il prompt successivo.
    - Il branch viene approvato e mergeato solo dopo tutti i checkpoints e con il commit finale redatto in italiano.

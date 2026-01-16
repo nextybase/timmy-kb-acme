@@ -41,7 +41,7 @@ Per un percorso rapido step-by-step vedi anche [Developer Quickstart](developer_
 
 - **WHAT:** la governance agency-first (ProtoTimmy → Timmy, Domain Gatekeepers, Control Plane/OCP, Prompt Chain) è documentata in `instructions/*` e definisce chi decide, valida ed esegue.
 - **HOW:** i moduli `pipeline.*`, `semantic.*`, `workspace_bootstrap` e `WorkspaceLayout` sono strumenti operativi per I/O, path, logging e semantica; garantiscono artefacts affidabili (markdown arricchiti + knowledge graph validato) ma non orchestrano né decidono.
-- La pipeline di foundation “apre” Timmy quando produce gli artefacts richiesti e il knowledge graph viene validato; fino a quel momento ProtoTimmy guida la fondazione e OCP gestisce il control plane senza porsi come agency.
+- La pipeline di foundation "apre" Timmy quando produce gli artefacts richiesti e il knowledge graph viene validato; fino a quel momento ProtoTimmy guida la fondazione e OCP gestisce il control plane senza porsi come agency.
 - Ogni riferimento a `pipeline.*` in questo documento va inteso come HOW (strumento tecnico); le decisioni e i gate sono descritte nelle sezioni `instructions/00*`, `instructions/01*` e `instructions/02*`.
 
 ---
@@ -52,7 +52,7 @@ Per un percorso rapido step-by-step vedi anche [Developer Quickstart](developer_
 - **UI/Service Layer** (`src/ui/*`): presenta funzioni e schermate Streamlit, delega alla pipeline senza cambiare semantica.
 - **Semantic** (`semantic.*`): conversione PDF→Markdown, arricchimento frontmatter, generazione `SUMMARY.md` / `README.md`.
 - **Workspace cliente**: `output/timmy-kb-<slug>/` con sottocartelle `raw/`, `book/`, `semantic/`, `config/`, `logs/`.
-- **DB KB per slug**: `semantic/kb.sqlite` vive nel workspace cliente e rappresenta l’unica sorgente supportata nel flusso 1.0.
+- **DB KB per slug**: `semantic/kb.sqlite` vive nel workspace cliente e rappresenta l'unica sorgente supportata nel flusso 1.0.
 
 ---
 
@@ -72,7 +72,7 @@ ai:
 - Le **chiamate dirette** (Responses/Chat Completions) leggono sempre `ai.vision.model`.
 - Il flusso **Assistant** usa l'ID letto dall'ambiente il cui nome è in `ai.vision.assistant_id_env`.
 - Accesso runtime **solo** tramite `pipeline.settings.Settings` / `ClientContext.settings` (UI inclusa); niente letture YAML manuali.
-- Config cliente: usare l’API unica prevista dal core (es. `pipeline.config_utils.load_client_settings(context)` / `context.settings` / `as_dict()`) ed evitare derivazioni ad-hoc.
+- Config cliente: usare l'API unica prevista dal core (es. `pipeline.config_utils.load_client_settings(context)` / `context.settings` / `as_dict()`) ed evitare derivazioni ad-hoc.
 
 Getter consigliato lato UI:
 
@@ -118,7 +118,7 @@ log.info("ui.preview.open", extra={"slug": "dummy", "page": "preview"})
 
 Per il parsing/dump del frontmatter Markdown e per letture con cache usa sempre `pipeline.frontmatter_utils`:
 
-- `parse_frontmatter(text) -> (meta, body)` e `dump_frontmatter(meta)` sono l’SSoT.
+- `parse_frontmatter(text) -> (meta, body)` e `dump_frontmatter(meta)` sono l'SSoT.
 - `read_frontmatter(base, path, use_cache=True)` effettua path-safety e caching (invalidazione su mtime/size).
 - Evita implementazioni duplicate in moduli di dominio: delega ai wrapper compat già presenti.
 - La cache del frontmatter `_FRONTMATTER_CACHE` è LRU bounded (256 entry): nei run lunghi/Streamlit è buona pratica chiamare `clear_frontmatter_cache()` quando rilasci workspace o dopo batch estesi.
@@ -153,7 +153,7 @@ yaml_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir /
 safe_write_text(yaml_path, content, encoding="utf-8", atomic=True, fsync=False)
 ```
 
-### Golden path “slug → raw/semantic/tags”
+### Golden path "slug → raw/semantic/tags"
 
 ```python
 layout = get_ui_workspace_layout(slug, require_env=False)
@@ -177,13 +177,13 @@ Il progetto utilizza `WorkspaceLayout` come Single Source of Truth (SSoT) per tu
 
 `WorkspaceLayout` viene sempre costruito a partire dal `ClientContext`: lo slug viene validato, il workspace radice viene risolto e tutti i percorsi (`raw/`, `semantic/`, `book/`, `logs/`, `config/`, `mapping/`) sono derivati in modo deterministico.
 
-La risoluzione del workspace è **fail-fast**: in runtime non viene mai creato nessun file o directory “per sicurezza”. Le eccezioni dedicate (`WorkspaceNotFound`, `WorkspaceLayoutInvalid`, `WorkspaceLayoutInconsistent`) vengono propagate ai caller affinché possano loggare l’errore e fermare il flow.
+La risoluzione del workspace è **fail-fast**: in runtime non viene mai creato nessun file o directory "per sicurezza". Le eccezioni dedicate (`WorkspaceNotFound`, `WorkspaceLayoutInvalid`, `WorkspaceLayoutInconsistent`) vengono propagate ai caller affinché possano loggare l'errore e fermare il flow.
 
 ### Modalità operative
 
 - **RUNTIME:** il resolver fallisce con una delle tre eccezioni se lo slug non esiste, il layout manca di asset minimi o presenta inconsistenze; non è richiesta alcuna riparazione implicita e il caller non deve mai creare directory.
 - **NEW_CLIENT_BOOTSTRAP / DUMMY_BOOTSTRAP:** i flussi `bootstrap_client_workspace` e `bootstrap_dummy_workspace` creano o rigenerano gli asset minimi.
-- **MIGRATION_OR_MAINTENANCE:** `migrate_or_repair_workspace` è l’unico entrypoint autorizzato a interpretare `WorkspaceLayoutInconsistent` e riparare asset avanzati.
+- **MIGRATION_OR_MAINTENANCE:** `migrate_or_repair_workspace` è l'unico entrypoint autorizzato a interpretare `WorkspaceLayoutInconsistent` e riparare asset avanzati.
 
 > The bootstrap APIs exposed by `pipeline.workspace_bootstrap` are the single source of truth for creating or repairing layouts; all other code must keep relying on `WorkspaceLayout` in fail-fast mode.
 
@@ -237,7 +237,7 @@ Qualsiasi wrapper UI che delega a `pipeline.*` / `semantic.*` **mantiene la stes
 
 ---
 
-# Definition of Done — v1.0 Beta (Determinismo / Low Entropy)
+# Definition of Done - v1.0 Beta (Determinismo / Low Entropy)
 
 ## Principio
 

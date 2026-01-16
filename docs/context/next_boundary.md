@@ -1,7 +1,7 @@
 # NeXT ↔ Timmy-KB: Nota di boundary
 
 ## 1. Scopo del documento
-NeXT definisce una cornice teorica estesa che guida la governance e la responsabilità; questo documento limita quell’ambito per identificare dove Timmy-KB si ferma, delega o non replica, mantenendo una visione auditabile e semplice da consultare. (Esterno / non implementato)
+NeXT definisce una cornice teorica estesa che guida la governance e la responsabilità; questo documento limita quell'ambito per identificare dove Timmy-KB si ferma, delega o non replica, mantenendo una visione auditabile e semplice da consultare. (Esterno / non implementato)
 
 ## 2. Governance multilivello (Team C / C-Board)
 NeXT introduce board e ruoli decisionali multilivello: Timmy-KB, pur rispettando la governance by design, non riproduce Team C o C-Board e rimane sotto il controllo delle AGENTS locali e delle istruzioni. (Delegato)
@@ -25,4 +25,4 @@ NeXT menziona TeamUP per allineare formazione e cambiamento; Timmy-KB offre guid
 Il paper considera cloni territoriali e Zenobia per estendere governance; Timmy-KB sul repository non governa distribuzioni geografiche né fornisce orchestrazione specifica per questi cloni. (Fuori scope)
 
 ## 9. Chiusura
-Questo documento limita in modo trasparente ciò che non fa Timmy-KB rispetto all’universo teorico NeXT: mantiene un boundary chiaro, a disposizione di chi valuta compliance e audit. (Esterno / non implementato)
+Questo documento limita in modo trasparente ciò che non fa Timmy-KB rispetto all'universo teorico NeXT: mantiene un boundary chiaro, a disposizione di chi valuta compliance e audit. (Esterno / non implementato)

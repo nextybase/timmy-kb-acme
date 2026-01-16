@@ -49,7 +49,7 @@ Guida completa: [guida_ui.md](guida_ui.md).
 ---
 
 ## From Foundation to Agency
-- La fase iniziale coinvolge ProtoTimmy che governa la pipeline di foundation: l’obiettivo è produrre markdown semanticamente arricchiti e validare il knowledge graph.
+- La fase iniziale coinvolge ProtoTimmy che governa la pipeline di foundation: l'obiettivo è produrre markdown semanticamente arricchiti e validare il knowledge graph.
 - Completare questa pipeline foundation abilita il passaggio a Timmy, che assume agency dialogica e coordina Domain Gatekeepers e micro-agent nella Prompt Chain documentata in `instructions/`.
 - La pipeline non orchestra né decide: fornisce gli artifact affidabili richiesti dallo SSoT, mentre Timmy è responsabile della governance e del dialogo con i gatekeeper dopo la validazione.
 

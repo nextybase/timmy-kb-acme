@@ -1,6 +1,6 @@
 # Streamlit UI  linee guida (dettagliate)
 
-Queste linee guida descrivono il modulo Streamlit come parte dell’ambiente Timmy-KB: il tool implementa un’interfaccia operativa, ma rimane sotto il controllo umano e osserva l’envelope epistemico senza assumere autonomie decisionali.
+Queste linee guida descrivono il modulo Streamlit come parte dell'ambiente Timmy-KB: il tool implementa un'interfaccia operativa, ma rimane sotto il controllo umano e osserva l'envelope epistemico senza assumere autonomie decisionali.
 
 *Allineato alle regole di progetto (vedi *[***coding\_rule.md***](./developer/coding_rule.md)*)*.
 

@@ -1,6 +1,6 @@
 # Timmy KB - README (v1.0 Beta)
 
-Timmy-KB è un ambiente per la creazione e il governo di Timmy: attraverso una pipeline di fondazione inghiotte dati, produce output deterministici (derivatives) e abilita l’emergere controllato dell’agency, restando HiTL e mantenendo governance by design.
+Timmy-KB è un ambiente per la creazione e il governo di Timmy: attraverso una pipeline di fondazione inghiotte dati, produce output deterministici (derivatives) e abilita l'emergere controllato dell'agency, restando HiTL e mantenendo governance by design.
 
 [**Design premise:** il sistema è pensato per hardware dedicato e ambienti controllati, esegue processi automatizzati e usa regole/test rigorosi per garantire riproducibilità e auditabilità: qualsiasi rottura deve fallire rumorosamente.]
 
@@ -10,7 +10,7 @@ Timmy-KB è un ambiente per la creazione e il governo di Timmy: attraverso una p
 [![Security Status](https://img.shields.io/badge/security-hardened-brightgreen)](docs/policies/security.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.md)
 
-Timmy-KB è l’implementazione operativa che incarna i principi del framework NeXT: mantiene l’envelope epistemico, resta Human-in-the-Loop e imposta governance by design; NeXT è la cornice teorica che descrive l’AI come strumento di supporto, non come autorità autonoma.
+Timmy-KB è l'implementazione operativa che incarna i principi del framework NeXT: mantiene l'envelope epistemico, resta Human-in-the-Loop e imposta governance by design; NeXT è la cornice teorica che descrive l'AI come strumento di supporto, non come autorità autonoma.
 
 Cornice filosofica e di responsabilità: [MANIFEST.md](MANIFEST.md).
 
@@ -50,11 +50,11 @@ In Beta, il flusso di onboarding è **strict by default**:
 la generazione degli stub semantici è **disabilitata** e lo stato massimo
 raggiungibile è `TAGS_CSV_READY`.
 
-L’esecuzione end-to-end è consentita **solo** tramite flag esplicito
+L'esecuzione end-to-end è consentita **solo** tramite flag esplicito
 `--dummy` ed è sempre **tracciata nel _Decision Ledger_**.
 
 👉 Dettagli operativi e implicazioni di audit:
-**[Strict vs Dummy – Guida Operativa](docs/strict_vs_dummy_beta.md)**.
+**[Strict vs Dummy - Guida Operativa](docs/strict_vs_dummy_beta.md)**.
 
 ## ✅ Beta: State Model (Decision Ledger = SSoT)
 
@@ -95,10 +95,10 @@ Usalo per interpretare il ledger in modo deterministico.
 - [LICENSE](LICENSE.md) - GPL-3.0.
 - [Code of Conduct](CODE_OF_CONDUCT.md) e [Security](SECURITY.md).
 
-La pipeline produce output necessari (derivatives) e orchestra l’emergere di agenti HiTL e micro-agenti sotto supervisione umana, mantenendo l’envelope epistemico come limite operativo.
+La pipeline produce output necessari (derivatives) e orchestra l'emergere di agenti HiTL e micro-agenti sotto supervisione umana, mantenendo l'envelope epistemico come limite operativo.
 
 ## From Foundation Pipeline to Agency
-- La pipeline di ingestione è l’atto di nascita di Timmy: nasce quando i PDF del cliente vengono trasformati in markdown semanticamente arricchiti e il knowledge graph associato viene validato.
+- La pipeline di ingestione è l'atto di nascita di Timmy: nasce quando i PDF del cliente vengono trasformati in markdown semanticamente arricchiti e il knowledge graph associato viene validato.
 - Solo a quel punto il passaggio concettuale ProtoTimmy → Timmy diventa operativo: ProtoTimmy governa la fondazione, Timmy assume agency globale e dialoga con Domain Gatekeepers e micro-agent.
 - La pipeline non decide né orchestra: è lo strumento che genera output (markdown + knowledge graph) richiesti dallo SSoT e abilita il control plane, ma la direzione resta affidata a Timmy e ai gatekeeper.
 - Tutti i riferimenti tecnici a `pipeline.*` descrivono gli strumenti operativi della fondazione; dopo la validazione la Prompt Chain documentata in `instructions/` prende il comando.
@@ -116,7 +116,7 @@ pre-commit run --all-files
 pytest -q
 ```
 Questo modello consente interventi profondi mantenendo massima sicurezza, coerenza e tracciabilita'.
-Il ciclo completo è Planner → OCP → Codex → OCP → Planner, con Phase 0 dedicata all’analisi read-only, Phase 1..N ai micro-PR intermedi (con `pytest -q -k "not slow"` e Active Rules memo) e Prompt N+1 alla QA finale (`pre-commit run --all-files` + `pytest -q`) e al riepilogo italiano.
+Il ciclo completo è Planner → OCP → Codex → OCP → Planner, con Phase 0 dedicata all'analisi read-only, Phase 1..N ai micro-PR intermedi (con `pytest -q -k "not slow"` e Active Rules memo) e Prompt N+1 alla QA finale (`pre-commit run --all-files` + `pytest -q`) e al riepilogo italiano.
 Per i dettagli operativi vedi `.codex/PROMPTS.md`, `system/ops/runbook_codex.md` e `.codex/WORKFLOWS.md`.
 
 ---

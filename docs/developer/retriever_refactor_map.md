@@ -1,6 +1,6 @@
 # Retriever Refactor Map (Post-Kernel)
 
-Status: v1.0 Beta — factual map + refactor notes
+Status: v1.0 Beta - factual map + refactor notes
 Scope: descrive lo stato attuale del retriever (confini funzionali, eventi/log, short-circuit) e annota possibili micro-step di estrazione senza cambiare semantica.
 
 ## Stato attuale (evidenza nel codice)
@@ -13,7 +13,7 @@ Scope: descrive lo stato attuale del retriever (confini funzionali, eventi/log, 
   - `retriever_ranking` (cosine, scoring/ranking deterministico)
   - `retriever_manifest` (evidence + manifest)
 
-Nota: la dicitura “shim vs implementation” va considerata **storica** finché non esiste un file separato `src/retriever.py` nel tree.
+Nota: la dicitura "shim vs implementation" va considerata **storica** finché non esiste un file separato `src/retriever.py` nel tree.
 
 ## 1) Current functional decomposition (retriever.py)
 Major responsibilities and implicit boundaries:
@@ -49,7 +49,7 @@ Major responsibilities and implicit boundaries:
 Il retriever può ritornare `[]` in condizioni diverse (input non utile, deadline/budget, embedding failure). Il valore di ritorno è uguale ma gli eventi emessi differiscono.
 
 ### Eventi principali (`retriever.*`)
-Gli eventi sono parte dell’osservabilità e costituiscono l’unico disambiguatore affidabile dei casi “empty result”.
+Gli eventi sono parte dell'osservabilità e costituiscono l'unico disambiguatore affidabile dei casi "empty result".
 
 ## 3) Kernel touchpoints (aspirazionale / best-effort)
 Where bridge fields should be present or passed (non garantito in Beta):

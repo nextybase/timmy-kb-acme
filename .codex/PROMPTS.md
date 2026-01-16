@@ -45,11 +45,11 @@ STOP RULE: <fermo dopo la risposta>
 - Mode: analytical, read-only; no files changed, no QA commands executed.
 - Output: Italian summary of the plan, statement of loaded documents, and risks.
 
-#### OPS AUTHORIZATION (READ-ONLY) — REQUIRED
+#### OPS AUTHORIZATION (READ-ONLY) - REQUIRED
 - Allowed (inspection only): `ls`/`dir`/`tree`/`find`/`Get-ChildItem`, `cat`/`less`/`head`/`tail`/`sed -n`/`Get-Content`, `rg`/`grep`, `git grep`/`git ls-files`/`git status`/`git diff`/`git log`.
 - Forbidden: any write/modify command, `apply_patch`, any formatter or tool that writes files, any test/build execution (`pytest`, `pre-commit`, etc.), any `git commit`.
 
-#### DELIVERY STRATEGY (PLANNING DECISION) — REQUIRED
+#### DELIVERY STRATEGY (PLANNING DECISION) - REQUIRED
 - `target`: `main` | `branch`
 - `target_branch`: required iff `target=branch`
 
@@ -80,14 +80,14 @@ STOP RULE: <fermo dopo la risposta>
 - Language: the entire response must be in Italian, salvo eccezione control-mode in inglese quando esplicitata dall'OCP.
 - **Diff requirement:** the structured block must always request and include a unified diff for files touched in this step.
 
-### EVIDENCE FORMAT (MUST) — Prompt 1..N e N+1
+### EVIDENCE FORMAT (MUST) - Prompt 1..N e N+1
 - Mandatory outputs (fixed order): 1) `git status --porcelain=v1`; 2) unified diff with `diff --git` + `index` + `---/+++` + `@@`; 3) structured report; 4) QA output with at least the final PASS/skip summary and exit status.
 - Dirty working tree: declare `working tree dirty outside scope: YES/NO` at the start of the report and use only `git diff -- <paths in scope>`; repo-wide diffs are forbidden when there are out-of-scope changes.
 - Evidence Gate aggiuntivo: verificare che il diff riportato sia davvero un unified diff (marker presenti) e che `git status --porcelain=v1` compaia in ogni micro-PR operativo.
 
 ### Template: Prompt N+1
 - Purpose: conclude the chain via final QA and a closing narrative.
-- Mandatory content: QA results for `pre-commit run --all-files` and `pytest -q`, documentation of retries/micro-fixes (up to ten attempts), full summary of the chain’s work, the one-line closing commit message in Italian (unless otherwise specified), and the Retrospective outcome (always PASS, with optional note/TODO) logged after the N+1 Gate.
+- Mandatory content: QA results for `pre-commit run --all-files` and `pytest -q`, documentation of retries/micro-fixes (up to ten attempts), full summary of the chain's work, the one-line closing commit message in Italian (unless otherwise specified), and the Retrospective outcome (always PASS, with optional note/TODO) logged after the N+1 Gate.
 - Action: only after both QA commands succeed and the Retrospective PASS is recorded may the chain be considered complete; Codex must report any remaining issues before ending.
 
 ## Active Rules Memo
@@ -139,7 +139,7 @@ One sentence, operational. No ambiguity.
 - objective: "<do X from input Y to produce output Z>"
 
 [INPUTS]
-Provide only what’s necessary. No hidden context.
+Provide only what's necessary. No hidden context.
 - input_payload: <JSON or bullet list, explicit>
 - context_minimal: <strictly necessary background, max 5 lines>
 - assumptions_allowed: none

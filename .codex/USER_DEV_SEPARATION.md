@@ -40,7 +40,7 @@ Document the 1.0 Beta split between the **User channel** (Streamlit screens plus
 - Mentioned guardrail tests already live in `.codex/CHECKLISTS.md` and `system/ops/agents_index.md`.
 - The enforcement is automated by `tools/ci/entrypoint_guard_ack.py`, which rejects changes touching public entrypoints unless `.codex/USER_DEV_SEPARATION.md` or `SEPARATION_ACK.md` is updated with rationale.
 - Ownership mappings are enforced per channel via `.github/CODEOWNERS`, keeping reviews aligned with these boundaries.
-- Il flusso “Nuovo cliente” ora invoca `pipeline.ownership.ensure_ownership_file()` e crea `clients/<slug>/ownership.yaml` per ogni workspace; aggiorna la governance tenant-level quando cambia la pagina `src/ui/pages/new_client.py`.
+- Il flusso "Nuovo cliente" ora invoca `pipeline.ownership.ensure_ownership_file()` e crea `clients/<slug>/ownership.yaml` per ogni workspace; aggiorna la governance tenant-level quando cambia la pagina `src/ui/pages/new_client.py`.
 
 ## Ownership semantics
 - Ownership here describes epistemic responsibility and interface boundaries, not individual or team assignment: the **User channel** owns user-facing logic and UI safety, the **Dev channel** owns automation flows and pipeline guardrails, and the **Architecture channel** (guardrail tests + CI) owns enforcement of these boundaries.

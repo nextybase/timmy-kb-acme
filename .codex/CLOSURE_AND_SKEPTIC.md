@@ -13,7 +13,7 @@ Purpose: formalize the closure packet (Prompt N+1) and the subsequent Skeptic Ga
      - commit subject (ITA)
      - short commit id
      - full commit SHA
-  5. closing note “Chain closed” in Italian.
+  5. closing note "Chain closed" in Italian.
 
 - PASS of Skeptic Gate N+1′ formally closes the chain (post N+1).
 
@@ -46,4 +46,4 @@ A Prompt Chain is closed only after PASS of Skeptic Gate N+1′.
 - `SKEPTIC_ACK.md`
 
 ## ACK / skip note
-The Skeptic Gate can be ACKed by updating `tests/**` or `SKEPTIC_ACK.md`. If diff context is missing (e.g., local run) the gate prints “SKIPPED”.
+The Skeptic Gate can be ACKed by updating `tests/**` or `SKEPTIC_ACK.md`. If diff context is missing (e.g., local run) the gate prints "SKIPPED".

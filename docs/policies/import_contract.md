@@ -11,7 +11,7 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
 - `pipeline.*` (helper core: context, workspace, path safety, logging, drive/github).
 - `semantic.*` (convert/enrich/embedding/mapping/tagging).
 - `ui.*` (Streamlit app/pages/services).
-- `tools.*` (tooling ufficiale: smoke, generatori, diagnostica) — **unico SSoT**.
+- `tools.*` (tooling ufficiale: smoke, generatori, diagnostica) - **unico SSoT**.
 
 ## Divieti
 - Vietato importare o risolvere stringhe del namespace legacy in qualsiasi modulo (inclusi `importlib`, loader custom, plugin).
@@ -19,7 +19,7 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
 - Vietato usare shim o alias verso namespace legacy o percorsi legacy.
 
 ## Tools: Single Source of Truth
-- `tools/` è l’unica sorgente runtime per `tools.*`.
+- `tools/` è l'unica sorgente runtime per `tools.*`.
 - Il vecchio namespace non è più sorgente: nessun import, nessun fallback, nessun loader.
 - Le dipendenze interne tra tool devono usare import espliciti `from tools...` senza path hacking.
 
@@ -49,5 +49,5 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
 - Prima della chiusura finale della Prompt Chain: `pre-commit run --all-files` + `pytest -q`.
 
 ## Note operative
-- Runner/entrypoint (es. CLI Streamlit/pytest) possono toccare `sys.path` solo se non c’è alternativa e devono documentare il motivo; i moduli di libreria non possono farlo.
+- Runner/entrypoint (es. CLI Streamlit/pytest) possono toccare `sys.path` solo se non c'è alternativa e devono documentare il motivo; i moduli di libreria non possono farlo.
 - Documentare ogni eccezione nel changelog e rimuovere i workaround appena possibile.

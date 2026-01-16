@@ -2,7 +2,7 @@
 
 ## Scopo
 Questo documento definisce il **modello di stato** del sistema in Beta 1.0 e il **contratto operativo** con cui lo stato viene derivato in modo deterministico dal **Decision Ledger** (SSoT).
-Non introduce un “motore di stato”: formalizza **termini, stati, transizioni e regole di interpretazione** per ridurre ambiguità ed entropia.
+Non introduce un "motore di stato": formalizza **termini, stati, transizioni e regole di interpretazione** per ridurre ambiguità ed entropia.
 
 ---
 
@@ -12,20 +12,20 @@ Non introduce un “motore di stato”: formalizza **termini, stati, transizioni
 Lo **stato del workspace** è la proiezione del **dato verificabile**:
 **`workspace_state` è derivato esclusivamente dal Decision Ledger e ancorato alla `latest_run`**.
 
-Interpretazione: “cosa è *vero adesso* nel workspace”, perché la `latest_run` è quella che ha definito l’assetto corrente degli artefatti.
+Interpretazione: "cosa è *vero adesso* nel workspace", perché la `latest_run` è quella che ha definito l'assetto corrente degli artefatti.
 
 Regola formale (Beta):
 - `latest_run` = ultima entry in `runs` (ordering deterministico)
-- `workspace_state` = `to_state` dell’ultima decisione `ALLOW` **nella `latest_run`**, ordinata per `decided_at` e tie-breaker `decision_id`
+- `workspace_state` = `to_state` dell'ultima decisione `ALLOW` **nella `latest_run`**, ordinata per `decided_at` e tie-breaker `decision_id`
 
-> Nota: questa scelta evita la “composizione” di gate provenienti da run diverse.
+> Nota: questa scelta evita la "composizione" di gate provenienti da run diverse.
 
 ### Last Run Status (telemetria / health)
-Lo **stato dell’ultima run** descrive “cosa è successo nell’ultima esecuzione”:
+Lo **stato dell'ultima run** descrive "cosa è successo nell'ultima esecuzione":
 - `latest_run` (run_id + started_at)
 - `last_run_verdict` (ALLOW/DENY) e relativo gate/stage, se disponibile
 
-Interpretazione: “l’ultima esecuzione è andata bene o male?”.
+Interpretazione: "l'ultima esecuzione è andata bene o male?".
 Non sostituisce il `workspace_state`.
 
 > Regola: **lo stato canonico è sempre `workspace_state`** e deriva dalla `latest_run`. La run più recente è anche il riferimento per la telemetria/health.
@@ -33,7 +33,7 @@ Non sostituisce il `workspace_state`.
 ---
 
 ## Monotonicità e regressione (Beta)
-In Beta, lo stato **non è monotono**: è ammessa **regressione** se una run successiva sostituisce gli artefatti e quindi ridefinisce uno stato “più basso”.
+In Beta, lo stato **non è monotono**: è ammessa **regressione** se una run successiva sostituisce gli artefatti e quindi ridefinisce uno stato "più basso".
 
 Esempio: se una run successiva rigenera solo il CSV tag (senza stub), lo stato canonico può passare da `TAGS_READY` a `TAGS_CSV_READY`.
 
@@ -82,5 +82,5 @@ Quando `--dummy` è usato:
 - `gates` = ultime decisioni per gate **nella latest_run** (ordinamento stabile)
 
 ### Interpretazione operativa consigliata
-- `workspace_state` risponde: “dove siamo davvero?”
-- `latest_run + verdict` risponde: “l’ultima esecuzione è sana?”
+- `workspace_state` risponde: "dove siamo davvero?"
+- `latest_run + verdict` risponde: "l'ultima esecuzione è sana?"

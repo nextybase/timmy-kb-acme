@@ -9,7 +9,7 @@ from typing import Any, Optional
 Eccezioni SSoT per NeXT/Timmy.
 
 Ruoli principali:
-- `TimmyError`: base per errori applicativi “generici” fuori pipeline (es. retriever).
+- `TimmyError`: base per errori applicativi "generici" fuori pipeline (es. retriever).
 - `PipelineError`: base per eccezioni di dominio della pipeline (no I/O, no exit).
 - Sottoclassi tipizzate per aree funzionali: Drive*, ConversionError, ConfigError,
   PreviewError, EnrichmentError, SemanticMappingError, PreOnboardingValidationError, ecc.
@@ -18,7 +18,7 @@ Ruoli principali:
 
 Linee guida:
 - Nessuna eccezione fa I/O o termina il processo.
-- I messaggi includono contesto “safe” in __str__ (slug, tail(file), mask id).
+- I messaggi includono contesto "safe" in __str__ (slug, tail(file), mask id).
 - Se non esiste una tipizzata adatta → usa `PipelineError`.
 """
 
@@ -244,7 +244,7 @@ EXIT_CODES = {
 
 
 def exit_code_for(exc: BaseException) -> int:
-    """Restituisce il codice di uscita per un’eccezione (fallback a PipelineError=1)."""
+    """Restituisce il codice di uscita per un'eccezione (fallback a PipelineError=1)."""
     return EXIT_CODES.get(type(exc).__name__, EXIT_CODES["PipelineError"])
 
 

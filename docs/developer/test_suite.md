@@ -65,7 +65,7 @@ Quando usare cosa (regola pratica)
 - Nota Beta 1.0: i test UI headless/stub sono skip deterministici e non fanno parte della copertura CI.
 - Gating/navigazione: `pytest -q -m "contract" --maxfail=1`
 - Verifica regressioni E2E UI: `pytest -q -m "e2e" --maxfail=1` (solo con Playwright pronto)
-- Smoke end-to-end “lento”: `pytest -q -m "slow" --maxfail=1`
+- Smoke end-to-end "lento": `pytest -q -m "slow" --maxfail=1`
 
 ## Marker e convenzioni
 

@@ -4,7 +4,7 @@ Questa pagina definisce le **policy operative di sicurezza e compliance**
 per il repository `timmy-kb-acme`.
 
 Il documento è **normativo** per la Beta 1.0:
-- non descrive “best practice opzionali”,
+- non descrive "best practice opzionali",
 - non introduce fallback impliciti,
 - non autorizza degradazioni silenziose del runtime.
 
@@ -21,7 +21,7 @@ un errore esplicito o uno stop governato.
   - esplicito,
   - verificabile,
   - auditabile.
-- L’assenza o l’invalidità di un segreto **non è recuperabile automaticamente**.
+- L'assenza o l'invalidità di un segreto **non è recuperabile automaticamente**.
 
 ### Modalità ammesse
 
@@ -37,16 +37,16 @@ un errore esplicito o uno stop governato.
   `aws-actions/configure-aws-credentials@<PIN_SHA>`.
 - Le variabili `TIMMY_SERVICE_NAME` e `TIMMY_ENV` sono obbligatorie.
 - Quando OIDC è attivo:
-  - non è consentito l’uso di access key statiche,
-  - l’autenticazione è **fail-fast**.
+  - non è consentito l'uso di access key statiche,
+  - l'autenticazione è **fail-fast**.
 
 #### Modalità senza OIDC (esplicita, non fallback)
-- Se `security.oidc.enabled=false`, l’uso di secret statici è
+- Se `security.oidc.enabled=false`, l'uso di secret statici è
   una **scelta dichiarata di configurazione**, non un fallback.
 - Questa modalità:
   - deve essere documentata nel contesto di deployment,
   - resta soggetta a rotazione e scanning obbligatori.
-- Non esiste alcuna modalità “best-effort” o automatica.
+- Non esiste alcuna modalità "best-effort" o automatica.
 
 ---
 
@@ -175,7 +175,7 @@ Script opzionale:
 - Header sensibili (`Authorization`, `x-access-token`) sono mascherati.
 - È vietato serializzare:
   - payload completi,
-  - variabili d’ambiente non filtrate.
+  - variabili d'ambiente non filtrate.
 - In caso di dubbio, usare `extra={...}` filtrato.
 
 ### Tracing

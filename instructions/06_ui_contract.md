@@ -1,4 +1,4 @@
-# UI Contract — v1.0
+# UI Contract - v1.0
 
 ## Scope & Non-goals
 - Defines WHAT UI surfaces may present, trigger, and document when interacting with the Prompt Chain.
@@ -14,9 +14,9 @@
 - UI must not surface actions outside the allowed family for the current phase (`VALIDATE_*` → VALIDATION/QA, `EXECUTE_*` only after validation, etc.).
 
 ## Action Triggering Rules
-- UI only triggers registered actions listed in the Intent’s `allowed_actions`; triggers come with the Work Order Envelope metadata (intent_id, action_id, phase, pipeline state).
+- UI only triggers registered actions listed in the Intent's `allowed_actions`; triggers come with the Work Order Envelope metadata (intent_id, action_id, phase, pipeline state).
 - Each trigger records the selected Intent, Action family, phase, and state in structured logs (`ui.action.start`, `ai.invocation`) for traceability.
-- UI must refuse to call actions marked `CONTRACT_ERROR` or not in the current state’s allowed families.
+- UI must refuse to call actions marked `CONTRACT_ERROR` or not in the current state's allowed families.
 
 ## HiTL & Stop Handling
 - When a stop_code (`HITL_REQUIRED`, `ContractError`, etc.) is active, UI displays the verbatim stop condition and required human action from the Gatekeeper/OCP.

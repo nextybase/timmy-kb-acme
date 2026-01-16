@@ -1,6 +1,6 @@
-# instructions/ — Specifica normativa del Control Plane (Beta 1.0)
+# instructions/ - Specifica normativa del Control Plane (Beta 1.0)
 
-## Cos’è `instructions/`
+## Cos'è `instructions/`
 - **Design-first specification repository** del control plane ProtoTimmy.
 - **Single Source of Truth (SSoT)** per la governance operativa della Beta 1.0.
 - **NON** è documentazione descrittiva o narrativa.
@@ -16,8 +16,8 @@ Se un comportamento non è descritto qui, **non è ammesso** nel sistema.
 
 ---
 
-## Obiettivo finale (Definition of Done – Beta 1.0)
-- L’interazione utente avviene **esclusivamente tramite Timmy (ProtoTimmy)**.
+## Obiettivo finale (Definition of Done - Beta 1.0)
+- L'interazione utente avviene **esclusivamente tramite Timmy (ProtoTimmy)**.
 - Timmy orchestra Domain Gatekeepers e micro-agent con copertura completa e HiTL esplicito.
 - OCP (Engineering Gatekeeper) dirige Codex e i micro-agent tramite il Control Plane.
 - La Prompt Chain è **lineare, governata e osservabile**, con:
@@ -49,16 +49,16 @@ Se un comportamento non è descritto qui, **non è ammesso** nel sistema.
 
 ## Elenco dei documenti (stato Beta 1.0)
 
-- `00_ssot_agency.md` — **congelato**
-- `01_intents_and_actions.md` — **attivo**
-- `02_prompt_chain_lifecycle.md` — **attivo**
-- `03_gatekeepers_contracts.md` — **attivo**
-- `04_microagents_work_orders.md` — **attivo**
-- `05_pipeline_workspace_state_machine.md` — **attivo**
-- `06_promptchain_workspace_mapping.md` — **attivo**
-- `07_gate_checklists.md` — **attivo**
-- `08_gate_evidence_and_retry_contract.md` — **attivo**
-- `09_context_layout_contract_beta.md` — **congelato**
+- `00_ssot_agency.md` - **congelato**
+- `01_intents_and_actions.md` - **attivo**
+- `02_prompt_chain_lifecycle.md` - **attivo**
+- `03_gatekeepers_contracts.md` - **attivo**
+- `04_microagents_work_orders.md` - **attivo**
+- `05_pipeline_workspace_state_machine.md` - **attivo**
+- `06_promptchain_workspace_mapping.md` - **attivo**
+- `07_gate_checklists.md` - **attivo**
+- `08_gate_evidence_and_retry_contract.md` - **attivo**
+- `09_context_layout_contract_beta.md` - **congelato**
 
 Un documento **attivo** può essere raffinato, ma:
 - non può contraddire le invarianti di questo README;

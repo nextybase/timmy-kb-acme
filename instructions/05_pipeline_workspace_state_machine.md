@@ -1,4 +1,4 @@
-# Pipeline State Machine — v1.0 (Beta)
+# Pipeline State Machine - v1.0 (Beta)
 
 ## Scope & Non-goals
 - Defines the **normative pipeline state machine** governing artefact readiness up to the production of:

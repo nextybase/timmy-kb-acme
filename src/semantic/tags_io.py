@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # src/semantic/tags_io.py
 # -*- coding: utf-8 -*-
-"""I/O utility per il flusso di tagging (cartella `semantic/`) – Timmy-KB.
+"""I/O utility per il flusso di tagging (cartella `semantic/`) - Timmy-KB.
 
 Cosa fa il modulo
 -----------------
@@ -56,7 +56,7 @@ def write_tagging_readme(semantic_dir: Path, logger: logging.Logger) -> Path:
     ensure_within(semantic_dir, out)
 
     content = (
-        "# Tag Onboarding (HiTL) – Guida rapida\n\n"
+        "# Tag Onboarding (HiTL) - Guida rapida\n\n"
         "1. Apri `tags_raw.csv` e valuta i suggerimenti.\n"
         "2. Approva/filtra i tag (keep/drop/merge) e prepara la revisione.\n"
         "3. Procedi con lo stub di revisione per i tag canonici e i sinonimi.\n\n"

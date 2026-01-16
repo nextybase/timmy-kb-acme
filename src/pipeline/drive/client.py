@@ -24,7 +24,7 @@ Superficie pubblica (accessibile anche tramite `pipeline.drive_utils`):
 - get_retry_metrics()
     Ritorna uno snapshot dict delle metriche correnti (vuoto se non attive).
 
-Note d’uso:
+Note d'uso:
 - Nessun `print()`; tutta la diagnostica passa dal logging strutturato del repo.
 - Policy retry/metriche centralizzata, riutilizzata da upload/download via `_retry(...)`.
 """
@@ -58,7 +58,7 @@ class _DriveRetryMetrics:
       - retries_total: numero totale di retry effettuati (esclusi i tentativi iniziali riusciti).
       - retries_by_error: mappa {NomeEccezione: conteggio}.
       - backoff_total_ms: somma delle attese (sleep) in millisecondi effettuate tra i tentativi.
-      - last_error: stringa breve con l’ultimo errore osservato.
+      - last_error: stringa breve con l'ultimo errore osservato.
       - last_status: ultimo HTTP status osservato (se disponibile).
     """
 

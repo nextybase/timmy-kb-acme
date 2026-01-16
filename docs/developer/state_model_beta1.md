@@ -2,7 +2,7 @@
 
 ## Scopo
 Questo documento definisce il **modello di stato** del sistema in Beta 1.0 e il **contratto operativo** con cui lo stato viene derivato in modo deterministico dal **Decision Ledger** (SSoT).
-Non introduce un “motore di stato”: formalizza **termini, stati, transizioni e regole di interpretazione** per ridurre ambiguità ed entropia.
+Non introduce un "motore di stato": formalizza **termini, stati, transizioni e regole di interpretazione** per ridurre ambiguità ed entropia.
 
 ---
 
@@ -10,16 +10,16 @@ Non introduce un “motore di stato”: formalizza **termini, stati, transizioni
 
 ### Workspace State (stato canonico)
 Lo **stato del workspace** è la proiezione del **dato verificabile**:
-**`workspace_state` = `to_state` dell’ultima decisione `ALLOW`**, ordinata per `decided_at` e tie-breaker `decision_id`.
+**`workspace_state` = `to_state` dell'ultima decisione `ALLOW`**, ordinata per `decided_at` e tie-breaker `decision_id`.
 
-Interpretazione: “cosa è *vero adesso* nel workspace”, indipendentemente dall'esito dell’ultima run.
+Interpretazione: "cosa è *vero adesso* nel workspace", indipendentemente dall'esito dell'ultima run.
 
 ### Last Run Status (telemetria / health)
-Lo **stato dell’ultima run** descrive “cosa è successo nell’ultima esecuzione”:
+Lo **stato dell'ultima run** descrive "cosa è successo nell'ultima esecuzione":
 - `latest_run` (run_id + started_at)
 - `last_run_verdict` (ALLOW/DENY) e relativo gate/stage, se disponibile
 
-Interpretazione: “l’ultima esecuzione è andata bene o male?”.
+Interpretazione: "l'ultima esecuzione è andata bene o male?".
 Non sostituisce il `workspace_state`.
 
 > Regola: **lo stato canonico è sempre `workspace_state`**. La run più recente è informazione di salute/telemetria.
@@ -58,7 +58,7 @@ Errori:
 - `TAGS_READY → SEMANTIC_READY` (ALLOW)
 - `TAGS_READY → SEMANTIC_READY` (DENY) = fallimento del gate (target non raggiunto)
 
-> Nota: se in Beta il percorso standard si ferma a `TAGS_CSV_READY`, l’esecuzione end-to-end richiede esplicitamente dummy per arrivare a `TAGS_READY` (vedi Policy).
+> Nota: se in Beta il percorso standard si ferma a `TAGS_CSV_READY`, l'esecuzione end-to-end richiede esplicitamente dummy per arrivare a `TAGS_READY` (vedi Policy).
 
 ---
 
@@ -92,7 +92,7 @@ Quando `--dummy` è usato:
 - `evidence_json.dummy_mode = true`
 - `rationale` contiene esplicitamente una traccia (es. `ok_dummy_mode`)
 
-> Regola d’oro: se nel ledger compare `TAGS_READY`, allora **è stato usato dummy** (o si è violata la policy).
+> Regola d'oro: se nel ledger compare `TAGS_READY`, allora **è stato usato dummy** (o si è violata la policy).
 
 ---
 
@@ -104,8 +104,8 @@ Quando `--dummy` è usato:
 - `latest_run` = ultima run (se presente)
 
 ### Interpretazione operativa consigliata
-- `workspace_state` risponde: “dove siamo davvero?”
-- `latest_run + verdict` risponde: “l’ultima esecuzione è sana?”
+- `workspace_state` risponde: "dove siamo davvero?"
+- `latest_run + verdict` risponde: "l'ultima esecuzione è sana?"
 
 Esempi:
 - `workspace_state = SEMANTIC_READY` + ultima run DENY → workspace valido, ma **ultima esecuzione fallita** (health degradata).
@@ -115,11 +115,11 @@ Esempi:
 
 ## Non previsto (intenzionale, Beta 1.0)
 - Migrazioni/versioning del ledger
-- Motore di inferenza dello stato oltre “latest decision”
+- Motore di inferenza dello stato oltre "latest decision"
 - UI/Dashboard di stato
 - Auto-promotion o fallback silenziosi
 
 ---
 
 ## Conseguenze pratiche (una riga)
-Lo stato è una **proiezione verificabile del ledger**: chi legge il ledger deve poter ricostruire “cosa è vero” senza interpretazioni creative.
+Lo stato è una **proiezione verificabile del ledger**: chi legge il ledger deve poter ricostruire "cosa è vero" senza interpretazioni creative.

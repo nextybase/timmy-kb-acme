@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # src/pipeline/context.py
-"""ClientContext – contenitore unico di stato e configurazione per Timmy-KB.
+"""ClientContext - contenitore unico di stato e configurazione per Timmy-KB.
 
 Che cosa fa questo modulo (overview):
 - Valida lo slug cliente (`validate_slug`).
@@ -108,7 +108,7 @@ class ClientContext:
       (`raw_dir`, `md_dir`, `log_dir`, ...);
     - Configurazione YAML caricata (in `settings`) e path di riferimento
       (`config_path`, `mapping_path`);
-    - Variabili d’ambiente risolte da `.env`/processo (`env`);
+    - Variabili d'ambiente risolte da `.env`/processo (`env`);
     - Flag runtime e strutture di tracking (`error_list`, `warning_list`, `step_status`);
     - Logger strutturato **iniettato** e riutilizzato (no print).
 
@@ -116,7 +116,7 @@ class ClientContext:
     - Nessun input utente qui; gli orchestratori gestiscono UX.
     - La policy di redazione log è calcolata da `compute_redact_flag(...)`.
     - `repo_root_dir` è il punto di verità dei path; i campi storici restano per compat.
-    - `stage` è un’etichetta opzionale della fase corrente (es. "scan_raw", "build_md").
+    - `stage` è un'etichetta opzionale della fase corrente (es. "scan_raw", "build_md").
     """
 
     # Identità cliente
@@ -132,7 +132,7 @@ class ClientContext:
     config_dir: Optional[Path] = None
     mapping_path: Optional[Path] = None
 
-    # Campi storici (compat) – derivati da repo_root_dir
+    # Campi storici (compat) - derivati da repo_root_dir
     base_dir: Optional[Path] = None
     output_dir: Optional[Path] = None
     raw_dir: Optional[Path] = None
@@ -188,7 +188,7 @@ class ClientContext:
           4) Carica impostazioni dal YAML.
           5) Calcola `redact_logs` (policy centralizzata).
         """
-        # 0) Logger (unico) – includiamo run_id se presente
+        # 0) Logger (unico) - includiamo run_id se presente
         _logger = cls._init_logger(logger, run_id)
 
         # 1) Validazione slug
@@ -227,7 +227,7 @@ class ClientContext:
             config_dir=config_path.parent,
             # FIX SSoT: path reale e validato
             mapping_path=ensure_within_and_resolve(repo_root, repo_root / "semantic" / "semantic_mapping.yaml"),
-            # Campi storici (compat) – derivati dal root canonico
+            # Campi storici (compat) - derivati dal root canonico
             base_dir=repo_root,
             output_dir=repo_root,
             raw_dir=repo_root / "raw",

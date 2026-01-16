@@ -7,14 +7,14 @@
 
 Timmy KB richiede un meccanismo affidabile per verificare rapidamente:
 
-- la salute dell’intera pipeline di onboarding (Vision → Semantic → RAW → Tags → Drive → Registry),
+- la salute dell'intera pipeline di onboarding (Vision → Semantic → RAW → Tags → Drive → Registry),
 - la stabilità della UI e dei servizi backend,
 - eventuali regressioni introdotte da refactor del codice,
 - la correttezza del workflow end-to-end senza utilizzare dati reali.
 
 Attualmente esiste lo strumento CLI
 [`tools/gen_dummy_kb.py`](../../tools/gen_dummy_kb.py)
-che genera una Knowledge Base “dummy”, ma:
+che genera una Knowledge Base "dummy", ma:
 
 - non registra un cliente reale nel registry della UI,
 - non esegue una validazione strutturale,
@@ -35,7 +35,7 @@ descrive l'applicazione smoke/deep nel rispetto di tali vincoli, senza introdurr
 
 Viene adottata la seguente decisione architetturale:
 
-> **La Dummy KB diventa un cliente reale, cancellabile e rigenerabile, usato ufficialmente come Smoke Test End-to-End dell’intero ecosistema Timmy KB.**
+> **La Dummy KB diventa un cliente reale, cancellabile e rigenerabile, usato ufficialmente come Smoke Test End-to-End dell'intero ecosistema Timmy KB.**
 
 Questa applicazione è subordinata ad ADR-0007 e non modifica le regole di governance del Dummy.
 
@@ -48,7 +48,7 @@ La decisione si articola in sei punti:
 
 2. **Rigenerabilità Completa**
    - La dummy viene progettata per essere cancellata e rigenerata senza lasciare residui.
-   - La UI mantiene l'opzione “Cancella dummy (locale + Drive)” già presente in
+   - La UI mantiene l'opzione "Cancella dummy (locale + Drive)" già presente in
      [`src/ui/chrome.py`](../../src/ui/chrome.py).
    - Nel rispetto dell'idempotenza del Manifesto, senza reset globali.
 
@@ -83,7 +83,7 @@ La decisione si articola in sei punti:
 6. **Integrazione nei flussi di sviluppo e CI**
    - Viene introdotto un comando dedicato (`make dummy-smoke`) che invoca
      `python tools/gen_dummy_kb.py --slug dummy --reset`.
-   - La generazione della dummy non avviene automaticamente all’avvio della UI, ma è uno strumento operativo a disposizione di sviluppatori e pipeline CI.
+   - La generazione della dummy non avviene automaticamente all'avvio della UI, ma è uno strumento operativo a disposizione di sviluppatori e pipeline CI.
 
    - In CI si esegue solo smoke mode; il deep è manuale e diagnostico.
 
@@ -92,10 +92,10 @@ La decisione si articola in sei punti:
 La modalità deep testing descrive lo stesso flusso controllato della Dummy KB smoke, ma con vincoli operativi più stringenti:
 Questa sezione applica i "smoke vs deep modes" del Manifesto e non introduce regole globali.
 
-- **Smoke** è l'esecuzione cablata: genera un workspace fittizio, valida la struttura e produce l’health report senza Vision/Drive reali quando disabilitati.
-- **Deep** è la stessa pipeline con Vision e Drive attivi, senza fallback: ogni chiamata reale viene osservata, i controlli falliscono duramente (health.status="failed") e viene chiesto all’utente di riprovare solo quando i secrets/permessi sono adeguati.
-- In deep non si ignora mai un errore Vision o Drive; una failure viene trasformata in `HardCheckError` e il payload health espone `errors`, `checks` ed `external_checks` con messaggi che collegano direttamente all’esito della Secrets Healthcheck UI.
-- Il flag CLI `--deep-testing` (e la checkbox "Attiva testing profondo") attivano questa modalità e scrivono `health.mode="deep"` nel payload finale, insieme a un’entry `golden_pdf` con path, sha256 e dimensione (solo in deep).
+- **Smoke** è l'esecuzione cablata: genera un workspace fittizio, valida la struttura e produce l'health report senza Vision/Drive reali quando disabilitati.
+- **Deep** è la stessa pipeline con Vision e Drive attivi, senza fallback: ogni chiamata reale viene osservata, i controlli falliscono duramente (health.status="failed") e viene chiesto all'utente di riprovare solo quando i secrets/permessi sono adeguati.
+- In deep non si ignora mai un errore Vision o Drive; una failure viene trasformata in `HardCheckError` e il payload health espone `errors`, `checks` ed `external_checks` con messaggi che collegano direttamente all'esito della Secrets Healthcheck UI.
+- Il flag CLI `--deep-testing` (e la checkbox "Attiva testing profondo") attivano questa modalità e scrivono `health.mode="deep"` nel payload finale, insieme a un'entry `golden_pdf` con path, sha256 e dimensione (solo in deep).
 - La selezione dei passi del Manifesto resta valida: passi disabilitati non eseguono e non modificano artefatti.
 
 ### Schema health (deep vs smoke)
@@ -150,13 +150,13 @@ Questa sezione applica i "smoke vs deep modes" del Manifesto e non introduce reg
 }
 ```
 
-Deep testing funge da segnale diagnostico: se fallisce, il messaggio riporta che i secrets/permessi non sono pronti e rimanda alla pagina Secrets Healthcheck. La modalità è "contract only": non introduce stati side effect e può essere ripetuta all’infinito.
+Deep testing funge da segnale diagnostico: se fallisce, il messaggio riporta che i secrets/permessi non sono pronti e rimanda alla pagina Secrets Healthcheck. La modalità è "contract only": non introduce stati side effect e può essere ripetuta all'infinito.
 
 ### Motivazioni (Rationale)
 
 #### Integrità del sistema
 La pipeline Timmy KB è composta da numerosi componenti interdipendenti (Vision, YAML, semantic mapping, tags DB, Drive, registry).
-La Dummy KB offre un contesto controllato per verificare l’intero flusso in pochi secondi.
+La Dummy KB offre un contesto controllato per verificare l'intero flusso in pochi secondi.
 
 #### Early Detection delle regressioni
 La rigenerazione della Dummy KB intercetta rapidamente:
@@ -174,14 +174,14 @@ La dummy viene registrata nel registry UI come cliente vero, rendendo testabili 
 - gestione dei PDF.
 
 #### Semplicità di integrazione
-La UI possiede già un pulsante per generarla; l’estensione è naturale.
+La UI possiede già un pulsante per generarla; l'estensione è naturale.
 Il tool è già completo: necessita solo di modularizzazione, validazione e registrazione.
 
 #### Rispetto del metodo NeXT
 Questa scelta è coerente con:
 - modello probabilistico (controllo continuo di anomalie),
-- approccio Human-in-the-Loop (l’utente vede subito problemi),
-- controllo dell’entropia (rigenerazione ripetuta che riporta il sistema allo stato base),
+- approccio Human-in-the-Loop (l'utente vede subito problemi),
+- controllo dell'entropia (rigenerazione ripetuta che riporta il sistema allo stato base),
 - design adattivo.
 
 ### Conseguenze

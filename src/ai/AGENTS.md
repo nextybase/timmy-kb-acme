@@ -1,10 +1,10 @@
 # Scopo
 
-Regole per l’area AI (`src/ai/`), con focus su integrazione OpenAI/SDK, SSoT di configurazione e separazione netta tra infrastruttura e logica applicativa.
+Regole per l'area AI (`src/ai/`), con focus su integrazione OpenAI/SDK, SSoT di configurazione e separazione netta tra infrastruttura e logica applicativa.
 
 # Regole (override)
 
-- Tutte le integrazioni con l’SDK OpenAI passano da `ai.client_factory.make_openai_client()`;
+- Tutte le integrazioni con l'SDK OpenAI passano da `ai.client_factory.make_openai_client()`;
   è vietato istanziare `OpenAI()` o usare direttamente il modulo `openai` al di fuori di `src/ai/`.
 - I parametri di timeout, retry e http2 devono essere letti solo tramite `Settings`
   (`config/config.yaml`, sezione `ai.openai.*`), mentre i segreti restano in `.env`

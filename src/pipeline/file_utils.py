@@ -5,7 +5,7 @@ File utilities: scritture atomiche e path-safety per la pipeline Timmy-KB.
 
 Obiettivi:
 - Offrire write testuali/bytes sicure, atomiche e robuste a interruzioni.
-- Centralizzare la logica di fsync (best-effort di default; opzionale più “forte”).
+- Centralizzare la logica di fsync (best-effort di default; opzionale più "forte").
 - Non imporre policy di perimetro: la guardia STRONG dei path resta in
   `pipeline.path_utils.ensure_within` (SSoT) e va chiamata dai *callers* prima di scrivere.
 
@@ -23,8 +23,8 @@ Indice (ruolo funzioni):
 - `safe_write_bytes(path, data, *, atomic=True, fsync=False)`: come sopra, per **bytes**.
 
 Note:
-- Di default eseguiamo un fsync “soft” (best-effort) anche quando `fsync=False`.
-- Questo modulo non valida che `path` sia “dentro” un perimetro: quel controllo va fatto a monte.
+- Di default eseguiamo un fsync "soft" (best-effort) anche quando `fsync=False`.
+- Questo modulo non valida che `path` sia "dentro" un perimetro: quel controllo va fatto a monte.
 """
 
 from __future__ import annotations
