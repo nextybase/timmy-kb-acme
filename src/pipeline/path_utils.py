@@ -31,6 +31,7 @@ Principi:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import re
@@ -93,6 +94,24 @@ class _SafePdfCacheEntry:
 _SAFE_PDF_CACHE: "OrderedDict[Path, _SafePdfCacheEntry]" = OrderedDict()
 _SAFE_PDF_CACHE_DEFAULT_TTL = _DEFAULT_RAW_CACHE_TTL
 _CACHE_DEFAULTS_LOADED = False
+
+
+class FilenameSanitizeError(RuntimeError):
+    """Errore deterministico durante la sanitizzazione del nome file in STRICT."""
+
+
+class PathSortError(RuntimeError):
+    """Errore deterministico durante l'ordinamento dei path in STRICT."""
+
+
+def _is_strict() -> bool:
+    raw = os.getenv("TIMMY_BETA_STRICT", "")
+    return raw.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+
+
+def _fallback_filename(raw_name: str) -> str:
+    digest = hashlib.sha256(raw_name.encode("utf-8", errors="replace")).hexdigest()[:12]
+    return f"file-{digest}"
 
 
 def _parse_positive_float(value: Any, default: float) -> float:
@@ -617,9 +636,10 @@ def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_
         max_length: lunghezza massima del risultato (default 100).
         replacement: carattere con cui sostituire i caratteri non permessi (default "_").
     """
+    raw_name = str(name or "")
     try:
         # Normalizzazione unicode
-        s = unicodedata.normalize("NFKC", str(name or ""))
+        s = unicodedata.normalize("NFKC", raw_name)
 
         # Sostituisci tutto ciò che non è [\w.-] con replacement
         s = _SANITIZE_DISALLOWED_RE.sub(replacement, s)
@@ -634,14 +654,16 @@ def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_
         if max_length and len(s) > int(max_length):
             s = s[: int(max_length)].rstrip(replacement)
 
-        # Fallback
-        return s or "file"
+        # Fallback deterministico
+        return s or _fallback_filename(raw_name)
     except Exception as e:
+        if _is_strict():
+            raise FilenameSanitizeError("Errore sanitizzazione nome file") from e
         _logger.error(
             "path_utils.sanitize_filename.error",
             extra={"error": str(e), "raw_name": name},
         )
-        return "file"
+        return _fallback_filename(raw_name)
 
 
 def to_kebab(s: str) -> str:
@@ -674,19 +696,24 @@ def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Pat
     altrimenti sul path assoluto risolto. I path non risolvibili vengono gestiti
     con fallback non-eccezionale e inclusi comunque nell’ordinamento.
     """
+    strict = _is_strict()
     items: List[Tuple[str, Path]] = []
     base_resolved: Optional[Path] = None
     if base is not None:
         try:
             base_resolved = Path(base).resolve()
-        except Exception:
+        except Exception as exc:
+            if strict:
+                raise PathSortError("Impossibile risolvere il path base per ordinamento") from exc
             base_resolved = None
 
     for p in paths:
         q = Path(p)
         try:
             q_res = q.resolve()
-        except Exception:
+        except Exception as exc:
+            if strict:
+                raise PathSortError(f"Impossibile risolvere il path per ordinamento: {q}") from exc
             q_res = q
 
         if base_resolved is not None:
