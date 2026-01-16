@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Helper di bootstrap per la dummy KB (path base, PDF vision di fallback)."""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
+Helper di bootstrap per la dummy KB (path base, PDF vision di fallback)."""
 
 from __future__ import annotations
 

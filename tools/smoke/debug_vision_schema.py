@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Debug rapido per VisionOutput schema e response_format."""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
+Debug rapido per VisionOutput schema e response_format."""
 
 from __future__ import annotations
 

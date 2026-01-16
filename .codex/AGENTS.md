@@ -6,7 +6,7 @@ Operational rules for the Codex agent acting within `.codex/`, focusing on path 
 
 # Rules (overrides)
 
-- Path-safety: write only within `src/`, `tests/`, `docs/`, `.codex/`; never touch `config/**`, `.env*`, `output/**`; scrivo solo in italiano salvo eccezione control-mode OCP ↔ Codex in inglese.
+- Path-safety: write only within `src/`, `tests/`, `docs/`, `.codex/`; **eccezione limitata**: `tools/dummy/**` e `tools/smoke/**` **solo** per header/docstring standardizzati di confinamento (documentazione-only, nessuna logica); never touch `config/**`, `.env*`, `output/**`; scrivo solo in italiano salvo eccezione control-mode OCP -> Codex in inglese.
 - Atomic I/O via SSoT helpers (`ensure_within*`, `safe_write_*`), no import-time side effects.
 - Standard QA pipeline: `isort`, `black`, `ruff --fix`, `mypy`, `pytest -q -k 'not slow'`.
 - Reuse vision/UI helpers `_is_gate_error` (`ui.pages.tools_check`) and the `build_payload/emit_structure` builders from `tools.gen_dummy_kb`.

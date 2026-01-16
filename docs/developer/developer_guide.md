@@ -269,4 +269,3 @@ Le degradazioni sono ammesse solo se:
 
 - PR piccole, commit atomici, messaggi chiari (imperativo al presente).
 - Ogni modifica di comportamento va coperta da test.
-

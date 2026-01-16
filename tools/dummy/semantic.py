@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Funzioni di supporto per la generazione della dummy KB (semantic/mapping/raw)."""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
+Funzioni di supporto per la generazione della dummy KB (semantic/mapping/raw)."""
 
 from __future__ import annotations
 

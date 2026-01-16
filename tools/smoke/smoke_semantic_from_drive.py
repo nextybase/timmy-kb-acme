@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: GPL-3.0-only
-"""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
 Smoke runner end-to-end (headless):
 
 - Carica il contesto locale per uno slug

@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # tools/e2e_smoke_test.py
+"""
+DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+"""
+
 import argparse
 import sqlite3
 import subprocess

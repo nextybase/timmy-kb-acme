@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Wrapper per le integrazioni Drive opzionali usate dalla dummy KB."""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
+Wrapper per le integrazioni Drive opzionali usate dalla dummy KB."""
 
 from __future__ import annotations
 

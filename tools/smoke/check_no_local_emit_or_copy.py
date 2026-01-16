@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
 Fail-fast su helper duplicati per ingest/CSV:
 - Vietate definizioni locali di `_copy_local_pdfs_to_raw` fuori da `src/semantic/`.
 - Vietati import/usi diretti di `semantic.tags_extractor` fuori da `src/semantic/`.

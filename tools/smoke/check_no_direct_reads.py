@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
 Blocca utilizzi di lettura non sicuri nei moduli pipeline/* e semantic/*:
 - open(..., "r"/"rb"/"r+") o Path.open("r"/"rb"/"r+")
 - Path.read_text(...)

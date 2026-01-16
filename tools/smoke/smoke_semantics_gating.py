@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
-"""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
 Smoke test per il gating della pagina Semantica.
 - Scenario A: workspace dummy SENZA PDF -> Semantica nascosta.
 - Scenario B: workspace dummy CON PDF minimo -> Semantica visibile.

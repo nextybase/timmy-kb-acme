@@ -12,7 +12,7 @@ Non introduce un “motore di stato”: formalizza **termini, stati, transizioni
 Lo **stato del workspace** è la proiezione del **dato verificabile**:
 **`workspace_state` = `to_state` dell’ultima decisione `ALLOW`**, ordinata per `decided_at` e tie-breaker `decision_id`.
 
-Interpretazione: “cosa è *vero adesso* nel workspace”, indipendentemente dall’esito dell’ultima run.
+Interpretazione: “cosa è *vero adesso* nel workspace”, indipendentemente dall'esito dell’ultima run.
 
 ### Last Run Status (telemetria / health)
 Lo **stato dell’ultima run** descrive “cosa è successo nell’ultima esecuzione”:

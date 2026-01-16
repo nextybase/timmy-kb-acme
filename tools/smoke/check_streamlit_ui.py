@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 """
-Streamlit UI guard (crossâ€‘platform, Python)
+Streamlit UI guard (cross-platform, Python)
 - Evita dipendenza da bash/WSL; coerente con gli altri check in tools/dev/*.py
 - Controlli:
   1) Router adoption: presenza di st.Page o st.navigation nel codice.

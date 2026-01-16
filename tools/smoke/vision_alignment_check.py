@@ -5,6 +5,12 @@
 #   - python-dotenv
 #   - una versione recente di openai-python che espone `client.responses.create`
 
+"""
+DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+"""
+
 from __future__ import annotations
 
 import json

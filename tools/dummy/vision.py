@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Helper isolati per l'esecuzione Vision con timeout."""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
+Helper isolati per l'esecuzione Vision con timeout."""
 
 from __future__ import annotations
 

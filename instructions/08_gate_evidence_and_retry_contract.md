@@ -43,6 +43,35 @@ I log e i file **non sostituiscono** mai questo record.
 
 ---
 
+## Persistenza nel Decision Ledger (mapping normativo → SQLite)
+
+Implementazione attuale: tabella `decisions` in `config/ledger.db` (SQLite).
+La persistenza **non cambia schema** e mappa i campi normativi nel ledger così:
+
+### Mapping verdict
+- `PASS` → `ALLOW` (ledger), `to_state` obbligatorio
+- `PASS_WITH_CONDITIONS` → `ALLOW` (ledger), `to_state` obbligatorio, `conditions` obbligatorio
+- `BLOCK` / `FAIL` → `DENY` (ledger), `stop_code` obbligatorio, `to_state` richiesto come *target* (vincolo schema)
+
+### Mapping campi
+- `gate_name` → `decisions.gate_name`
+- `from_state` / `to_state` → `decisions.from_state` / `decisions.to_state`
+- `actor`, `stop_code`, `evidence_refs[]`, `conditions` → `decisions.evidence_json` con chiavi deterministiche:
+  - `actor`
+  - `stop_code` (solo quando applicabile)
+  - `evidence_refs` (lista, anche vuota)
+  - `conditions` (lista, anche vuota)
+  - `normative_verdict`
+- `rationale` → `decisions.rationale` (stringa deterministica)
+
+### Regole di strictness
+- `PASS` / `PASS_WITH_CONDITIONS` richiedono `to_state`.
+- `BLOCK` / `FAIL` richiedono `stop_code`.
+- `PASS_WITH_CONDITIONS` richiede `conditions` non vuoto.
+- `evidence_json` deve essere serializzato in JSON con chiavi ordinate (deterministico).
+
+---
+
 ## Evidence Model (Log & Artefact as Evidence)
 
 ### Regola generale

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Fail if UI services hardcode Vision model names (gpt-...)."""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
+Fail if UI services hardcode Vision model names (gpt-...)."""
 from __future__ import annotations
 
 import argparse

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Fail pre-commit if raw file reads are introduced outside safe helpers."""
+"""DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
+
+Fail pre-commit if raw file reads are introduced outside safe helpers."""
 
 from __future__ import annotations
 

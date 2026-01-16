@@ -1,13 +1,18 @@
 # SPDX-License-Identifier: GPL-3.0-only
-from __future__ import annotations
+"""
+DUMMY / SMOKE SUPER-TEST ONLY
+FORBIDDEN IN RUNTIME-CORE (src/)
+Fallback behavior is intentional and confined to this perimeter
 
-"""Soft check: avvisa se alcune fasi risultano con artifacts=0.
+Soft check: avvisa se alcune fasi risultano con artifacts=0.
 
 Uso:
   python -m tools.smoke.check_phase_artifacts --json out/bench.json
 
 Exit code sempre 0 (non-gating); stampa WARNING su stdout.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
