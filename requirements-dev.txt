@@ -301,7 +301,7 @@ py-serializable==1.1.2
     # via cyclonedx-python-lib
 pyarrow==22.0.0
     # via streamlit
-pyasn1==0.6.1
+pyasn1==0.6.2
     # via
     #   pyasn1-modules
     #   rsa
