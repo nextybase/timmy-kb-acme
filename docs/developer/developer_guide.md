@@ -719,6 +719,29 @@ safe_write_text(yaml_path, yaml_content, encoding="utf-8", atomic=True)
 log.info("ui.manage.tags.save", extra={"slug": slug, "path": str(yaml_path)})
 ```
 
+# Definition of Done — v1.0 Beta (Determinismo / Low Entropy)
+
+## Principio
+Per la Beta, il determinismo è richiesto nei processi e nella gestione degli artefatti.
+Le degradazioni sono ammesse solo se:
+1) deterministiche, 2) osservabili, 3) disambiguabili.
+
+## Retriever: contratto minimo di osservabilità
+1) Ogni query emette `retriever.query.started` con `response_id` e campi base.
+2) Ogni fetch emette `retriever.candidates.fetched` includendo `budget_hit` e contatori.
+3) Ogni ritorno `[]` è disambiguato da almeno un evento tra:
+   - deadline/budget (`retriever.throttle.deadline`, `retriever.latency_budget.hit`)
+   - errore embedding gestito (`retriever.query.embed_failed`)
+   - input invalid/skipped (`retriever.query.invalid`, `retriever.query.skipped`)
+4) Nessuna degradazione silenziosa: se un controllo fallisce, deve esistere un evento esplicito.
+
+## Waiver
+È possibile accettare una non-conformità solo se:
+- è documentata nel PR,
+- ha un issue linkato,
+- non è silenziosa (log/evento presente),
+- non altera artefatti in modo non deterministico.
+
 ---
 
 ## Contributi

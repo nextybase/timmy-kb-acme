@@ -25,18 +25,46 @@ e modello di esecuzione. Non inventaria directory o artefatti locali.
 
 ## Vincoli di design e policy
 
-- **Vincolo di design (enforced in core utilities; test coverage non garantita):**
-  path-safety e scritture atomiche tramite utility SSoT (`ensure_within*`,
-  `safe_write_*`).
-- **Vincolo di design (enforced in code; test coverage non garantita):** nessun
-  side effect a import-time; I/O solo in funzioni/runtime.
-- **Policy operativa:** configurazione runtime letta solo via Settings/ClientContext
-  (SSoT). Non tutti i punti sono verificabili automaticamente.
-- **Policy operativa:** logging strutturato; niente `print` nei moduli runtime.
-- **Decisione Beta (policy):** la repo contiene solo artefacts versionati; lo stato
-  runtime vive in workspace esterni deterministici (derivati da WorkspaceLayout).
+### Vincoli di design (invarianti del runtime)
+
+- **Path-safety e scritture atomiche**
+  - **Invariante:** ogni operazione di I/O su filesystem deve essere confinata
+    all'interno del workspace attivo e produrre scritture atomiche.
+  - **Enforcement:** garantito quando si utilizzano esclusivamente le utility SSoT
+    (`ensure_within*`, `safe_write_*`).
+  - **Verifica:** copertura di test parziale su casi di traversal e scrittura;
+    non tutte le possibili violazioni sono intercettate automaticamente.
+  - **Gap noto:** l'invariante è violabile se moduli aggirano le utility SSoT.
+
+- **Assenza di side effects a import-time**
+  - **Invariante:** nessuna operazione di I/O o mutazione di stato globale
+    durante l'import dei moduli runtime.
+  - **Enforcement:** applicato per convenzione di codice e review;
+    alcune violazioni sono intercettate da test architetturali.
+  - **Verifica:** non esaustiva; la completezza non è dimostrata automaticamente.
+
+### Policy operative (enforcement parziale)
+
+- **Configurazione runtime centralizzata**
+  - **Regola:** la configurazione runtime è letta esclusivamente tramite
+    `Settings` / `ClientContext` (SSoT).
+  - **Enforcement:** applicato nei punti principali del runtime.
+  - **Verifica:** non tutti i punti di accesso sono verificabili automaticamente.
+
+- **Logging strutturato**
+  - **Regola:** uso esclusivo di logging strutturato nei moduli runtime;
+    `print` vietato.
+  - **Enforcement:** verificato per convenzione e tooling.
+
+- **Decisione Beta (gestione dello stato)**
+  - La repository contiene solo artefacts versionati.
+  - Lo stato runtime vive in workspace esterni deterministici,
+    derivati da `WorkspaceLayout`.
 
 ## Tracciabilita (esempi, non esaustivi)
+
+> Nota: i riferimenti seguenti sono indicativi e non costituiscono
+> una SSoT architetturale. L'invariante è la regola, non il path del file.
 
 - Path-safety: `src/pipeline/path_utils.py`
 - Scritture atomiche: `src/pipeline/file_utils.py`
@@ -52,3 +80,13 @@ e modello di esecuzione. Non inventaria directory o artefatti locali.
 2. **UI/CLI**: orchestrano i flussi con gating esplicito e chiamano la pipeline.
 3. **Control plane**: Prompt Chain e gate HiTL definiscono governance e ordine
    delle operazioni (Planner/OCP/Codex), senza bypassare la pipeline.
+
+## Stato degli invarianti (v1.0 Beta)
+
+| Invariante                         | Stato        | Note sintetiche                          |
+|-----------------------------------|--------------|------------------------------------------|
+| Path-safety                       | Implemented  | Utility SSoT + test parziali              |
+| Scritture atomiche                | Implemented  | Enforcement via utility                  |
+| No side effects a import-time     | Guardrailed  | Test architetturali non esaustivi         |
+| Config via Settings/ClientContext | Observed     | Enforcement parziale                     |
+| Logging strutturato               | Implemented  | Tooling + convenzione                    |

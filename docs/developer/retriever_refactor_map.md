@@ -1,8 +1,19 @@
 # Retriever Refactor Map (Post-Kernel)
 
-Status: C0 evidence
-Scope: planning-only map for slimming the retriever monolith after kernel standardization.
-Sources: `src/retriever.py` (shim) and `src/timmy_kb/cli/retriever.py` (actual implementation).
+Status: v1.0 Beta — factual map + refactor notes
+Scope: descrive lo stato attuale del retriever (confini funzionali, eventi/log, short-circuit) e annota possibili micro-step di estrazione senza cambiare semantica.
+
+## Stato attuale (evidenza nel codice)
+
+- **Modulo effettivo**: `src/timmy_kb/cli/retriever.py` (header: `# src/retriever.py`) funge da facade e wiring verso i sottocomponenti `retriever_*`.
+- **Sottocomponenti principali**:
+  - `retriever_validation` (QueryParams / contratti input)
+  - `retriever_throttle` (deadline, parallelism, guard)
+  - `retriever_embeddings` (embed query + normalize)
+  - `retriever_ranking` (cosine, scoring/ranking deterministico)
+  - `retriever_manifest` (evidence + manifest)
+
+Nota: la dicitura “shim vs implementation” va considerata **storica** finché non esiste un file separato `src/retriever.py` nel tree.
 
 ## 1) Current functional decomposition (retriever.py)
 Major responsibilities and implicit boundaries:
@@ -32,8 +43,16 @@ Major responsibilities and implicit boundaries:
     `with_config_or_budget`, `search_with_config`, `preview_effective_candidate_limit`.
   - Implicit boundary: config-driven policy vs raw search.
 
-## 2) Kernel touchpoints (best-effort)
-Where bridge fields should be present or passed:
+## 2) Contratto operativo osservabile (v1.0 Beta)
+
+### Short-circuit a `[]` (non-silenzioso)
+Il retriever può ritornare `[]` in condizioni diverse (input non utile, deadline/budget, embedding failure). Il valore di ritorno è uguale ma gli eventi emessi differiscono.
+
+### Eventi principali (`retriever.*`)
+Gli eventi sono parte dell’osservabilità e costituiscono l’unico disambiguatore affidabile dei casi “empty result”.
+
+## 3) Kernel touchpoints (aspirazionale / best-effort)
+Where bridge fields should be present or passed (non garantito in Beta):
 - Entry points: `search(...)`, `search_with_config(...)`, `retrieve_candidates(...)`.
   - Expected fields: `run_id`, `slug`, `phase_id`, `state_id`, `intent_id`, `action_id`.
 - Throttle and budget warnings:
@@ -50,7 +69,7 @@ Where bridge fields should be present or passed:
   - Events `retriever.evidence.selected`, `retriever.response.manifest`.
   - Should include `run_id/slug/intent_id/action_id` to tie evidence to the kernel chain.
 
-Stop/HiTL conditions (best-effort):
+Stop/HiTL conditions (best-effort / policy-layer):
 - `RetrieverError` on invalid params (`_validate_params`): candidate for STOP with user input.
 - Embedding client failure in `_materialize_query_vector`: candidate for HiTL if persistent.
 - Budget exhaustion (`retriever.latency_budget.hit`) with empty results: candidate for STOP or retry gate.
