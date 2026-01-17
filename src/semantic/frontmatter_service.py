@@ -203,7 +203,8 @@ def _dump_layout_yaml(data: Dict[str, Any]) -> str | None:
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
 
-def _persist_layout_proposal(base_dir: Path, logger: logging.Logger, *, slug: str) -> None:
+def _persist_layout_proposal(layout: WorkspaceLayout, logger: logging.Logger, *, slug: str) -> None:
+    base_dir = layout.base_dir
     try:
         cfg = load_semantic_config(base_dir)
     except Exception as exc:
@@ -303,7 +304,8 @@ def enrich_frontmatter(
     layout_keys = _read_layout_top_levels(base_dir / "semantic" / "layout_proposal.yaml")
     mapping_all: Dict[str, Any] = {}
     try:
-        cfg = load_semantic_config(base_dir)
+        cfg_root = getattr(context, "repo_root_dir", None) or base_dir
+        cfg = load_semantic_config(cfg_root)
         mapping_all = cfg.mapping if isinstance(cfg.mapping, dict) else {}
     except Exception:
         mapping_all = {}
@@ -478,7 +480,7 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
 
         validate_func(paths)
         logger.info("semantic.book.validated", extra={"slug": slug, "book_dir": str(md_dir)})
-        _persist_layout_proposal(base_dir, logger, slug=slug)
+        _persist_layout_proposal(layout, logger, slug=slug)
         scope.set_artifacts(2)
 
     ms = int((time.perf_counter() - start_ts) * 1000)

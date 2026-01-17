@@ -21,14 +21,18 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
     sem = base_dir / "semantic"
     book = base_dir / "book"
     config_dir = base_dir / "config"
+    logs_dir = base_dir / "logs"
 
     raw.mkdir(parents=True, exist_ok=True)
     sem.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
     (sem / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (book / "README.md").write_text("# README\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
 
     nested = raw / "HR" / "Policies"
     nested.mkdir(parents=True, exist_ok=True)
@@ -79,14 +83,18 @@ def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeyp
     sem = base_dir / "semantic"
     book = base_dir / "book"
     config_dir = base_dir / "config"
+    logs_dir = base_dir / "logs"
 
     raw.mkdir(parents=True, exist_ok=True)
     sem.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
     (sem / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (book / "README.md").write_text("# README\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
 
     (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n")
 
@@ -117,14 +125,18 @@ def test_build_tags_csv_writes_doc_entities_db(tmp_path: Path, monkeypatch: pyte
     sem = base_dir / "semantic"
     book = base_dir / "book"
     config_dir = base_dir / "config"
+    logs_dir = base_dir / "logs"
 
     raw.mkdir(parents=True, exist_ok=True)
     sem.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
     (sem / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (book / "README.md").write_text("# README\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
 
     def _fake_candidates(_raw_dir: Path, _cfg: object) -> dict[str, dict[str, object]]:
         return {

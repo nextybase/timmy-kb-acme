@@ -259,8 +259,6 @@ def _prepare_context_and_logger(
 
     context: ClientContext = ClientContext.load(slug=slug, require_env=require_env, run_id=run_id)
 
-    if context.base_dir is None:
-        raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)
     layout = WorkspaceLayout.from_context(context)
     layout.logs_dir.mkdir(parents=True, exist_ok=True)
     log_file = layout.log_file
@@ -274,7 +272,7 @@ def _prepare_context_and_logger(
     )
     if not require_env:
         logger.info("cli.pre_onboarding.offline_mode", extra={"slug": context.slug})
-    logger.info("cli.pre_onboarding.config_loaded", extra={"slug": context.slug, "path": str(context.config_path)})
+    logger.info("cli.pre_onboarding.config_loaded", extra={"slug": context.slug, "path": str(layout.config_path)})
     logger.info("cli.pre_onboarding.started", extra={"slug": context.slug})
     return context, logger, client_name
 
@@ -294,16 +292,10 @@ def _build_ledger_evidence(layout: WorkspaceLayout) -> str:
 
 def _create_local_structure(context: ClientContext, logger: logging.Logger, *, client_name: str) -> Path:
     """Crea raw/, book/, config/ e scrive config.yaml minimale. Restituisce il path di config."""
-    if context.base_dir is None or context.config_path is None:
-        raise PipelineError(
-            "Contesto incompleto: base_dir/config_path mancanti",
-            slug=context.slug,
-        )
-    ensure_within(context.base_dir, context.config_path)
-
-    cfg_path = context.config_path
-
     bootstrap_client_workspace(context)
+    layout = WorkspaceLayout.from_context(context)
+    cfg_path = layout.config_path
+    base_dir = layout.base_dir
 
     cfg: Dict[str, Any] = {}
     try:
@@ -323,14 +315,9 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     repo_root = get_repo_root(allow_env=False)
     bootstrap_semantic_templates(repo_root, context, client_name, logger)
 
-    if context.base_dir is None or context.raw_dir is None or context.md_dir is None:
-        raise PipelineError(
-            "Contesto incompleto: base_dir/raw_dir/md_dir mancanti",
-            slug=context.slug,
-        )
-    ensure_within(context.base_dir, context.raw_dir)
-    ensure_within(context.base_dir, context.md_dir)
-    ensure_within(context.base_dir, cfg_path.parent)
+    ensure_within(base_dir, layout.raw_dir)
+    ensure_within(base_dir, layout.book_dir)
+    ensure_within(base_dir, cfg_path.parent)
 
     cfg_dir = cfg_path.parent
     cfg_dir.mkdir(parents=True, exist_ok=True)
@@ -338,7 +325,7 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     with phase_scope(logger, stage="create_local_structure", customer=context.slug) as m:
         # telemetria: numero directory top-level nella base cliente
         try:
-            base = context.base_dir
+            base = base_dir
             count = sum(1 for p in (base.iterdir() if base else []) if p.is_dir()) if base else None
             m.set_artifacts(count)
         except Exception:
@@ -347,8 +334,8 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     logger.info(
         "cli.pre_onboarding.local_skeleton.created",
         extra={
-            "raw": str(context.raw_dir),
-            "book": str(context.md_dir),
+            "raw": str(layout.raw_dir),
+            "book": str(layout.book_dir),
             "config": str(cfg_path.parent),
         },
     )
@@ -389,22 +376,22 @@ def ensure_local_workspace_for_ui(
 
     # Crea struttura locale e config di base (idempotente)
     config_path = _create_local_structure(context, logger, client_name=(resolved_name or slug))
+    layout = WorkspaceLayout.from_context(context)
 
     # Salva VisionStatement.pdf se fornito
     if vision_statement_pdf:
-        if context.base_dir is None:
-            raise PipelineError("Contesto incompleto: base_dir mancante", slug=context.slug)
-        cfg_dir = context.base_dir / "config"
-        target = cfg_dir / "VisionStatement.pdf"
+        base_dir = layout.base_dir
+        cfg_dir = layout.config_path.parent
+        target = layout.vision_pdf
         cfg_dir.mkdir(parents=True, exist_ok=True)
-        ensure_within(context.base_dir, target)
+        ensure_within(base_dir, target)
         safe_write_bytes(target, vision_statement_pdf, atomic=True)
         logger.info(
             "vision_statement_saved",
             extra={
                 "slug": context.slug,
                 "file_path": str(target),
-                "context_base_dir": str(context.base_dir or "<none>"),
+                "context_base_dir": str(base_dir),
                 "repo_root_dir": str(context.repo_root_dir or "<none>"),
             },
         )
@@ -440,13 +427,12 @@ def ensure_local_workspace_for_ui(
 
     # Copia il system prompt Vision nel workspace (serve per test/casi con REPO_ROOT_DIR override)
     try:
-        if context.base_dir is not None:
-            repo_root = Path(__file__).resolve().parents[1]
-            prompt_src = repo_root / "config" / "assistant_vision_system_prompt.txt"
+        repo_root = Path(__file__).resolve().parents[1]
+        prompt_src = repo_root / "config" / "assistant_vision_system_prompt.txt"
         if prompt_src.exists():
-            prompt_dest = context.base_dir / "config" / "assistant_vision_system_prompt.txt"
+            prompt_dest = layout.config_path.parent / "assistant_vision_system_prompt.txt"
             prompt_dest.parent.mkdir(parents=True, exist_ok=True)
-            ensure_within(context.base_dir, prompt_dest)
+            ensure_within(layout.base_dir, prompt_dest)
             source_text = read_text_safe(prompt_src.parent, prompt_src, encoding="utf-8")
             safe_write_text(prompt_dest, source_text, encoding="utf-8", atomic=True)
     except Exception as exc:
@@ -459,7 +445,7 @@ def ensure_local_workspace_for_ui(
         "cli.pre_onboarding.workspace.created",
         extra={
             "slug": context.slug,
-            "base": str(context.base_dir) if context.base_dir else None,
+            "base": str(layout.base_dir),
             "config": str(config_path),
         },
     )

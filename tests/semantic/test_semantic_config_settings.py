@@ -19,6 +19,10 @@ def test_semantic_config_merges_settings(tmp_path: Path) -> None:
     slug = "dummy"
     base_dir = tmp_path / "output" / f"timmy-kb-{slug}"
     base_dir.mkdir(parents=True, exist_ok=True)
+    (base_dir / "raw").mkdir(parents=True, exist_ok=True)
+    (base_dir / "logs").mkdir(parents=True, exist_ok=True)
+    _write_file(base_dir / "book" / "README.md", "# README\n")
+    _write_file(base_dir / "book" / "SUMMARY.md", "# SUMMARY\n")
     config_yaml = base_dir / "config" / "config.yaml"
     mapping_yaml = base_dir / "semantic" / "semantic_mapping.yaml"
 

@@ -46,6 +46,7 @@ from pipeline.drive.download_steps import discover_candidates
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger, redact_secrets, tail_path
 from pipeline.path_utils import ensure_within, refresh_iter_safe_pdfs_cache_for_path, sanitize_filename
+from pipeline.workspace_layout import WorkspaceLayout
 
 # MIME costanti basilari (allineate alla facciata)
 MIME_FOLDER = "application/vnd.google-apps.folder"
@@ -217,10 +218,16 @@ def download_drive_pdfs_to_local(
         Numero di PDF scaricati (nuovi/aggiornati).
     """
     logger = get_structured_logger("pipeline.drive.download", context=context)
+    if context is None:
+        raise ConfigError("Context mancante: impossibile risolvere il workspace in modo deterministico.")
+    layout = WorkspaceLayout.from_context(context)
+    base_dir = layout.base_dir
     local_root_dir = Path(local_root_dir).resolve()
-
-    # Base sandbox: preferisci context.base_dir; fallback al genitore di local_root_dir
-    base_dir = Path(getattr(context, "base_dir", local_root_dir.parent)).resolve()
+    if local_root_dir != layout.raw_dir:
+        raise ConfigError(
+            "local_root_dir non coerente con il layout canonico.",
+            file_path=str(local_root_dir),
+        )
 
     # STRONG: local_root_dir deve essere *dentro* base_dir
     try:

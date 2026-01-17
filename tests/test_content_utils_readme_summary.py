@@ -25,15 +25,19 @@ def test_readme_and_summary_respect_mapping(tmp_path: Path) -> None:
     raw = base / "raw"
     config_dir = base / "config"
     semantic_dir = base / "semantic"
+    logs_dir = base / "logs"
 
     book.mkdir(parents=True, exist_ok=True)
     raw.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
     semantic_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
     mapping_yaml = "semantic_tagger: {}\n" "areas:\n" "  - key: area-uno\n" "    descrizione: Descrizione Area Uno\n"
     (semantic_dir / "semantic_mapping.yaml").write_text(mapping_yaml, encoding="utf-8")
+    (book / "README.md").write_text("# README\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
 
     # Prepara una struttura book con markdown annidato
     area_dir = book / "area-uno"
@@ -56,12 +60,16 @@ def test_readme_and_summary_respect_mapping(tmp_path: Path) -> None:
 def test_readme_includes_entity_table(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     book = base / "book"
+    raw = base / "raw"
     config_dir = base / "config"
     semantic_dir = base / "semantic"
+    logs_dir = base / "logs"
 
     book.mkdir(parents=True, exist_ok=True)
+    raw.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
     semantic_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
 
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
     mapping_yaml = (
@@ -73,6 +81,8 @@ def test_readme_includes_entity_table(tmp_path: Path) -> None:
         "  Progetto: area-uno\n"
     )
     (semantic_dir / "semantic_mapping.yaml").write_text(mapping_yaml, encoding="utf-8")
+    (book / "README.md").write_text("# README\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
 
     ctx = _ctx(base, book)
     readme_path = cu.generate_readme_markdown(ctx)

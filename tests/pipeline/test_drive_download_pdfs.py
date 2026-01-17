@@ -40,7 +40,16 @@ def test_download_drive_pdfs_to_local_downloads_new_and_skips_existing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ctx = types.SimpleNamespace(base_dir=tmp_path, slug="dummy")
+    (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "book").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "semantic").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config" / "config.yaml").write_text("{}", encoding="utf-8")
+    (tmp_path / "book" / "README.md").write_text("# README\n", encoding="utf-8")
+    (tmp_path / "book" / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+
+    ctx = types.SimpleNamespace(repo_root_dir=tmp_path, slug="dummy")
     local_root = tmp_path / "raw"
 
     existing_file = local_root / "Reports" / "existing.pdf"
@@ -99,7 +108,16 @@ def test_download_drive_pdfs_to_local_overwrite_rewrites_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ctx = types.SimpleNamespace(base_dir=tmp_path, slug="dummy")
+    (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "book").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "semantic").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config" / "config.yaml").write_text("{}", encoding="utf-8")
+    (tmp_path / "book" / "README.md").write_text("# README\n", encoding="utf-8")
+    (tmp_path / "book" / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+
+    ctx = types.SimpleNamespace(repo_root_dir=tmp_path, slug="dummy")
     local_root = tmp_path / "raw"
     existing = local_root / "Reports" / "existing.pdf"
     existing.parent.mkdir(parents=True, exist_ok=True)
@@ -141,7 +159,16 @@ def test_download_drive_pdfs_to_local_overwrite_rewrites_file(
 
 
 def test_download_drive_pdfs_to_local_aggregates_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    ctx = types.SimpleNamespace(base_dir=tmp_path, slug="dummy")
+    (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "book").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "semantic").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config" / "config.yaml").write_text("{}", encoding="utf-8")
+    (tmp_path / "book" / "README.md").write_text("# README\n", encoding="utf-8")
+    (tmp_path / "book" / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+
+    ctx = types.SimpleNamespace(repo_root_dir=tmp_path, slug="dummy")
     local_root = tmp_path / "raw"
 
     dest = local_root / "broken.pdf"
@@ -181,7 +208,16 @@ def test_download_drive_pdfs_to_local_aggregates_failures(tmp_path: Path, monkey
 
 
 def test_download_drive_pdfs_refreshes_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    ctx = types.SimpleNamespace(base_dir=tmp_path, slug="dummy")
+    (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "book").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "semantic").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config" / "config.yaml").write_text("{}", encoding="utf-8")
+    (tmp_path / "book" / "README.md").write_text("# README\n", encoding="utf-8")
+    (tmp_path / "book" / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+
+    ctx = types.SimpleNamespace(repo_root_dir=tmp_path, slug="dummy")
     local_root = tmp_path / "raw"
     dest = local_root / "Reports" / "report.pdf"
     candidates = [

@@ -198,8 +198,9 @@ class ClientContext:
         # 2) Carica ENV (prima dei path per eventuale override)
         env_vars = cls._load_env(require_env=require_env)
 
-        # 3) Calcola repo_root_dir (SST) con possibile override da ENV
-        repo_root = cls._compute_repo_root_dir(slug, env_vars, _logger)
+        # 3) Calcola repo_root_dir (SSoT) con possibile override da kwargs/ENV
+        repo_root_override = kwargs.get("repo_root_dir")
+        repo_root = cls._compute_repo_root_dir(slug, env_vars, _logger, repo_root_override)
 
         # 4) Path & bootstrap minima (crea config se non presente) sotto repo_root_dir
         config_path = cls._ensure_config(repo_root, slug, _logger)
@@ -266,13 +267,29 @@ class ClientContext:
                 continue
 
     @staticmethod
-    def _compute_repo_root_dir(slug: str, env_vars: Dict[str, Any], logger: logging.Logger) -> Path:
+    def _compute_repo_root_dir(
+        slug: str,
+        env_vars: Dict[str, Any],
+        logger: logging.Logger,
+        repo_root_override: Path | str | None = None,
+    ) -> Path:
         """Determina la root del workspace cliente.
 
         Priorità:
         - ENV `REPO_ROOT_DIR` (espansa e risolta).
-        - Fallback deterministico locale: `<project_root>/output/timmy-kb-<slug>` (derivatives).
+        - Parametro `repo_root_dir` passato in `ClientContext.load(...)`.
         """
+        if repo_root_override:
+            try:
+                root = Path(str(repo_root_override)).expanduser().resolve()
+            except Exception as e:
+                raise ConfigError(f"repo_root_dir non valido: {repo_root_override}", slug=slug) from e
+            logger.info(
+                "context.repo_root_dir_override",
+                extra={"slug": slug, "repo_root_dir": str(root)},
+            )
+            return root
+
         env_root = env_vars.get("REPO_ROOT_DIR")
         if env_root:
             try:
@@ -291,9 +308,10 @@ class ClientContext:
             except Exception as e:
                 raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root}", slug=slug) from e
 
-        # Project root = this file → ../../
-        default_root = Path(__file__).resolve().parents[2] / "output" / f"timmy-kb-{slug}"
-        return default_root
+        raise ConfigError(
+            "REPO_ROOT_DIR mancante: specifica un workspace root canonico.",
+            slug=slug,
+        )
 
     @staticmethod
     def _ensure_config(repo_root_dir: Path, slug: str, logger: logging.Logger) -> Path:

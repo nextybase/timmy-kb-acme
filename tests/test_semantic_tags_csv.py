@@ -30,11 +30,17 @@ def test_build_tags_csv_from_raw(tmp_path):
 
     base = tmp_path / "output" / "timmy-kb-dummy"
     raw = base / "raw"
+    book = base / "book"
     sem = base / "semantic"
+    logs_dir = base / "logs"
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "config" / "config.yaml").write_text("{}", encoding="utf-8")
+    book.mkdir(parents=True, exist_ok=True)
     sem.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
     (sem / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (book / "README.md").write_text("# README\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
     (raw / "HR" / "Policies").mkdir(parents=True, exist_ok=True)
     (raw / "HR" / "Policies" / "Welcome Packet.pdf").write_bytes(b"%PDF-1.4\n")
     (raw / "Security-Guide_v2.pdf").write_bytes(b"%PDF-1.4\n")

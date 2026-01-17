@@ -661,7 +661,8 @@ def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Pat
     )
     logger = get_structured_logger("pipeline.content_utils")
     try:
-        cfg = load_semantic_config(ctx.base_dir)
+        cfg_root = getattr(ctx, "repo_root_dir", None) or ctx.base_dir
+        cfg = load_semantic_config(cfg_root)
         entity_section = generate_entity_section(cfg)
         if entity_section:
             sections.append(entity_section)
@@ -774,7 +775,8 @@ def convert_files_to_structured_markdown(
             file_path=str(raw_root),
         )
 
-    cfg = load_semantic_config(base)
+    cfg_root = getattr(ctx, "repo_root_dir", None) or base
+    cfg = load_semantic_config(cfg_root)
     candidates = extract_semantic_candidates(raw_root, cfg)
 
     written: set[Path] = set()

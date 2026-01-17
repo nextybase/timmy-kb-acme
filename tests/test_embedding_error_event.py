@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,12 +18,30 @@ class _BoomEmb:
         raise RuntimeError("boom")
 
 
+def _prepare_workspace(base: Path, *, slug: str) -> SimpleNamespace:
+    raw_dir = base / "raw"
+    book_dir = base / "book"
+    semantic_dir = base / "semantic"
+    logs_dir = base / "logs"
+    config_dir = base / "config"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    book_dir.mkdir(parents=True, exist_ok=True)
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
+    (book_dir / "README.md").write_text("# README\n", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+    return SimpleNamespace(repo_root_dir=base, slug=slug)
+
+
 def test_embedding_error_is_logged_and_fall_back(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     db_path = base / "kb.sqlite"
     book.mkdir(parents=True, exist_ok=True)
     (book / "a.md").write_text("# A\nBody", encoding="utf-8")
+    _prepare_workspace(base, slug="dummy")
 
     ctx = type("C", (), dict(base_dir=base, md_dir=book, repo_root_dir=base, slug="dummy"))()
     logger = get_structured_logger("tests.index.emb_error", context=ctx)
@@ -46,8 +65,8 @@ def test_explainability_events_emitted(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     base = tmp_path / "output" / "timmy-kb-dummy"
+    ctx = _prepare_workspace(base, slug="dummy")
     raw_dir = base / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
     db_path = base / "kb.sqlite"
     content_path = raw_dir / "loggable.md"
     content_path.write_text("# Loggable\nContenuto eventi", encoding="utf-8")
@@ -70,6 +89,7 @@ def test_explainability_events_emitted(
         version="v1",
         meta={},
         embeddings_client=_OkEmb(),
+        context=ctx,
         base_dir=base,
         db_path=db_path,
     )

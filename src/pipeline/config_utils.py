@@ -52,11 +52,12 @@ else:
         SettingsConfigDict as _SettingsConfigDict,
     )
 
-from pipeline.constants import BACKUP_SUFFIX, CONFIG_DIR_NAME, CONFIG_FILE_NAME
+from pipeline.constants import BACKUP_SUFFIX
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidationError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
+from pipeline.workspace_layout import WorkspaceLayout
 from pipeline.path_utils import ensure_within, read_text_safe
 from pipeline.settings import Settings as ContextSettings
 
@@ -209,18 +210,10 @@ class ClientEnvSettings(_BaseSettings):
 # ----------------------------------------------------------
 def write_client_config_file(context: ClientContext, config: ClientConfigPayload) -> Path:
     """Scrive il file `config.yaml` nella cartella cliente in modo atomico (backup + SSoT)."""
-    output_dir = context.output_dir
-    base_dir = context.base_dir
-    if output_dir is None or base_dir is None:
-        raise PipelineError(
-            "Contesto incompleto: output_dir/base_dir mancanti",
-            slug=context.slug,
-        )
-    output_dir = cast(Path, output_dir)
-    base_dir = cast(Path, base_dir)
-
-    config_dir = output_dir / CONFIG_DIR_NAME
-    config_path = config_dir / CONFIG_FILE_NAME
+    layout = WorkspaceLayout.from_context(context)
+    base_dir = layout.base_dir
+    config_path = layout.config_path
+    config_dir = config_path.parent
 
     config_dir.mkdir(parents=True, exist_ok=True)
     ensure_within(base_dir, config_dir)

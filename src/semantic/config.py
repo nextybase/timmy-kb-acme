@@ -5,9 +5,9 @@
 Scopo
 -----
 Restituire un oggetto `SemanticConfig` che unisce:
-1) Valori di default robusti (fallback hardcoded)
-2) Override generali del cliente (output/.../config/config.yaml -> semantic_defaults)
-3) Parametri locali per il tagging (output/.../semantic -> semantic_mapping.yaml -> semantic_tagger)
+1) Valori di default hardcoded
+2) Override generali del cliente (config.yaml -> semantic_defaults)
+3) Parametri locali per il tagging (semantic_mapping.yaml -> semantic_tagger)
 4) Eventuali `overrides` passati a runtime (massima precedenza)
 
 Ordine di precedenza (alto -> basso)
@@ -26,6 +26,7 @@ from typing import Any, Optional, cast
 from pipeline.config_utils import load_client_settings
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings as PipelineSettings
+from pipeline.workspace_layout import WorkspaceLayout
 from pipeline.yaml_utils import yaml_read
 
 try:  # compat per import in UI/CLI
@@ -77,7 +78,7 @@ class SemanticConfig:
     spacy_model: str = "it_core_news_sm"
 
     # Riferimenti utili per l'orchestrazione
-    base_dir: Path = Path(".")  # output/timmy-kb-<slug> (resolve in load)
+    base_dir: Path = Path(".")  # workspace root (resolve in load)
     semantic_dir: Path = Path("semantic")  # base_dir / "semantic" (resolve in load)
     raw_dir: Path = Path("raw")  # base_dir / "raw" (resolve in load)
 
@@ -187,59 +188,63 @@ def _merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 
 
 # ----------------------------- API pubblica ---------------------------------- #
-def _load_client_settings(base_dir: Path | Any) -> dict[str, Any]:
+def _resolve_layout(context_or_root: Path | Any) -> WorkspaceLayout:
+    if ClientContext is not None and isinstance(context_or_root, ClientContext):
+        return WorkspaceLayout.from_context(context_or_root)
+    return WorkspaceLayout.from_workspace(Path(context_or_root).resolve())
+
+
+def _load_client_settings(context_or_root: Path | Any) -> dict[str, Any]:
     """Carica config.yaml del cliente tramite loader centralizzato (SSoT)."""
-    if ClientContext is not None and isinstance(base_dir, ClientContext):
+    layout = _resolve_layout(context_or_root)
+    if ClientContext is not None and isinstance(context_or_root, ClientContext):
         try:
-            settings = load_client_settings(base_dir)
+            settings = load_client_settings(context_or_root)
             return cast(dict[str, Any], settings.as_dict())
         except ConfigError:
             raise
         except Exception as exc:
-            config_path = getattr(base_dir, "config_path", None)
+            config_path = getattr(context_or_root, "config_path", None)
             if config_path:
                 file_path = str(config_path)
             else:
-                base_dir_path = Path(getattr(base_dir, "base_dir", None) or ".").resolve()
-                file_path = str((base_dir_path / "config" / "config.yaml").resolve())
+                file_path = str(layout.config_path)
             raise ConfigError("Errore lettura config.yaml.", file_path=file_path) from exc
 
-    base_dir = Path(base_dir).resolve()
-    config_path = (base_dir / "config" / "config.yaml").resolve()
     try:
-        settings = PipelineSettings.load(base_dir, config_path=config_path)
+        settings = PipelineSettings.load(layout.base_dir, config_path=layout.config_path)
         return cast(dict[str, Any], settings.as_dict())
     except ConfigError:
         raise
     except Exception as exc:
-        raise ConfigError("Errore lettura config.yaml.", file_path=str(config_path)) from exc
+        raise ConfigError("Errore lettura config.yaml.", file_path=str(layout.config_path)) from exc
 
 
-def load_semantic_config(base_dir: Path | Any, *, overrides: Optional[dict[str, Any]] = None) -> SemanticConfig:
-    """Carica la configurazione semantica per il cliente sotto `base_dir`.
+def load_semantic_config(context_or_root: Path | Any, *, overrides: Optional[dict[str, Any]] = None) -> SemanticConfig:
+    """Carica la configurazione semantica per il cliente sotto la workspace root.
 
     Parametri:
-      - base_dir: Path della sandbox cliente (es. output/timmy-kb-<slug>) oppure ClientContext
+      - context_or_root: workspace root canonica oppure ClientContext
       - overrides: dict opzionale con parametri espliciti (massima precedenza)
 
     Ritorna:
       - SemanticConfig con parametri finali e mapping completo (da semantic_mapping.yaml)
     """
-    ctx = base_dir if ClientContext is not None and isinstance(base_dir, ClientContext) else None
-    base_dir_path = Path(getattr(ctx, "base_dir", None) or base_dir).resolve()
-    semantic_dir = (base_dir_path / "semantic").resolve()
-    raw_dir = (base_dir_path / "raw").resolve()
-    config_path = (base_dir_path / "config" / "config.yaml").resolve()
+    layout = _resolve_layout(context_or_root)
+    base_dir_path = layout.base_dir
+    semantic_dir = layout.semantic_dir
+    raw_dir = layout.raw_dir
+    config_path = layout.config_path
 
     # semantic_mapping.yaml -> strict: deve esistere e validare prima dei merge
-    mapping_path = semantic_dir / "semantic_mapping.yaml"
+    mapping_path = layout.mapping_path
     mapping_all = _safe_load_yaml(mapping_path)
 
     # 1) Defaults hardcoded
     acc: dict[str, Any] = dict(_DEFAULTS)
 
     # 2) config.yaml -> semantic_defaults (chiavi ammesse in _ALLOWED_KEYS)
-    cfg_all = _load_client_settings(base_dir)
+    cfg_all = _load_client_settings(context_or_root)
     if (
         isinstance(cfg_all, dict)
         and "semantic_defaults" in cfg_all

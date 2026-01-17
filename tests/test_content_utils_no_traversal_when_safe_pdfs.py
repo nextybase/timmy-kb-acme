@@ -24,12 +24,16 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
     book = base / "book"
     semantic_dir = base / "semantic"
     config_dir = base / "config"
+    logs_dir = base / "logs"
     semantic_dir.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
     (semantic_dir / "semantic_mapping.yaml").write_text("semantic_tagger: {}\nareas: {}\n", encoding="utf-8")
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
+    (book / "README.md").write_text("# README\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
 
     # PDF reali (anche annidati)
     root_pdf = raw / "root.pdf"

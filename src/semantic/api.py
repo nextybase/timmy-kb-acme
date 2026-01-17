@@ -132,6 +132,7 @@ def export_tags_yaml_from_db(
     db_path: Path,
     logger: logging.Logger,
     *,
+    context: ClientContextType | None = None,
     workspace_base: Path | None = None,
     limit: int = 200,
     min_weight: float = 0.0,
@@ -139,10 +140,32 @@ def export_tags_yaml_from_db(
     version: str = "2",
 ) -> Path:
     """Facade sicuro per esportare tags_reviewed.yaml dal DB NLP (UI-only).
-    Il parametro `workspace_base` filtra il perimetro root (default = semantic_dir.parent.parent)."""
-    base_root_path = Path(workspace_base or Path(semantic_dir).parent.parent).resolve()
+    Richiede `context` o `workspace_base` canonico per risolvere il layout."""
+    if context is not None:
+        if getattr(context, "repo_root_dir", None) is None:
+            raise ConfigError(
+                "Contesto privo di repo_root_dir: impossibile risolvere il workspace.",
+                file_path=str(semantic_dir),
+            )
+        with workspace_validation_policy(skip_validation=True):
+            layout = WorkspaceLayout.from_context(cast(Any, context))
+    elif workspace_base is not None:
+        with workspace_validation_policy(skip_validation=True):
+            layout = WorkspaceLayout.from_workspace(Path(workspace_base).resolve(), skip_validation=True)
+    else:
+        raise ConfigError(
+            "workspace_base o context richiesti per esportare tags_reviewed.yaml.",
+            file_path=str(semantic_dir),
+        )
+
+    base_root_path = layout.base_dir
     semantic_dir_path = ensure_within_and_resolve(base_root_path, Path(semantic_dir))
-    yaml_path = ensure_within_and_resolve(semantic_dir_path, semantic_dir_path / "tags_reviewed.yaml")
+    if semantic_dir_path != layout.semantic_dir:
+        raise ConfigError(
+            "semantic_dir non coerente con il workspace canonico.",
+            file_path=str(semantic_dir_path),
+        )
+    yaml_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "tags_reviewed.yaml")
     expected_db_path = ensure_within_and_resolve(
         semantic_dir_path,
         Path(_derive_tags_db_path(yaml_path)),

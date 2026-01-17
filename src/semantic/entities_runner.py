@@ -51,8 +51,9 @@ def run_doc_entities_pipeline(
 ) -> dict[str, Any]:
     """Esegue tagging SpaCy+lexicon e salva in doc_entities (fail-soft)."""
     log = logger or LOG
+    workspace_root = base_dir
     try:
-        cfg = load_semantic_config(base_dir)
+        cfg = load_semantic_config(workspace_root)
     except Exception as exc:  # pragma: no cover
         log.warning("semantic.entities.config_failed", extra={"error": str(exc)})
         return {"entities_written": 0}

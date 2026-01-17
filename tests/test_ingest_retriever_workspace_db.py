@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Sequence
 
 import pytest
@@ -28,6 +29,7 @@ class DummyEmbeddingsClient:
 def test_ingest_and_search_use_workspace_db(dummy_workspace: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
     base: Path = dummy_workspace["base"]
     slug: str = dummy_workspace["slug"]
+    ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
 
     store = KbStore.for_slug(slug=slug, base_dir=base)
     db_path = store.effective_db_path()
@@ -49,6 +51,7 @@ def test_ingest_and_search_use_workspace_db(dummy_workspace: dict[str, Path], mo
         version="v1",
         meta={"slug": slug},
         embeddings_client=dummy_embeddings,
+        context=ctx,
         base_dir=base,
         db_path=db_path,
     )
@@ -73,6 +76,7 @@ def test_ingest_and_search_use_workspace_db(dummy_workspace: dict[str, Path], mo
 def test_lineage_persisted_in_ingest_path(dummy_workspace: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
     base: Path = dummy_workspace["base"]
     slug: str = dummy_workspace["slug"]
+    ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
 
     store = KbStore.for_slug(slug=slug, base_dir=base)
     db_path = store.effective_db_path()
@@ -93,6 +97,7 @@ def test_lineage_persisted_in_ingest_path(dummy_workspace: dict[str, Path], monk
         version="v1",
         meta={"slug": slug},
         embeddings_client=dummy_embeddings,
+        context=ctx,
         base_dir=base,
         db_path=db_path,
     )

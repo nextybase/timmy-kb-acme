@@ -32,30 +32,11 @@ from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.metrics import record_document_processed, start_metrics_server_once
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.tracing import start_decision_span, start_root_trace
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
 from storage.kb_store import KbStore
 
 LOGGER = get_structured_logger("timmy_kb.ingest")
-
-_WILDCARD_CHARS = ("*", "?", "[")
-
-
-def _infer_base_dir(folder_glob: str | Path) -> Path:
-    """Ricava una directory base dal glob (prima dei wildcard)."""
-    pattern = str(folder_glob)
-    first_wildcard = len(pattern)
-    for char in _WILDCARD_CHARS:
-        idx = pattern.find(char)
-        if idx != -1:
-            first_wildcard = min(first_wildcard, idx)
-    prefix = pattern[:first_wildcard]
-    if not prefix:
-        return Path(".").resolve()
-    sep_idx = max(prefix.rfind("/"), prefix.rfind("\\"))
-    base_slice = prefix if sep_idx == -1 else prefix[: sep_idx + 1]
-    base_candidate = Path(base_slice or ".")
-    return base_candidate.resolve()
-
 
 def _relative_to(base: Path, candidate: Path) -> str:
     try:
@@ -64,43 +45,13 @@ def _relative_to(base: Path, candidate: Path) -> str:
         return str(candidate)
 
 
-def _resolve_workspace_base(slug: str) -> Optional[Path]:
-    """
-    Best-effort resolution del workspace per uno slug.
-
-    Priorità:
-    1) ClientContext.load(...).base_dir
-    2) Se raw_dir è presente, usa raw_dir.parent
-    3) semantic.api.get_paths(slug)["base"]
-    4) Fallback None (DB globale)
-    """
-    slug = (slug or "").strip()
-    if not slug:
-        return None
-    try:
-        ctx = ClientContext.load(slug=slug, require_env=False, run_id=None)
-        base_dir = getattr(ctx, "base_dir", None)
-        if isinstance(base_dir, Path):
-            return base_dir
-        raw_dir = getattr(ctx, "raw_dir", None)
-        if isinstance(raw_dir, Path):
-            return raw_dir.parent
-    except Exception:
-        pass
-
-    try:
-        from semantic.api import get_paths as _get_paths
-
-        paths = _get_paths(slug)
-        base = paths.get("base")
-        if isinstance(base, Path):
-            return base
-        if base is not None:
-            return Path(str(base))
-    except Exception:
-        return None
-
-    return None
+def _require_layout(context: ClientContext | None, slug: str) -> WorkspaceLayout:
+    if context is None:
+        raise ConfigError("Context mancante: impossibile risolvere il workspace.")
+    ctx_slug = getattr(context, "slug", None)
+    if isinstance(ctx_slug, str) and ctx_slug and slug and ctx_slug != slug:
+        raise ConfigError("Slug del contesto non coerente con l'ingest.", slug=slug)
+    return WorkspaceLayout.from_context(context)
 
 
 def _build_lineage(
@@ -484,23 +435,28 @@ def ingest_path(
     meta: dict[str, Any],
     embeddings_client: Optional[EmbeddingsClient] = None,
     *,
+    context: ClientContext | None = None,
     base_dir: Optional[Path] = None,
     db_path: Optional[Path] = None,
 ) -> int:
     """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk.
 
     Funzione di orchestrazione: delega path-safety/lettura a load_and_chunk e l'embed/persist a embed_and_persist.
+    Richiede un context valido per risolvere il layout canonico.
     """
+    layout = _require_layout(context, slug)
+    base = layout.base_dir
+    if base_dir is not None:
+        requested = Path(base_dir).resolve()
+        if requested != base:
+            raise ConfigError("base_dir non coerente con il layout canonico.", slug=slug)
+
     effective_db_path = db_path
     if effective_db_path is None:
         # Riusabile stand-alone: se ingest_folder non ha già risolto il DB, calcola qui il workspace.
-        workspace_base = _resolve_workspace_base(slug)
-        store = KbStore.for_slug(slug, base_dir=workspace_base)
+        store = KbStore.for_slug(slug, base_dir=base)
         effective_db_path = store.effective_db_path()
     p = Path(path)
-    if base_dir is None:
-        raise ConfigError("Base directory obbligatoria per ingest_path.")
-    base = Path(base_dir).resolve()
     customer = meta.get("slug") if isinstance(meta, dict) else None
     safe_path, chunks = load_and_chunk(
         path=p,
@@ -533,6 +489,7 @@ def ingest_folder(
     meta: dict[str, Any],
     embeddings_client: Optional[EmbeddingsClient] = None,
     *,
+    context: ClientContext | None = None,
     base_dir: Optional[Path] = None,
     max_files: Optional[int] = None,
     batch_size: Optional[int] = None,
@@ -542,17 +499,27 @@ def ingest_folder(
     Args:
         slug/scope/version/meta: parametri dominio.
         embeddings_client: facoltativo, riuso di un client embedding.
-        base_dir: override del perimetro path-safety (default: inferito dal glob).
+        base_dir: override del perimetro path-safety (deve coincidere con layout.base_dir).
         max_files: limita il numero massimo di file elaborati (None -> tutti).
         batch_size: numero di file caricati per batch durante lo streaming (None -> 1).
 
     Restituisce un dizionario di riepilogo con i conteggi: {files, chunks}.
     """
     start_metrics_server_once()
-    base = Path(base_dir).resolve() if base_dir is not None else _infer_base_dir(folder_glob)
+    layout = _require_layout(context, slug)
+    base = layout.base_dir
+    if base_dir is not None:
+        requested = Path(base_dir).resolve()
+        if requested != base:
+            raise ConfigError("base_dir non coerente con il layout canonico.", slug=slug)
+    glob_path = Path(folder_glob)
+    if glob_path.is_absolute():
+        try:
+            glob_path.resolve().relative_to(base)
+        except Exception as exc:
+            raise ConfigError("folder_glob fuori dal workspace canonico.", slug=slug, file_path=str(glob_path)) from exc
     client: EmbeddingsClient | None = embeddings_client
-    workspace_base = _resolve_workspace_base(slug)
-    store = KbStore.for_slug(slug, base_dir=workspace_base)
+    store = KbStore.for_slug(slug, base_dir=base)
     db_path = store.effective_db_path()
     if slug:
         LOGGER.info("ingest.db_path", extra={"slug": slug, "db_path": str(db_path)})
@@ -605,6 +572,7 @@ def ingest_folder(
                                 version=version,
                                 meta=meta,
                                 embeddings_client=client,
+                                context=context,
                                 base_dir=base,
                                 db_path=db_path,
                             )

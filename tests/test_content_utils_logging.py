@@ -52,10 +52,14 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
     book = base / "book"
     semantic_dir = base / "semantic"
     config_dir = base / "config"
+    logs_dir = base / "logs"
     (raw / "cat").mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    (book / "README.md").write_text("# README\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
     (semantic_dir / "semantic_mapping.yaml").write_text("semantic_tagger: {}\nareas: {}\n", encoding="utf-8")
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
 

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Union, cast
 from ..exceptions import ConfigError, DriveUploadError
 from ..logging_utils import get_structured_logger
 from ..path_utils import ensure_within_and_resolve, sanitize_filename, validate_slug
+from ..workspace_layout import WorkspaceLayout
 
 logger = get_structured_logger("pipeline.drive.upload")
 
@@ -419,20 +420,17 @@ def create_drive_structure_from_yaml(
 
 
 def create_local_raw_children_from_yaml(
-    slug: str,
+    context: Any,
     yaml_path: Union[str, PathLike[str]],
-    *,
-    base_root: Union[str, Path] = "output",
 ) -> List[Path]:
     """Crea **solo** le sottocartelle immediate di `raw/` in locale, leggendo lo YAML."""
-    validate_slug(slug)
+    layout = WorkspaceLayout.from_context(context)
+    base_dir = layout.base_dir
+    raw_dir = ensure_within_and_resolve(base_dir, layout.raw_dir)
+    _ensure_dir(raw_dir)
+
     mapping = _read_yaml_structure(yaml_path)
     raw_names = _extract_structural_raw_names(mapping)
-
-    base_root_path = Path(base_root).resolve()
-    base_dir = ensure_within_and_resolve(base_root_path, base_root_path / f"timmy-kb-{slug}")
-    raw_dir = ensure_within_and_resolve(base_dir, base_dir / "raw")
-    _ensure_dir(raw_dir)
 
     written: List[Path] = []
     for name in raw_names:
@@ -448,7 +446,6 @@ def create_local_base_structure(
     *,
     context: Any,
     yaml_structure_file: Union[str, PathLike[str]],
-    base_root: Union[str, Path] = "output",
 ) -> Dict[str, Path]:
     """Crea la struttura locale (raw/, book/, config/, semantic/) e le sottocartelle raw/."""
     slug = getattr(context, "slug", None)
@@ -456,17 +453,12 @@ def create_local_base_structure(
         raise DriveUploadError("Contesto privo di slug: impossibile creare struttura locale.")
     validate_slug(slug)
 
-    base_dir_hint = getattr(context, "base_dir", None)
-    if base_dir_hint:
-        base_dir = Path(str(base_dir_hint)).resolve()
-    else:
-        base_root_path = Path(base_root).resolve()
-        base_dir = ensure_within_and_resolve(base_root_path, base_root_path / f"timmy-kb-{slug}")
-
-    raw_dir = ensure_within_and_resolve(base_dir, base_dir / "raw")
-    book_dir = ensure_within_and_resolve(base_dir, base_dir / "book")
-    config_dir = ensure_within_and_resolve(base_dir, base_dir / "config")
-    semantic_dir = ensure_within_and_resolve(base_dir, base_dir / "semantic")
+    layout = WorkspaceLayout.from_context(context)
+    base_dir = layout.base_dir
+    raw_dir = ensure_within_and_resolve(base_dir, layout.raw_dir)
+    book_dir = ensure_within_and_resolve(base_dir, layout.book_dir)
+    config_dir = ensure_within_and_resolve(base_dir, layout.config_path.parent)
+    semantic_dir = ensure_within_and_resolve(base_dir, layout.semantic_dir)
 
     _ensure_dir(base_dir)
     for path in (raw_dir, book_dir, config_dir, semantic_dir):
