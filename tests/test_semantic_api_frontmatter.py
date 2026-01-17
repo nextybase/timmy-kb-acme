@@ -22,9 +22,12 @@ def test_parse_and_dump_frontmatter_roundtrip() -> None:
 
 def test_parse_frontmatter_no_header_returns_plain() -> None:
     text = "# No header here\ncontent"
-    meta, body = _parse_frontmatter(text)
-    assert meta == {}
-    assert body == text
+    import pytest
+
+    from pipeline.exceptions import ConfigError
+
+    with pytest.raises(ConfigError):
+        _parse_frontmatter(text)
 
 
 def test_merge_frontmatter_preserves_existing_title_and_merges_tags() -> None:

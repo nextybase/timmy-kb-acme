@@ -5,25 +5,25 @@ File utilities: scritture atomiche e path-safety per la pipeline Timmy-KB.
 
 Obiettivi:
 - Offrire write testuali/bytes sicure, atomiche e robuste a interruzioni.
-- Centralizzare la logica di fsync (best-effort di default; opzionale più "forte").
+- Centralizzare la logica di fsync con errori deterministici quando richiesto.
 - Non imporre policy di perimetro: la guardia STRONG dei path resta in
   `pipeline.path_utils.ensure_within` (SSoT) e va chiamata dai *callers* prima di scrivere.
 
 Indice (ruolo funzioni):
-- `_fsync_file(fd, *, path=None, strict=False)`: sincronizza il file descriptor.
-  - `strict=True` → solleva `ConfigError`; altrimenti logga in debug (best-effort).
-- `_fsync_dir_best_effort(dir_path)`: tenta la sincronizzazione della directory padre.
-  - Non solleva eccezioni (compatibile con Windows/FS remoti).
+- `_fsync_file(fd, *, path=None, allow_fallback=False)`: sincronizza il file descriptor.
+  - `allow_fallback=True` abilita un fallback esplicito (log warning) senza sollevare.
+- `_fsync_dir(dir_path, allow_fallback=False)`: sincronizza la directory padre.
+  - `allow_fallback=True` abilita un fallback esplicito (log warning) senza sollevare.
 - `safe_write_text(path, data, *, encoding="utf-8", atomic=True, fsync=False)`:
   scrittura **testo** sicura.
   - Crea le directory mancanti.
   - `atomic=True`: usa temp file + `os.replace()` atomico. Con `fsync=True` fa flush+fsync.
   - `atomic=False`: scrive direttamente e puo fare fsync sul file.
-  - Sempre prova a fsync-are la directory (best-effort).
+  - Esegue `fsync` della directory padre solo se `fsync=True`.
 - `safe_write_bytes(path, data, *, atomic=True, fsync=False)`: come sopra, per **bytes**.
 
 Note:
-- Di default eseguiamo un fsync "soft" (best-effort) anche quando `fsync=False`.
+- Nessun fsync implicito quando `fsync=False`; i fallback sono opt-in.
 - Questo modulo non valida che `path` sia "dentro" un perimetro: quel controllo va fatto a monte.
 """
 
@@ -53,27 +53,27 @@ def _post_write_hooks(path: Path) -> None:
         refresh_iter_safe_pdfs_cache_for_path(Path(path), prewarm=True)
 
 
-def _fsync_file(fd: int, *, path: Optional[Path] = None, strict: bool = False) -> None:
+def _fsync_file(fd: int, *, path: Optional[Path] = None, allow_fallback: bool = False) -> None:
     """Sincronizza il file descriptor.
 
-    Se `strict=True`, su errore solleva `ConfigError`. Altrimenti logga e continua
-    (best-effort).
+    Se `allow_fallback=True`, su errore logga e continua; altrimenti solleva `ConfigError`.
     """
     try:
         os.fsync(fd)
-    except Exception as e:  # pragma: no cover - dipende da l'FS
-        if strict:
-            raise ConfigError(f"fsync(file) fallito: {e}", file_path=str(path) if path else None) from e
-        _logger.debug(
-            "file_utils.fsync_file_failed",
-            extra={"file_path": str(path) if path else None},
-        )
+    except Exception as exc:  # pragma: no cover - dipende da l'FS
+        if allow_fallback:
+            _logger.warning(
+                "file_utils.fsync_file_failed",
+                extra={"file_path": str(path) if path else None, "error": str(exc)},
+            )
+            return
+        raise ConfigError(f"fsync(file) fallito: {exc}", file_path=str(path) if path else None) from exc
 
 
-def _fsync_dir_best_effort(dir_path: Path) -> None:
-    """Sincronizza la directory contenitore in modo best-effort.
+def _fsync_dir(dir_path: Path, *, allow_fallback: bool = False) -> None:
+    """Sincronizza la directory contenitore.
 
-    Su Windows o FS remoti potrebbe non essere disponibile: non solleva.
+    Se `allow_fallback=True`, su errore logga e continua; altrimenti solleva `ConfigError`.
     """
     try:
         flags = getattr(os, "O_DIRECTORY", 0)
@@ -83,8 +83,14 @@ def _fsync_dir_best_effort(dir_path: Path) -> None:
             os.fsync(dfd)
         finally:
             os.close(dfd)
-    except Exception:  # pragma: no cover - dipende da l'OS/FS
-        _logger.debug("file_utils.fsync_dir_failed", extra={"dir_path": str(dir_path)})
+    except Exception as exc:  # pragma: no cover - dipende da l'OS/FS
+        if allow_fallback:
+            _logger.warning(
+                "file_utils.fsync_dir_failed",
+                extra={"dir_path": str(dir_path), "error": str(exc)},
+            )
+            return
+        raise ConfigError(f"fsync(dir) fallito: {exc}", file_path=str(dir_path)) from exc
 
 
 def _extended_str(path: Path) -> str:
@@ -145,7 +151,7 @@ def safe_write_text(
     - Con `atomic=True` scrive su file temporaneo e poi sostituisce con `os.replace`.
     - Crea la directory padre se mancante.
     - Con `fsync=True` fa `flush()` + `fsync()` sul file (temp o diretto).
-    - Esegue sempre `fsync` della directory padre in best-effort.
+    - Esegue `fsync` della directory padre solo se `fsync=True`.
 
     Solleva:
         ConfigError: su errori di I/O bloccanti (es. dir non scrivibile, fsync strict fallito).
@@ -165,21 +171,16 @@ def safe_write_text(
             with open(path_str, "w", encoding=encoding, newline="") as f:
                 f.write(data)
                 if fsync:
-                    try:
-                        f.flush()
-                    except Exception:
-                        # flush best-effort: eventuali errori emergeranno in fsync strict
-                        pass
-                    _fsync_file(f.fileno(), path=path, strict=True)
-                else:
-                    _fsync_file(f.fileno(), path=path, strict=False)
-            _fsync_dir_best_effort(parent_path)
+                    f.flush()
+                    _fsync_file(f.fileno(), path=path)
+            if fsync:
+                _fsync_dir(parent_path)
             _post_write_hooks(path)
             return
         except Exception as e:
             raise ConfigError(f"Scrittura file fallita: {e}", file_path=str(path)) from e
 
-    # Modalità atomica: temp + replace
+    # Modalita atomica: temp + replace
     tmp_path: Optional[Path] = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -194,17 +195,12 @@ def safe_write_text(
             tmp_path = Path(tmp_name)
             tmp.write(data)
             if fsync:
-                try:
-                    tmp.flush()
-                except Exception:
-                    # flush best-effort; fsync strict intercetterà eventuali errori
-                    pass
-                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_name), strict=True)
-            else:
-                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_name), strict=False)
+                tmp.flush()
+                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_name))
 
         os.replace(tmp_name, path_str)  # atomic move
-        _fsync_dir_best_effort(parent_path)
+        if fsync:
+            _fsync_dir(parent_path)
         _post_write_hooks(path)
     except Exception as e:
         # Proviamo a rimuovere il temp se esiste
@@ -239,10 +235,10 @@ def safe_write_bytes(
             with open(path_str, "wb") as f:
                 f.write(data)
                 if fsync:
-                    _fsync_file(f.fileno(), path=path, strict=True)
-                else:
-                    _fsync_file(f.fileno(), path=path, strict=False)
-            _fsync_dir_best_effort(parent_path)
+                    f.flush()
+                    _fsync_file(f.fileno(), path=path)
+            if fsync:
+                _fsync_dir(parent_path)
             _post_write_hooks(path)
             return
         except Exception as e:
@@ -260,12 +256,12 @@ def safe_write_bytes(
             tmp_path = Path(tmp_name)
             tmp.write(data)
             if fsync:
-                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_name), strict=True)
-            else:
-                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_name), strict=False)
+                tmp.flush()
+                _fsync_file(tmp.fileno(), path=strip_extended_length_path(tmp_name))
 
         os.replace(tmp_name, path_str)
-        _fsync_dir_best_effort(parent_path)
+        if fsync:
+            _fsync_dir(parent_path)
         _post_write_hooks(path)
     except Exception as e:
         try:
@@ -284,12 +280,16 @@ def safe_append_text(
     encoding: str = "utf-8",
     lock_timeout: float = 5.0,
     fsync: bool = False,
+    fsync_dir_allow_fallback: bool = False,
 ) -> None:
     """Appende testo in modo sicuro usando path-safety, lock file e append diretto.
 
     Nota: su Windows puo emergere PermissionError durante create/unlink concorrenti
     del lock file. Lo trattiamo come contesa del lock (al pari di FileExistsError),
     con piccoli retry fino a lock_timeout.
+
+    - Con `fsync=True` sincronizza file e directory.
+    - `fsync_dir_allow_fallback=True` abilita il fallback esplicito per fsync(dir).
     """
     base_dir = Path(base_dir)
     resolved_base = base_dir.resolve()
@@ -331,14 +331,10 @@ def safe_append_text(
             with open(resolved_str, "a", encoding=encoding, newline="") as f:
                 f.write(data)
                 if fsync:
-                    try:
-                        f.flush()
-                    except Exception:
-                        pass
-                    _fsync_file(f.fileno(), path=resolved, strict=True)
-                else:
-                    _fsync_file(f.fileno(), path=resolved, strict=False)
-            _fsync_dir_best_effort(parent_path)
+                    f.flush()
+                    _fsync_file(f.fileno(), path=resolved)
+            if fsync:
+                _fsync_dir(parent_path, allow_fallback=fsync_dir_allow_fallback)
         except Exception as exc:
             raise ConfigError(
                 f"Append fallito: {exc}",

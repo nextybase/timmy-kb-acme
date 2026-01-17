@@ -310,13 +310,13 @@ def _open_markdown_modal(title: str, rel_path: str, *, editable: bool = True) ->
     try:
         raw_md = _load_agents_text(rel_path)
         sections = _split_markdown_sections(raw_md)
-    except Exception as exc:  # pragma: no cover - degradazione di sicurezza
-        LOGGER.warning(
+    except Exception as exc:  # pragma: no cover - hard cut
+        LOGGER.error(
             "ui.agents_network.read_markdown_failed",
             extra={"rel_path": rel_path, "error": str(exc)},
         )
-        raw_md = _read_markdown(rel_path)
-        sections = []
+        st.error("Documento non disponibile: impossibile caricare il contenuto richiesto.")
+        st.stop()
 
     if _supports_dialog():
         dialog_builder = cast(

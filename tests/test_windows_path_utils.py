@@ -58,7 +58,7 @@ def test_safe_append_text_on_long_paths(tmp_path: Path) -> None:
     target = _build_long_path(base, depth=5, segment_len=24)
     rel_target = target.relative_to(base)
 
-    safe_append_text(base, rel_target, "riga-1\n", fsync=True)
+    safe_append_text(base, rel_target, "riga-1\n", fsync=True, fsync_dir_allow_fallback=True)
     safe_append_text(base, rel_target, "riga-2\n", fsync=False)
 
     contents = target.read_text(encoding="utf-8")

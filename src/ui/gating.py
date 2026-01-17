@@ -41,6 +41,8 @@ _LAST_PREVIEW_READY: dict[str, bool] = {}
 _CAPABILITY_CACHE: dict[Path, dict[str, object]] = {}
 _CAPABILITY_SCHEMA_VERSION = 1
 _CAPABILITY_FILENAME = "gate_capabilities.json"
+_OPTIONAL_GATES = {"drive", "vision", "tags"}
+_LAST_OPTIONAL_GATES: dict[str, dict[str, bool]] = {}
 
 
 def _log_gating_failure(event: str, exc: Exception, *, extra: dict[str, object] | None = None) -> None:
@@ -112,6 +114,9 @@ class GateState:
 
     def as_dict(self) -> dict[str, bool]:
         return {"drive": self.drive, "vision": self.vision, "tags": self.tags}
+
+
+_KNOWN_GATES = frozenset(GateState.__annotations__.keys())
 
 
 def compute_gates(env: Mapping[str, str] | None = None) -> GateState:
@@ -238,6 +243,8 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
         st.stop()
 
     groups: dict[str, list[PageSpec]] = {}
+    specs_by_group = page_specs()
+    required_gates = {name for specs in specs_by_group.values() for spec in specs for name in _requires(spec)}
     slug: str | None
     raw_ready_flag = False
     semantic_ready = False
@@ -253,6 +260,16 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
             error=exc,
         )
         return {}
+    unknown = required_gates - _KNOWN_GATES
+    if unknown:
+        _stop_gating_error(
+            "ui.gating.unknown_gate",
+            "Errore nel gating UI: gate non riconosciuto.",
+            slug=slug if "slug" in locals() else None,
+            error=RuntimeError(f"Gate non riconosciuto: {sorted(unknown)}"),
+        )
+        return {}
+
     if slug:
         try:
             ready, _path = raw_ready(slug, strict=True)
@@ -298,8 +315,32 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
         except Exception:
             pass
     _LAST_RAW_READY[slug_key] = raw_ready_flag
+    optional_required = sorted(required_gates & _OPTIONAL_GATES)
+    if optional_required:
+        last_optional = _LAST_OPTIONAL_GATES.get(slug_key, {})
+        try:
+            from ui.utils.stubs import get_streamlit
+
+            st = get_streamlit()
+        except Exception:
+            st = None
+        current_optional: dict[str, bool] = {}
+        for name in optional_required:
+            enabled = bool(getattr(gates, name, False))
+            current_optional[name] = enabled
+            if not enabled and last_optional.get(name) is not False:
+                _LOGGER.warning(
+                    "ui.gating.optional_gate_disabled",
+                    extra={"slug": slug or "", "gate": name},
+                )
+                if st is not None:
+                    try:
+                        st.warning(f"Funzionalita' opzionale non disponibile: {name}.")
+                    except Exception:
+                        pass
+        _LAST_OPTIONAL_GATES[slug_key] = current_optional
     last_preview = _LAST_PREVIEW_READY.get(slug_key)
-    for group, specs in page_specs().items():
+    for group, specs in specs_by_group.items():
         allowed = [spec for spec in specs if _satisfied(_requires(spec), gates)]
         if not raw_ready_flag:
             allowed = [spec for spec in allowed if spec.path not in {PagePaths.SEMANTICS, PagePaths.PREVIEW}]

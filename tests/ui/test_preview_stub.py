@@ -48,13 +48,8 @@ def test_preview_stub_mode_start_and_stop(tmp_path: Path, monkeypatch: pytest.Mo
     ctx = SimpleNamespace(slug=DUMMY_SLUG)
     logger = logging.getLogger("test.preview")
 
-    name = preview._start_preview(ctx, logger, status_widget=None)
-    preview._stop_preview(logger, name, status_widget=None)
-
-    log_file = preview_dir / f"{DUMMY_SLUG}.log"
-    content = log_file.read_text(encoding="utf-8")
-    assert "PREVIEW_STUB_START" in content
-    assert "PREVIEW_STUB_STOP" in content
+    with pytest.raises(ConfigError):
+        preview._start_preview(ctx, logger, status_widget=None)
     assert not st_stub.warning_messages
 
 
@@ -88,11 +83,8 @@ def test_preview_stub_absolute_log_dir(tmp_path: Path, monkeypatch: pytest.Monke
     ctx = SimpleNamespace(slug=DUMMY_SLUG)
     logger = logging.getLogger("test.preview")
 
-    name = preview._start_preview(ctx, logger, status_widget=None)
-    preview._stop_preview(logger, name, status_widget=None)
-
-    log_file = absolute_dir / f"{DUMMY_SLUG}.log"
-    assert log_file.exists()
+    with pytest.raises(ConfigError):
+        preview._start_preview(ctx, logger, status_widget=None)
     assert not st_stub.warning_messages
 
 

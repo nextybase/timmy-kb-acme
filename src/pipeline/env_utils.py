@@ -13,10 +13,12 @@ Espone:
 import importlib.util
 import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from pipeline.logging_utils import get_structured_logger
 
+from .exceptions import ConfigError
 from .path_utils import read_text_safe
 
 __all__ = [
@@ -31,97 +33,105 @@ _LOGGER = get_structured_logger("pipeline.env_utils")
 _ENV_LOADED = False
 
 
-def ensure_dotenv_loaded() -> bool:
+def ensure_dotenv_loaded(*, strict: bool = True, allow_fallback: bool = False) -> bool:
     """Carica il file .env una sola volta su richiesta esplicita.
 
-    Ritorna True se il caricamento è stato eseguito in questa chiamata,
-    False se già caricato in precedenza o se `python-dotenv` non è disponibile.
+    Ritorna True se il caricamento e stato eseguito in questa chiamata,
+    False se gia caricato in precedenza o se `python-dotenv` non e disponibile.
     """
     global _ENV_LOADED
     if _ENV_LOADED:
         return False
+    env_path = Path(".env")
     if importlib.util.find_spec("dotenv") is None:
+        if strict and env_path.exists():
+            raise ConfigError("python-dotenv non disponibile ma .env presente", file_path=str(env_path))
         return False
     try:
         from dotenv import load_dotenv
 
         loaded: Optional[bool] = load_dotenv()  # carica da CWD; non forza override
         _ENV_LOADED = True
-        try:
-            _LOGGER.info("env.loaded", extra={"loaded": bool(loaded)})
-        except Exception:
-            pass
-        # Fallback minimale: se python-dotenv non ha popolato, prova parse basilare
-        try:
-            from pathlib import Path as _Path
-
-            env_path = _Path(".env")
-            if env_path.exists():
-                # Lettura sicura rispetto alla CWD come perimetro
-                text = read_text_safe(_Path.cwd(), env_path, encoding="utf-8")
-                for line in text.splitlines():
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    if "=" not in line:
-                        continue
-                    k, v = line.split("=", 1)
-                    k = k.strip()
-                    v = v.strip().strip('"').strip("'")
-                    if k and os.environ.get(k) is None:
-                        os.environ[k] = v
-        except Exception:
-            pass
+        _LOGGER.info("env.loaded", extra={"loaded": bool(loaded)})
+        # Caricamento deterministico da .env (senza override) per garantire le variabili.
+        if env_path.exists():
+            text = read_text_safe(Path.cwd(), env_path, encoding="utf-8")
+            for line in text.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                if k and os.environ.get(k) is None:
+                    os.environ[k] = v
         return True
-    except Exception:
-        # Non propagare: il caricamento .env è best-effort
-        return False
+    except Exception as exc:
+        if allow_fallback:
+            _LOGGER.warning("env.load_failed_fallback", extra={"error": str(exc)})
+            return False
+        raise ConfigError(f"Caricamento .env fallito: {exc}", file_path=str(env_path)) from exc
     finally:
         # Non ripristiniamo le variabili mancanti: se .env le fornisce, sono necessarie
         # per i flussi reali (Drive/GitHub) e devono rimanere disponibili nel processo.
         pass
 
 
-def get_env_var(name: str, default: Optional[str] = None, *, required: bool | None = False) -> Optional[str]:
+def get_env_var(
+    name: str,
+    default: Optional[str] = None,
+    *,
+    required: bool | None = False,
+    strict: bool = True,
+    allow_fallback: bool = False,
+) -> Optional[str]:
     """Ritorna il valore di una variabile d'ambiente.
 
     - Trimma spazi; se vuota, tratta come non impostata.
-    - Se ``required`` e non presente, solleva ``KeyError``.
+    - Se ``required`` e non presente, solleva ``ConfigError`` solo in strict.
     """
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        # Best-effort: il loader è idempotente e può non essere disponibile
-        # (nessuna eccezione propagata)
-        pass
+    strict_load = strict and bool(required)
+    ensure_dotenv_loaded(strict=strict_load, allow_fallback=allow_fallback)
     val = os.environ.get(name)
     if val is None:
-        if required:
-            raise KeyError(f"ENV missing: {name}")
+        if required and strict:
+            raise ConfigError(f"ENV missing: {name}")
         return default
     sval = val.strip()
     if sval == "":
-        if required:
-            raise KeyError(f"ENV empty: {name}")
+        if required and strict:
+            raise ConfigError(f"ENV empty: {name}")
         return default
     return sval
 
 
-def get_bool(name: str, default: bool = False, *, env: Mapping[str, str] | None = None) -> bool:
+def get_bool(
+    name: str,
+    default: bool = False,
+    *,
+    env: Mapping[str, str] | None = None,
+    strict: bool | None = None,
+    allow_fallback: bool = False,
+) -> bool:
     """Parsa un booleano da ENV (o mapping fornito) usando valori comuni truthy/falsy.
 
     Truthy: 1,true,yes,on (case-insensitive). Falsy: 0,false,no,off.
-    Se non impostata o non riconosciuta, ritorna ``default``.
-    Passando ``env`` si evita il caricamento di .env ed è possibile usare mapping custom.
+    Se non impostata, ritorna sempre ``default``.
+    Se non riconosciuta, solleva `ConfigError` in strict (default su env reale) o
+    ritorna `default` solo se `allow_fallback=True` o `strict=False`.
+    Passando ``env`` si evita il caricamento di .env ed e possibile usare mapping custom.
     """
     source: Mapping[str, str]
     if env is not None:
+        if strict is None:
+            strict = False
         source = env
     else:
-        try:
-            ensure_dotenv_loaded()
-        except Exception:
-            pass
+        if strict is None:
+            strict = True
+        ensure_dotenv_loaded(strict=False, allow_fallback=allow_fallback)
         source = os.environ
     val = source.get(name)
     if val is None:
@@ -131,21 +141,30 @@ def get_bool(name: str, default: bool = False, *, env: Mapping[str, str] | None 
         return True
     if s in {"0", "false", "no", "off"}:
         return False
+    if allow_fallback:
+        return bool(default)
+    if strict:
+        raise ConfigError(f"ENV invalid boolean: {name}")
     return bool(default)
 
 
-def get_int(name: str, default: int = 0) -> int:
-    """Parsa un intero da ENV; ritorna `default` se mancante o non valido."""
-    try:
-        ensure_dotenv_loaded()
-    except Exception:
-        pass
+def get_int(name: str, default: int = 0, *, strict: bool = True, allow_fallback: bool = False) -> int:
+    """Parsa un intero da ENV; ritorna `default` se mancante.
+
+    Valore presente ma non valido: solleva `ConfigError` in strict (default),
+    oppure ritorna `default` se `allow_fallback=True` o `strict=False`.
+    """
+    ensure_dotenv_loaded(strict=False, allow_fallback=allow_fallback)
     val = os.environ.get(name)
     if val is None:
         return int(default)
     try:
         return int(str(val).strip())
-    except Exception:
+    except Exception as exc:
+        if allow_fallback:
+            return int(default)
+        if strict:
+            raise ConfigError(f"ENV invalid int: {name}", file_path=str(val)) from exc
         return int(default)
 
 

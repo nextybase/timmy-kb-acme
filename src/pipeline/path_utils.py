@@ -104,11 +104,6 @@ class PathSortError(RuntimeError):
     """Errore deterministico durante l'ordinamento dei path in STRICT."""
 
 
-def _is_strict() -> bool:
-    raw = os.getenv("TIMMY_BETA_STRICT", "")
-    return raw.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
-
-
 def _fallback_filename(raw_name: str) -> str:
     digest = hashlib.sha256(raw_name.encode("utf-8", errors="replace")).hexdigest()[:12]
     return f"file-{digest}"
@@ -302,25 +297,24 @@ def _compress_replacement(s: str, replacement: str) -> str:
 
 def is_safe_subpath(path: Path, base: Path) -> bool:
     """
-    Verifica in modo sicuro se `path` è contenuto all'interno di `base`.
+    Verifica in modo sicuro se `path` e contenuto all'interno di `base`.
     SOFT guard: usare SOLO come pre-check booleano (mai per autorizzare write/delete).
 
     Usa i percorsi risolti (realpath) per prevenire path traversal e link simbolici.
-    In caso di eccezioni durante la risoluzione, ritorna `False` e registra un errore.
     """
     try:
         path_resolved = Path(path).resolve()
         base_resolved = Path(base).resolve()
-        try:
-            path_resolved.relative_to(base_resolved)
-            return True
-        except Exception:
-            return False
-    except Exception as e:
-        _logger.error(
-            "path_utils.validation_error",
-            extra={"error": str(e), "path": str(path), "base": str(base)},
-        )
+    except Exception as exc:
+        raise ConfigError(
+            "Impossibile risolvere i path per la validazione",
+            file_path=str(path),
+        ) from exc
+
+    try:
+        path_resolved.relative_to(base_resolved)
+        return True
+    except Exception:
         return False
 
 
@@ -363,6 +357,7 @@ def iter_safe_paths(
     include_files: bool = True,
     suffixes: Sequence[str] | None = None,
     on_skip: Callable[[Path, str], None] | None = None,
+    strict: bool = False,
 ) -> Iterator[Path]:
     """
     Itera ricorsivamente percorsi sotto `root` applicando path-safety forte.
@@ -375,6 +370,7 @@ def iter_safe_paths(
             se None accetta tutti i file.
         on_skip: callback opzionale invocata con (path, motivo) per
             symlink, errori di resolve o altre condizioni scartate.
+        strict: se True, solleva errori su condizioni ambigue/insicure.
     """
 
     if not include_dirs and not include_files:
@@ -387,17 +383,23 @@ def iter_safe_paths(
     try:
         root_resolved = Path(root).resolve()
     except Exception as exc:
+        if strict:
+            raise ConfigError("Impossibile risolvere il root di iterazione", file_path=str(root)) from exc
         if on_skip:
             on_skip(Path(root), f"resolve-root:{exc}")
         return
 
     if not root_resolved.exists() or not root_resolved.is_dir():
+        if strict:
+            raise ConfigError("Root di iterazione non valido", file_path=str(root_resolved))
         return
 
     def _traverse(current: Path) -> Iterator[Path]:
         try:
             entries = sorted(current.iterdir(), key=lambda p: p.name.lower())
         except Exception as exc:
+            if strict:
+                raise ConfigError("Impossibile leggere la directory", file_path=str(current)) from exc
             if on_skip:
                 on_skip(current, f"iterdir:{exc}")
             return
@@ -406,16 +408,22 @@ def iter_safe_paths(
             try:
                 safe_entry = ensure_within_and_resolve(root_resolved, entry)
             except Exception as exc:
+                if strict:
+                    raise
                 if on_skip:
                     on_skip(entry, f"resolve:{exc}")
                 continue
 
             try:
                 if entry.is_symlink():
+                    if strict:
+                        raise PathTraversalError("Symlink non consentito", file_path=str(entry))
                     if on_skip:
                         on_skip(entry, "symlink")
                     continue
             except Exception as exc:
+                if strict:
+                    raise ConfigError("Impossibile verificare symlink", file_path=str(entry)) from exc
                 if on_skip:
                     on_skip(entry, f"symlink-check:{exc}")
                 continue
@@ -423,6 +431,8 @@ def iter_safe_paths(
             try:
                 is_dir = entry.is_dir()
             except Exception as exc:
+                if strict:
+                    raise ConfigError("Impossibile ottenere lo stato del path", file_path=str(entry)) from exc
                 if on_skip:
                     on_skip(entry, f"stat:{exc}")
                 continue
@@ -448,6 +458,7 @@ def iter_safe_pdfs(
     on_skip: Callable[[Path, str], None] | None = None,
     use_cache: bool = False,
     cache_ttl_s: float | None = None,
+    strict: bool = False,
 ) -> Iterator[Path]:
     """Convenience wrapper che restituisce solo file PDF in modo path-safe."""
     if not use_cache:
@@ -457,6 +468,7 @@ def iter_safe_pdfs(
             include_files=True,
             suffixes=(".pdf",),
             on_skip=on_skip,
+            strict=strict,
         )
         return
 
@@ -464,11 +476,15 @@ def iter_safe_pdfs(
     try:
         resolved_root = Path(root).resolve()
     except Exception as exc:
+        if strict:
+            raise ConfigError("Impossibile risolvere il root dei PDF", file_path=str(root)) from exc
         if on_skip:
             on_skip(Path(root), f"resolve-root:{exc}")
         return
 
     if not resolved_root.exists() or not resolved_root.is_dir():
+        if strict:
+            raise ConfigError("Root PDF non valido", file_path=str(resolved_root))
         clear_iter_safe_pdfs_cache(root=resolved_root)
         return
 
@@ -569,12 +585,20 @@ def _load_slug_regex() -> str:
             candidate = cast(Any, settings).get_value("slug_regex", default=default_regex)
         else:
             candidate = getattr(settings, "slug_regex", default_regex)
-    except Exception as e:
-        raise ConfigError("Impossibile ottenere slug_regex da Settings", file_path=str(settings)) from e
+    except Exception as exc:
+        raise ConfigError("Impossibile ottenere slug_regex da Settings", file_path=str(settings)) from exc
 
     if isinstance(candidate, str) and candidate.strip():
-        return candidate.strip()
-    return default_regex
+        pattern = candidate.strip()
+    else:
+        pattern = default_regex
+
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        raise ConfigError("slug_regex non valida", file_path=str(pattern)) from exc
+
+    return pattern
 
 
 def clear_slug_regex_cache() -> None:
@@ -593,10 +617,8 @@ def is_valid_slug(slug: str) -> bool:
     pattern = _load_slug_regex()
     try:
         return bool(re.fullmatch(pattern, slug))
-    except re.error as e:
-        # Regex malformata in config → fallback sicuro
-        _logger.error("path_utils.slug_regex_invalid", extra={"error": str(e)})
-        return bool(re.fullmatch(r"^[a-z0-9-]+$", slug))
+    except re.error as exc:
+        raise ConfigError("slug_regex non valida", file_path=str(pattern)) from exc
 
 
 # -------------------------
@@ -620,7 +642,14 @@ def normalize_path(path: Path) -> Path:
         raise ConfigError("Impossibile normalizzare il path", file_path=str(path)) from e
 
 
-def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_") -> str:
+def sanitize_filename(
+    name: str,
+    max_length: int = 100,
+    *,
+    replacement: str = "_",
+    strict: bool | None = None,
+    allow_fallback: bool = False,
+) -> str:
     """Pulisce un nome file per l'uso su filesystem.
 
     Operazioni:
@@ -629,19 +658,24 @@ def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_
     - comprime ripetizioni contigue di `replacement` e trimma ai lati
     - rimuove caratteri di controllo
     - tronca a `max_length`
-    - garantisce un fallback non vuoto
 
     Args:
         name: nome originale.
         max_length: lunghezza massima del risultato (default 100).
         replacement: carattere con cui sostituire i caratteri non permessi (default "_").
+        strict: se True, solleva `FilenameSanitizeError` su errori/risultato vuoto.
+            Se None, usa TIMMY_BETA_STRICT per compatibilita legacy.
+        allow_fallback: se True, usa un fallback deterministico su errore/risultato vuoto.
     """
     raw_name = str(name or "")
+    if strict is None:
+        raw = os.getenv("TIMMY_BETA_STRICT", "")
+        strict = raw.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
     try:
         # Normalizzazione unicode
         s = unicodedata.normalize("NFKC", raw_name)
 
-        # Sostituisci tutto ciò che non è [\w.-] con replacement
+        # Sostituisci tutto cio che non e [\w.-] con replacement
         s = _SANITIZE_DISALLOWED_RE.sub(replacement, s)
 
         # Rimuovi caratteri di controllo residui
@@ -654,16 +688,17 @@ def sanitize_filename(name: str, max_length: int = 100, *, replacement: str = "_
         if max_length and len(s) > int(max_length):
             s = s[: int(max_length)].rstrip(replacement)
 
-        # Fallback deterministico
-        return s or _fallback_filename(raw_name)
-    except Exception as e:
-        if _is_strict():
-            raise FilenameSanitizeError("Errore sanitizzazione nome file") from e
-        _logger.error(
-            "path_utils.sanitize_filename.error",
-            extra={"error": str(e), "raw_name": name},
-        )
-        return _fallback_filename(raw_name)
+        if s:
+            return s
+        if allow_fallback or not strict:
+            # Fallback esplicito per contesti non-exec o non-strict legacy.
+            return _fallback_filename(raw_name)
+        raise FilenameSanitizeError("Nome file sanitizzato vuoto")
+    except Exception as exc:
+        if allow_fallback or not strict:
+            # Fallback esplicito per contesti non-exec o non-strict legacy.
+            return _fallback_filename(raw_name)
+        raise FilenameSanitizeError("Errore sanitizzazione nome file") from exc
 
 
 def to_kebab(s: str) -> str:
@@ -689,21 +724,20 @@ def to_kebab(s: str) -> str:
 # ----------------------------------------
 # Ordinamento deterministico
 # ----------------------------------------
-def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Path]:
+def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None, *, allow_fallback: bool = False) -> List[Path]:
     """Restituisce i path ordinati in modo deterministico.
 
     Criterio: confronto case-insensitive sul path relativo a `base` (se fornita),
-    altrimenti sul path assoluto risolto. I path non risolvibili vengono gestiti
-    con fallback non-eccezionale e inclusi comunque nell'ordinamento.
+    altrimenti sul path assoluto risolto. I path non risolvibili sollevano errore
+    a meno di `allow_fallback`.
     """
-    strict = _is_strict()
     items: List[Tuple[str, Path]] = []
     base_resolved: Optional[Path] = None
     if base is not None:
         try:
             base_resolved = Path(base).resolve()
         except Exception as exc:
-            if strict:
+            if not allow_fallback:
                 raise PathSortError("Impossibile risolvere il path base per ordinamento") from exc
             base_resolved = None
 
@@ -712,7 +746,7 @@ def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Pat
         try:
             q_res = q.resolve()
         except Exception as exc:
-            if strict:
+            if not allow_fallback:
                 raise PathSortError(f"Impossibile risolvere il path per ordinamento: {q}") from exc
             q_res = q
 

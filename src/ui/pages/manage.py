@@ -35,6 +35,13 @@ LOGGER = get_structured_logger("ui.manage")
 st = get_streamlit()
 
 
+def _warn_once(key: str, event: str, *, extra: dict[str, object]) -> None:
+    if st.session_state.get(key):
+        return
+    st.session_state[key] = True
+    LOGGER.warning(event, extra=extra)
+
+
 def _safe_rerun() -> None:
     rerun_fn = getattr(st, "rerun", None)
     if callable(rerun_fn):
@@ -370,6 +377,11 @@ if slug:
             LOGGER.exception("ui.manage.drive.diff_failed", extra={"slug": slug, "error": str(e)})
             st.error(f"Errore nella vista Diff: {e}")
     else:
+        _warn_once(
+            "manage_drive_diff_unavailable",
+            "ui.manage.drive.diff_unavailable",
+            extra={"slug": slug, "service": "ui.services.drive:render_drive_diff"},
+        )
         st.info("Vista Diff non disponibile.")
 
     # --- Sezioni Gestisci cliente: download, arricchimento, README ---
@@ -408,6 +420,15 @@ if slug:
     col_emit, col_download, col_semantic = st.columns(3)
 
     with col_emit:
+        if emit_disabled:
+            _warn_once(
+                "manage_readme_unavailable",
+                "ui.manage.readme.unavailable",
+                extra={"slug": slug, "service": "ui.services.drive_runner:emit_readmes_for_raw"},
+            )
+            st.caption(
+                "Generazione README non disponibile: installa gli extra Drive e configura le credenziali richieste."
+            )
         if _column_button(
             st,
             "Genera Readme",
@@ -464,6 +485,13 @@ if slug:
             status_msg = f"Percorso SERVICE_ACCOUNT_FILE non valido: {drive_env.service_account_file!r}."
         else:
             status_msg = default_msg
+        if download_disabled:
+            reason = "service_missing" if _plan_raw_download is None else "config_incomplete"
+            _warn_once(
+                "manage_drive_download_unavailable",
+                "ui.manage.drive.download_unavailable",
+                extra={"slug": slug, "reason": reason},
+            )
         drive_component.render_drive_status_message(st, download_disabled, status_msg)
         if _column_button(
             st,

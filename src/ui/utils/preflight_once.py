@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""Utility per gestire il bypass del preflight su singola run."""
+"""Utility per gestire lo stato del preflight nella UI."""
 
 from __future__ import annotations
 
@@ -12,27 +12,14 @@ def apply_preflight_once(
     logger: Optional[Any] = None,
 ) -> bool:
     """
-    Applica il bypass del preflight **solo per questa esecuzione**.
+    Beta 1.0: bypass disabilitato nella UI runtime.
 
-    - Non modifica preferenze persistenti.
-    - È idempotente nella stessa sessione (loggato una sola volta).
-
-    Ritorna:
-        True se il bypass è attivo per questa run, False altrimenti.
+    Ritorna sempre False (nessun effetto su session_state).
     """
-    if not skip_once:
-        return False
-
-    if session_state.get("_preflight_once_applied", False):
-        session_state["preflight_ok"] = True
-        return True
-
-    session_state["preflight_ok"] = True
-    session_state["_preflight_once_applied"] = True
-
     if logger is not None:
         try:
-            logger.info("ui.preflight.once", extra={"mode": "one_shot"})
+            if skip_once:
+                logger.warning("ui.preflight.once.disabled", extra={"disabled": True})
         except Exception:
             pass
-    return True
+    return False

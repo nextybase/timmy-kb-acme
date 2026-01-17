@@ -39,7 +39,7 @@ def test_enrich_frontmatter_ignores_md_dir_override(tmp_path: Path):
     _write_minimal_layout(base)
 
     md_file = (base / "book") / "doc_ai.md"
-    md_file.write_text("Contenuto senza frontmatter", encoding="utf-8")
+    md_file.write_text("---\ntitle:\n---\nContenuto senza frontmatter", encoding="utf-8")
 
     ctx = DummyCtx(base=base, md=md_custom, raw=raw)
     logger = logging.getLogger("test")
@@ -66,7 +66,7 @@ def test_enrich_frontmatter_does_not_touch_md_dir_outside_base(tmp_path: Path):
     outside_file.write_text("Contenuto", encoding="utf-8")
 
     inside_file = (base / "book") / "doc_ai.md"
-    inside_file.write_text("Contenuto", encoding="utf-8")
+    inside_file.write_text("---\ntitle:\n---\nContenuto", encoding="utf-8")
 
     ctx = DummyCtx(base=base, md=md_outside, raw=raw)
     logger = logging.getLogger("test")

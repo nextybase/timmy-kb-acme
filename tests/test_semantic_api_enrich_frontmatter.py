@@ -38,7 +38,7 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
     book = base / "book"
     _write_minimal_layout(base)
     # Prepare two MD files: one without frontmatter, one with existing frontmatter
-    _write(book / "data_governance-intro.md", "Body A\n")
+    _write(book / "data_governance-intro.md", "---\ntitle:\n---\nBody A\n")
     existing = (
         "---\n"
         "title: Existing Title\n"
@@ -51,7 +51,7 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
         "Existing body\n"
     )
     _write(book / "analytics_report.md", existing)
-    _write(book / "risk" / "analytics_nested.md", "Nested body\n")
+    _write(book / "risk" / "analytics_nested.md", "---\ntitle:\n---\nNested body\n")
 
     # Minimal vocab with aliases; both canon and alias should map back to canon
     vocab: Dict[str, Dict[str, Sequence[str]]] = {

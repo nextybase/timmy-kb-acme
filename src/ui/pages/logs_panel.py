@@ -66,6 +66,23 @@ from ui.utils.stubs import get_streamlit
 st = get_streamlit()
 
 
+def _warn_once(key: str, event: str, *, page: str, slug: str | None, message: str, decision: str) -> None:
+    if st.session_state.get(key):
+        return
+    st.session_state[key] = True
+    logger = get_structured_logger("ui.logs_panel")
+    logger.warning(
+        event,
+        extra={
+            "page": page,
+            "slug": slug or "",
+            "reason": message,
+            "decision": decision,
+        },
+    )
+    st.warning(message)
+
+
 def _safe_link_button(label: str, url: str, **kwargs: Any) -> bool:
     """Fallback compatto quando l'API `link_button` non è disponibile."""
     link_btn = getattr(st, "link_button", None)
@@ -195,6 +212,7 @@ def _render_stack_controls(
     action_button: Callable[..., bool],
     start_stack: StackAction | None,
     stop_stack: StackAction | None,
+    slug: str | None,
 ) -> None:
     """
     Rende i controlli Start/Stop stack e i messaggi informativi
@@ -205,6 +223,17 @@ def _render_stack_controls(
             "Docker non attivo: avvia il daemon prima di usare i pulsanti Grafana."
             f" Esempio: `{docker_cmd} up -d` nella root del progetto."
         )
+        return
+    if start_stack is None and stop_stack is None:
+        _warn_once(
+            "logs_panel_stack_controls_unavailable",
+            "ui.logs_panel.stack_controls_unavailable",
+            page="logs_panel",
+            slug=slug,
+            message="Controlli stack non disponibili: modulo observability_stack non importato.",
+            decision="HIDE",
+        )
+        st.caption("Controlli stack non disponibili.")
         return
 
     stack_ready = stack_enabled and grafana_reachable
@@ -352,6 +381,7 @@ def _render_observability_controls() -> None:
         action_button=action_button,
         start_stack=start_observability_stack,
         stop_stack=stop_observability_stack,
+        slug=slug,
     )
 
     with col2:

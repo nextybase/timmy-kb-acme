@@ -94,8 +94,8 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
 
     def _fake_convert(ctx, md_dir: Path | None = None) -> None:  # type: ignore[no-untyped-def]
         target = md_dir or ctx.md_dir
-        (target / "A.md").write_text("A", encoding="utf-8")
-        (target / "B.md").write_text("B", encoding="utf-8")
+        (target / "A.md").write_text("---\ntitle: A\n---\nA", encoding="utf-8")
+        (target / "B.md").write_text("---\ntitle: B\n---\nB", encoding="utf-8")
 
     monkeypatch.setattr(conv, "_convert_md", _fake_convert)
     monkeypatch.setattr(

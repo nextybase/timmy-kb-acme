@@ -168,32 +168,16 @@ def get_vision_model(default: str | None = None) -> str:
 
 def get_skip_preflight() -> bool:
     """
-    Flag persistente per saltare il preflight (config/config.yaml -> ui.skip_preflight).
+    Beta 1.0: il preflight non e' bypassabile dalla UI runtime.
     """
-    cfg: GlobalConfig = _load_config()
-    ui_section: Any = cfg.get("ui")
-    if isinstance(ui_section, dict):
-        try:
-            return bool(ui_section.get("skip_preflight", False))
-        except Exception:
-            return False
-    try:
-        return bool(cfg.get("skip_preflight", False))
-    except Exception:
-        return False
+    return False
 
 
 def set_skip_preflight(flag: bool) -> None:
     """
-    Aggiorna ui.skip_preflight persistendo la configurazione in modo atomico.
+    Beta 1.0: la preferenza di bypass e' disabilitata nella UI runtime.
     """
-    cfg: GlobalConfig = _load_config()
-    ui_section: Any = cfg.get("ui")
-    if not isinstance(ui_section, dict):
-        ui_section = {}
-    ui_section["skip_preflight"] = bool(flag)
-    cfg["ui"] = ui_section
-    _save_config(cfg)
+    _logger.warning("ui.skip_preflight.disabled", extra={"requested": bool(flag)})
 
 
 def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:

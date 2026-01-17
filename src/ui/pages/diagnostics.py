@@ -5,10 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional, cast
 
+from pipeline.logging_utils import get_structured_logger
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
+LOGGER = get_structured_logger("ui.diagnostics")
 
 from ui.chrome import render_chrome_then_require
 from ui.utils import diagnostics as diag  # verrà monkeypatchato nei test
@@ -16,7 +18,20 @@ from ui.utils import diagnostics as diag  # verrà monkeypatchato nei test
 TAIL_BYTES = 4000
 
 
-def _render_counts(base_dir: Optional[Path]) -> None:
+def _warn_once(key: str, event: str, *, slug: str | None, message: str, level: str = "warning") -> None:
+    if st.session_state.get(key):
+        return
+    st.session_state[key] = True
+    extra = {"page": "diagnostics", "slug": slug or "", "reason": message, "decision": "HIDE"}
+    if level == "error":
+        LOGGER.error(event, extra=extra)
+        st.error(message)
+    else:
+        LOGGER.warning(event, extra=extra)
+        st.warning(message)
+
+
+def _render_counts(base_dir: Optional[Path], *, slug: str | None) -> None:
     """Mostra un riepilogo minimale del workspace (raw/book/semantic)."""
     with st.expander("Workspace", expanded=False):
         if not base_dir:
@@ -25,8 +40,14 @@ def _render_counts(base_dir: Optional[Path]) -> None:
 
         try:
             summaries = diag.summarize_workspace_folders(base_dir)
-        except Exception:
-            summaries = {}
+        except Exception as exc:
+            _warn_once(
+                f"diag_counts_failed_{slug}",
+                "ui.diagnostics.counts_failed",
+                slug=slug,
+                message=f"Impossibile leggere il riepilogo workspace: {exc}",
+            )
+            return
 
         if summaries:
 
@@ -52,8 +73,14 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
         # Elenco log
         try:
             log_files = diag.collect_log_files(base_dir)
-        except Exception:
-            log_files = []
+        except Exception as exc:
+            _warn_once(
+                f"diag_logs_list_failed_{slug}",
+                "ui.diagnostics.logs_list_failed",
+                slug=slug,
+                message=f"Impossibile elencare i log: {exc}",
+            )
+            return
 
         if not log_files:
             st.info("Nessun log trovato.")
@@ -75,8 +102,13 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
                     st.code(tail_bytes.decode(errors="replace"))
                 except Exception:
                     st.code(tail_bytes)
-        except Exception:
-            st.warning("Impossibile leggere il log più recente.")
+        except Exception as exc:
+            _warn_once(
+                f"diag_logs_tail_failed_{slug}",
+                "ui.diagnostics.logs_tail_failed",
+                slug=slug,
+                message=f"Impossibile leggere il log più recente: {exc}",
+            )
 
         # Download archivio log
         try:
@@ -88,9 +120,13 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
                     file_name=f"{(slug or 'logs')}.zip",
                     mime="application/zip",
                 )
-        except Exception:
-            # best-effort: la pagina resta utilizzabile anche senza archivio
-            pass
+        except Exception as exc:
+            _warn_once(
+                f"diag_logs_archive_failed_{slug}",
+                "ui.diagnostics.logs_archive_failed",
+                slug=slug,
+                message=f"Archivio log non disponibile: {exc}",
+            )
 
 
 def main() -> None:
@@ -101,12 +137,17 @@ def main() -> None:
 
     try:
         base_dir = diag.resolve_base_dir(slug)
-    except Exception:
-        base_dir = None
+    except Exception as exc:
+        LOGGER.error(
+            "ui.diagnostics.base_dir_failed",
+            extra={"page": "diagnostics", "slug": slug or "", "reason": str(exc), "decision": "STOP"},
+        )
+        st.error(f"Impossibile risolvere la base dir: {exc}")
+        st.stop()
 
-    st.write(f"Base dir: `{base_dir or 'n/d'}`")
+    st.write(f"Base dir: `{base_dir}`")
 
-    _render_counts(base_dir)
+    _render_counts(base_dir, slug=slug)
     _render_logs(base_dir, slug)
 
 

@@ -37,6 +37,7 @@ else:  # pragma: no cover
     ClientContext = Any  # type: ignore[misc]
 
 _PREVIEW_MODE = os.getenv("PREVIEW_MODE", "").strip().lower()
+_PREVIEW_IMPORT_ERROR: str | None = None
 StartPreviewFn = Callable[[Any, logging.Logger], str]
 StopPreviewFn = Callable[[logging.Logger, Optional[str]], None]
 
@@ -46,41 +47,73 @@ _STOP_PREVIEW: StopPreviewFn | None = None
 
 def _load_preview_impl() -> bool:
     """Import lazy degli adapter preview per evitare side-effect a import-time."""
-    global _START_PREVIEW, _STOP_PREVIEW, _PREVIEW_MODE
+    global _START_PREVIEW, _STOP_PREVIEW, _PREVIEW_MODE, _PREVIEW_IMPORT_ERROR
     if _PREVIEW_MODE == "stub":
+        _PREVIEW_IMPORT_ERROR = "PREVIEW_MODE=stub"
         return False
     if _START_PREVIEW and _STOP_PREVIEW:
         return True
     try:
         from adapters.preview import start_preview as _sp
         from adapters.preview import stop_preview as _xp
-    except Exception:
-        _PREVIEW_MODE = "stub"
+    except Exception as exc:
+        _PREVIEW_IMPORT_ERROR = repr(exc)
         return False
     _START_PREVIEW, _STOP_PREVIEW = _sp, _xp
+    _PREVIEW_IMPORT_ERROR = None
     return True
 
 
+def _preview_unavailable_reason() -> str | None:
+    if _PREVIEW_MODE == "stub":
+        return "Preview disabilitata (PREVIEW_MODE=stub)."
+    if not _load_preview_impl():
+        detail = f" Dettaglio: {_PREVIEW_IMPORT_ERROR}" if _PREVIEW_IMPORT_ERROR else ""
+        return f"Adapter preview non disponibile.{detail}"
+    if _START_PREVIEW is None or _STOP_PREVIEW is None:
+        return "Adapter preview incompleto."
+    return None
+
+
+def _log_preview_unavailable(logger: logging.Logger, slug: str, reason: str) -> None:
+    key = "_preview_unavailable_reason"
+    if st.session_state.get(key) == reason:
+        return
+    st.session_state[key] = reason
+    try:
+        logger.warning(
+            "ui.preview.unavailable",
+            extra={"slug": slug, "reason": reason, "mode": _PREVIEW_MODE},
+        )
+    except Exception:
+        pass
+
+
 def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:
-    if _load_preview_impl():
-        if _START_PREVIEW is None:
-            return _start_preview_stub(ctx, logger, status_widget)
-        name = _START_PREVIEW(ctx, logger)
-        if status_widget is not None and hasattr(status_widget, "update"):
-            status_widget.update(label=f"Preview avviata ({name}).", state="complete")
-        return name
-    return _start_preview_stub(ctx, logger, status_widget)
+    reason = _preview_unavailable_reason()
+    if reason is not None:
+        raise ConfigError(
+            f"Preview non disponibile: {reason}",
+            code="preview.unavailable",
+            component="preview",
+        )
+    name = _START_PREVIEW(ctx, logger)
+    if status_widget is not None and hasattr(status_widget, "update"):
+        status_widget.update(label=f"Preview avviata ({name}).", state="complete")
+    return name
 
 
 def _stop_preview(logger: logging.Logger, container_name: Optional[str], status_widget: Any) -> None:
-    if _load_preview_impl():
-        if _STOP_PREVIEW is None:
-            return
-        _STOP_PREVIEW(logger, container_name)
-        if status_widget is not None and hasattr(status_widget, "update"):
-            status_widget.update(label="Preview arrestata.", state="complete")
-        return
-    _stop_preview_stub(logger, container_name, status_widget)
+    reason = _preview_unavailable_reason()
+    if reason is not None:
+        raise ConfigError(
+            f"Preview non disponibile: {reason}",
+            code="preview.unavailable",
+            component="preview",
+        )
+    _STOP_PREVIEW(logger, container_name)
+    if status_widget is not None and hasattr(status_widget, "update"):
+        status_widget.update(label="Preview arrestata.", state="complete")
 
 
 def _preview_stub_warning(message: str, *, error: Exception | None = None, base: Path | None = None) -> None:
@@ -258,6 +291,11 @@ else:
 
     else:
         col_start, col_stop = st.columns(2)
+        reason = _preview_unavailable_reason()
+        if reason is not None:
+            _log_preview_unavailable(logger, slug, reason)
+            st.error(f"Preview non disponibile: {reason}")
+            st.stop()
         if _column_button(col_start, "Avvia preview", key="btn_preview_start"):
             try:
                 with status_guard(

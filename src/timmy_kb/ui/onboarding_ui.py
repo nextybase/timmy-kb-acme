@@ -216,58 +216,26 @@ def _run_preflight_flow(
     st_module: StreamlitLike,
     *,
     logger: logging.Logger,
-    get_skip_preflight,
-    set_skip_preflight,
-    apply_preflight_once,
     run_preflight,
     status_guard,
 ) -> None:
     """
-    Esegue (o salta) il preflight, gestendo session_state e rerun/stop.
+    Esegue il preflight, gestendo session_state e rerun/stop.
 
-    Mantiene la stessa semantica del blocco precedente in main:
-    - se preflight_ok è già True → non fa nulla;
-    - se skip_preflight è attivo → setta preflight_ok=True e prosegue;
-    - altrimenti mostra la UI di controllo, blocca finché non si preme Prosegui
+    Beta 1.0: il preflight e' obbligatorio (nessun bypass).
+    - se preflight_ok e' gia' True non fa nulla;
+    - altrimenti mostra la UI di controllo, blocca finche' non si preme Prosegui
       o in caso di errore chiama st.stop().
     """
-    skip_preflight = get_skip_preflight()
-
     if st_module.session_state.get("preflight_ok", False):
         return
 
     _load_dotenv_best_effort(logger)
 
-    if skip_preflight:
-        st_module.session_state["preflight_ok"] = True
-        return
-
     _render_preflight_header(st_module, logger)
     box = st_module.container()
     with box:
         with st_module.expander("Prerequisiti", expanded=True):
-            current_skip = skip_preflight
-            new_skip = st_module.checkbox(
-                "Salta il controllo",
-                value=current_skip,
-                help="Preferenza persistente (config/config.yaml -> ui.skip_preflight).",
-            )
-            if new_skip != current_skip:
-                try:
-                    set_skip_preflight(new_skip)
-                    st_module.toast("Preferenza aggiornata.")
-                except Exception as exc:  # pragma: no cover - UI feedback best effort
-                    st_module.warning(f"Impossibile salvare la preferenza: {exc}")
-
-            once_skip = st_module.checkbox(
-                "Salta il controllo solo per questa esecuzione",
-                value=False,
-                help="Bypassa il preflight in questa sessione senza modificare la preferenza persistente.",
-            )
-            if apply_preflight_once(once_skip, st_module.session_state, logger):
-                st_module.toast("Preflight saltato per questa run.")
-                st_module.rerun()
-
             try:
                 with status_guard(
                     "Controllo prerequisiti...",
@@ -365,13 +333,11 @@ def main() -> None:
     except Exception as exc:  # pragma: no cover
         raise RuntimeError("Streamlit non disponibile: installa le dipendenze UI") from exc
 
-    from ui.config_store import get_skip_preflight, set_skip_preflight  # noqa: E402
     from ui.gating import compute_gates, visible_page_specs, write_gate_capability_manifest  # noqa: E402
     from ui.preflight import run_preflight  # noqa: E402
     from ui.theme_enhancements import inject_theme_css  # noqa: E402
     from ui.utils import get_active_slug  # noqa: E402
     from ui.utils.branding import get_favicon_path  # noqa: E402
-    from ui.utils.preflight_once import apply_preflight_once  # noqa: E402
     from ui.utils.slug import clear_active_slug  # noqa: E402
     from ui.utils.status import status_guard  # noqa: E402
     from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
@@ -430,9 +396,6 @@ def main() -> None:
     _run_preflight_flow(
         st_module=st,
         logger=logger,
-        get_skip_preflight=get_skip_preflight,
-        set_skip_preflight=set_skip_preflight,
-        apply_preflight_once=apply_preflight_once,
         run_preflight=run_preflight,
         status_guard=status_guard,
     )
