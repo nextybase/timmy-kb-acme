@@ -9,9 +9,7 @@ from pipeline.exceptions import ConfigError
 from timmy_kb.cli import pre_onboarding
 
 
-def test_ensure_local_workspace_for_ui_merge_failure_is_fatal(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_ensure_local_workspace_for_ui_merge_failure_is_fatal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     workspace_root = tmp_path / "workspace"
     template_root = tmp_path / "template"
     (template_root / "config").mkdir(parents=True, exist_ok=True)

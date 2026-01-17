@@ -88,6 +88,7 @@ def _walk_drive_tree(service: Any, root_id: str) -> Iterable[Tuple[List[str], Di
     path_parts = lista di nomi cartella dal root ai figli (sanificati).
     """
     stack: List[Tuple[str, List[str]]] = [(root_id, [])]
+    logger = get_structured_logger("pipeline.drive.download")
     while stack:
         folder_id, parts = stack.pop()
         children = _list_children(
@@ -98,11 +99,21 @@ def _walk_drive_tree(service: Any, root_id: str) -> Iterable[Tuple[List[str], Di
         for it in children:
             name = sanitize_filename(it.get("name") or "")
             if not name:
-                # Fallback generico, utile in casi estremi di nomi vuoti
-                name = f"item-{it.get('id','unknown')[:8]}"
+                logger.warning(
+                    "drive.tree_item.invalid",
+                    extra={"reason": "missing_name"},
+                )
+                continue
+            file_id = it.get("id") or ""
+            if not file_id:
+                logger.warning(
+                    "drive.tree_item.invalid",
+                    extra={"reason": "missing_id", "item_name": name},
+                )
+                continue
             mime = it.get("mimeType")
             if mime == MIME_FOLDER:
-                stack.append((it["id"], parts + [name]))
+                stack.append((file_id, parts + [name]))
                 yield (parts, it)  # opzionale: superficie per chi vuole "vedere" anche le cartelle
             else:
                 yield (parts, it)

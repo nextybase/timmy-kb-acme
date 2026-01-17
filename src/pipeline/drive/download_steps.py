@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional, Sequence
 
+from pipeline.exceptions import PipelineError
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import sanitize_filename
 
 
@@ -43,23 +45,48 @@ def discover_candidates(
 ) -> list[DriveCandidate]:
     """Restituisce i candidati download (categoria, filename, destinazione, id)."""
     candidates: list[DriveCandidate] = []
+    invalid: list[dict[str, Any]] = []
+    log = logger if logger is not None else get_structured_logger("pipeline.drive.download_steps")
 
     def _append(category: str, file_info: Dict[str, Any], rel_parts: Sequence[str]) -> None:
-        name = sanitize_filename(file_info.get("name") or "")
+        raw_name = file_info.get("name") or ""
         file_id = file_info.get("id") or ""
-        if not name or not file_id:
+        if not raw_name or not file_id:
+            invalid.append(
+                {
+                    "category": category,
+                    "has_name": bool(raw_name),
+                    "has_id": bool(file_id),
+                }
+            )
+            log.warning(
+                "drive.candidate.invalid",
+                extra={
+                    "category": category,
+                    "has_name": bool(raw_name),
+                    "has_id": bool(file_id),
+                    "reason": "missing_name_or_id",
+                },
+            )
             return
+        name = sanitize_filename(raw_name)
         if not name.lower().endswith(".pdf"):
             name = f"{name}.pdf"
         remote_size = int(file_info.get("size") or 0)
         try:
             dest = ensure_dest(base_dir, local_root, list(rel_parts), name)
         except Exception as exc:
-            if logger is not None:
-                logger.warning(
-                    "drive.candidate.ensure_failed",
-                    extra={"category": category, "file_name": name, "error": str(exc)},
-                )
+            invalid.append(
+                {
+                    "category": category,
+                    "file_name": name,
+                    "reason": "ensure_dest_failed",
+                }
+            )
+            log.error(
+                "drive.candidate.ensure_failed",
+                extra={"category": category, "file_name": name, "error": str(exc)},
+            )
             return
         candidates.append(
             DriveCandidate(
@@ -81,9 +108,32 @@ def discover_candidates(
         category = (folder.get("name") or "").strip()
         folder_id = folder.get("id") or ""
         if not category or not folder_id:
+            invalid.append(
+                {
+                    "category": category,
+                    "has_name": bool(category),
+                    "has_id": bool(folder_id),
+                    "reason": "missing_folder_name_or_id",
+                }
+            )
+            log.warning(
+                "drive.candidate.folder_invalid",
+                extra={
+                    "category": category,
+                    "has_name": bool(category),
+                    "has_id": bool(folder_id),
+                    "reason": "missing_folder_name_or_id",
+                },
+            )
             continue
         for file_info in list_pdfs(service, folder_id):
             _append(category, file_info, [category])
+
+    if invalid:
+        raise PipelineError(
+            f"Drive candidates invalid: {len(invalid)} elementi scartati.",
+            component="drive.download",
+        )
 
     return candidates
 
@@ -91,17 +141,27 @@ def discover_candidates(
 def emit_progress(
     candidates: Iterable[DriveCandidate],
     callback: Optional[Callable[[int, int, str], None]],
+    *,
+    logger: Optional[Any] = None,
 ) -> None:
     """Invoca callback(done, total, label) per ogni candidato."""
     if not callable(callback):
         return
     cand_list = list(candidates)
     total = len(cand_list)
+    log = logger if logger is not None else get_structured_logger("pipeline.drive.download_steps")
     for idx, cand in enumerate(cand_list, start=1):
         try:
             callback(idx, total, cand.label)
-        except Exception:
-            continue
+        except Exception as exc:
+            log.error(
+                "drive.progress_callback.failed",
+                extra={"index": idx, "total": total, "label": cand.label, "error": str(exc)},
+            )
+            raise PipelineError(
+                "Callback di progresso fallita durante il download Drive.",
+                component="drive.download",
+            ) from exc
 
 
 def snapshot_existing(candidates: Iterable[DriveCandidate]) -> set[Path]:
