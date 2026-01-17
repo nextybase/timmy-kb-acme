@@ -35,6 +35,12 @@ except Exception:  # pragma: no cover
     st = None
 
 
+def _require_streamlit() -> Any:
+    if st is None:
+        raise RuntimeError("Streamlit not available")
+    return st
+
+
 def _safe_rerun() -> None:
     """Richiede un rerun Streamlit se disponibile, senza dipendere da src.ui.app."""
     if st is None:
@@ -91,24 +97,27 @@ CLIENT_CONTEXT_ERROR_MSG = (
 
 def _reset_to_landing() -> None:
     """Reimposta lo stato UI e torna alla landing (slug vuoto)."""
-    if st is None:
-        return
+    st_module = _require_streamlit()
     preserve = {"phase", _ui_key("phase")}
-    for key in list(st.session_state.keys()):
+    for key in list(st_module.session_state.keys()):
         if key not in preserve:
-            st.session_state.pop(key, None)
+            st_module.session_state.pop(key, None)
     _state_set("slug", "")
-    try:
-        _safe_rerun()
-    except Exception:
-        pass
+    _safe_rerun()
 
 
 def _resolve_layout(slug: str) -> WorkspaceLayout | None:
     try:
         return get_ui_workspace_layout(slug, require_env=False)
-    except Exception:
+    except (ConfigError, InvalidSlug):
         return None
+    except Exception as exc:
+        log = get_structured_logger("ui.landing_slug")
+        log.exception(
+            "ui.landing_slug.resolve_layout_failed",
+            extra={"slug": slug, "error": repr(exc)},
+        )
+        raise
 
 
 def _layout_missing_message(slug: str) -> str:
@@ -160,7 +169,9 @@ def _st_notify(level: str, message: str) -> None:
     Compatibile con stub/dummy usati nei test dove `st.error`/`st.warning`
     possono non esistere. Non solleva eccezioni.
     """
+    log = get_structured_logger("ui.landing_slug")
     if st is None:
+        log.warning("ui.landing_slug.notify_unavailable", extra={"requested_level": level})
         return
     # Prova il livello richiesto, poi degrada a warning/info
     for name in (level, "warning", "info"):
@@ -168,14 +179,23 @@ def _st_notify(level: str, message: str) -> None:
         if callable(fn):
             try:
                 fn(message)
-                break
-            except Exception:
+                if name != level:
+                    log.warning(
+                        "ui.landing_slug.notify_degraded",
+                        extra={"requested_level": level, "used_method": name},
+                    )
+                return
+            except Exception as exc:
+                log.warning(
+                    "ui.landing_slug.notify_failed",
+                    extra={"requested_level": level, "used_method": name, "error": repr(exc)},
+                )
                 continue
+    log.warning("ui.landing_slug.notify_unhandled", extra={"requested_level": level})
 
 
 def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str, str]:
-    if st is None:
-        raise RuntimeError("Streamlit non disponibile per la landing UI.")
+    _require_streamlit()
     client_name: str = fallback_name or slug
     try:
         ctx = get_client_context(slug, require_env=False)
@@ -191,15 +211,13 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
     _state_set("client_locked", True)
     _state_set("active_section", "Configurazione")
     _state_pop("vision_workflow")
-    try:
-        _safe_rerun()
-    except Exception:  # pragma: no cover
-        pass
+    _safe_rerun()
     return True, slug, client_name
 
 
 def _render_logo() -> None:
     """Render del logo nella landing (usato dai test UI)."""
+    _require_streamlit()
     render_brand_header(
         st_module=st,
         repo_root=REPO_ROOT,
@@ -224,8 +242,7 @@ def _validate_candidate_slug(candidate: str) -> tuple[bool, Optional[str]]:
 
 
 def render_header_form(slug_state: str, log: Optional[logging.Logger]) -> tuple[str, bool]:
-    if st is None:
-        raise RuntimeError("Streamlit non disponibile per la landing UI.")
+    _require_streamlit()
     render_brand_header(
         st_module=st,
         repo_root=REPO_ROOT,
@@ -257,8 +274,7 @@ def handle_verify_workflow(
     verify_clicked: bool,
     vision_state: Optional[Dict[str, Any]],
 ) -> tuple[str, Dict[str, Any], bool, bool]:
-    if st is None:
-        raise RuntimeError("Streamlit non disponibile per la landing UI.")
+    _require_streamlit()
     slug_state = _normalize_slug_value(slug_state)
     slug_submitted = False
     form_error = False
@@ -312,8 +328,7 @@ def render_workspace_summary(
     slug_submitted: bool,
     log: Optional[logging.Logger],
 ) -> tuple[bool, str, str]:
-    if st is None:
-        raise RuntimeError("Streamlit non disponibile per la landing UI.")
+    _require_streamlit()
     layout = _resolve_layout(slug)
     if layout is None:
         _st_notify("error", _layout_missing_message(slug))
@@ -437,8 +452,7 @@ def render_workspace_summary(
 def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str, str]:
     """Landing slug-first con verifica e bootstrap Vision Statement."""
 
-    if st is None:
-        raise RuntimeError("Streamlit non disponibile per la landing UI.")
+    _require_streamlit()
 
     slug_state = cast(str, _state_get("slug", "") or "")
     vision_state = cast(Optional[Dict[str, Any]], _state_get("vision_workflow"))

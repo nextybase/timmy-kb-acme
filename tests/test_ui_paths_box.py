@@ -84,6 +84,19 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
         def info(self, *a, **k):
             return None
 
+        def expander(self, *a, **k):
+            class _Exp:
+                def __enter__(self_inner):
+                    return self_inner
+
+                def __exit__(self_inner, exc_type, exc, tb):
+                    return False
+
+            return _Exp()
+
+        def code(self, *a, **k):
+            return None
+
         def json(self, data, expanded=False):
             # Traccia il contenuto del box percorsi
             if isinstance(data, dict):
@@ -110,10 +123,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(landing.vision_services, "provision_from_vision_with_config", _fake_provision, raising=True)
 
     # Esegue il rendering
-    try:
-        landing.render_landing_slug()
-    except Exception:
-        pass
+    landing.render_landing_slug()
 
     # Verifica che sia stato mostrato un box con i path assoluti
     found = False
