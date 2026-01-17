@@ -418,12 +418,18 @@ def ensure_local_workspace_for_ui(
                 "cli.pre_onboarding.config_merged_from_template",
                 extra={"slug": context.slug, "file_path": str(template_cfg)},
             )
+    except ConfigError:
+        raise
     except Exception as e:
-        # Non blocca il flusso UI: finiamo comunque con un warning visibile in Diagnostica
         logger.warning(
             "cli.pre_onboarding.config_merge_failed",
             extra={"slug": context.slug, "err": str(e).splitlines()[:1]},
         )
+        raise ConfigError(
+            "Merge del template config.yaml fallito durante il bootstrap UI.",
+            slug=context.slug,
+            file_path=str(template_cfg) if "template_cfg" in locals() else None,
+        ) from e
 
     # Copia il system prompt Vision nel workspace (serve per test/casi con REPO_ROOT_DIR override)
     try:

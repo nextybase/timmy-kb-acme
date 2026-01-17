@@ -57,9 +57,9 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidationError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.workspace_layout import WorkspaceLayout
 from pipeline.path_utils import ensure_within, read_text_safe
 from pipeline.settings import Settings as ContextSettings
+from pipeline.workspace_layout import WorkspaceLayout
 
 logger = get_structured_logger("pipeline.config_utils")
 

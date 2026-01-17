@@ -5,7 +5,7 @@ import pytest
 
 from pipeline import workspace_bootstrap
 from pipeline.context import ClientContext
-from pipeline.exceptions import WorkspaceLayoutInvalid, WorkspaceNotFound
+from pipeline.exceptions import ConfigError, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.workspace_layout import WorkspaceLayout
 
 
@@ -96,3 +96,26 @@ def test_bootstrap_client_workspace_is_idempotent(tmp_path: Path) -> None:
     ):
         assert text_file.read_text(encoding="utf-8")
     assert second_layout.repo_root_dir == workspace
+
+
+def test_bootstrap_client_workspace_missing_repo_template_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing_repo_root = tmp_path / "repo-missing-template"
+    monkeypatch.setattr(workspace_bootstrap, "_project_root", lambda: missing_repo_root)
+    context = _make_client_context(tmp_path, "no-template")
+    with pytest.raises(ConfigError):
+        workspace_bootstrap.bootstrap_client_workspace(context)
+    assert not (context.repo_root_dir / "config" / "config.yaml").exists()
+
+
+def test_migrate_or_repair_workspace_missing_repo_template_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing_repo_root = tmp_path / "repo-missing-template"
+    monkeypatch.setattr(workspace_bootstrap, "_project_root", lambda: missing_repo_root)
+    context = _make_client_context(tmp_path, "no-template")
+    context.repo_root_dir.mkdir(parents=True, exist_ok=True)
+    with pytest.raises(ConfigError):
+        workspace_bootstrap.migrate_or_repair_workspace(context)
+    assert not (context.repo_root_dir / "config" / "config.yaml").exists()

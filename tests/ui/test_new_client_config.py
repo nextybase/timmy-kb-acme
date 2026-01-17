@@ -9,6 +9,7 @@ from typing import Any, Iterator
 
 import pytest
 
+from pipeline.exceptions import ConfigError
 from pipeline.workspace_layout import WorkspaceLayout
 from tests.ui.streamlit_stub import StreamlitStub
 from tests.ui.test_manage_probe_raw import register_streamlit_runtime
@@ -111,7 +112,8 @@ def test_mirror_repo_config_logs_failure(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
     monkeypatch.setattr(new_client, "deep_merge_dict", _boom, raising=False)
 
-    new_client._mirror_repo_config_into_client(slug, layout)
+    with pytest.raises(ConfigError):
+        new_client._mirror_repo_config_into_client(slug, layout)
 
     assert logger_stub.records, "expected warning log on merge failure"
     msg, extra = logger_stub.records[0]
@@ -125,3 +127,64 @@ def test_mirror_repo_config_logs_failure(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert level == "warning"
     assert diag_msg == "ui.new_client.config_merge_failed"
     assert diag_extra["dst"].endswith("config.yaml")
+
+
+def test_mirror_repo_config_missing_template_is_fatal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = StreamlitStub()
+    stub.container = lambda *_args, **_kwargs: _null_context()
+    stub.spinner = lambda *_args, **_kwargs: _null_context()
+    stub.register_button_sequence("Genera workspace locale", [False])
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
+    register_streamlit_runtime(monkeypatch, stub)
+    sys.modules.pop("ui.pages.new_client", None)
+    new_client = importlib.import_module("ui.pages.new_client")
+
+    slug = "dummy"
+    template_root = tmp_path
+    workspace_root = template_root / "output" / f"timmy-kb-{slug}"
+    client_cfg_dir = workspace_root / "config"
+    client_cfg_dir.mkdir(parents=True, exist_ok=True)
+    (client_cfg_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
+    (workspace_root / "book").mkdir(parents=True, exist_ok=True)
+    (workspace_root / "book" / "README.md").write_text("# Book\n", encoding="utf-8")
+    (workspace_root / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (workspace_root / "raw").mkdir(parents=True, exist_ok=True)
+    (workspace_root / "semantic").mkdir(parents=True, exist_ok=True)
+    layout = WorkspaceLayout.from_workspace(workspace=workspace_root, slug=slug)
+
+    monkeypatch.setattr(new_client, "get_repo_root", lambda: template_root)
+
+    with pytest.raises(ConfigError):
+        new_client._mirror_repo_config_into_client(slug, layout)
+    assert (client_cfg_dir / "config.yaml").is_file()
+
+
+def test_mirror_repo_config_missing_client_config_is_fatal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = StreamlitStub()
+    stub.container = lambda *_args, **_kwargs: _null_context()
+    stub.spinner = lambda *_args, **_kwargs: _null_context()
+    stub.register_button_sequence("Genera workspace locale", [False])
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
+    register_streamlit_runtime(monkeypatch, stub)
+    sys.modules.pop("ui.pages.new_client", None)
+    new_client = importlib.import_module("ui.pages.new_client")
+
+    slug = "dummy"
+    template_root = tmp_path
+    (template_root / "config").mkdir(parents=True, exist_ok=True)
+    (template_root / "config" / "config.yaml").write_text("client_name: Template\n", encoding="utf-8")
+    workspace_root = template_root / "output" / f"timmy-kb-{slug}"
+    client_cfg_dir = workspace_root / "config"
+    client_cfg_dir.mkdir(parents=True, exist_ok=True)
+    (workspace_root / "book").mkdir(parents=True, exist_ok=True)
+    (workspace_root / "book" / "README.md").write_text("# Book\n", encoding="utf-8")
+    (workspace_root / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (workspace_root / "raw").mkdir(parents=True, exist_ok=True)
+    (workspace_root / "semantic").mkdir(parents=True, exist_ok=True)
+    layout = WorkspaceLayout.from_workspace(workspace=workspace_root, slug=slug)
+
+    monkeypatch.setattr(new_client, "get_repo_root", lambda: template_root)
+
+    with pytest.raises(ConfigError):
+        new_client._mirror_repo_config_into_client(slug, layout)
+    assert not (client_cfg_dir / "config.yaml").exists()

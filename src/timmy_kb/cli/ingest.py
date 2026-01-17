@@ -38,6 +38,7 @@ from storage.kb_store import KbStore
 
 LOGGER = get_structured_logger("timmy_kb.ingest")
 
+
 def _relative_to(base: Path, candidate: Path) -> str:
     try:
         return str(candidate.relative_to(base))

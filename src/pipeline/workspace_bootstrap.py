@@ -15,7 +15,7 @@ from typing import cast
 
 from pipeline.constants import LOGS_DIR_NAME
 from pipeline.context import ClientContext
-from pipeline.exceptions import WorkspaceNotFound
+from pipeline.exceptions import ConfigError, WorkspaceNotFound
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe, validate_slug
 from pipeline.workspace_layout import WorkspaceLayout
@@ -80,7 +80,7 @@ def _template_config_content() -> str:
     if template.exists():
         safe_template = ensure_within_and_resolve(_project_root(), template)
         return cast(str, read_text_safe(safe_template.parent, safe_template, encoding="utf-8"))
-    return "meta:\n  client_name: dummy\n"
+    raise ConfigError(f"Template config.yaml globale non trovato: {template}", file_path=template)
 
 
 def _dummy_output_root() -> Path:

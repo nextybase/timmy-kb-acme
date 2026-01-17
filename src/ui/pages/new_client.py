@@ -206,12 +206,42 @@ def _mirror_repo_config_into_client(
         pass
     template_cfg = get_repo_root() / "config" / "config.yaml"
     if not template_cfg.exists():
-        return
+        LOGGER.warning(
+            "ui.new_client.config_template_missing",
+            extra={"slug": slug, "template": str(template_cfg)},
+        )
+        _log_diagnostics(
+            slug,
+            "warning",
+            "ui.new_client.config_template_missing",
+            extra={"slug": slug, "template": str(template_cfg)},
+            layout=layout,
+        )
+        raise ConfigError(
+            "Template config.yaml del repository non trovato.",
+            slug=slug,
+            file_path=str(template_cfg),
+        )
 
     client_cfg_dir = _config_dir_client(slug, layout=layout)
     dst_cfg = client_cfg_dir / "config.yaml"
     if not dst_cfg.exists():
-        return
+        LOGGER.warning(
+            "ui.new_client.config_missing",
+            extra={"slug": slug, "dst": str(dst_cfg)},
+        )
+        _log_diagnostics(
+            slug,
+            "warning",
+            "ui.new_client.config_missing",
+            extra={"slug": slug, "dst": str(dst_cfg)},
+            layout=layout,
+        )
+        raise ConfigError(
+            "Config cliente non trovata al momento del merge.",
+            slug=slug,
+            file_path=str(dst_cfg),
+        )
 
     try:
         base_cfg = yaml_read(template_cfg.parent, template_cfg) or {}
@@ -247,21 +277,23 @@ def _mirror_repo_config_into_client(
                 atomic=True,
             )
     except Exception as exc:
-        # Best-effort: segnala l'errore ma non blocca il flusso UI.
+        # Strict: segnala e interrompe il flusso UI.
         LOGGER.warning(
             "ui.new_client.config_merge_failed",
             extra={"slug": slug, "error": str(exc), "dst": str(dst_cfg)},
         )
-        try:
-            _log_diagnostics(
-                slug,
-                "warning",
-                "ui.new_client.config_merge_failed",
-                extra={"slug": slug, "error": str(exc), "dst": str(dst_cfg)},
-                layout=layout,
-            )
-        except Exception:
-            pass
+        _log_diagnostics(
+            slug,
+            "warning",
+            "ui.new_client.config_merge_failed",
+            extra={"slug": slug, "error": str(exc), "dst": str(dst_cfg)},
+            layout=layout,
+        )
+        raise ConfigError(
+            "Merge del template config.yaml fallito.",
+            slug=slug,
+            file_path=str(dst_cfg),
+        ) from exc
 
 
 def _ui_logger() -> logging.Logger:
@@ -468,7 +500,11 @@ if current_phase == UI_PHASE_INIT:
                     _LAYOUT_CACHE[cache_key] = layout
                 cfg_dir = layout.config_path.parent if layout.config_path else layout.base_dir / "config"
                 _semantic_dir_client(s, layout=layout).mkdir(parents=True, exist_ok=True)
-                _mirror_repo_config_into_client(s, layout, pdf_bytes=pdf_bytes)
+                try:
+                    _mirror_repo_config_into_client(s, layout, pdf_bytes=pdf_bytes)
+                except ConfigError as exc:
+                    _open_error_modal("Errore configurazione", str(exc))
+                    st.stop()
                 if pdf_bytes:
                     vision_target = cast(
                         Path, ensure_within_and_resolve(layout.base_dir, cfg_dir / "VisionStatement.pdf")
