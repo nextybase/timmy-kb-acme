@@ -115,35 +115,16 @@ def _require_drive_utils() -> None:
 
 
 def _resolve_yaml_structure_file() -> Path:
-    """Risolve in modo robusto il percorso dello YAML della struttura cartelle."""
+    """Ritorna il percorso canonico dello YAML per la struttura cartelle."""
     repo_root = get_repo_root(allow_env=False)
-
-    env_path = get_env_var("YAML_STRUCTURE_FILE", required=False)
-    if env_path:
-        p = Path(env_path).expanduser().resolve()
-        try:
-            ensure_within(repo_root, p)
-        except ConfigError:
-            raise ConfigError(
-                f"YAML_STRUCTURE_FILE punta fuori dal repository: {p}",
-                file_path=str(p),
-            )
-        if p.is_file():
-            return p
-
-    candidates = [
-        repo_root / "config" / "cartelle_raw.yaml",
-        repo_root / "src" / "config" / "cartelle_raw.yaml",
-    ]
-    for p in candidates:
-        if p.is_file():
-            return p
-
-    raise ConfigError(
-        "File YAML per struttura cartelle non trovato in nessuno dei percorsi noti. "
-        "Imposta YAML_STRUCTURE_FILE oppure aggiungi config/cartelle_raw.yaml.",
-        file_path="; ".join(str(c) for c in candidates),
-    )
+    template_dir = repo_root / "system" / "assets" / "templates"
+    path = template_dir / "cartelle_raw.yaml"
+    if not path.is_file():
+        raise ConfigError(
+            "File YAML per struttura cartelle non trovato nel percorso canonico.",
+            file_path=str(path),
+        )
+    return path
 
 
 def _sync_env(context: ClientContext, *, require_env: bool) -> None:
@@ -163,7 +144,7 @@ def bootstrap_semantic_templates(
     - cartelle_raw.yaml -> semantic/cartelle_raw.yaml
     - default_semantic_mapping.yaml -> semantic/tags_reviewed.yaml (+ blocco context)
 
-    Nota: duplica automaticamente anche semantic/semantic_mapping.yaml per compatibilita UI.
+    Nota: duplica automaticamente anche semantic_mapping.yaml nella cartella semantic/ per compatibilita UI.
     """
     if not context.slug:
         raise WorkspaceNotFound("Contesto incompleto: slug mancante", slug=context.slug)
@@ -174,9 +155,9 @@ def bootstrap_semantic_templates(
     semantic_dir = layout.semantic_dir
     semantic_dir.mkdir(parents=True, exist_ok=True)
 
-    cfg_dir = repo_root / "config"
+    template_dir = repo_root / "system" / "assets" / "templates"
     struct_src = _resolve_yaml_structure_file()
-    mapping_src = cfg_dir / "default_semantic_mapping.yaml"
+    mapping_src = template_dir / "default_semantic_mapping.yaml"
 
     struct_dst = semantic_dir / "cartelle_raw.yaml"
     mapping_dst = semantic_dir / "tags_reviewed.yaml"  # nuovo nome allineato alla UI

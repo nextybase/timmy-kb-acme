@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.context import ClientContext
+from pipeline.exceptions import ConfigError
 from timmy_kb.cli import pre_onboarding
 
 
@@ -96,3 +97,24 @@ def test_bootstrap_semantic_templates_writes_cartelle_raw_only_in_workspace(
 
     wrong_repo_dst = repo_root / "semantic" / "cartelle_raw.yaml"
     assert not wrong_repo_dst.exists()
+
+
+def test_resolve_yaml_structure_file_uses_template_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo_root = tmp_path / "repo"
+    template_path = repo_root / "system" / "assets" / "templates" / "cartelle_raw.yaml"
+    template_path.parent.mkdir(parents=True)
+    template_path.write_text("raw: {}\n", encoding="utf-8")
+
+    monkeypatch.setattr(pre_onboarding, "get_repo_root", lambda allow_env=False: repo_root)
+
+    assert pre_onboarding._resolve_yaml_structure_file() == template_path
+
+
+def test_resolve_yaml_structure_file_missing_template_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+
+    monkeypatch.setattr(pre_onboarding, "get_repo_root", lambda allow_env=False: repo_root)
+
+    with pytest.raises(ConfigError):
+        pre_onboarding._resolve_yaml_structure_file()

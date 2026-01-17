@@ -584,7 +584,7 @@ def emit_readmes_for_raw(
 ) -> Dict[str, str]:
     """Per ogni categoria Vision (sottocartella di raw) genera un README.pdf (o .txt fallback):
 
-    - legge **semantic/semantic_mapping.yaml** in formato Vision;
+    - legge `semantic_mapping.yaml` nel workspace (cartella semantic/) in formato Vision;
     - costruisce il set categorie da `areas` (+ `system_folders` se presenti);
     - carica/aggiorna i file nelle rispettive sottocartelle già esistenti di raw/ su Drive.
 

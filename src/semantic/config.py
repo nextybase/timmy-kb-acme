@@ -7,7 +7,7 @@ Scopo
 Restituire un oggetto `SemanticConfig` che unisce:
 1) Valori di default robusti (fallback hardcoded)
 2) Override generali del cliente (output/.../config/config.yaml -> semantic_defaults)
-3) Parametri locali per il tagging (output/.../semantic/semantic_mapping.yaml -> semantic_tagger)
+3) Parametri locali per il tagging (output/.../semantic -> semantic_mapping.yaml -> semantic_tagger)
 4) Eventuali `overrides` passati a runtime (massima precedenza)
 
 Ordine di precedenza (alto -> basso)

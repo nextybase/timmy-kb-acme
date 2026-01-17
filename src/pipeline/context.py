@@ -34,6 +34,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, TypedDict, runtime_checkable
 
+from .constants import SEMANTIC_DIR_NAME, SEMANTIC_MAPPING_FILE
 from .env_utils import compute_redact_flag, get_bool, get_env_var
 from .exceptions import ConfigError, InvalidSlug
 from .file_utils import safe_write_text
@@ -217,6 +218,8 @@ class ClientContext:
         # 7) Calcola redazione log
         redact = compute_redact_flag(env_vars, log_level_name)
 
+        semantic_dir = ensure_within_and_resolve(repo_root, repo_root / SEMANTIC_DIR_NAME)
+
         return cls(
             slug=slug,
             client_name=_safe_settings_get(settings, "client_name"),
@@ -226,7 +229,7 @@ class ClientContext:
             config_path=config_path,
             config_dir=config_path.parent,
             # FIX SSoT: path reale e validato
-            mapping_path=ensure_within_and_resolve(repo_root, repo_root / "semantic" / "semantic_mapping.yaml"),
+            mapping_path=ensure_within_and_resolve(semantic_dir, semantic_dir / SEMANTIC_MAPPING_FILE),
             # Campi storici (compat) - derivati dal root canonico
             base_dir=repo_root,
             output_dir=repo_root,

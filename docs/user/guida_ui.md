@@ -59,6 +59,8 @@ output/
 
 Se Drive e' configurato, la stessa struttura viene replicata sotto **\<DRIVE\_ID>/**.
 
+Template seed: `system/assets/templates/cartelle_raw.yaml` e `system/assets/templates/default_semantic_mapping.yaml` (copiati nel workspace da `pre_onboarding`, nessun override tramite ENV).
+
 ---
 
 ## 4) Onboarding -> **Nuovo cliente** (2 step)

@@ -29,9 +29,10 @@ MAPPING_RESERVED = {
 
 
 def load_default_mapping() -> Dict[str, Any]:
-    """Carica config/default_semantic_mapping.yaml a partire dalla root repo."""
+    """Carica il mapping di default dai template canonici del repository."""
     repo_root = Path(__file__).resolve().parents[3]  # .../src/ui/components -> .../src -> repo
-    path = repo_root / "config" / "default_semantic_mapping.yaml"
+    template_root = repo_root / "system" / "assets" / "templates"
+    path = template_root / "default_semantic_mapping.yaml"
     if not path.is_file():
         raise FileNotFoundError(f"Mapping default non trovato: {path}")
     data = yaml_load(path)
@@ -149,7 +150,7 @@ def save_semantic_mapping(slug: str, mapping: Dict[str, Any], *, base_root: Path
 
 
 def load_semantic_mapping(slug: str, *, base_root: Path | str = "output") -> Dict[str, Any]:
-    """Carica esclusivamente semantic/semantic_mapping.yaml per il cliente.
+    """Carica esclusivamente semantic_mapping.yaml nel workspace del cliente.
 
     Se il file non esiste, solleva FileNotFoundError.
     """

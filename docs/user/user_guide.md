@@ -24,7 +24,7 @@ Nota: la UI e gli orchestratori CLI delegano alle funzioni modulari
 - (Opz.) **Docker** per preview HonKit
 - (Default Drive) **Service Account JSON** e `DRIVE_ID`
 
-Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `LOG_REDACTION`, `YAML_STRUCTURE_FILE`.
+Variabili utili: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `LOG_REDACTION`.
 
 ---
 
@@ -145,6 +145,8 @@ output/timmy-kb-<slug>/
    config/     # config.yaml (con eventuali ID Drive)
    logs/
 ```
+
+Template seed (repo): `system/assets/templates/cartelle_raw.yaml` e `system/assets/templates/default_semantic_mapping.yaml`, copiati nel workspace durante `pre_onboarding`.
 
 ---
 

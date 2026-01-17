@@ -4,6 +4,8 @@ Nel contesto di Timmy-KB come ambiente di creazione e governo, questa review des
 
 ## Stato attuale
 - **Vision  mapping**: `semantic.vision_provision.provision_from_vision` continua a orchestrare l'impaginazione dal VisionStatement e produce `semantic_mapping.yaml` e `cartelle_raw.yaml`.
+- **Template seed**: i template canonici `cartelle_raw.yaml` e `default_semantic_mapping.yaml` vivono in `system/assets/templates/` e vengono copiati nel workspace da `pre_onboarding`.
+- **Mapping source**: il mapping runtime arriva solo dal workspace (`semantic/semantic_mapping.yaml`) oppure dal template `system/assets/templates/default_semantic_mapping.yaml` dove previsto; nessun fallback dal repo root.
 - **Conversione RAW  Markdown**: `semantic.convert_service.convert_markdown` converte i PDF in `.md` con frontmatter semplificato e ora inserisce un `excerpt` estratto dal PDF, mantenuto da cache per evitare riscritture inutili, oltre a lasciare il placeholder contestuale per la tracciabilita.
 - **Pipeline unificata libro**: `semantic.api.build_markdown_book` esegue conversione, arricchimento frontmatter, README/SUMMARY e, aggiunta di questa iterazione, scrive un file `semantic/layout_proposal.yaml` derivato da `layout_enricher`.
 - **Frontmatter & layout**: i `.md` ora includono il campo `layout_section` dedotto dalla proposta ER, e la UI documenta i top-level suggeriti aggiungendo una nota nel README generato.

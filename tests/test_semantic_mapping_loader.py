@@ -8,6 +8,7 @@ import pytest
 
 from pipeline.constants import SEMANTIC_MAPPING_FILE
 from pipeline.exceptions import ConfigError
+from semantic.mapping_loader import iter_mapping_candidates
 from semantic.semantic_mapping import load_semantic_mapping
 
 
@@ -27,22 +28,28 @@ def test_load_semantic_mapping_prefers_workspace(tmp_path):
     assert mapping == {"concept": ["tag-one"]}
 
 
-def test_load_semantic_mapping_repo_fallback(tmp_path):
+def test_load_semantic_mapping_template_fallback(tmp_path):
     repo = tmp_path / "repo"
     config_dir = None
-    mapping_path = repo / "semantic"
-    mapping_path.mkdir(parents=True)
-    (mapping_path / SEMANTIC_MAPPING_FILE).write_text("concept:\n  tags:\n    - repo-tag\n", encoding="utf-8")
+    template_dir = repo / "system" / "assets" / "templates"
+    template_dir.mkdir(parents=True)
+    (template_dir / "default_semantic_mapping.yaml").write_text(
+        "concept:\n  tags:\n    - template-tag\n",
+        encoding="utf-8",
+    )
 
     mapping = load_semantic_mapping(_ctx(config_dir=config_dir, repo_root_dir=repo))
 
-    assert mapping == {"concept": ["repo-tag"]}
+    assert mapping == {"concept": ["template-tag"]}
 
 
 def test_load_semantic_mapping_default_fallback(tmp_path):
     repo = tmp_path / "repo"
-    (repo / "config").mkdir(parents=True)
-    (repo / "config" / "default_semantic_mapping.yaml").write_text("concept:\n  - default-tag\n", encoding="utf-8")
+    (repo / "system" / "assets" / "templates").mkdir(parents=True)
+    (repo / "system" / "assets" / "templates" / "default_semantic_mapping.yaml").write_text(
+        "concept:\n  - default-tag\n",
+        encoding="utf-8",
+    )
     ctx = _ctx(config_dir=None, repo_root_dir=repo)
 
     mapping = load_semantic_mapping(ctx)
@@ -69,3 +76,22 @@ def test_load_semantic_mapping_missing_raises(tmp_path):
 
     with pytest.raises(ConfigError):
         load_semantic_mapping(ctx)
+
+
+def test_iter_mapping_candidates_exposes_only_workspace_and_template(tmp_path):
+    cfg = tmp_path / "cfg"
+    repo = tmp_path / "repo"
+    cfg.mkdir()
+    repo.mkdir()
+
+    candidates = list(
+        iter_mapping_candidates(
+            context_slug="dummy",
+            config_dir=cfg,
+            repo_root_dir=repo,
+            repo_default_dir=None,
+            mapping_filename=SEMANTIC_MAPPING_FILE,
+        )
+    )
+
+    assert [source for source, _, _ in candidates] == ["workspace", "template"]

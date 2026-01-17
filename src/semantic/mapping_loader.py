@@ -107,9 +107,6 @@ def iter_mapping_candidates(
         cfg_base = Path(config_dir)
         yield "workspace", cfg_base, cfg_base / mapping_filename
 
-    repo_base = Path(repo_root_dir) / "semantic"
-    yield "repo", repo_base, repo_base / mapping_filename
-
-    fallback_root = Path(repo_default_dir or repo_root_dir)
-    fallback_base = fallback_root / "config"
-    yield "fallback", fallback_base, fallback_base / "default_semantic_mapping.yaml"
+    template_root = Path(repo_default_dir or repo_root_dir)
+    template_base = template_root / "system" / "assets" / "templates"
+    yield "template", template_base, template_base / "default_semantic_mapping.yaml"

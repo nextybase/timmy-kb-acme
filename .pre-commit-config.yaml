@@ -103,6 +103,13 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
+      - id: template-hardline
+        name: Template hardline guard (templates/mapping)
+        entry: python tools/smoke/check_template_hardline.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: forbid-runtime-asserts
         name: Forbid runtime asserts in src/
         entry: python tools/dev/forbid_runtime_asserts.py
