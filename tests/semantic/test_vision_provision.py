@@ -597,8 +597,6 @@ def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
 
 def test_call_assistant_json_skips_response_format_when_not_structured(monkeypatch: pytest.MonkeyPatch):
-    captured: Dict[str, Any] = {}
-
     class _DummyClient:
         pass
 
@@ -608,24 +606,16 @@ def test_call_assistant_json_skips_response_format_when_not_structured(monkeypat
         lambda client, assistant_id, strict_output: False,
     )
 
-    def _fake_responses_api(**kwargs: Any) -> Dict[str, Any]:
-        captured.update(kwargs)
-        return {}
-
-    monkeypatch.setattr(vp, "_call_responses_json", _fake_responses_api)
-
-    vp._call_assistant_json(
-        client=_DummyClient(),
-        assistant_id="asst",
-        model="gpt-4o-mini",
-        user_messages=[{"role": "user", "content": "hi"}],
-        strict_output=False,
-        run_instructions=None,
-        use_kb=False,
-    )
-
-    assert captured.get("use_structured") is False
-    assert captured.get("response_format") == {"type": "json_object"}
+    with pytest.raises(ConfigError, match="strict-only"):
+        vp._call_assistant_json(
+            client=_DummyClient(),
+            assistant_id="asst",
+            model="gpt-4o-mini",
+            user_messages=[{"role": "user", "content": "hi"}],
+            strict_output=False,
+            run_instructions=None,
+            use_kb=False,
+        )
 
 
 def test_call_assistant_json_uses_schema_when_strict(monkeypatch: pytest.MonkeyPatch):

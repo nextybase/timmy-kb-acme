@@ -999,14 +999,16 @@ def provision_from_vision_yaml_with_config(
 
 
 def _determine_structured_output(client: Any, assistant_id: str, strict_output: bool) -> bool:
-    """Decide se usare JSON Schema: strict_output True forza schema, altrimenti fallback json_object."""
+    """Decide se usare JSON Schema: strict_output deve essere True (strict-only)."""
     _ = (client, assistant_id)  # mantenimento firma, no calls Assistants
-    return bool(strict_output)
+    if strict_output is not True:
+        raise ConfigError("strict_output deve essere True (strict-only)")
+    return True
 
 
 def _build_response_format(use_structured: bool) -> Optional[Dict[str, Any]]:
     if not use_structured:
-        return {"type": "json_object"}
+        raise ConfigError("structured output richiesto: strict-only")
     schema_payload: Dict[str, Any] = {
         "type": "json_schema",
         "json_schema": {
@@ -1093,66 +1095,25 @@ def _parse_json_output(text: Optional[str], assistant_id: str, *, source: str) -
         LOGGER.error(_evt("no_output_text"), extra={"assistant_id": assistant_id, "source": source})
         raise ConfigError("Assistant run completato ma nessun testo nel messaggio di output.")
 
-    def _strip_code_fences(payload: str) -> str:
-        candidate = payload.strip()
-        if candidate.startswith("```") and candidate.count("```") >= 2:
-            parts = candidate.split("```")
-            candidate = parts[1] if len(parts) > 1 else candidate
-        if candidate.lower().startswith("json"):
-            candidate = candidate[4:].lstrip()
-        return candidate.strip()
+    if not isinstance(text, str):
+        text = str(text)
 
-    def _try_json_load(payload: str) -> Dict[str, Any]:
-        return cast(Dict[str, Any], json.loads(payload))
-
-    if isinstance(text, str):
-        stripped = text.lstrip()
-        if not stripped.startswith("{") and not stripped.startswith("["):
-            LOGGER.warning(
-                _evt("non_json_like_output"),
-                extra={
-                    "assistant_id": assistant_id,
-                    "source": source,
-                    "sample": stripped[:500],
-                },
-            )
-            try:
-                if LOGGER.isEnabledFor(logging.DEBUG):
-                    LOGGER.debug(
-                        _evt("raw_output.capture"),
-                        extra={
-                            "assistant_id": assistant_id,
-                            "source": source,
-                            "length": len(stripped),
-                            "preview": stripped[:2000],
-                        },
-                    )
-            except Exception:
-                pass
-            # Tolleranza minima: se l'output è racchiuso in ```...``` o ```json ...```, rimuovi i fence.
-            text = _strip_code_fences(stripped)
-    text_value = text if isinstance(text, str) else str(text)
-    try:
-        return _try_json_load(text_value)
-    except json.JSONDecodeError as exc:
-        # Se arrivano fence ```...``` non rimossi o testo extra, prova un parse best-effort sul blocco tra i fence.
-        if isinstance(text_value, str) and "```" in text_value:
-            fences = text_value.split("```")
-            for chunk in fences:
-                candidate = _strip_code_fences(chunk)
-                if not candidate:
-                    continue
-                try:
-                    return _try_json_load(candidate)
-                except Exception:
-                    continue
-        LOGGER.error(
-            _evt("invalid_json"),
-            extra={
-                "assistant_id": assistant_id,
-                "error": str(exc),
-                "source": source,
-                "sample": (text[:500] if isinstance(text, str) else None),
-            },
+    if "```" in text:
+        raise ConfigError(
+            f"Output LLM non conforme: JSON puro richiesto (assistant_id={assistant_id}, source={source})"
         )
-        raise ConfigError(f"Assistant: risposta non JSON: {exc}") from exc
+
+    stripped = text.strip()
+    try:
+        decoder = json.JSONDecoder()
+        parsed, idx = decoder.raw_decode(stripped)
+        if stripped[idx:].strip():
+            raise ConfigError(
+                f"Output LLM non conforme: JSON puro richiesto (assistant_id={assistant_id}, source={source})"
+            )
+        return cast(Dict[str, Any], parsed)
+    except json.JSONDecodeError as exc:
+        first_line = str(exc).splitlines()[0]
+        raise ConfigError(
+            f"Output LLM non conforme: {first_line} (assistant_id={assistant_id}, source={source})"
+        ) from exc
