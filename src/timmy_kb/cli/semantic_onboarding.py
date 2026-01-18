@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: GPL-3.0-only
+#
 
 from __future__ import annotations
 
@@ -54,6 +55,63 @@ def _parse_args() -> argparse.Namespace:
     return _default_parse_args()
 
 
+def _resolve_requested_effective(args: argparse.Namespace) -> tuple[dict[str, object], dict[str, object]]:
+    """
+    requested/effective per il gate semantic_onboarding.
+    - requested = ciò che l'utente chiede via CLI
+    - effective  = ciò che viene applicato davvero (qui: coincide, ma lo rendiamo esplicito)
+    """
+    requested = {
+        "preview": "disabled" if bool(args.no_preview) else "enabled",
+        "interactive": "disabled" if bool(args.non_interactive) else "enabled",
+        # KG: per ora non esponiamo flag; è "auto" (dipende dall'esistenza di semantic/tags_raw.json)
+        "tag_kg": "auto",
+    }
+    effective = dict(requested)  # in questo CLI non ci sono override/auto-correction
+    return requested, effective
+
+
+def _build_evidence_json(
+    *,
+    layout: WorkspaceLayout,
+    requested: dict[str, object],
+    effective: dict[str, object],
+    outcome: str,
+    tag_kg_effective: str | None = None,
+    exit_code: int | None = None,
+    error_summary: str | None = None,
+) -> str:
+    # Se abbiamo un esito sul KG (built/skipped), lo materializziamo nell'effective
+    effective_final = dict(effective)
+    if tag_kg_effective is not None:
+        effective_final["tag_kg"] = tag_kg_effective
+
+    payload: dict[str, object] = {
+        "slug": layout.slug,
+        "workspace_root": str(layout.base_dir),
+        "config_path": str(layout.config_path),
+        "semantic_dir": str(layout.semantic_dir),
+        "requested": requested,
+        "effective": effective_final,
+        "outcome": outcome,  # ok | deny_config | deny_pipeline | deny_unexpected
+    }
+    if exit_code is not None:
+        payload["exit_code"] = int(exit_code)
+    if error_summary:
+        payload["error"] = error_summary
+
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _deny_rationale(exc: BaseException) -> str:
+    # Rationale *deterministica* (bassa entropia): non dipende dal messaggio d'errore.
+    if isinstance(exc, ConfigError):
+        return "deny_config_error"
+    if isinstance(exc, PipelineError):
+        return "deny_pipeline_error"
+    return "deny_unexpected_error"
+
+
 def _summarize_error(exc: BaseException) -> str:
     name = type(exc).__name__
     message = str(exc).splitlines()[:1]
@@ -85,6 +143,7 @@ def main() -> int:
     ctx: SemanticContextProtocol = ClientContext.load(slug=slug, require_env=False, run_id=run_id)
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(ctx)
+    requested, effective = _resolve_requested_effective(args)
     ledger_conn = None
     ledger_conn = decision_ledger.open_ledger(layout)
     decision_ledger.start_run(
@@ -92,16 +151,6 @@ def main() -> int:
         run_id=run_id,
         slug=slug,
         started_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    )
-    evidence_json = json.dumps(
-        {
-            "slug": layout.slug,
-            "workspace_root": str(layout.base_dir),
-            "config_path": str(layout.config_path),
-            "semantic_dir": str(layout.semantic_dir),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
     )
 
     try:
@@ -121,6 +170,8 @@ def main() -> int:
             trace_kind="onboarding",
         ):
             try:
+                tag_kg_effective: str | None = None
+
                 base_dir, _mds, touched = run_semantic_pipeline(
                     ctx,
                     logger,
@@ -134,14 +185,17 @@ def main() -> int:
                 if tags_raw_path.exists():
                     with phase_scope(logger, stage="cli.tag_kg_builder", customer=slug):
                         build_kg_for_workspace(base_dir, namespace=slug)
+                    tag_kg_effective = "built"
                 else:
                     logger.info(
                         "cli.tag_kg_builder.skipped",
                         extra={"slug": slug, "reason": "semantic/tags_raw.json assente"},
                     )
+                    tag_kg_effective = "skipped"
             except (ConfigError, PipelineError) as exc:
                 # Mappa verso exit code deterministici (no traceback non gestiti)
                 original_error = _summarize_error(exc)
+                code: int = int(exit_code_for(exc))  # exit_code_for non è tipizzato: forza int per mypy
                 try:
                     decision_ledger.record_decision(
                         ledger_conn,
@@ -154,8 +208,15 @@ def main() -> int:
                         verdict=decision_ledger.DECISION_DENY,
                         subject="semantic_onboarding",
                         decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        evidence_json=evidence_json,
-                        rationale=str(exc).splitlines()[:1][0] if str(exc) else "error",
+                        evidence_json=_build_evidence_json(
+                            layout=layout,
+                            requested=requested,
+                            effective=effective,
+                            outcome=_deny_rationale(exc),
+                            exit_code=code,
+                            error_summary=original_error,
+                        ),
+                        rationale=_deny_rationale(exc),
                     )
                 except Exception as ledger_exc:
                     ledger_error = _summarize_error(ledger_exc)
@@ -178,10 +239,10 @@ def main() -> int:
                         run_id=run_id,
                     ) from ledger_exc
                 logger.error("cli.semantic_onboarding.failed", extra={"slug": slug, "error": str(exc)})
-                code: int = int(exit_code_for(exc))  # exit_code_for non è tipizzato: forza int per mypy
                 return code
             except Exception as exc:
                 original_error = _summarize_error(exc)
+                code = 99
                 try:
                     decision_ledger.record_decision(
                         ledger_conn,
@@ -194,8 +255,15 @@ def main() -> int:
                         verdict=decision_ledger.DECISION_DENY,
                         subject="semantic_onboarding",
                         decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        evidence_json=evidence_json,
-                        rationale=str(exc).splitlines()[:1][0] if str(exc) else "error",
+                        evidence_json=_build_evidence_json(
+                            layout=layout,
+                            requested=requested,
+                            effective=effective,
+                            outcome="deny_unexpected_error",
+                            exit_code=code,
+                            error_summary=original_error,
+                        ),
+                        rationale="deny_unexpected_error",
                     )
                 except Exception as ledger_exc:
                     ledger_error = _summarize_error(ledger_exc)
@@ -218,7 +286,7 @@ def main() -> int:
                         run_id=run_id,
                     ) from ledger_exc
                 logger.exception("cli.semantic_onboarding.unexpected_error", extra={"slug": slug, "error": str(exc)})
-                return 99
+                return code
 
         decision_ledger.record_decision(
             ledger_conn,
@@ -231,7 +299,13 @@ def main() -> int:
             verdict=decision_ledger.DECISION_ALLOW,
             subject="semantic_onboarding",
             decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            evidence_json=evidence_json,
+            evidence_json=_build_evidence_json(
+                layout=layout,
+                requested=requested,
+                effective=effective,
+                outcome="ok",
+                tag_kg_effective=tag_kg_effective,
+            ),
             rationale="ok",
         )
 

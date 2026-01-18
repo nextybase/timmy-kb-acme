@@ -20,7 +20,7 @@ ai:
     assistant_id_env: OBNEXT_ASSISTANT_ID
     use_kb: false
     snapshot_retention_days: 30
-    strict_output: false
+    strict_output: true
   prototimmy:
     engine: assistants
     model: gpt-4.1

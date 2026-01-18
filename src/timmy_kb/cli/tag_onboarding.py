@@ -103,12 +103,22 @@ def _summarize_error(exc: BaseException) -> str:
     return f"{name}: {first_line}"
 
 
-def _build_ledger_evidence(layout: WorkspaceLayout, *, dummy_mode: bool) -> str:
+def _build_ledger_evidence(
+    layout: WorkspaceLayout,
+    *,
+    dummy_mode: bool,
+    requested_mode: str,
+    strict_mode: bool,
+    effective_mode: str,
+) -> str:
     payload = {
         "slug": layout.slug,
         "workspace_root": str(layout.base_dir),
         "config_path": str(layout.config_path),
         "dummy_mode": bool(dummy_mode),
+        "requested_mode": requested_mode,
+        "strict_mode": bool(strict_mode),
+        "effective_mode": effective_mode,
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
@@ -116,6 +126,20 @@ def _build_ledger_evidence(layout: WorkspaceLayout, *, dummy_mode: bool) -> str:
 def _is_beta_strict() -> bool:
     flag = os.getenv("TIMMY_BETA_STRICT", "").strip().lower()
     return flag in {"1", "true", "yes", "on"}
+
+
+def _resolve_modes(*, dummy_mode: bool, strict_mode: bool, force_dummy: bool) -> tuple[str, str, str]:
+    requested_mode = "dummy" if dummy_mode else "standard"
+    if dummy_mode and strict_mode and not force_dummy:
+        effective_mode = "strict"
+        rationale = "dummy_blocked_by_strict"
+    elif dummy_mode:
+        effective_mode = "dummy"
+        rationale = "dummy_allowed"
+    else:
+        effective_mode = "standard"
+        rationale = "checkpoint_proceeded_no_stub"
+    return requested_mode, effective_mode, rationale
 
 
 def copy_from_local(*args: Any, **kwargs: Any) -> None:
@@ -545,6 +569,8 @@ def tag_onboarding_main(
     non_interactive: bool = False,
     proceed_after_csv: bool = False,
     dummy_mode: bool = False,
+    strict_mode: bool | None = None,
+    force_dummy: bool = False,
     run_id: Optional[str] = None,
 ) -> None:
     """Orchestratore della fase di *Tag Onboarding*."""
@@ -575,7 +601,19 @@ def tag_onboarding_main(
         started_at=_utc_now_iso(),
     )
     dummy_mode = bool(dummy_mode)
-    evidence_json = _build_ledger_evidence(layout, dummy_mode=dummy_mode)
+    strict_mode_resolved = _is_beta_strict() if strict_mode is None else bool(strict_mode)
+    requested_mode, effective_mode, effective_rationale = _resolve_modes(
+        dummy_mode=dummy_mode,
+        strict_mode=strict_mode_resolved,
+        force_dummy=bool(force_dummy),
+    )
+    evidence_json = _build_ledger_evidence(
+        layout,
+        dummy_mode=dummy_mode,
+        requested_mode=requested_mode,
+        strict_mode=strict_mode_resolved,
+        effective_mode=effective_mode,
+    )
 
     payload: TaggingPayload = {
         "workspace_slug": slug,
@@ -638,7 +676,7 @@ def tag_onboarding_main(
             )
             return
 
-        if not dummy_mode:
+        if effective_mode != "dummy":
             decision_ledger.record_decision(
                 ledger_conn,
                 decision_id=uuid.uuid4().hex,
@@ -651,24 +689,7 @@ def tag_onboarding_main(
                 subject="tag_onboarding",
                 decided_at=_utc_now_iso(),
                 evidence_json=evidence_json,
-                rationale="checkpoint_proceeded_no_stub",
-            )
-            return
-
-        if _is_beta_strict():
-            decision_ledger.record_decision(
-                ledger_conn,
-                decision_id=uuid.uuid4().hex,
-                run_id=run_id,
-                slug=slug,
-                gate_name="tag_onboarding",
-                from_state="WORKSPACE_READY",
-                to_state="TAGS_CSV_READY",
-                verdict=decision_ledger.DECISION_ALLOW,
-                subject="tag_onboarding",
-                decided_at=_utc_now_iso(),
-                evidence_json=evidence_json,
-                rationale="checkpoint_proceeded_no_stub",
+                rationale=effective_rationale,
             )
             return
 
@@ -798,6 +819,26 @@ def _parse_args() -> argparse.Namespace:
         "--dummy",
         action="store_true",
         help="Abilita la modalita dummy end-to-end (consente la generazione degli stub).",
+    )
+    strict_group = p.add_mutually_exclusive_group()
+    strict_group.add_argument(
+        "--strict",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Forza strict mode (default se TIMMY_BETA_STRICT=1).",
+    )
+    strict_group.add_argument(
+        "--no-strict",
+        action="store_const",
+        const=False,
+        default=None,
+        help="Disabilita strict mode (consente dummy/stub se usato con --dummy).",
+    )
+    p.add_argument(
+        "--force-dummy",
+        action="store_true",
+        help="Se strict è attivo, consente comunque la generazione stub quando --dummy è richiesto (eccezione esplicita).",
     )
 
     p.add_argument(
@@ -975,6 +1016,8 @@ def main(args: argparse.Namespace) -> int | None:
                 non_interactive=args.non_interactive,
                 proceed_after_csv=bool(args.proceed),
                 dummy_mode=bool(args.dummy),
+                strict_mode=getattr(args, "strict", None),
+                force_dummy=bool(getattr(args, "force_dummy", False)),
                 run_id=run_id,
             )
             return 0

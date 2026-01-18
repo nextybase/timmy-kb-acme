@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Callable, Dict, Optional
+from typing import cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_bytes
@@ -183,6 +184,30 @@ def _count_tags(base_dir: Path) -> int:
         return 0
 
 
+def _get_vision_strict_output(ctx_obj: Any) -> tuple[Optional[bool], str]:
+    """
+    Best-effort: estrae vision_settings.strict_output dal ClientContext.settings.
+    Ritorna (value, source).
+    """
+    try:
+        settings = getattr(ctx_obj, "settings", None)
+        if settings is None:
+            return None, "missing_settings"
+        vs = getattr(settings, "vision_settings", None)
+        if vs is None:
+            # settings potrebbe essere dict-like o un wrapper senza vision_settings
+            if isinstance(settings, dict):
+                vision = settings.get("vision") or {}
+                if isinstance(vision, dict) and "strict_output" in vision:
+                    return bool(vision.get("strict_output")), "config_dict"
+            return None, "missing_vision_settings"
+        if hasattr(vs, "strict_output"):
+            return bool(getattr(vs, "strict_output")), "config"
+        return None, "missing_strict_output"
+    except Exception:
+        return None, "error"
+
+
 def build_dummy_payload(
     *,
     slug: str,
@@ -281,6 +306,37 @@ def build_dummy_payload(
     hard_check_results: dict[str, tuple[bool, str, int | None]] = {}
     soft_errors: list[str] = []
     vision_downgraded = False
+    decisions: dict[str, Any] = {}
+
+    # ---- strict-only gate (fail-fast, deterministic) ----
+    ctx_for_checks: Any | None = None
+    try:
+        if ClientContext and hasattr(ClientContext, "load"):
+            ctx_for_checks = ClientContext.load(slug=slug, require_env=False, run_id=None)  # type: ignore[misc]
+    except Exception:
+        ctx_for_checks = None
+
+    strict_requested, strict_source = _get_vision_strict_output(ctx_for_checks) if ctx_for_checks else (None, "ctx_unavailable")
+    strict_effective = True if (deep_testing and enable_vision) else (True if strict_requested is None else bool(strict_requested))
+    strict_rationale = (
+        "deep_testing requires strict-only output"
+        if (deep_testing and enable_vision)
+        else ("default_true" if strict_requested is None else strict_source)
+    )
+    decisions["vision_strict_output"] = {
+        "requested": strict_requested,
+        "effective": strict_effective,
+        "rationale": strict_rationale,
+        "source": strict_source,
+    }
+
+    if deep_testing and enable_vision and strict_requested is False:
+        msg = "Vision hard check failed; verifica config: strict output deve essere True (strict-only)"
+        logger.error(
+            "tools.gen_dummy_kb.vision_hardcheck.strict_required",
+            extra={"slug": slug, "requested": strict_requested, "source": strict_source},
+        )
+        raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg))
 
     vision_already_completed = False
     if enable_vision and (sentinel_path.exists() or (mapping_path.exists() and cartelle_path.exists())):
@@ -604,6 +660,7 @@ def build_dummy_payload(
     return {
         "slug": slug,
         "client_name": client_name,
+        "decisions": decisions,
         "paths": {
             "base": str(base_dir),
             "config": str(base_dir / "config" / "config.yaml"),
