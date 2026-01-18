@@ -44,6 +44,9 @@ def _init_ui_logging() -> None:
     # Propagazione abilitata cosi i logger delle pagine ereditano l'handler file.
     os.environ.setdefault("TIMMY_LOG_PROPAGATE", "1")
     get_structured_logger("ui", log_file=log_file, propagate=True)
+    get_structured_logger("ai", log_file=log_file, propagate=True)
+    get_structured_logger("ai.responses", log_file=log_file, propagate=True)
+    LOGGER.info("ui.logging.ai_wired")
 
 
 LOGGER: logging.Logger = get_structured_logger("ui.preflight")

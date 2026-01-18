@@ -29,6 +29,13 @@ def _find_invocation_record(caplog: pytest.CaptureFixture[str]) -> logging.LogRe
     raise AssertionError("ai.invocation record not found")
 
 
+def _find_json_schema_record(caplog: pytest.CaptureFixture[str]) -> logging.LogRecord:
+    for record in caplog.records:
+        if getattr(record, "event", "") == "ai.responses.json_schema_format":
+            return record
+    raise AssertionError("ai.responses.json_schema_format record not found")
+
+
 def test_run_json_model_logs_invocation(monkeypatch, caplog):
     caplog.set_level(logging.INFO, logger="ai.responses")
     monkeypatch.setattr(responses, "make_openai_client", lambda: _dummy_client('{"ok": true}'))
@@ -36,7 +43,10 @@ def test_run_json_model_logs_invocation(monkeypatch, caplog):
     responses.run_json_model(
         model="vision-model",
         messages=[{"role": "user", "content": "{}"}],
-        response_format={"type": "json_object"},
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "VisionOutput_v2", "schema": {"type": "object"}, "strict": True},
+        },
         invocation={
             "component": "vision",
             "operation": "vision.provision",
@@ -47,6 +57,13 @@ def test_run_json_model_logs_invocation(monkeypatch, caplog):
             "request_tag": "vision-test",
         },
     )
+
+    schema_record = _find_json_schema_record(caplog)
+    assert schema_record.type == "json_schema"
+    assert schema_record.name_present is True
+    assert schema_record.format_name == "VisionOutput_v2"
+    assert schema_record.schema_present is True
+    assert schema_record.json_schema_present is False
 
     record = _find_invocation_record(caplog)
     assert record.component == "vision"

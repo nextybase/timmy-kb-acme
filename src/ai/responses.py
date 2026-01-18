@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import hashlib
 import inspect
 import json
 import os
@@ -214,6 +215,118 @@ def run_text_model(
     return ResponseText(model=model, text=text, raw=resp)
 
 
+def _normalize_response_format(response_format: Dict[str, Any]) -> Dict[str, Any]:
+    if response_format.get("type") != "json_schema":
+        return response_format
+
+    normalized = dict(response_format)
+    schema_payload = response_format.get("json_schema")
+    if isinstance(schema_payload, dict):
+        normalized.pop("json_schema", None)
+        for key in ("name", "schema", "strict", "description"):
+            if key in schema_payload and key not in normalized:
+                normalized[key] = schema_payload[key]
+
+    if "name" not in normalized:
+        raise ConfigError(
+            "Responses text.format richiede name per json_schema.",
+            code="responses.request.invalid",
+            component="responses",
+        )
+    return normalized
+
+
+def _diagnose_json_schema_format(rf_payload: Dict[str, Any]) -> Dict[str, Any]:
+    schema = rf_payload.get("schema")
+    if not isinstance(schema, Mapping):
+        schema = {}
+
+    properties = schema.get("properties")
+    root_properties = sorted(properties.keys()) if isinstance(properties, Mapping) else []
+
+    required = schema.get("required")
+    root_required = sorted([str(item) for item in required]) if isinstance(required, list) else []
+
+    required_minus_properties = [key for key in root_required if key not in root_properties]
+    properties_minus_required = [key for key in root_properties if key not in root_required]
+
+    has_pattern_properties_any = False
+    has_one_of_any = False
+    has_any_of_any = False
+    has_all_of_any = False
+    map_like_paths: List[str] = []
+
+    stack: List[tuple[Mapping[str, Any], str]] = [(schema, "$")]
+    while stack:
+        node, path = stack.pop()
+
+        if "patternProperties" in node:
+            has_pattern_properties_any = True
+        if "oneOf" in node:
+            has_one_of_any = True
+        if "anyOf" in node:
+            has_any_of_any = True
+        if "allOf" in node:
+            has_all_of_any = True
+
+        node_type = node.get("type")
+        node_props = node.get("properties")
+        node_additional = node.get("additionalProperties")
+        if node_type == "object" and isinstance(node_additional, Mapping):
+            if not (isinstance(node_props, Mapping) and node_props):
+                map_like_paths.append(path)
+
+        if isinstance(node_props, Mapping):
+            for key in sorted(node_props.keys()):
+                child = node_props.get(key)
+                if isinstance(child, Mapping):
+                    stack.append((child, f"{path}.{key}"))
+
+        items = node.get("items")
+        if isinstance(items, Mapping):
+            stack.append((items, f"{path}[]"))
+        elif isinstance(items, list):
+            for idx, item in enumerate(items):
+                if isinstance(item, Mapping):
+                    stack.append((item, f"{path}[{idx}]"))
+
+        if isinstance(node_additional, Mapping):
+            stack.append((node_additional, f"{path}.*"))
+
+        for branch_key in ("oneOf", "anyOf", "allOf"):
+            branches = node.get(branch_key)
+            if isinstance(branches, list):
+                for idx, branch in enumerate(branches):
+                    if isinstance(branch, Mapping):
+                        stack.append((branch, f"{path}.{branch_key}[{idx}]"))
+
+    map_like_paths_sorted = sorted(set(map_like_paths))[:30]
+    fingerprint_source = json.dumps(
+        {
+            "properties": root_properties,
+            "required": root_required,
+            "map_like_paths": map_like_paths_sorted,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    fingerprint_sha256 = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()
+
+    return {
+        "root_properties_count": len(root_properties),
+        "root_required_count": len(root_required),
+        "required_minus_properties": sorted(required_minus_properties)[:50],
+        "properties_minus_required": sorted(properties_minus_required)[:50],
+        "has_additionalProperties_root": "additionalProperties" in schema,
+        "has_patternProperties_any": has_pattern_properties_any,
+        "has_oneOf_any": has_one_of_any,
+        "has_anyOf_any": has_any_of_any,
+        "has_allOf_any": has_all_of_any,
+        "map_like_paths": map_like_paths_sorted,
+        "fingerprint_sha256": fingerprint_sha256,
+    }
+
+
 def run_json_model(
     *,
     model: str,
@@ -242,7 +355,30 @@ def run_json_model(
             component="responses",
         )
     input_payload = _to_input_blocks(messages)
-    rf_payload = response_format or {"type": "json_object"}
+    rf_payload = _normalize_response_format(response_format or {"type": "json_object"})
+    if rf_payload.get("type") == "json_schema":
+        raw_name = rf_payload.get("name")
+        name = str(raw_name) if raw_name is not None else ""
+        name_truncated = name[:80] if name else ""
+        LOGGER.info(
+            "ai.responses.json_schema_format",
+            extra={
+                "type": "json_schema",
+                "name_present": bool(name_truncated),
+                "format_name": name_truncated,
+                "schema_present": "schema" in rf_payload,
+                "json_schema_present": "json_schema" in rf_payload,
+            },
+        )
+        diagnostics = _diagnose_json_schema_format(rf_payload)
+        LOGGER.info(
+            "ai.responses.json_schema_diagnostics",
+            extra={
+                **diagnostics,
+                "schema_name": name_truncated,
+                "name_present": bool(name_truncated),
+            },
+        )
     normalized_metadata = _normalize_metadata(metadata)
 
     LOGGER.info(

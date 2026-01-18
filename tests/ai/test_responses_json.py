@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import json
+import logging
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from ai.responses import ConfigError, _parse_json_payload, run_json_model
+from ai.responses import ConfigError, _diagnose_json_schema_format, _normalize_response_format, _parse_json_payload, run_json_model
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 
 class _FakeResponse:
@@ -46,6 +49,22 @@ class _TypeErrorClient:
 
     def create(self, **_kwargs: object) -> _FakeResponse:
         raise TypeError("create() got an unexpected keyword argument 'response_format'")
+
+
+def _load_vision_schema() -> dict:
+    repo_root = Path(__file__).resolve().parents[2]
+    schema_path = ensure_within_and_resolve(repo_root, repo_root / "src" / "ai" / "schemas" / "VisionOutput.schema.json")
+    raw = read_text_safe(repo_root, schema_path, encoding="utf-8")
+    return json.loads(raw)
+
+
+def _find_diagnostics_record(caplog: pytest.CaptureFixture[str]) -> logging.LogRecord:
+    for record in caplog.records:
+        if getattr(record, "event", "") == "ai.responses.json_schema_diagnostics":
+            return record
+        if record.getMessage() == "ai.responses.json_schema_diagnostics":
+            return record
+    raise AssertionError("ai.responses.json_schema_diagnostics record not found")
 
 
 def test_run_json_model_uses_client_without_make(monkeypatch) -> None:
@@ -113,3 +132,67 @@ def test_run_json_model_invalid_json_raises() -> None:
             messages=[{"role": "user", "content": "hi"}],
             client=client,
         )
+
+
+def test_normalize_response_format_json_schema_flattens() -> None:
+    payload = {
+        "type": "json_schema",
+        "json_schema": {"name": "X", "schema": {"type": "object"}, "strict": True},
+    }
+    normalized = _normalize_response_format(payload)
+    assert normalized["type"] == "json_schema"
+    assert normalized["name"] == "X"
+    assert normalized["schema"] == {"type": "object"}
+    assert normalized["strict"] is True
+    assert "json_schema" not in normalized
+
+
+def test_normalize_response_format_json_schema_missing_name_raises() -> None:
+    payload = {"type": "json_schema", "json_schema": {"schema": {"type": "object"}, "strict": True}}
+    with pytest.raises(ConfigError) as exc:
+        _normalize_response_format(payload)
+    assert exc.value.code == "responses.request.invalid"
+    assert exc.value.component == "responses"
+
+
+def test_normalize_response_format_non_json_schema_passthrough() -> None:
+    payload = {"type": "json_object"}
+    assert _normalize_response_format(payload) == payload
+
+
+def test_diagnostics_required_minus_properties_empty_for_vision_schema() -> None:
+    schema = _load_vision_schema()
+    diagnostics = _diagnose_json_schema_format({"type": "json_schema", "schema": schema})
+    assert diagnostics["required_minus_properties"] == []
+
+
+def test_diagnostics_detects_map_like_paths_for_vision_schema() -> None:
+    schema = _load_vision_schema()
+    diagnostics = _diagnose_json_schema_format({"type": "json_schema", "schema": schema})
+    map_like_paths = diagnostics["map_like_paths"]
+    assert "$.entity_to_area" in map_like_paths
+    assert "$.entity_to_document_type" in map_like_paths
+
+
+def test_run_json_model_emits_json_schema_diagnostics_log(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="ai.responses")
+    client = _FakeClient('{"ok": true}')
+    run_json_model(
+        model="stub",
+        messages=[{"role": "user", "content": "hi"}],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "VisionOutput_v2",
+                "schema": {"type": "object", "properties": {"a": {"type": "string"}}, "required": ["a"]},
+                "strict": True,
+            },
+        },
+        client=client,
+    )
+    record = _find_diagnostics_record(caplog)
+    assert record.root_properties_count == 1
+    assert record.root_required_count == 1
+    assert record.required_minus_properties == []
+    assert record.properties_minus_required == []
+    assert record.name_present is True
