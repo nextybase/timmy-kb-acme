@@ -19,7 +19,7 @@ def test_get_repo_root_env_valid(monkeypatch, tmp_path) -> None:
     repo.mkdir()
     (repo / ".git").mkdir()
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo))
-    assert get_repo_root() == repo
+    assert get_repo_root(allow_env=True) == repo
 
 
 def test_get_repo_root_env_disabled(monkeypatch, tmp_path) -> None:

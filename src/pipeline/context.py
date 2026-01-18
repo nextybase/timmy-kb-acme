@@ -300,6 +300,9 @@ class ClientContext:
                     # creati direttamente nella repo stessa (fallimento UI).
                     env_root = None
                 else:
+                    expected = f"timmy-kb-{slug}"
+                    if root.name.startswith("timmy-kb-") and root.name != expected:
+                        root = root.parent / expected
                     logger.info(
                         "context.repo_root_dir_env",
                         extra={"slug": slug, "repo_root_dir": str(root)},

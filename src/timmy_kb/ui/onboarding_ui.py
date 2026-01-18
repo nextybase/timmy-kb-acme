@@ -27,13 +27,12 @@ except Exception:  # pragma: no cover
 LOGGER = get_structured_logger("ui.bootstrap")
 
 try:
-    REPO_ROOT = get_repo_root()
+    REPO_ROOT = get_repo_root(allow_env=False)
 except ConfigError as exc:
     LOGGER.error("ui.bootstrap.repo_root_missing", extra={"error": str(exc)})
     raise
 
-# Non vogliamo che REPO_ROOT_DIR da env interferisca col SSoT.
-os.environ.pop("REPO_ROOT_DIR", None)
+# REPO_ROOT_DIR serve al workspace: non rimuoverla qui.
 
 
 def _init_ui_logging() -> None:

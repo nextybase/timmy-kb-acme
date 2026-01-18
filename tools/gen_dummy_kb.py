@@ -57,7 +57,7 @@ yaml = _yaml_mod  # type: ignore
 
 from pipeline.paths import get_repo_root
 
-REPO_ROOT = get_repo_root()
+REPO_ROOT = get_repo_root(allow_env=False)
 
 
 class _PayloadPaths(TypedDict):

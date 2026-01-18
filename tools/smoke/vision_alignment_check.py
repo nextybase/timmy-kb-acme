@@ -25,7 +25,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from pipeline.paths import get_repo_root
 
-ROOT = get_repo_root()
+ROOT = get_repo_root(allow_env=False)
 
 from pipeline.env_utils import get_env_var  # noqa: E402
 from pipeline.logging_utils import get_structured_logger  # noqa: E402

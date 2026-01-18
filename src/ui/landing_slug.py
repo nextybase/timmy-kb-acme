@@ -139,10 +139,13 @@ def _workspace_dir_for(slug: str, *, layout: WorkspaceLayout | None = None) -> P
 
 
 def _request_shutdown(logger: Optional[logging.Logger]) -> None:
+    log = logger or get_structured_logger("ui.landing_slug")
     try:
-        (logger or get_structured_logger("ui.landing_slug")).info("ui.shutdown_request")
+        log.info("ui.shutdown_request", extra={"pid": os.getpid()})
         os.kill(os.getpid(), signal.SIGTERM)
-    except Exception:
+    except Exception as exc:
+        # Evita silent shutdown: lascia almeno traccia prima dell'exit forzato.
+        log.warning("ui.shutdown_request_failed", extra={"error": repr(exc)})
         os._exit(0)
 
 
@@ -410,8 +413,12 @@ def render_workspace_summary(
                     mapping_abs = str(ensure_within_and_resolve(base_dir, Path(yaml_paths.get("mapping", ""))))
                     cartelle_abs = str(ensure_within_and_resolve(base_dir, Path(yaml_paths.get("cartelle_raw", ""))))
                     st.json({"mapping": mapping_abs, "cartelle_raw": cartelle_abs}, expanded=False)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Non bloccare la UX, ma evita silent degradation: traccia l'errore.
+                    (log or get_structured_logger("ui.landing_slug")).warning(
+                        "ui.landing_slug.paths_box_failed",
+                        extra={"slug": slug, "error": repr(exc)},
+                    )
             except ConfigError as exc:
                 if log:
                     log.warning("landing.workspace_creation_failed", extra={"slug": slug, "error": str(exc)})
@@ -451,7 +458,6 @@ def render_workspace_summary(
 
 def render_landing_slug(log: Optional[logging.Logger] = None) -> Tuple[bool, str, str]:
     """Landing slug-first con verifica e bootstrap Vision Statement."""
-
     _require_streamlit()
 
     slug_state = cast(str, _state_get("slug", "") or "")

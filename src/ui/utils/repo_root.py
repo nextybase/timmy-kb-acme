@@ -7,7 +7,7 @@ from pathlib import Path
 from pipeline.paths import get_repo_root as _get_repo_root
 
 
-def get_repo_root(*, allow_env: bool = True) -> Path:
+def get_repo_root(*, allow_env: bool = False) -> Path:
     """Wrapper SSoT: delega a pipeline.paths.get_repo_root (no fallback UI-specific)."""
     return _get_repo_root(allow_env=allow_env)
 

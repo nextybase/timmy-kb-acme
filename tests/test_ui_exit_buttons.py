@@ -13,6 +13,9 @@ def test_request_shutdown_kill_path(monkeypatch) -> None:
         def info(self, *_a, **_k):
             called["logged"] = True
 
+        def warning(self, *_a, **_k):
+            called["logged"] = True
+
     def _fake_kill(pid, sig):  # noqa: ARG001
         called["kill"] = True
 
@@ -35,6 +38,9 @@ def test_request_shutdown_fallback_exit_on_exception(monkeypatch) -> None:
 
     class _Logger:
         def info(self, *_a, **_k):
+            called["logged"] = True
+
+        def warning(self, *_a, **_k):
             called["logged"] = True
 
     def _fake_kill(pid, sig):  # noqa: ARG001

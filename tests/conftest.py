@@ -462,6 +462,8 @@ def _stable_env(monkeypatch, dummy_workspace):
 
     # Disabilita accidentalmente l'assistente, salvo override nel test
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
+    # Evita che REPO_ROOT_DIR da .env alteri i test che richiedono la repo root.
+    monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
 
     # Evita side-effect su output/ del repo: se qualche codice usa default,
     # meglio che punti alla base temporanea del dummy.

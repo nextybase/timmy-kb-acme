@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -28,12 +29,15 @@ def repo_tmp() -> Path:
 
 def run_hook(*args: str) -> subprocess.CompletedProcess[str]:
     cmd = [sys.executable, str(SCRIPT), *args]
+    env = os.environ.copy()
+    env["REPO_ROOT_DIR"] = str(REPO_ROOT)
     return subprocess.run(
         cmd,
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
 
 
