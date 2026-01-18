@@ -1,0 +1,18 @@
+[
+  {
+    "label": "contratti",
+    "path": "book/alpha.md",
+    "contexts": [
+      "contratti",
+      "forniture"
+    ]
+  },
+  {
+    "label": "report",
+    "path": "book/beta.md",
+    "contexts": [
+      "reportistica",
+      "metriche"
+    ]
+  }
+]

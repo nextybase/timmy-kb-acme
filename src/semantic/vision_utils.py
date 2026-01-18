@@ -106,24 +106,6 @@ def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
             if src and dst and rel_type:
                 relations.append({"from": src, "to": dst, "type": rel_type})
 
-    entity_to_area = data.get("entity_to_area")
-    normalized_entity_to_area = (
-        {str(k).strip(): str(v).strip() for k, v in entity_to_area.items() if str(k).strip() and str(v).strip()}
-        if isinstance(entity_to_area, dict)
-        else {}
-    )
-
-    entity_to_document_type = data.get("entity_to_document_type")
-    normalized_entity_to_doc = (
-        {
-            str(k).strip(): str(v).strip()
-            for k, v in entity_to_document_type.items()
-            if str(k).strip() and str(v).strip()
-        }
-        if isinstance(entity_to_document_type, dict)
-        else {}
-    )
-
     er_model_raw = data.get("er_model")
     er_model: Dict[str, Any] = {}
     if isinstance(er_model_raw, dict):
@@ -160,8 +142,6 @@ def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
         "areas": normalized_areas,
         "entities": entities,
         "relations": relations,
-        "entity_to_area": normalized_entity_to_area,
-        "entity_to_document_type": normalized_entity_to_doc,
         "er_model": er_model,
         "system_folders": sys,
     }

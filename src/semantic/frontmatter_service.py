@@ -217,8 +217,6 @@ def _persist_layout_proposal(layout: WorkspaceLayout, logger: logging.Logger, *,
     mapping_all = cfg.mapping if isinstance(cfg.mapping, dict) else {}
     entities = mapping_all.get("entities")
     if isinstance(entities, list) and entities:
-        entity_to_area = mapping_all.get("entity_to_area") or {}
-        entity_to_doc = mapping_all.get("entity_to_document_type") or {}
         entity_blocks: list[dict[str, Any]] = []
         for ent in entities:
             if not isinstance(ent, dict):
@@ -231,8 +229,6 @@ def _persist_layout_proposal(layout: WorkspaceLayout, logger: logging.Logger, *,
                     "entity": name,
                     "category": ent.get("category", ""),
                     "description": ent.get("description", ""),
-                    "area": entity_to_area.get(name),
-                    "document_type": entity_to_doc.get(name),
                 }
             )
         layout_dict: dict[str, Any] = {
@@ -242,8 +238,6 @@ def _persist_layout_proposal(layout: WorkspaceLayout, logger: logging.Logger, *,
             "entities": entity_blocks,
             "relations": mapping_all.get("relations", []),
             "areas": mapping_all.get("areas", []),
-            "entity_to_area": entity_to_area,
-            "entity_to_document_type": entity_to_doc,
             "er_model": mapping_all.get("er_model", {}),
         }
         layout_yaml = _dump_layout_yaml(layout_dict)
@@ -317,8 +311,6 @@ def enrich_frontmatter(
             for ent in entities_raw
             if isinstance(ent, dict) and str(ent.get("name", "")).strip()
         ]
-    entity_map_raw = mapping_all.get("entity_to_area")
-    entity_to_area: Dict[str, Any] = entity_map_raw if isinstance(entity_map_raw, dict) else {}
     relations_raw = mapping_all.get("relations")
     relations_all: list[Any] = relations_raw if isinstance(relations_raw, list) else []
 
@@ -362,8 +354,6 @@ def enrich_frontmatter(
                     break
             if inferred_entity and not new_meta.get("entity"):
                 new_meta["entity"] = inferred_entity
-            if new_meta.get("entity") and not new_meta.get("area"):
-                new_meta["area"] = entity_to_area.get(new_meta["entity"]) or section
             if not new_meta.get("relation_hints") and new_meta.get("entity"):
                 rel_hints: list[dict[str, str]] = []
                 for rel in relations_all:

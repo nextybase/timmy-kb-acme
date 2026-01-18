@@ -1,0 +1,141 @@
+version: 1
+source: vision
+context:
+  slug: dummy
+areas:
+- key: sostenibilità
+  ambito: strategico
+  descrizione_breve: Promozione della sostenibilità integrata.
+  descrizione_dettagliata:
+    include:
+    - principi di sostenibilità ambientale
+    - sostenibilità sociale
+    - sostenibilità lavorativa
+    exclude: []
+    artefatti_note: NeXT promuove un modello basato sulla riduzione degli sprechi.
+  documents:
+  - DOC-1
+  - DOC-2
+  artefatti:
+  - Artefatto 1
+  - Artefatto 2
+  correlazioni:
+    entities:
+    - id: progetto
+      label: Progetto
+      syn:
+      - iniziativa
+      - progetto di sviluppo
+    - id: obiettivo
+      label: Obiettivo
+      syn:
+      - meta
+      - target
+    relations:
+    - subj: sostenibilità
+      pred: promuove
+      obj: modello
+      card: singolo
+    chunking_hints: []
+- key: intelligenza_artificiale
+  ambito: strategico
+  descrizione_breve: Integrazione dell'AI nel supporto decisionale.
+  descrizione_dettagliata:
+    include:
+    - supervisione umana
+    - trasparenza nel processo decisionale
+    exclude: []
+    artefatti_note: NeXT utilizza AI come supporto, non sostituzione.
+  documents:
+  - DOC-3
+  - DOC-4
+  artefatti:
+  - Artefatto 3
+  - Artefatto 4
+  correlazioni:
+    entities:
+    - id: decisione
+      label: Decisione
+      syn:
+      - scelta
+      - delibera
+    - id: analisi
+      label: Analisi
+      syn:
+      - valutazione
+      - esame
+    relations:
+    - subj: AI
+      pred: supporta
+      obj: decisione
+      card: singolo
+    chunking_hints: []
+- key: formazione
+  ambito: operativo
+  descrizione_breve: Formazione continua per team e utenti.
+  descrizione_dettagliata:
+    include:
+    - corsi di formazione AI
+    - workshop su sostenibilità
+    exclude: []
+    artefatti_note: Team e utenti sono formati per utilizzare al meglio le tecnologie.
+  documents:
+  - DOC-5
+  - DOC-6
+  artefatti:
+  - Artefatto 5
+  - Artefatto 6
+  correlazioni:
+    entities:
+    - id: team
+      label: Team
+      syn:
+      - gruppo di lavoro
+      - team operativo
+    - id: cliente
+      label: Cliente
+      syn:
+      - utente
+      - partner
+    relations:
+    - subj: formazione
+      pred: offre
+      obj: cumpiimento
+      card: multiplo
+    chunking_hints: []
+entities:
+- name: Progetto
+  category: operativi
+  description: Iniziative di sviluppo territoriale.
+  examples:
+  - Progetto NeXT Sicilia
+  - Progetto Digitalizzazione PMI
+- name: Obiettivo
+  category: operativi
+  description: Meta da raggiungere per il progetto.
+  examples:
+  - Ridurre effort del 20%
+  - Introdurre AI in 10 PMI
+- name: Milestone
+  category: operativi
+  description: Traguardi significativi nel progetto.
+  examples:
+  - Completamento onboarding
+  - Rilascio prototipo Timmy v0.1
+relations: []
+er_model:
+  entities:
+  - Progetto
+  - Obiettivo
+  - Milestone
+system_folders:
+  identity:
+    documents: []
+  glossario:
+    artefatti: []
+    terms_hint: []
+metadata_policy:
+  chunk_length_tokens:
+    target: 100
+    overlap: 10
+  mandatory_fields: []

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
 import hashlib
@@ -30,9 +31,11 @@ def _remove_map_like(schema: Dict[str, Any]) -> Dict[str, Any]:
         props.pop("entity_to_area", None)
         props.pop("entity_to_document_type", None)
         schema["properties"] = props
-    reqs = schema.get("required")
-    if isinstance(reqs, list):
-        schema["required"] = [item for item in reqs if item not in {"entity_to_area", "entity_to_document_type"}]
+    required_items = schema.get("required")
+    if isinstance(required_items, list):
+        schema["required"] = [
+            item for item in required_items if item not in {"entity_to_area", "entity_to_document_type"}
+        ]
     return schema
 
 
@@ -47,11 +50,11 @@ def _dump_payload(
     required = []
     if isinstance(schema, Mapping):
         props = schema.get("properties")
-        reqs = schema.get("required")
+        required_items = schema.get("required")
         if isinstance(props, Mapping):
             properties = sorted(str(k) for k in props.keys())
-        if isinstance(reqs, list):
-            required = sorted(str(k) for k in reqs)
+        if isinstance(required_items, list):
+            required = sorted(str(k) for k in required_items)
     payload = {
         "response_format_raw": response_format_raw,
         "text_format_normalized": text_format_normalized,
@@ -85,7 +88,9 @@ def main() -> int:
 
     logger.info("schema_test.env", extra={"python": sys.version.split()[0], "openai": openai_version})
 
-    schema_path = ensure_within_and_resolve(repo_root, repo_root / "src" / "ai" / "schemas" / "VisionOutput.schema.json")
+    schema_path = ensure_within_and_resolve(
+        repo_root, repo_root / "src" / "ai" / "schemas" / "VisionOutput.schema.json"
+    )
     schema = _load_schema(schema_path)
     schema = _remove_map_like(schema)
 
@@ -112,11 +117,11 @@ def main() -> int:
         return 0
     except ConfigError as exc:
         logger.error("schema_test.result FAIL")
-        logger.error(f"schema_test.error {exc}")
+        logger.error("schema_test.error %s", exc)
         return 1
     except Exception as exc:
         logger.error("schema_test.result FAIL")
-        logger.error(f"schema_test.error {exc}")
+        logger.error("schema_test.error %s", exc)
         return 2
 
 

@@ -868,12 +868,7 @@ def _persist_outputs(
     mapping_yaml_str = vision_to_semantic_mapping_yaml(payload, slug=slug)
     safe_write_text(prepared.paths.mapping_yaml, mapping_yaml_str)
 
-    doc_map = payload.get("entity_to_document_type", {})
-    raw_folders: dict[str, list[str]] | None = None
-    if isinstance(doc_map, dict) and doc_map:
-        codes = [str(code).strip() for code in doc_map.values() if str(code).strip()]
-        raw_folders = {code: [] for code in codes}
-    cartelle_yaml_str = json_to_cartelle_raw_yaml(payload, slug=slug, raw_folders=raw_folders)
+    cartelle_yaml_str = json_to_cartelle_raw_yaml(payload, slug=slug, raw_folders=None)
     safe_write_text(prepared.paths.cartelle_yaml, cartelle_yaml_str)
 
     ts = datetime.now(timezone.utc).isoformat()

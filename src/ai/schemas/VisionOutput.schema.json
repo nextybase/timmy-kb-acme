@@ -325,20 +325,6 @@
         "additionalProperties": false
       }
     },
-    "entity_to_area": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "string"
-      },
-      "description": "Mappa: nome_entità → key_area"
-    },
-    "entity_to_document_type": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "string"
-      },
-      "description": "Mappa: nome_entità → codice documentale (es. PRJ-, ORG-, ecc.)"
-    },
     "er_model": {
       "type": "object",
       "properties": {
@@ -422,8 +408,6 @@
     "message_ui",
     "entities",
     "relations",
-    "entity_to_area",
-    "entity_to_document_type",
     "er_model",
     "metadata_policy"
   ],

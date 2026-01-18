@@ -1,4 +1,4 @@
-﻿# 10_runtime_strict_contract_beta.md
+# 10_runtime_strict_contract_beta.md
 
 Status: ACTIVE (Beta 1.0)
 Authority: OCP / C-Board
@@ -166,4 +166,3 @@ State advancement is allowed ONLY after a successful Decision Record.
 ---
 
 End of document.
-

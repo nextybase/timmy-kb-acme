@@ -1,0 +1,110 @@
+version: 1
+source: vision
+context:
+  slug: dummy
+areas:
+- key: sostenibilita
+  ambito: strategico
+  descrizione_breve: Integrazione della sostenibilità in ogni aspetto operativo.
+  descrizione_dettagliata:
+    include:
+    - pratiche sostenibili
+    - tecnologie che riducono gli sprechi
+    exclude:
+    - processi non sostenibili
+    - modelli obsoleti
+    artefatti_note: Focus su un modello integrato di sostenibilità.
+  documents:
+  - PROGETTO NeXT Sicilia
+  - PROGETTO Digitalizzazione PMI
+  artefatti:
+  - Deliverable di report di impatto
+  - Documento di Statuto
+  correlazioni:
+    entities:
+    - id: progetto
+      label: Progetto
+      syn: []
+    - id: obiettivo
+      label: Obiettivo
+      syn: []
+    relations:
+    - subj: Progetto
+      pred: include
+      obj: Obiettivo
+      card: 1:N
+    chunking_hints: []
+- key: tecnologia
+  ambito: it-data
+  descrizione_breve: Implementazione di tecnologie AI per il supporto decisionale.
+  descrizione_dettagliata:
+    include:
+    - AI per la decisione umana
+    - ottimizzazione dei processi
+    exclude:
+    - automatizzazione senza supervisione
+    - approcci rigidi
+    artefatti_note: Rafforzare l'approccio Human-in-the-Loop.
+  documents:
+  - PROGETTO Digitalizzazione PMI
+  artefatti:
+  - Procedure di gestione incidenti
+  - Contratti di fornitura AI
+  correlazioni:
+    entities:
+    - id: team
+      label: Team
+      syn: []
+    - id: operatore
+      label: Operatore
+      syn: []
+    relations:
+    - subj: Team
+      pred: supervisa
+      obj: Operatore
+      card: 1:N
+    chunking_hints: []
+- key: formazione
+  ambito: hr
+  descrizione_breve: Formazione continua per team e stakeholders.
+  descrizione_dettagliata:
+    include:
+    - corsi di formazione
+    - workshop pratici
+    exclude:
+    - formazione statica
+    - materiale obsoleto
+    artefatti_note: Focus su skills di AI e Agile.
+  documents:
+  - Report di progetto
+  artefatti:
+  - Skill di competenze AI
+  - Documento di sintesi delle attività
+  correlazioni:
+    entities:
+    - id: stakeholder
+      label: Stakeholder
+      syn: []
+    - id: decisore
+      label: Decisore
+      syn: []
+    relations:
+    - subj: Stakeholder
+      pred: partecipano a
+      obj: Formazione
+      card: N:M
+    chunking_hints: []
+entities: []
+relations: []
+er_model: {}
+system_folders:
+  identity:
+    documents: []
+  glossario:
+    artefatti: []
+    terms_hint: []
+metadata_policy:
+  chunk_length_tokens:
+    target: 200
+    overlap: 50
+  mandatory_fields: []

@@ -1,0 +1,31 @@
+version: 1
+source: vision
+context:
+  slug: dummy
+folders:
+- key: sostenibilità
+  title: strategico
+  description: Promozione della sostenibilità integrata.
+  examples:
+  - DOC-1
+  - DOC-2
+- key: intelligenza_artificiale
+  title: strategico
+  description: Integrazione dell'AI nel supporto decisionale.
+  examples:
+  - DOC-3
+  - DOC-4
+- key: formazione
+  title: operativo
+  description: Formazione continua per team e utenti.
+  examples:
+  - DOC-5
+  - DOC-6
+- key: identity
+  title: Identità
+  description: Documenti identificativi e titoli abilitanti
+  examples: []
+- key: glossario
+  title: Glossario
+  description: Termini e definizioni vincolanti (artefatti di sistema)
+  examples: []

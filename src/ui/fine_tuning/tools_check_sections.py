@@ -228,58 +228,28 @@ def _global_vocab() -> Dict[str, Dict[str, Any]]:
 
 def _render_entities_section(mapping_data: Dict[str, Any], st: Any) -> None:
     entities = mapping_data.get("entities") or []
-    entity_to_area = mapping_data.get("entity_to_area") or {}
-    entity_to_document_type = mapping_data.get("entity_to_document_type") or {}
     vocab = _global_vocab()
 
     if entities:
         st.markdown("### Entità rilevanti (da l'assistant)")
-        rows: List[str] = ["| Entità | Categoria | Codice |", "| --- | --- | --- |"]
+        rows: List[str] = ["| Entità | Categoria |", "| --- | --- |"]
         out_of_vocab = False
         for ent in entities:
             if not isinstance(ent, dict):
                 continue
             name = str(ent.get("name") or "").strip()
             category = str(ent.get("category") or "").strip()
-            code = str(entity_to_document_type.get(name, "")).strip()
-            rows.append(f"| {name} | {category} | {code or '-'} |")
+            rows.append(f"| {name} | {category} |")
             if name and name.lower() not in vocab:
                 out_of_vocab = True
         st.markdown("\n".join(rows))
         if out_of_vocab:
             st.warning("ATTENZIONE: entità fuori dal vocabolario NeXT")
 
-    if isinstance(entity_to_area, dict) and entity_to_area:
-        st.markdown("### Mapping entità → aree")
-        rows_area = ["| Entità | Area |", "| --- | --- |"]
-        for ent_name, area in entity_to_area.items():
-            rows_area.append(f"| {ent_name} | {area} |")
-        st.markdown("\n".join(rows_area))
-
-    if isinstance(entity_to_document_type, dict) and entity_to_document_type:
-        st.markdown("### Mapping entità → prefissi documentali")
-        rows_doc = ["| Entità | Prefisso |", "| --- | --- |"]
-        for ent_name, code in entity_to_document_type.items():
-            rows_doc.append(f"| {ent_name} | {code} |")
-        st.markdown("\n".join(rows_doc))
-
-    if entities:
-        missing_area = [e.get("name") for e in entities if (e.get("name") and e.get("name") not in entity_to_area)]
-        missing_code = [
-            e.get("name") for e in entities if (e.get("name") and e.get("name") not in entity_to_document_type)
-        ]
-        if missing_area:
-            st.error(f"Entità senza area: {', '.join(str(x) for x in missing_area)}")
-        if missing_code:
-            st.error(f"Entità senza prefisso documentale: {', '.join(str(x) for x in missing_code)}")
-
 
 def _render_diagnostics(mapping_data: Dict[str, Any], st: Any) -> None:
     st.markdown("### Diagnostica VisionOutput")
     entities = mapping_data.get("entities") or []
-    entity_to_area = mapping_data.get("entity_to_area") or {}
-    entity_to_document_type = mapping_data.get("entity_to_document_type") or {}
-    areas = mapping_data.get("areas") or []
     er_model = mapping_data.get("er_model") or {}
     vocab = _global_vocab()
 
@@ -290,36 +260,11 @@ def _render_diagnostics(mapping_data: Dict[str, Any], st: Any) -> None:
     else:
         st.success("Entità duplicate: PASS")
 
-    missing_area = [n for n in names if n and n not in entity_to_area]
-    if missing_area:
-        st.error(f"Entità senza area: {', '.join(missing_area)}")
-    else:
-        st.success("Entità senza area: PASS")
-
-    missing_code = [n for n in names if n and n not in entity_to_document_type]
-    if missing_code:
-        st.error(f"Entità senza prefisso: {', '.join(missing_code)}")
-    else:
-        st.success("Entità senza prefisso: PASS")
-
     out_of_vocab = [n for n in names if n and n.lower() not in vocab]
     if out_of_vocab:
         st.warning(f"Entità non riconosciute: {', '.join(out_of_vocab)}")
     else:
         st.success("Entità non riconosciute: PASS")
-
-    area_keys = [a.get("key") for a in areas if isinstance(a, dict) and a.get("key")]
-    mapped_areas = {v for v in entity_to_area.values() if v}
-    no_entities = [k for k in area_keys if k not in mapped_areas]
-    if no_entities:
-        st.warning(f"Aree senza entità: {', '.join(str(k) for k in no_entities)}")
-    else:
-        st.success("Aree senza entità: PASS")
-
-    if not entity_to_area or not entity_to_document_type:
-        st.warning("Mapping entità mancanti o incompleti")
-    else:
-        st.success("Mapping entità: PASS")
 
     if not isinstance(er_model, dict) or not er_model:
         st.warning("ER model mancante o incompleto")
@@ -342,8 +287,6 @@ def render_readme_preview(
     st = st_module or get_streamlit()
     with st.expander("Preview README", expanded=False):
         entities = mapping_data.get("entities") or []
-        entity_to_area = mapping_data.get("entity_to_area") or {}
-        entity_to_document_type = mapping_data.get("entity_to_document_type") or {}
 
         idx: Dict[str, Dict[str, Any]] = {}
         for ent in global_entities or []:
@@ -355,17 +298,15 @@ def render_readme_preview(
                 idx.setdefault(label, ent)
 
         st.markdown("#### Entità rilevanti")
-        rows = ["| Entità | Categoria | Area | Prefisso | Esempi |", "| --- | --- | --- | --- | --- |"]
+        rows = ["| Entità | Categoria | Esempi |", "| --- | --- | --- |"]
         for ent in entities:
             if not isinstance(ent, dict):
                 continue
             name = str(ent.get("name") or "").strip()
             meta = idx.get(name.lower())
             category = ent.get("category") or (meta or {}).get("category", "")
-            area = entity_to_area.get(name, "-")
-            prefix = entity_to_document_type.get(name, (meta or {}).get("document_code", "-"))
             examples = ", ".join((meta or {}).get("examples") or [])
-            rows.append(f"| {name} | {category} | {area} | {prefix} | {examples} |")
+            rows.append(f"| {name} | {category} | {examples} |")
         st.markdown("\n".join(rows))
 
         areas = mapping_data.get("areas") or []

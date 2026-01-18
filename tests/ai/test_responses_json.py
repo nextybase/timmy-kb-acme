@@ -8,7 +8,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai.responses import ConfigError, _diagnose_json_schema_format, _normalize_response_format, _parse_json_payload, run_json_model
+from ai.responses import (
+    ConfigError,
+    _diagnose_json_schema_format,
+    _normalize_response_format,
+    _parse_json_payload,
+    run_json_model,
+)
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 
@@ -53,7 +59,9 @@ class _TypeErrorClient:
 
 def _load_vision_schema() -> dict:
     repo_root = Path(__file__).resolve().parents[2]
-    schema_path = ensure_within_and_resolve(repo_root, repo_root / "src" / "ai" / "schemas" / "VisionOutput.schema.json")
+    schema_path = ensure_within_and_resolve(
+        repo_root, repo_root / "src" / "ai" / "schemas" / "VisionOutput.schema.json"
+    )
     raw = read_text_safe(repo_root, schema_path, encoding="utf-8")
     return json.loads(raw)
 
@@ -169,9 +177,7 @@ def test_diagnostics_required_minus_properties_empty_for_vision_schema() -> None
 def test_diagnostics_detects_map_like_paths_for_vision_schema() -> None:
     schema = _load_vision_schema()
     diagnostics = _diagnose_json_schema_format({"type": "json_schema", "schema": schema})
-    map_like_paths = diagnostics["map_like_paths"]
-    assert "$.entity_to_area" in map_like_paths
-    assert "$.entity_to_document_type" in map_like_paths
+    assert diagnostics["map_like_paths"] == []
 
 
 def test_run_json_model_emits_json_schema_diagnostics_log(caplog) -> None:

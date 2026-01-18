@@ -154,10 +154,6 @@ entities:
     category: operativo
   - name: Fantasma
     category: oggetto
-entity_to_area:
-  Progetto: area-uno
-entity_to_document_type:
-  Progetto: PRJ-
 """,
         encoding="utf-8",
     )
@@ -171,11 +167,7 @@ entity_to_document_type:
     module.render_vision_output({"mapping": str(mapping_file)}, st_module=st_stub)
 
     assert any("vocabolario" in msg for msg in st_stub.warning_messages)
-    assert any("senza area" in msg for msg in st_stub.error_messages)
-    assert any("senza prefisso" in msg for msg in st_stub.error_messages)
-    assert any(
-        "Mapping entità" in msg or "Mapping entit" in msg for msg in st_stub.warning_messages + st_stub.success_messages
-    )
+    assert not st_stub.error_messages
 
 
 def test_render_controls_calls_readme_preview(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -190,10 +182,6 @@ areas: []
 entities:
   - name: Progetto
     category: operativo
-entity_to_area:
-  Progetto: area-uno
-entity_to_document_type:
-  Progetto: PRJ-
 """,
         encoding="utf-8",
     )
