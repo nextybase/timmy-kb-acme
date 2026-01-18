@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from storage.tags_store import ensure_schema_v2 as _ensure_tags_schema_v2
 
+
 def _ctx(base_dir: Path):
     class C:
         # Attributi dichiarati per soddisfare Pylance

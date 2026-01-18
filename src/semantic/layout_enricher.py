@@ -319,14 +319,7 @@ def _build_branch(
     min_children, max_children = 3, 6
     children = candidates[:max_children]
     if len(children) < min_children:
-        # fallback: aggiungi placeholder coerenti
-        placeholders = ["overview", "governance", "processi", "dataset", "kpi", "roadmap"]
-        for ph in placeholders:
-            k = to_kebab(f"{top}-{ph}")
-            if k not in children and k not in seen:
-                children.append(k)
-            if len(children) >= min_children:
-                break
+        raise ConversionError(f"Struttura insufficiente per '{top}': figli={len(children)}/{min_children}")
 
     # Crea nodi foglia (dict vuoti) rispettando max_depth (top=1, figli=2)
     for child in children:
@@ -403,7 +396,7 @@ def _nd_merge_into(dst: Dict[str, Any], src: Dict[str, Any]) -> None:
     Merge non distruttivo in-place:
     - se una chiave non esiste in dst: copia
     - se esiste ed è dict: ricorsivo
-    - se esiste ed è conflitto (non dict): crea variante con suffisso '-alt'
+    - se esiste ed è conflitto (non dict): error hard-fail
     """
     for k, v in src.items():
         if k not in dst:
@@ -411,23 +404,8 @@ def _nd_merge_into(dst: Dict[str, Any], src: Dict[str, Any]) -> None:
         else:
             if isinstance(dst[k], dict) and isinstance(v, dict):
                 _nd_merge_into(dst[k], v)
-            elif isinstance(dst[k], dict) and not isinstance(v, dict):
-                # conflitto di tipo: crea alt
-                alt_key = _next_alt_key(dst, k)
-                dst[alt_key] = _deep_copy(v)
             else:
-                # valore già presente non-dict: crea alt
-                alt_key = _next_alt_key(dst, k)
-                dst[alt_key] = _deep_copy(v)
-
-
-def _next_alt_key(d: Dict[str, Any], base: str) -> str:
-    i = 1
-    while True:
-        candidate = f"{base}-alt{i}"
-        if candidate not in d:
-            return candidate
-        i += 1
+                raise ConversionError(f"Conflitto merge su chiave '{k}'")
 
 
 def _sorted_dict(d: Dict[str, Any]) -> Dict[str, Any]:

@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple, cast
 
+from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
 from semantic.document_ingest import read_document
@@ -184,14 +185,7 @@ def _split_goal_baskets(goal_text: str) -> Dict[str, List[str]]:
             buckets["b12"].append(body)
 
     if all(not values for values in buckets.values()):
-        fallback = _to_list(formatted)
-        for idx, body in enumerate(fallback):
-            if idx == 0:
-                buckets["b3"].append(body)
-            elif idx == 1:
-                buckets["b6"].append(body)
-            else:
-                buckets["b12"].append(body)
+        raise ConfigError("Goal format non conforme: attesi blocchi 'Goal N'")
 
     return buckets
 

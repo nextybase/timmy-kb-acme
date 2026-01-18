@@ -201,15 +201,9 @@ def json_to_cartelle_raw_yaml(
         docs = area.get("documents") or []
         if isinstance(docs, str):
             docs = [docs]
-        include_fallback: List[str] = []
-        dd = area.get("descrizione_dettagliata") or {}
-        if isinstance(dd, dict):
-            include_fallback = dd.get("include") or []
-            if isinstance(include_fallback, str):
-                include_fallback = [include_fallback]
-            if not isinstance(include_fallback, list):
-                include_fallback = []
-        examples = [str(x).strip() for x in (docs or include_fallback) if str(x).strip()]
+        examples = [str(x).strip() for x in docs if str(x).strip()]
+        if not examples:
+            raise ConfigError(f"Vision data: documents mancanti per area '{key}'")
 
         folders.append(
             {
@@ -221,40 +215,37 @@ def json_to_cartelle_raw_yaml(
         )
 
     sys = data.get("system_folders") or {}
-    identity_docs: List[str] = []
-    gloss_arts: List[str] = []
     if isinstance(sys, dict):
-        ident = sys.get("identity") or {}
+        ident = sys.get("identity")
         if isinstance(ident, dict):
             identity_docs = ident.get("documents") or []
             if isinstance(identity_docs, str):
                 identity_docs = [identity_docs]
             if not isinstance(identity_docs, list):
                 identity_docs = []
-        gloss = sys.get("glossario") or {}
+            folders.append(
+                {
+                    "key": "identity",
+                    "title": "Identità",
+                    "description": "Documenti identificativi e titoli abilitanti",
+                    "examples": [str(x).strip() for x in identity_docs if str(x).strip()],
+                }
+            )
+        gloss = sys.get("glossario")
         if isinstance(gloss, dict):
             gloss_arts = gloss.get("artefatti") or []
             if isinstance(gloss_arts, str):
                 gloss_arts = [gloss_arts]
             if not isinstance(gloss_arts, list):
                 gloss_arts = []
-
-    folders.append(
-        {
-            "key": "identity",
-            "title": "Identità",
-            "description": "Documenti identificativi e titoli abilitanti",
-            "examples": [str(x).strip() for x in identity_docs if str(x).strip()],
-        }
-    )
-    folders.append(
-        {
-            "key": "glossario",
-            "title": "Glossario",
-            "description": "Termini e definizioni vincolanti (artefatti di sistema)",
-            "examples": [str(x).strip() for x in gloss_arts if str(x).strip()],
-        }
-    )
+            folders.append(
+                {
+                    "key": "glossario",
+                    "title": "Glossario",
+                    "description": "Termini e definizioni vincolanti (artefatti di sistema)",
+                    "examples": [str(x).strip() for x in gloss_arts if str(x).strip()],
+                }
+            )
 
     payload: Dict[str, Any] = {"version": 1, "source": "vision", "context": {"slug": slug}, "folders": folders}
     if isinstance(raw_folders, dict):

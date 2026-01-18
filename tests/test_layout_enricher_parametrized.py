@@ -22,8 +22,38 @@ def test_to_kebab_cases(raw, expected):
 @pytest.mark.parametrize(
     "vision_text,allowed_prefixes",
     [
-        ("Strategia e dati: governance e KPI.", {"strategy", "data"}),
-        ("Ops: processi e delivery; dati e dataset.", {"operations", "data"}),
+        (
+            "Strategia e dati: "
+            "strategy"
+            "governance "
+            "strategy"
+            "roadmap "
+            "strategy"
+            "kpi "
+            "data"
+            "governance "
+            "data"
+            "dataset "
+            "data"
+            "quality.",
+            {"strategy", "data"},
+        ),
+        (
+            "Processi: "
+            "operations"
+            "processi "
+            "operations"
+            "delivery "
+            "operations"
+            "kpi "
+            "data"
+            "dataset "
+            "data"
+            "quality "
+            "data"
+            "governance.",
+            {"operations", "data"},
+        ),
     ],
 )
 def test_suggest_layout_respects_allowed_prefixes(vision_text, allowed_prefixes):
