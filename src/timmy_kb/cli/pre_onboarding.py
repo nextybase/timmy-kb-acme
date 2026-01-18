@@ -281,6 +281,13 @@ def _utc_now_iso() -> str:
     return _dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _summarize_error(exc: BaseException) -> str:
+    name = type(exc).__name__
+    message = str(exc).splitlines()[:1]
+    first_line = message[0] if message else "error"
+    return f"{name}: {first_line}"
+
+
 def _build_ledger_evidence(layout: WorkspaceLayout) -> str:
     payload = {
         "slug": layout.slug,
@@ -646,6 +653,7 @@ def pre_onboarding_main(
             rationale="ok",
         )
     except Exception as exc:
+        original_error = _summarize_error(exc)
         try:
             decision_ledger.record_decision(
                 ledger_conn,
@@ -662,15 +670,25 @@ def pre_onboarding_main(
                 rationale=str(exc).splitlines()[:1][0] if str(exc) else "error",
             )
         except Exception as ledger_exc:
-            logger.exception(
-                "cli.pre_onboarding.ledger_deny_failed",
+            ledger_error = _summarize_error(ledger_exc)
+            logger.error(
+                "cli.pre_onboarding.ledger_write_failed",
                 extra={
                     "slug": context.slug,
                     "run_id": run_id,
                     "stage": current_stage,
-                    "error": str(ledger_exc).splitlines()[:1],
+                    "gate": "pre_onboarding",
+                    "ledger_error": ledger_error,
+                    "original_error": original_error,
                 },
             )
+            raise PipelineError(
+                "Ledger write failed for gate=pre_onboarding "
+                f"slug={context.slug} run_id={run_id} stage={current_stage}; "
+                f"ledger_error={ledger_error}; original_error={original_error}",
+                slug=context.slug,
+                run_id=run_id,
+            ) from ledger_exc
         logger.exception(
             "cli.pre_onboarding.failed",
             extra={

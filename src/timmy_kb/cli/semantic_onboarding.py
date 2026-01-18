@@ -54,6 +54,13 @@ def _parse_args() -> argparse.Namespace:
     return _default_parse_args()
 
 
+def _summarize_error(exc: BaseException) -> str:
+    name = type(exc).__name__
+    message = str(exc).splitlines()[:1]
+    first_line = message[0] if message else "error"
+    return f"{name}: {first_line}"
+
+
 def main() -> int:
     # ENTRYPOINT BOOTSTRAP - consentito: CLI standalone usa la repo root per il workspace.
     get_repo_root()
@@ -134,6 +141,7 @@ def main() -> int:
                     )
             except (ConfigError, PipelineError) as exc:
                 # Mappa verso exit code deterministici (no traceback non gestiti)
+                original_error = _summarize_error(exc)
                 try:
                     decision_ledger.record_decision(
                         ledger_conn,
@@ -150,19 +158,30 @@ def main() -> int:
                         rationale=str(exc).splitlines()[:1][0] if str(exc) else "error",
                     )
                 except Exception as ledger_exc:
-                    logger.exception(
-                        "cli.semantic_onboarding.ledger_deny_failed",
+                    ledger_error = _summarize_error(ledger_exc)
+                    logger.error(
+                        "cli.semantic_onboarding.ledger_write_failed",
                         extra={
                             "slug": slug,
                             "run_id": run_id,
                             "stage": "semantic_onboarding",
-                            "error": str(ledger_exc).splitlines()[:1][0] if str(ledger_exc) else "error",
+                            "gate": "semantic_onboarding",
+                            "ledger_error": ledger_error,
+                            "original_error": original_error,
                         },
                     )
+                    raise PipelineError(
+                        "Ledger write failed for gate=semantic_onboarding "
+                        f"slug={slug} run_id={run_id} stage=semantic_onboarding; "
+                        f"ledger_error={ledger_error}; original_error={original_error}",
+                        slug=slug,
+                        run_id=run_id,
+                    ) from ledger_exc
                 logger.error("cli.semantic_onboarding.failed", extra={"slug": slug, "error": str(exc)})
                 code: int = int(exit_code_for(exc))  # exit_code_for non è tipizzato: forza int per mypy
                 return code
             except Exception as exc:
+                original_error = _summarize_error(exc)
                 try:
                     decision_ledger.record_decision(
                         ledger_conn,
@@ -179,15 +198,25 @@ def main() -> int:
                         rationale=str(exc).splitlines()[:1][0] if str(exc) else "error",
                     )
                 except Exception as ledger_exc:
-                    logger.exception(
-                        "cli.semantic_onboarding.ledger_deny_failed",
+                    ledger_error = _summarize_error(ledger_exc)
+                    logger.error(
+                        "cli.semantic_onboarding.ledger_write_failed",
                         extra={
                             "slug": slug,
                             "run_id": run_id,
                             "stage": "semantic_onboarding",
-                            "error": str(ledger_exc).splitlines()[:1][0] if str(ledger_exc) else "error",
+                            "gate": "semantic_onboarding",
+                            "ledger_error": ledger_error,
+                            "original_error": original_error,
                         },
                     )
+                    raise PipelineError(
+                        "Ledger write failed for gate=semantic_onboarding "
+                        f"slug={slug} run_id={run_id} stage=semantic_onboarding; "
+                        f"ledger_error={ledger_error}; original_error={original_error}",
+                        slug=slug,
+                        run_id=run_id,
+                    ) from ledger_exc
                 logger.exception("cli.semantic_onboarding.unexpected_error", extra={"slug": slug, "error": str(exc)})
                 return 99
 
