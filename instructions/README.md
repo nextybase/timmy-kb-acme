@@ -59,6 +59,7 @@ Se un comportamento non è descritto qui, **non è ammesso** nel sistema.
 - `07_gate_checklists.md` - **attivo**
 - `08_gate_evidence_and_retry_contract.md` - **attivo**
 - `09_context_layout_contract_beta.md` - **congelato**
+- `10_runtime_strict_contract_beta.md` - **attivo** - Runtime invariants and strict-only execution rules (Beta 1.0).
 
 Un documento **attivo** può essere raffinato, ma:
 - non può contraddire le invarianti di questo README;

@@ -28,6 +28,7 @@ Riferimenti normativi:
   formalizzato tramite **Decision Record append-only**.
 - L'applicabilità dei gate per ciascuna transizione è definita in
   `instructions/06_promptchain_workspace_mapping.md`.
+- Tutti i gate MUST essere conformi a `instructions/10_runtime_strict_contract_beta.md`; ogni violazione implica BLOCK.
 
 ---
 
