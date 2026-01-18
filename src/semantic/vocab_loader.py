@@ -245,12 +245,14 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
             "semantic.vocab.loader_missing",
             extra={"event": "semantic.vocab.loader_missing", "file_path": str(db_path)},
         )
-        return {}
+        raise ConfigError("Loader tags_store mancante per tags.db.", file_path=db_path)
     try:
         raw = _load_tags_reviewed(str(db_path))  # accetta str/Path
     except sqlite3.Error as exc:  # errori SQLite (query/cursor)
+        err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+        err_type = type(exc).__name__
         raise ConfigError(
-            f"Errore lettura DB del vocabolario: {exc}",
+            f"Errore lettura DB del vocabolario: {err_type}: {err_line}",
             file_path=db_path,
         ) from exc
     return _to_vocab(raw)
@@ -307,8 +309,7 @@ def load_reviewed_vocab(
     Carica (se presente) il vocabolario consolidato per l'enrichment da semantic/tags.db.
 
     Regole:
-    - Se `tags.db` non esiste: restituisce `{}` e registra un log informativo (enrichment disabilitato).
-      Con `strict=True` solleva `ConfigError`.
+    - Se `tags.db` non esiste: solleva `ConfigError` dopo log informativo.
     - Errori di path (traversal/symlink) o apertura DB: `ConfigError` con metadati utili.
     - Dati letti adattati a: {canonical: {"aliases": [str,...]}}.
     """
@@ -318,7 +319,7 @@ def load_reviewed_vocab(
     db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
     slug = _derive_slug(base_dir)
 
-    # DB assente: enrichment disabilitato (nessuna eccezione)
+    # DB assente: stop hard
     if not db_path.exists():
         _log_vocab_event(
             logger,
@@ -327,9 +328,7 @@ def load_reviewed_vocab(
             file_path=db_path,
             canon_count=0,
         )
-        if strict:
-            raise ConfigError("Vocabolario canonico assente (tags.db).", file_path=db_path)
-        return {}
+        raise ConfigError("Vocabolario canonico assente (tags.db).", file_path=db_path)
 
     if _load_tags_reviewed is None:
         if strict:
@@ -338,14 +337,16 @@ def load_reviewed_vocab(
             "semantic.vocab.tags_store_missing",
             extra={"slug": slug, "file_path": str(db_path)},
         )
-        return {}
+        raise ConfigError("Loader tags_store mancante per tags.db.", file_path=db_path)
 
     try:
         con = sqlite3.connect(str(db_path))
         con.close()
     except Exception as exc:
+        err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+        err_type = type(exc).__name__
         raise ConfigError(
-            f"Impossibile aprire il DB del vocabolario: {exc}",
+            f"Impossibile aprire il DB del vocabolario: {err_type}: {err_line}",
             file_path=db_path,
         ) from exc
 
@@ -359,9 +360,7 @@ def load_reviewed_vocab(
             file_path=db_path,
             canon_count=0,
         )
-        if strict:
-            raise ConfigError("Vocabolario canonico vuoto (tags.db).", file_path=db_path)
-        return {}
+        raise ConfigError("Vocabolario canonico vuoto (tags.db).", file_path=db_path)
 
     _log_vocab_event(
         logger,

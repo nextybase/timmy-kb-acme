@@ -36,6 +36,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
@@ -248,10 +249,11 @@ def extract_semantic_candidates(
         try:
             from semantic.spacy_extractor import extract_spacy_tags
 
+            model_name = os.getenv("SPACY_MODEL", cfg.spacy_model)
             spacy_candidates = extract_spacy_tags(
                 raw_dir,
                 cfg,
-                model_name=os.getenv("SPACY_MODEL", cfg.spacy_model),
+                model_name=model_name,
                 logger=LOGGER,
             )
             candidates = _merge_spacy_candidates(candidates, spacy_candidates)
@@ -274,10 +276,11 @@ def extract_semantic_candidates(
                         extra={"count": len(spacy_candidates)},
                     )
         except Exception as exc:
-            LOGGER.warning(
-                "semantic.auto_tagger.spacy_failed",
-                extra={"error": str(exc)},
-            )
+            err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+            err_type = type(exc).__name__
+            raise ConfigError(
+                f"SpaCy fallito (model={model_name}): {err_type}: {err_line}",
+            ) from exc
     return candidates
 
 

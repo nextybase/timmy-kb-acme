@@ -9,7 +9,7 @@ import pytest
 
 from pipeline.exceptions import PathTraversalError
 from semantic.api import build_tags_csv
-from storage.tags_store import derive_db_path_from_yaml_path
+from storage.tags_store import derive_db_path_from_yaml_path, ensure_schema_v2
 from tests.support.contexts import TestClientCtx
 
 
@@ -33,6 +33,7 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
     (sem / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (book / "README.md").write_text("# README\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+    ensure_schema_v2(str(sem / "tags.db"))
 
     nested = raw / "HR" / "Policies"
     nested.mkdir(parents=True, exist_ok=True)
@@ -95,6 +96,7 @@ def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeyp
     (sem / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (book / "README.md").write_text("# README\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+    ensure_schema_v2(str(sem / "tags.db"))
 
     (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n")
 
@@ -137,6 +139,7 @@ def test_build_tags_csv_writes_doc_entities_db(tmp_path: Path, monkeypatch: pyte
     (sem / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (book / "README.md").write_text("# README\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+    ensure_schema_v2(str(sem / "tags.db"))
 
     def _fake_candidates(_raw_dir: Path, _cfg: object) -> dict[str, dict[str, object]]:
         return {

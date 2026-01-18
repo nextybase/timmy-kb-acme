@@ -8,9 +8,11 @@ Best effort: se SpaCy/mapping mancano, logga warning e non blocca il flusso.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, Iterable, cast
 
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
 from semantic.config import load_semantic_config
@@ -51,10 +53,16 @@ def run_doc_entities_pipeline(
 ) -> dict[str, Any]:
     """Esegue tagging SpaCy+lexicon e salva in doc_entities (fail-soft)."""
     log = logger or LOG
+    backend_env = (os.getenv("TAGS_NLP_BACKEND") or "").strip().lower()
+    strict_spacy = backend_env == "spacy"
     workspace_root = base_dir
     try:
         cfg = load_semantic_config(workspace_root)
     except Exception as exc:  # pragma: no cover
+        if strict_spacy:
+            err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+            err_type = type(exc).__name__
+            raise ConfigError(f"Config semantica non caricabile: {err_type}: {err_line}") from exc
         log.warning("semantic.entities.config_failed", extra={"error": str(exc)})
         return {"entities_written": 0}
 
@@ -72,6 +80,10 @@ def run_doc_entities_pipeline(
         nlp = _load_spacy(cfg.spacy_model)
         matcher = make_phrase_matcher(nlp, lexicon)
     except Exception as exc:
+        if strict_spacy:
+            err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+            err_type = type(exc).__name__
+            raise ConfigError(f"SpaCy non disponibile: {err_type}: {err_line}") from exc
         log.warning("semantic.entities.spacy_unavailable", extra={"error": str(exc)})
         return {"entities_written": 0}
 
@@ -88,6 +100,13 @@ def run_doc_entities_pipeline(
         try:
             text = _read_document_text(pdf_path)
         except Exception as exc:
+            if strict_spacy:
+                err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+                err_type = type(exc).__name__
+                raise ConfigError(
+                    f"Lettura PDF fallita: {err_type}: {err_line}",
+                    file_path=pdf_path,
+                ) from exc
             log.warning("semantic.entities.pdf_read_failed", extra={"file": str(pdf_path), "error": str(exc)})
             continue
         if not text:
@@ -118,6 +137,13 @@ def run_doc_entities_pipeline(
         save_doc_entities(db_path, records)
         hits_count = len(records)
     except Exception as exc:
+        if strict_spacy:
+            err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+            err_type = type(exc).__name__
+            raise ConfigError(
+                f"Salvataggio doc_entities fallito: {err_type}: {err_line}",
+                file_path=db_path,
+            ) from exc
         log.warning("semantic.entities.save_failed", extra={"error": str(exc)})
         return {"entities_written": 0}
     log.info(

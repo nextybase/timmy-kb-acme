@@ -20,9 +20,8 @@ def test_load_vocab_missing_db_returns_empty_and_logs(tmp_path: Path, capsys: py
     base = _mk_workspace(tmp_path)
     logger = get_structured_logger("test.vocab.missing")
 
-    vocab = load_reviewed_vocab(base, logger)
-
-    assert vocab == {}
+    with pytest.raises(ConfigError, match="Vocabolario canonico assente"):
+        load_reviewed_vocab(base, logger)
     out = capsys.readouterr().out
     assert "semantic.vocab.db_missing" in out
     assert f"slug={base.name}" in out
@@ -38,9 +37,8 @@ def test_load_vocab_empty_db_warns(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(vl, "load_tags_reviewed_db", lambda p: {}, raising=True)
 
     logger = get_structured_logger("test.vocab.empty")
-    vocab = load_reviewed_vocab(base, logger)
-
-    assert vocab == {}
+    with pytest.raises(ConfigError, match="Vocabolario canonico vuoto"):
+        load_reviewed_vocab(base, logger)
     out = capsys.readouterr().out
     assert "semantic.vocab.db_empty" in out
     assert f"slug={base.name}" in out

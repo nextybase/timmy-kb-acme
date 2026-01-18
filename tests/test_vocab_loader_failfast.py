@@ -22,9 +22,13 @@ def test_returns_empty_when_db_missing(tmp_path: Path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
+    db = sem / "tags.db"
 
-    vocab = vl.load_reviewed_vocab(base, _NoopLogger())
-    assert vocab == {}
+    with pytest.raises(ConfigError, match="Vocabolario canonico assente") as ei:
+        _ = vl.load_reviewed_vocab(base, _NoopLogger())
+
+    err = ei.value
+    assert getattr(err, "file_path", None) == db
 
 
 def test_raises_configerror_on_db_open_failure(tmp_path: Path, monkeypatch: Any):

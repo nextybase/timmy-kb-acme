@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, cast
 
+from storage.tags_store import ensure_schema_v2 as _ensure_tags_schema_v2
 
 def _ctx(base_dir: Path):
     class C:
@@ -39,6 +40,8 @@ def test_build_tags_csv_from_raw(tmp_path):
     sem.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
     (sem / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    tags_db = sem / "tags.db"
+    _ensure_tags_schema_v2(str(tags_db))
     (book / "README.md").write_text("# README\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
     (raw / "HR" / "Policies").mkdir(parents=True, exist_ok=True)

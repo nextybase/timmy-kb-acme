@@ -67,7 +67,11 @@ def _load_folder_terms(tags_db_path: Path, *, slug: str | None = None) -> Dict[s
 
     folder_terms: Dict[str, List[str]] = {}
     if not tags_db_path.exists():
-        return folder_terms
+        raise ConfigError(
+            "tags.db mancante per arricchimento top-terms.",
+            slug=slug,
+            file_path=tags_db_path,
+        )
 
     try:
         _ensure_tags_schema_v2(str(tags_db_path))
@@ -169,6 +173,8 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         except PathTraversalError:
             raise
         except Exception as exc:
+            err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+            err_type = type(exc).__name__
             logger.exception(
                 "semantic.tags_csv.enrichment_failed",
                 extra={
@@ -177,7 +183,11 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
                     "tags_db": str(tags_db_path) if tags_db_path else None,
                 },
             )
-            raise ConfigError("Arricchimento tag fallito", slug=slug) from exc
+            raise ConfigError(
+                f"Arricchimento tag fallito: {err_type}: {err_line}",
+                slug=slug,
+                file_path=tags_db_path,
+            ) from exc
 
         _render_tags_csv(candidates, csv_path, base_dir=workspace_root)
         count = len(candidates)

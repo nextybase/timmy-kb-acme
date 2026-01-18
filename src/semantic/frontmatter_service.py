@@ -381,8 +381,8 @@ def enrich_frontmatter(
                 if rel_hints:
                     new_meta["relation_hints"] = rel_hints
             # Arricchimento additivo da doc_entities (se presenti e approvate)
+            tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
             try:
-                tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
                 if tags_db.exists():
                     with _get_tags_conn(str(tags_db)) as conn:
                         new_meta = enrich_frontmatter_with_entities(
@@ -390,9 +390,14 @@ def enrich_frontmatter(
                             conn,
                             getattr(paths, "semantic_mapping", {}),
                         )
-            except Exception:
-                # fail-soft: non bloccare l'arricchimento standard
-                pass
+            except Exception as exc:
+                err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+                err_type = type(exc).__name__
+                raise ConfigError(
+                    f"Arricchimento doc_entities fallito: {err_type}: {err_line}",
+                    slug=slug,
+                    file_path=tags_db,
+                ) from exc
             if meta == new_meta:
                 continue
 

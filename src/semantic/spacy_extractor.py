@@ -185,8 +185,7 @@ def extract_spacy_tags(
 
     Ritorna un dict: relative_path -> {tags, entities, keyphrases, score, sources}
     """
-    log = logger or LOGGER
-    layout = WorkspaceLayout.from_workspace(cfg.base_dir, enforce_integrity=True)
+    layout = WorkspaceLayout.from_workspace(cfg.base_dir)
     raw_dir = layout.raw_dir
     lexicon = build_lexicon(cfg.mapping)
     if not lexicon:
@@ -196,8 +195,9 @@ def extract_spacy_tags(
         nlp = _get_nlp(model_name)
         matcher, label_map = _build_phrase_matcher(nlp, lexicon)
     except Exception as exc:
-        log.warning("semantic.spacy.load_failed", extra={"error": str(exc), "model": model_name})
-        return {}
+        err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+        err_type = type(exc).__name__
+        raise ConfigError(f"SpaCy fallito (model={model_name}): {err_type}: {err_line}") from exc
 
     candidates: Dict[str, Dict[str, Any]] = {}
     for pdf_path in iter_safe_pdfs(raw_dir):
@@ -214,11 +214,12 @@ def extract_spacy_tags(
                 file_path=str(pdf_path),
             ) from exc
         except Exception as exc:
-            log.warning(
-                "semantic.spacy.markdown_read_failed",
-                extra={"file_path": str(pdf_path), "error": str(exc)},
-            )
-            continue
+            err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+            err_type = type(exc).__name__
+            raise ConfigError(
+                f"Markdown non leggibile per {pdf_path.name}: {err_type}: {err_line}",
+                file_path=str(pdf_path),
+            ) from exc
         if not text:
             continue
 
