@@ -9,7 +9,10 @@ import sys
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from pipeline.exceptions import ConfigError
+from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
+from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.paths import get_repo_root
 
 from .client_factory import make_openai_client
 from .types import ResponseJson, ResponseText
@@ -56,6 +59,50 @@ def _runtime_info() -> tuple[str, str, str]:
         openai_version = f"unavailable:{type(exc).__name__}"
         openai_file = "unavailable"
     return sys.executable, openai_version, openai_file
+
+
+def _dump_json_schema_payload(
+    *,
+    raw_response_format: Mapping[str, Any],
+    normalized_format: Mapping[str, Any],
+) -> None:
+    if normalized_format.get("type") != "json_schema":
+        return
+
+    schema = normalized_format.get("schema")
+    properties = []
+    required = []
+    if isinstance(schema, Mapping):
+        props = schema.get("properties")
+        reqs = schema.get("required")
+        if isinstance(props, Mapping):
+            properties = sorted(str(k) for k in props.keys())
+        if isinstance(reqs, list):
+            required = sorted(str(k) for k in reqs)
+
+    payload = {
+        "response_format_raw": raw_response_format,
+        "text_format_normalized": normalized_format,
+        "properties": properties,
+        "required": required,
+        "entity_to_area_in_properties": "entity_to_area" in properties,
+        "entity_to_area_in_required": "entity_to_area" in required,
+    }
+    try:
+        repo_root = get_repo_root(allow_env=False)
+        dump_path = ensure_within_and_resolve(repo_root, repo_root / "output" / "debug" / "vision_schema_sent.json")
+        dump_text = json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n"
+        digest = hashlib.sha256(dump_text.encode("utf-8")).hexdigest()
+        safe_write_text(dump_path, dump_text, encoding="utf-8")
+        LOGGER.info(
+            "ai.responses.json_schema_dumped",
+            extra={"path": str(dump_path), "sha256": digest},
+        )
+    except Exception as exc:
+        LOGGER.warning(
+            "ai.responses.json_schema_dump_failed",
+            extra={"error": str(exc)},
+        )
 
 
 def _build_invocation_extra(
@@ -355,7 +402,13 @@ def run_json_model(
             component="responses",
         )
     input_payload = _to_input_blocks(messages)
-    rf_payload = _normalize_response_format(response_format or {"type": "json_object"})
+    raw_response_format = response_format or {"type": "json_object"}
+    rf_payload = _normalize_response_format(raw_response_format)
+    if _debug_runtime_enabled():
+        _dump_json_schema_payload(
+            raw_response_format=raw_response_format,
+            normalized_format=rf_payload,
+        )
     if rf_payload.get("type") == "json_schema":
         raw_name = rf_payload.get("name")
         name = str(raw_name) if raw_name is not None else ""
