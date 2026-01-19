@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: GPL-3.0-only
+# Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
 
 from __future__ import annotations
 
@@ -38,7 +39,7 @@ def main() -> int:
         enable_tracing=settings.tracing_enabled,
     )
 
-    ctx = ClientContext.load(slug=slug, require_env=False, run_id=run_id)
+    ctx = ClientContext.load(slug=slug, require_env=False, run_id=run_id, bootstrap_config=False)
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(ctx)
 

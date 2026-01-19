@@ -356,7 +356,7 @@ class ClientContext:
 
         if not config_path.exists():
             raise ConfigError(
-                f"Manca config/config.yaml in {config_path}. Workspace non bootstrapppato o incompleto.",
+                f"Manca config/config.yaml in {config_path}. Workspace non inizializzato o incompleto.",
                 slug=slug,
                 file_path=config_path,
             )

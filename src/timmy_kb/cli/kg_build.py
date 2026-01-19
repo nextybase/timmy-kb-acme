@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """CLI helper per il Tag KG Builder (passo intermedio tra Tag Onboarding e Semantic Onboarding)."""
+# Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
 
 from __future__ import annotations
 
@@ -72,6 +73,7 @@ def _resolve_workspace(
         slug=slug,
         require_env=args.require_env,
         run_id=run_id,
+        bootstrap_config=False,
     )
 
     layout = WorkspaceLayout.from_context(context)

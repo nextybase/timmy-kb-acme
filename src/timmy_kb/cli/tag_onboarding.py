@@ -434,6 +434,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
         require_env=False,
         run_id=run_id,
         stage="validate",
+        bootstrap_config=False,
     )
     layout = _require_layout(context)
     base_dir = layout.base_dir
@@ -964,6 +965,7 @@ def main(args: argparse.Namespace) -> int | None:
                 require_env=False,
                 run_id=run_id,
                 stage="scan_raw",
+                bootstrap_config=False,
             )
             base_dir, raw_dir, db_path, _ = _resolve_cli_paths(
                 ctx,
@@ -981,6 +983,7 @@ def main(args: argparse.Namespace) -> int | None:
                 require_env=False,
                 run_id=run_id,
                 stage="nlp",
+                bootstrap_config=False,
             )
             base_dir, raw_dir, db_path, _ = _resolve_cli_paths(
                 ctx,

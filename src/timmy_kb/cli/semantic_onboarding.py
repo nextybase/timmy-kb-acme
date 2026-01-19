@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: GPL-3.0-only
 #
+# Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
 
 from __future__ import annotations
 
@@ -140,7 +141,12 @@ def main() -> int:
     touched: list[Path] = []
 
     # Carica contesto locale (niente Drive / env obbligatori)
-    ctx: SemanticContextProtocol = ClientContext.load(slug=slug, require_env=False, run_id=run_id)
+    ctx: SemanticContextProtocol = ClientContext.load(
+        slug=slug,
+        require_env=False,
+        run_id=run_id,
+        bootstrap_config=True,
+    )
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(ctx)
     requested, effective = _resolve_requested_effective(args)

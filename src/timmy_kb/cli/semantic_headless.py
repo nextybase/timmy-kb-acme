@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic_headless.py
+# Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
 from __future__ import annotations
 
 import argparse
@@ -154,6 +155,7 @@ def run_semantic_headless(
                 slug=slug,
                 require_env=False,
                 run_id=None,
+                bootstrap_config=False,
             )
         except ConfigError as exc:
             log.exception("semantic.headless.context_load_failed", extra={"error": str(exc)})

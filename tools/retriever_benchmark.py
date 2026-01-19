@@ -99,7 +99,7 @@ def main() -> None:
 
     workspace = None
     try:
-        ctx = ClientContext.load(slug=args.slug, require_env=False, run_id=None)
+        ctx = ClientContext.load(slug=args.slug, require_env=False, run_id=None, bootstrap_config=False)
         base_dir = getattr(ctx, "base_dir", None)
         if isinstance(base_dir, Path):
             workspace = base_dir

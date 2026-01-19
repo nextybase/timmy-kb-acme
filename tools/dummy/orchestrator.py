@@ -312,7 +312,12 @@ def build_dummy_payload(
     ctx_for_checks: Any | None = None
     try:
         if ClientContext and hasattr(ClientContext, "load"):
-            ctx_for_checks = ClientContext.load(slug=slug, require_env=False, run_id=None)  # type: ignore[misc]
+            ctx_for_checks = ClientContext.load(
+                slug=slug,
+                require_env=False,
+                run_id=None,
+                bootstrap_config=False,
+            )  # type: ignore[misc]
     except Exception:
         ctx_for_checks = None
 
@@ -612,7 +617,12 @@ def build_dummy_payload(
     cfg_out: dict[str, Any] = {}
     if callable(get_client_config) and ClientContext:
         try:
-            ctx_cfg = ClientContext.load(slug=slug, require_env=False, run_id=None)  # type: ignore[misc]
+            ctx_cfg = ClientContext.load(
+                slug=slug,
+                require_env=False,
+                run_id=None,
+                bootstrap_config=False,
+            )  # type: ignore[misc]
             cfg = get_client_config(ctx_cfg) or {}
             cfg_out = {
                 "drive_folder_id": cfg.get("drive_folder_id"),

@@ -18,6 +18,7 @@ Note architetturali:
 - Path-safety STRONG: `ensure_within()` prima di ogni write/copy/delete.
 - Non stampare segreti nei log (mascheratura parziale per ID e percorsi).
 """
+# Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
 
 # Fase pre-Vision (MINIMAL): nessun uso di YAML.
 # 1) LOCALE: crea raw/, book/, config/ e scrive config/config.yaml
@@ -257,7 +258,12 @@ def _prepare_context_and_logger(
     if not client_name:
         client_name = slug
 
-    context: ClientContext = ClientContext.load(slug=slug, require_env=require_env, run_id=run_id)
+    context: ClientContext = ClientContext.load(
+        slug=slug,
+        require_env=require_env,
+        run_id=run_id,
+        bootstrap_config=True,
+    )
 
     layout = WorkspaceLayout.from_context(context)
     layout.logs_dir.mkdir(parents=True, exist_ok=True)

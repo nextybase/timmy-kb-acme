@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Utility di setup contesto per l'orchestratore tag_onboarding."""
+# Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
 
 from __future__ import annotations
 
@@ -37,6 +38,7 @@ def prepare_context(
         slug=slug,
         require_env=require_env,
         run_id=run_id,
+        bootstrap_config=False,
     )
 
     layout = WorkspaceLayout.from_context(context)

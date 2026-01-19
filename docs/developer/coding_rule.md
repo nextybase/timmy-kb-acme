@@ -12,6 +12,8 @@ Regole di sviluppo per **Timmy KB**. Questa e la base iniziale: nessun riferimen
 - **Path-safety** e **scritture atomiche** su ogni file.
 - **UI import-safe** (nessun side-effect a import-time).
 - **Parita di firma** dei wrapper UI rispetto al backend (`pipeline.*`, `semantic.*`).
+- Ogni CLI/orchestratore deve dichiarare esplicitamente `bootstrap_config`; il default e vietato nei CLI.
+- tools/dummy = runtime strict (`bootstrap_config=False`); tools/smoke = permissivo ma esplicito (`bootstrap_config=True`).
 
 ---
 

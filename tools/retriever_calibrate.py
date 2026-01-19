@@ -227,7 +227,7 @@ def main() -> int:
 
     log = get_structured_logger("tools.retriever_calibrate")
 
-    ctx = ClientContext.load(slug=args.slug, require_env=False, run_id=None)
+    ctx = ClientContext.load(slug=args.slug, require_env=False, run_id=None, bootstrap_config=False)
     slug = ctx.slug
     base_attr = getattr(ctx, "base_dir", None)
     if base_attr is not None:
