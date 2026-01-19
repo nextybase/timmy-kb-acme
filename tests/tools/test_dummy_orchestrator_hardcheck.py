@@ -48,7 +48,10 @@ def test_dummy_validate_structure_passes_when_cartelle_yaml_present(tmp_path: Pa
     layout = bootstrap_client_workspace(context)
 
     _write_required_dummy_files(layout.base_dir)
-    (layout.semantic_dir / "cartelle_raw.yaml").write_text("folders: []\n", encoding="utf-8")
+    (layout.semantic_dir / "cartelle_raw.yaml").write_text(
+        "version: 1\nfolders:\n  - key: governance\n    title: Governance\n",
+        encoding="utf-8",
+    )
 
     validate_dummy_structure(layout.base_dir, logger)
 

@@ -77,7 +77,7 @@ def test_bootstrap_semantic_templates_writes_cartelle_raw_only_in_workspace(
 
     template_src = repo_root / "_templates" / "cartelle_raw.yaml"
     template_src.parent.mkdir(parents=True)
-    template_payload = "cartelle: []\n"
+    template_payload = "version: 1\nfolders:\n  - key: governance\n    title: Governance\n"
     template_src.write_text(template_payload, encoding="utf-8")
 
     context = _build_context(workspace_root, slug)
@@ -99,7 +99,10 @@ def test_resolve_yaml_structure_file_uses_template_dir(tmp_path: Path, monkeypat
     repo_root = tmp_path / "repo"
     template_path = repo_root / "system" / "assets" / "templates" / "cartelle_raw.yaml"
     template_path.parent.mkdir(parents=True)
-    template_path.write_text("raw: {}\n", encoding="utf-8")
+    template_path.write_text(
+        "version: 1\nfolders:\n  - key: governance\n    title: Governance\n",
+        encoding="utf-8",
+    )
 
     monkeypatch.setattr(pre_onboarding, "get_repo_root", lambda allow_env=False: repo_root)
 

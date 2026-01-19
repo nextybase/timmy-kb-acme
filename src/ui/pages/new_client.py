@@ -65,6 +65,15 @@ _ensure_drive_minimal_impl = cast(
     getattr_if_callable(_drive_runner, "ensure_drive_minimal_and_upload_config"),
 )
 
+_local_structure_module = import_first(
+    "ui.services.local_structure",
+    "src.ui.services.local_structure",
+)
+_materialize_local_raw_impl = cast(
+    Optional[Callable[..., Any]],
+    getattr_if_callable(_local_structure_module, "materialize_local_raw_from_cartelle"),
+)
+
 build_drive_from_mapping: Optional[BuildDriveCallable]
 if _build_drive_from_mapping_impl:
     build_drive_from_mapping = _build_drive_from_mapping_impl
@@ -76,6 +85,10 @@ if _ensure_drive_minimal_impl:
     _ensure_drive_minimal = _ensure_drive_minimal_impl
 else:
     _ensure_drive_minimal = None
+
+materialize_local_raw_from_cartelle: Optional[Callable[..., Any]] = (
+    _materialize_local_raw_impl if _materialize_local_raw_impl else None
+)
 
 
 def _load_repo_settings() -> Settings:
@@ -608,6 +621,19 @@ if current_phase == UI_PHASE_INIT:
                         logger=ui_logger,
                         preview_prompt=preview_prompt,
                     )
+                    cartelle_path = _semantic_dir_client(s, layout=layout) / "cartelle_raw.yaml"
+                    if not cartelle_path.exists():
+                        raise ConfigError(
+                            "Vision completata ma cartelle_raw.yaml mancante in semantic/.",
+                            slug=s,
+                            file_path=str(cartelle_path),
+                        )
+                    if materialize_local_raw_from_cartelle is None:
+                        raise ConfigError(
+                            "Servizio struttura RAW locale non disponibile.",
+                            slug=s,
+                        )
+                    materialize_local_raw_from_cartelle(slug=s, require_env=False)
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Vision completata.", state="complete")
                     step_progress.progress(100, text="Vision completata.")

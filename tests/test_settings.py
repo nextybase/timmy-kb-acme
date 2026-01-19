@@ -97,6 +97,28 @@ def test_settings_loads_config(sample_config: Path) -> None:
     assert settings.ops_log_level == "DEBUG"
 
 
+def test_settings_allows_top_level_cartelle_raw_yaml(sample_config: Path) -> None:
+    payload = sample_config.read_text(encoding="utf-8")
+    sample_config.write_text(
+        "cartelle_raw_yaml: semantic/cartelle_raw.yaml\n" + payload,
+        encoding="utf-8",
+    )
+    settings = Settings.load(sample_config.parent.parent, config_path=sample_config)
+    assert settings.as_dict().get("cartelle_raw_yaml") == "semantic/cartelle_raw.yaml"
+
+
+def test_settings_rejects_meta_cartelle_raw_yaml(sample_config: Path) -> None:
+    payload = sample_config.read_text(encoding="utf-8")
+    updated = payload.replace(
+        "meta:\n",
+        "meta:\n  cartelle_raw_yaml: semantic/cartelle_raw.yaml\n",
+        1,
+    )
+    sample_config.write_text(updated, encoding="utf-8")
+    with pytest.raises(ConfigError, match="meta.cartelle_raw_yaml"):
+        Settings.load(sample_config.parent.parent, config_path=sample_config)
+
+
 def test_resolve_env_ref_reads_env(sample_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DUMMY_ASSISTANT_ID", "asst_dummy")  # pragma: allowlist secret
     envu._ENV_LOADED = False

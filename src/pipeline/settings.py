@@ -152,7 +152,6 @@ _VISION_ENGINE_ALIASES: dict[str, str] = {
 
 @dataclass(frozen=True)
 class MetaSection:
-    cartelle_raw_yaml: Optional[str]
     n_ver: int
     data_ver: Optional[str]
     client_name: Optional[str]
@@ -161,13 +160,12 @@ class MetaSection:
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "MetaSection":
+        if "cartelle_raw_yaml" in data:
+            raise ConfigError(
+                "meta.cartelle_raw_yaml non supportato: usa cartelle_raw_yaml top-level.",
+                file_path=str(config_path),
+            )
         return cls(
-            cartelle_raw_yaml=_extract_optional_str(
-                data.get("cartelle_raw_yaml"),
-                "meta.cartelle_raw_yaml",
-                config_path=config_path,
-                default=None,
-            ),
             n_ver=_extract_int(
                 data.get("N_VER"),
                 "meta.N_VER",
@@ -420,6 +418,13 @@ class Settings:
         repo_root = repo_root.resolve()
         cfg_path = (config_path or (repo_root / "config" / "config.yaml")).resolve()
         payload = yaml_read(repo_root, cfg_path) or {}
+        if isinstance(payload, Mapping):
+            meta = payload.get("meta")
+            if isinstance(meta, Mapping) and "cartelle_raw_yaml" in meta:
+                raise ConfigError(
+                    "meta.cartelle_raw_yaml non supportato: usa cartelle_raw_yaml top-level.",
+                    file_path=str(cfg_path),
+                )
         instance = cls(config_path=cfg_path, data=payload)
         if logger:
             extra = {"file_path": str(cfg_path)}

@@ -106,26 +106,36 @@ def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
 
 
 def _extract_structural_raw_names(mapping: Dict[str, Any]) -> List[str]:
-    """Estrae i nomi delle categorie RAW di primo livello dal mapping moderno.
+    """Estrae i nomi delle categorie RAW di primo livello dal mapping canonico.
 
-    Supporta sia:
-      - {"raw": {"contracts": {}, "reports": {}}}
-      - {"folders": [{"key": "contracts"}, {"key": "reports"}]}
+    Formato canonico supportato:
+      - {"folders": [{"key": "<name>", "title": "<title>"}]}
+
+    Se trova schema legacy (es. "raw"), solleva ConfigError.
     """
+    if "raw" in mapping:
+        raise ConfigError(
+            "Schema cartelle_raw.yaml non valido: usa 'folders' con chiavi canoniche (legacy 'raw' non supportato)."
+        )
+
+    folders = mapping.get("folders")
+    if not isinstance(folders, list):
+        raise ConfigError("Schema cartelle_raw.yaml non valido: 'folders' mancante o non e' una lista.")
+
     names: List[str] = []
+    for item in folders:
+        if not isinstance(item, dict):
+            raise ConfigError("Schema cartelle_raw.yaml non valido: folders deve contenere oggetti.")
+        key = item.get("key") or item.get("name")
+        if not key:
+            raise ConfigError("Schema cartelle_raw.yaml non valido: ogni folder richiede 'key'.")
+        cleaned = sanitize_filename(str(key))
+        if cleaned:
+            names.append(cleaned)
 
-    if isinstance(mapping.get("raw"), dict):
-        for k in mapping["raw"].keys():
-            names.append(sanitize_filename(str(k)))
+    if not names:
+        raise ConfigError("Schema cartelle_raw.yaml non valido: 'folders' non puo' essere vuoto.")
 
-    if not names and isinstance(mapping.get("folders"), list):
-        for item in mapping["folders"]:
-            if isinstance(item, dict):
-                key = item.get("key") or item.get("name")
-                if key:
-                    names.append(sanitize_filename(str(key)))
-
-    # de-dup
     out: List[str] = []
     seen: set[str] = set()
     for n in names:

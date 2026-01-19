@@ -1,8 +1,8 @@
 # config/config.example.yaml
 # Copia questo file come config/config.yaml e personalizza i campi per il cliente.
 
+cartelle_raw_yaml: cartelle_raw.yaml          # Workspace-relative (semantic/cartelle_raw.yaml)
 meta:
-  cartelle_raw_yaml: cartelle_raw.yaml          # Workspace-relative (semantic/cartelle_raw.yaml)
   N_VER: 0                                       # Versione config interna (int)
   DATA_VER: null                                 # Versione dataset/contrattualistica
   client_name: "Cliente Demo"                    # Nome cliente leggibile
