@@ -144,6 +144,39 @@ def _load_config() -> GlobalConfig:
             return {}
 
 
+def _load_repo_config(repo_root: Path) -> GlobalConfig:
+    """Carica config/config.yaml per un repo specifico."""
+    cfg_dir = _resolve_path(repo_root, repo_root / "config")
+    cfg_file = _resolve_path(cfg_dir, cfg_dir / "config.yaml")
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    if not cfg_file.exists():
+        safe_write_text(cfg_file, "{}\n", encoding="utf-8", atomic=True)
+    try:
+        settings = Settings.load(repo_root, config_path=cfg_file, logger=_logger)
+        if hasattr(settings, "as_dict"):
+            return cast(GlobalConfig, settings.as_dict())
+        raise AttributeError("settings.as_dict missing")
+    except Exception as exc:
+        _logger.warning(
+            "ui.config_store.global_config_load_failed",
+            extra={"error": str(exc), "file_path": str(cfg_file)},
+        )
+        try:
+            text = read_text_safe(cfg_file.parent, cfg_file, encoding="utf-8")
+            data = yaml.safe_load(text) or {}
+            return cast(GlobalConfig, data if isinstance(data, dict) else {})
+        except Exception:
+            return {}
+
+
+def _save_repo_config(cfg: GlobalConfig, repo_root: Path) -> None:
+    cfg_dir = _resolve_path(repo_root, repo_root / "config")
+    cfg_file = _resolve_path(cfg_dir, cfg_dir / "config.yaml")
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    payload: str = yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False)
+    safe_write_text(cfg_file, payload, encoding="utf-8", atomic=True)
+
+
 def _save_config(cfg: GlobalConfig) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     payload: str = yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False)
@@ -166,18 +199,38 @@ def get_vision_model(default: str | None = None) -> str:
     raise ConfigError("Modello Vision mancante in ai.vision.model", file_path=str(CONFIG_FILE))
 
 
-def get_skip_preflight() -> bool:
+def get_skip_preflight(*, repo_root: Path | None = None) -> bool:
     """
-    Beta 1.0: il preflight non e' bypassabile dalla UI runtime.
+    True => la UI può saltare il preflight (modalità dev/ambienti controllati).
+    Fonte: config/config.yaml
+
+    Chiave canonica: ui.skip_preflight
+    Legacy supportato (OR secco, non "fallback morbidi"): skip_preflight top-level
     """
-    return False
+    root = repo_root or REPO_ROOT
+    cfg: GlobalConfig = _load_repo_config(root) or {}
+
+    ui = cfg.get("ui")
+    ui_skip = False
+    if isinstance(ui, dict):
+        ui_skip = bool(ui.get("skip_preflight", False))
+
+    legacy_skip = bool(cfg.get("skip_preflight", False))
+    return bool(ui_skip or legacy_skip)
 
 
-def set_skip_preflight(flag: bool) -> None:
+def set_skip_preflight(flag: bool, *, repo_root: Path | None = None) -> None:
     """
-    Beta 1.0: la preferenza di bypass e' disabilitata nella UI runtime.
+    Setter coerente con la chiave canonica: ui.skip_preflight
     """
-    _logger.warning("ui.skip_preflight.disabled", extra={"requested": bool(flag)})
+    root = repo_root or REPO_ROOT
+    cfg: GlobalConfig = _load_repo_config(root) or {}
+    ui = cfg.get("ui")
+    if not isinstance(ui, dict):
+        ui = {}
+        cfg["ui"] = ui
+    ui["skip_preflight"] = bool(flag)
+    _save_repo_config(cfg, root)
 
 
 def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:

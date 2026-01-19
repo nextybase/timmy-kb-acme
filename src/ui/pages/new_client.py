@@ -496,6 +496,13 @@ if current_phase == UI_PHASE_INIT:
                 error_label="Errore durante la preparazione del workspace",
             ) as status:
                 layout = bootstrap_client_workspace(ctx)
+                invalidate_client_context(s)
+                ctx = get_client_context(s, require_env=False, force_reload=True)
+                if getattr(ctx, "repo_root_dir", None) is None:
+                    raise ConfigError(
+                        "Context privo di repo_root_dir dopo il bootstrap del workspace.",
+                        slug=s,
+                    )
                 ensure_ownership_file(s, get_repo_root())
                 if isinstance(pdf_bytes, (bytes, bytearray)) and len(pdf_bytes) > 20 * 1024 * 1024:
                     try:
@@ -528,6 +535,14 @@ if current_phase == UI_PHASE_INIT:
                     if client_name_value:
                         updates["client_name"] = client_name_value
                     update_config_with_drive_ids(ctx, updates, logger=LOGGER)
+                    # Reload immediato dopo scrittura config (pre-Vision) per evitare Context stale.
+                    invalidate_client_context(s)
+                    ctx = get_client_context(s, require_env=False, force_reload=True)
+                    if getattr(ctx, "repo_root_dir", None) is None:
+                        raise ConfigError(
+                            "Context privo di repo_root_dir dopo la scrittura config pre-Vision.",
+                            slug=s,
+                        )
                 yaml_target = _client_vision_yaml_path(s, layout=layout)
                 try:
                     compile_document_to_vision_yaml(_client_pdf_path(s, layout=layout), yaml_target)
@@ -603,9 +618,6 @@ if current_phase == UI_PHASE_INIT:
 
             # 5) Vision
             ui_logger = _ui_logger()
-            invalidate_client_context(s)
-            # Ricarica il contesto reale dopo le scritture della config.
-            ctx = get_client_context(s, require_env=False, force_reload=True)
             with status_guard(
                 "Eseguo Vision…",
                 expanded=True,

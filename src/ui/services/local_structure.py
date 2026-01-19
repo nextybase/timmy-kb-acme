@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import ensure_within_and_resolve, sanitize_filename
-from pipeline.yaml_utils import yaml_read
 from pipeline.logging_utils import get_structured_logger
-from ui.utils.context_cache import get_client_context
+from pipeline.path_utils import ensure_within_and_resolve, sanitize_filename
 from pipeline.workspace_layout import WorkspaceLayout
+from pipeline.yaml_utils import yaml_read
+from ui.utils.context_cache import get_client_context
 
 LOGGER = get_structured_logger("ui.services.local_structure")
 

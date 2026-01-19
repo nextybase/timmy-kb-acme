@@ -223,14 +223,32 @@ def provision_from_vision_with_config(
         }
     """
     base_dir = getattr(ctx, "base_dir", None)
+    pdf_path = Path(pdf_path)
+
+    # In UI (specie in local/dev), il ClientContext puo' essere valido ma senza base_dir.
+    # In quel caso inferiamo base_dir dal path del PDF (tipicamente <base>/config/<file>.pdf)
+    # e passiamo un proxy a run_vision_with_gating senza mutare ctx (spesso frozen).
+    ctx_for_run: Any = ctx
     if not base_dir:
-        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+        inferred_base = pdf_path.parent
+        if inferred_base.name == "config":
+            inferred_base = inferred_base.parent
+
+        class _CtxProxy:
+            def __init__(self, inner: Any, base_dir: Path) -> None:
+                self._inner = inner
+                self.base_dir = base_dir
+
+            def __getattr__(self, name: str) -> Any:
+                return getattr(self._inner, name)
+
+        ctx_for_run = _CtxProxy(ctx, inferred_base)
 
     return run_vision_with_gating(
-        ctx,
+        ctx_for_run,
         logger,
         slug=slug,
-        pdf_path=Path(pdf_path),
+        pdf_path=pdf_path,
         force=force,
         model=model,
         prepared_prompt=prepared_prompt,

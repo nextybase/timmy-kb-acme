@@ -17,6 +17,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.paths import get_repo_root, global_logs_dir
 from timmy_kb.versioning import build_identity
+from ui import config_store
 from ui.types import StreamlitLike
 
 try:
@@ -230,6 +231,25 @@ def _run_preflight_flow(
       o in caso di errore chiama st.stop().
     """
     if st_module.session_state.get("preflight_ok", False):
+        return
+
+    # In runtime UI l'env REPO_ROOT_DIR può puntare alla workspace (output/...) e
+    # fallire la validazione del sentinel (.git/pyproject). In quel caso facciamo
+    # fallback deterministico su autodetect del repo (no env).
+    try:
+        repo_root = get_repo_root()
+    except ConfigError as e:
+        logger.warning(
+            "ui.repo_root.env_invalid_fallback",
+            extra={"error": str(e)},
+        )
+        repo_root = get_repo_root(allow_env=False)
+    if config_store.get_skip_preflight(repo_root=repo_root):
+        logger.info(
+            "ui.preflight.skipped",
+            extra={"reason": "config", "file_path": str(repo_root / "config" / "config.yaml")},
+        )
+        st_module.session_state["preflight_ok"] = True
         return
 
     _load_dotenv_best_effort(logger)

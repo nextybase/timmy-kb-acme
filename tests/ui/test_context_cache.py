@@ -97,6 +97,37 @@ def test_get_client_context_force_reload(monkeypatch: pytest.MonkeyPatch) -> Non
     assert len(loads) == 2
 
 
+def test_invalidate_and_force_reload_refreshes_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _StaleContext:
+        def __init__(self, slug: str) -> None:
+            self.slug = slug
+            self.repo_root_dir = None
+
+        @classmethod
+        def load(cls, **kwargs: Any) -> "_StaleContext":
+            return cls(str(kwargs["slug"]))
+
+    class _FreshContext:
+        def __init__(self, slug: str) -> None:
+            self.slug = slug
+            self.repo_root_dir = "base"
+
+        @classmethod
+        def load(cls, **kwargs: Any) -> "_FreshContext":
+            return cls(str(kwargs["slug"]))
+
+    monkeypatch.setattr(cache, "ClientContext", _StaleContext)
+    cache.st.session_state.clear()
+    first = cache.get_client_context("slug", require_env=False)
+    assert first.repo_root_dir is None
+
+    monkeypatch.setattr(cache, "ClientContext", _FreshContext)
+    cache.invalidate_client_context("slug")
+    refreshed = cache.get_client_context("slug", require_env=False, force_reload=True)
+    assert refreshed is not first
+    assert refreshed.repo_root_dir == "base"
+
+
 def test_get_client_context_tracks_run_id(monkeypatch: pytest.MonkeyPatch) -> None:
     loads: list[str | None] = []
 
