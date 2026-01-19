@@ -135,7 +135,12 @@ class WorkspaceLayout:
     def from_slug(cls, *, slug: str, require_env: bool = True, run_id: str | None = None) -> "WorkspaceLayout":
         """Valida lo slug, costruisce il ClientContext e applica la policy fail-fast."""
         validate_slug(slug)
-        context = ClientContext.load(slug=slug, require_env=require_env, run_id=run_id)
+        context = ClientContext.load(
+            slug=slug,
+            require_env=require_env,
+            run_id=run_id,
+            bootstrap_config=False,
+        )
         return cls.from_context(context)
 
     @classmethod

@@ -6,8 +6,8 @@ Che cosa fa questo modulo (overview):
 - Valida lo slug cliente (`validate_slug`).
 - Calcola la radice canonica del workspace cliente (`_compute_repo_root_dir`),
   con override da ENV `REPO_ROOT_DIR`.
-- Garantisce la presenza del `config/config.yaml` del cliente (`_ensure_config`),
-  generandolo da template se mancante.
+- Garantisce la presenza del `config/config.yaml` del cliente (`_ensure_config`)
+  solo in modalita' bootstrap (crea da template se mancante).
 - Carica la configurazione YAML del cliente (`_load_yaml_config`).
 - Raccoglie le variabili d'ambiente necessarie/opzionali (`_load_env`) e calcola
   la policy di redazione log (in `env_utils`).
@@ -164,6 +164,7 @@ class ClientContext:
         logger: Optional[logging.Logger] = None,
         *,
         require_env: bool = True,
+        bootstrap_config: bool = True,
         run_id: Optional[str] = None,
         stage: Optional[str] = None,
         **kwargs: Any,
@@ -173,8 +174,10 @@ class ClientContext:
         Pipeline di caricamento:
           1) Valida `slug`.
           2) Carica ENV (richiesto/opzionale) → override `REPO_ROOT_DIR` se presente.
-          3) Determina `repo_root_dir` e garantisce la presenza di `config/config.yaml`
-             (bootstrap se mancante).
+          3) Determina `repo_root_dir` e gestisce `config/config.yaml`:
+             - bootstrap attivo: garantisce la presenza (crea da template se mancante);
+             - bootstrap disattivo: richiede il file gia' presente.
+             In modalita' runtime non vengono effettuate mutazioni del filesystem.
           4) Carica impostazioni dal YAML.
           5) Calcola `redact_logs` (policy centralizzata).
         """
@@ -191,8 +194,11 @@ class ClientContext:
         repo_root_override = kwargs.get("repo_root_dir")
         repo_root = cls._compute_repo_root_dir(slug, env_vars, _logger, repo_root_override)
 
-        # 4) Path & bootstrap minima (crea config se non presente) sotto repo_root_dir
-        config_path = cls._ensure_config(repo_root, slug, _logger)
+        # 4) Due modalita': bootstrap (crea config) o runtime (fail-fast, no mutazioni).
+        if bootstrap_config:
+            config_path = cls._ensure_config(repo_root, slug, _logger)
+        else:
+            config_path = cls._require_existing_config(repo_root, slug)
 
         # 5) Carica config cliente (yaml)
         # Config YAML e' SSoT non-segreto; i segreti restano in .env.
@@ -337,6 +343,23 @@ class ClientContext:
             payload = read_text_safe(template_config.parent, template_config, encoding="utf-8")
             safe_write_text(config_path, payload, encoding="utf-8", atomic=True)
 
+        return config_path
+
+    @staticmethod
+    def _require_existing_config(repo_root_dir: Path, slug: str) -> Path:
+        """Richiede `config/config.yaml` senza creare directory o template."""
+        config_dir = repo_root_dir / "config"
+        config_path = config_dir / "config.yaml"
+
+        ensure_within(repo_root_dir, config_dir)
+        ensure_within(repo_root_dir, config_path)
+
+        if not config_path.exists():
+            raise ConfigError(
+                f"Manca config/config.yaml in {config_path}. Workspace non bootstrapppato o incompleto.",
+                slug=slug,
+                file_path=config_path,
+            )
         return config_path
 
     @staticmethod
