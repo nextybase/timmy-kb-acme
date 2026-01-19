@@ -282,7 +282,7 @@ def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
                 "ambito": "governance",
                 "descrizione_breve": "x",
                 "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
-                "documents": [],
+                "documents": ["verbale CdA"],
                 "artefatti": [],
             },
             {
@@ -290,7 +290,7 @@ def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
                 "ambito": "it-data",
                 "descrizione_breve": "y",
                 "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
-                "documents": [],
+                "documents": ["policy sicurezza"],
                 "artefatti": [],
             },
             {
@@ -298,11 +298,14 @@ def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
                 "ambito": "prodotto-servizio",
                 "descrizione_breve": "z",
                 "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
-                "documents": [],
+                "documents": ["manuale prodotto"],
                 "artefatti": [],
             },
         ],
-        "system_folders": {"identity": {"documents": []}, "glossario": {"artefatti": ["glossario.yaml"]}},
+        "system_folders": {
+            "identity": {"documents": ["statuto", "visura camerale"]},
+            "glossario": {"artefatti": ["glossario.yaml"]},
+        },
         "metadata_policy": {"chunk_length_tokens": {"target": 800, "overlap": 100}, "mandatory_fields": []},
     }
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: mismatched)
@@ -334,7 +337,7 @@ def test_missing_system_folders_raises(monkeypatch, tmp_workspace: Path):
                 "ambito": "x",
                 "descrizione_breve": "d",
                 "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
-                "documents": [],
+                "documents": ["report strategico"],
                 "artefatti": [],
             },
             {
@@ -342,7 +345,7 @@ def test_missing_system_folders_raises(monkeypatch, tmp_workspace: Path):
                 "ambito": "y",
                 "descrizione_breve": "d",
                 "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
-                "documents": [],
+                "documents": ["piano operativo"],
                 "artefatti": [],
             },
             {
@@ -350,7 +353,7 @@ def test_missing_system_folders_raises(monkeypatch, tmp_workspace: Path):
                 "ambito": "z",
                 "descrizione_breve": "d",
                 "descrizione_dettagliata": {"include": [], "exclude": [], "artefatti_note": ""},
-                "documents": [],
+                "documents": ["linee guida"],
                 "artefatti": [],
             },
         ],

@@ -94,7 +94,8 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "minItems": 1
           },
           "artefatti": {
             "type": "array",
@@ -195,7 +196,8 @@
               "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "minItems": 1
             }
           },
           "required": [

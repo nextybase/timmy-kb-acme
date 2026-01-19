@@ -259,6 +259,8 @@ def _build_run_instructions(use_kb: bool) -> str:
         "- il payload DEVE contenere almeno le chiavi richieste dallo schema,",
         "  in particolare 'context' e 'areas';",
         "- 'context.slug' e 'context.client_name' devono usare i valori del blocco 'Contesto cliente';",
+        "- per OGNI area in 'areas', 'documents' DEVE essere una lista NON vuota (min 1; consigliato >=3);",
+        "- 'system_folders.identity.documents' DEVE essere una lista NON vuota (min 1);",
         "- non aggiungere chiavi fuori dallo schema.",
         "",
         "Schema JSON da rispettare (VisionOutput.schema.json):",

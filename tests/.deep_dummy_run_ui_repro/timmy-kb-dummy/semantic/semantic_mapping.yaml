@@ -1,0 +1,101 @@
+version: 1
+source: vision
+context:
+  slug: dummy
+areas:
+- key: sostenibilita
+  ambito: strategico
+  descrizione_breve: Promozione della sostenibilità integrata.
+  descrizione_dettagliata:
+    include:
+    - Sostenibilità ambientale
+    - Sostenibilità sociale
+    - Sostenibilità lavorativa
+    exclude:
+    - Sostenibilità economica a breve termine
+    artefatti_note: Considerazioni su impatti a lungo termine.
+  documents: []
+  artefatti: []
+  correlazioni:
+    entities:
+    - id: progetto
+      label: Progetto
+      syn:
+      - Iniziativa
+      - Attività
+    - id: obiettivo
+      label: Obiettivo
+      syn:
+      - Scopo
+      - Meta
+    - id: milestone
+      label: Milestone
+      syn:
+      - Punto di riferimento
+      - Traguardo
+    relations: []
+    chunking_hints: []
+- key: governance_ai
+  ambito: governance
+  descrizione_breve: Regole e normative per l'uso dell'AI.
+  descrizione_dettagliata:
+    include:
+    - AI Act UE
+    - Legge Scatolini
+    exclude: []
+    artefatti_note: Documentazione di conformità.
+  documents: []
+  artefatti: []
+  correlazioni:
+    entities:
+    - id: decisione
+      label: Decisione
+      syn:
+      - Scelta
+      - Determinazione
+    - id: analisi
+      label: Analisi
+      syn:
+      - Valutazione
+      - Esame
+    relations: []
+    chunking_hints: []
+- key: formazione
+  ambito: hr
+  descrizione_breve: Percorsi di crescita e formazione continua.
+  descrizione_dettagliata:
+    include:
+    - Programmi di formazione
+    - Sviluppo professionale
+    exclude: []
+    artefatti_note: Risorse per l'autoapprendimento.
+  documents: []
+  artefatti: []
+  correlazioni:
+    entities:
+    - id: team
+      label: Team
+      syn:
+      - Gruppo
+      - Collaboratori
+    - id: skill
+      label: Skill
+      syn:
+      - Competenze
+      - Abilità
+    relations: []
+    chunking_hints: []
+entities: []
+relations: []
+er_model: {}
+system_folders:
+  identity:
+    documents: []
+  glossario:
+    artefatti: []
+    terms_hint: []
+metadata_policy:
+  chunk_length_tokens:
+    target: 2048
+    overlap: 50
+  mandatory_fields: []

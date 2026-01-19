@@ -1,0 +1,97 @@
+context:
+  slug: "<SLUG>"
+  client_name: "<CLIENT_NAME>"
+  created_at: "2025-08-25"
+
+# -----------------------------------------------------------------------------
+# MAPPING SEMANTICO
+# -----------------------------------------------------------------------------
+# Nota:
+# - Mantiene la struttura originale del file che mi hai fornito.
+# - Puoi personalizzare slug e client_name, aggiungere/ritoccare tassonomie, sinonimi e regole.
+# - Questo file viene letto da tag_onboarding/semantic_onboarding per guidare normalizzazione e arricchimento.
+# -----------------------------------------------------------------------------
+
+# ⬇️ Contenuto originale, preservato e reso AI-ready (ordinamento stabile, unicode)
+#    Sezione di mapping, categorie, sinonimi, regole di merge/canonicalizzazione, ecc.
+#    (Se alcune chiavi erano scalari o liste, sono state mantenute tali)
+#    Suggerimento: mantieni chiavi in lowercase per coerenza.
+#    Esempio di struttura tipica (aggiungi/integra la tua):
+#
+# taxonomy:
+#   - organizzazione
+#   - prodotto
+#   - processo
+#   - tecnologia
+#   - luogo
+#
+# synonyms:
+#   ai:
+#     - intelligenza artificiale
+#     - artificial intelligence
+#   pm:
+#     - project management
+#
+# canonical:
+#   intelligenza artificiale: ai
+#   project management: pm
+#
+# rules:
+#   merge_into:
+#     "gestione progetto": "pm"
+#   drop:
+#     - "bozza"
+#     - "varie"
+#
+# NOTE: La sezione sopra è solo un esempio; qui sotto trovi i tuoi dati reali.
+# -----------------------------------------------------------------------------
+
+identity:
+  ambito: "Identità Aziendale"
+  descrizione: "Documenti che identificano la struttura legale, amministrativa e la mission della società"
+  keywords: ["Statuto", "Visura", "Atto Costitutivo"]
+
+organizzazione:
+  ambito: "Struttura Organizzativa"
+  descrizione: "Documenti relativi all’organigramma, funzionigramma, ruoli e mansionari"
+  keywords: ["Organigramma", "Mansionario"]
+
+artefatti-operativi:
+  ambito: "Procedure e Operatività"
+  descrizione: "Procedure operative, documenti di processo, modelli interni"
+  keywords: ["Procedure", "Modelli"]
+
+glossario:
+  ambito: "Definizioni e Glossario"
+  descrizione: "Termini chiave, glossari e dizionari interni"
+  keywords: ["Glossario", "Vocabolario"]
+
+best-practices:
+  ambito: "Best Practices"
+  descrizione: "Linee guida operative, esempi virtuosi e template"
+  keywords: ["Linee guida", "Template"]
+
+normativa:
+  ambito: "Normativa e Compliance"
+  descrizione: "Norme, regolamenti, certificazioni, policy obbligatorie"
+  keywords: ["Norme", "Certificazioni"]
+
+scenario:
+  ambito: "Scenario e Mercato"
+  descrizione: "Analisi di settore, mercato di riferimento, scenari evolutivi"
+  keywords: ["Analisi", "Mercato"]
+
+economy:
+  ambito: "Dati Economici"
+  descrizione: "Bilanci, analisi economiche, indici di performance"
+  keywords: ["Bilanci", "KPI"]
+
+template-documenti:
+  ambito: "Template Documentali"
+  descrizione: "Modelli editabili di documentazione"
+  keywords: ["Template", "Modelli"]
+
+contrattualistica:
+  ambito: "Contratti"
+  descrizione: "Documenti legali e contratti"
+  keywords: ["Contratti", "Accordi"]

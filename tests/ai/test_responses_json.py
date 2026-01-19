@@ -180,6 +180,23 @@ def test_diagnostics_detects_map_like_paths_for_vision_schema() -> None:
     assert diagnostics["map_like_paths"] == []
 
 
+def test_vision_schema_documents_min_items() -> None:
+    schema = _load_vision_schema()
+    areas_docs = (
+        schema.get("properties", {}).get("areas", {}).get("items", {}).get("properties", {}).get("documents", {})
+    )
+    identity_docs = (
+        schema.get("properties", {})
+        .get("system_folders", {})
+        .get("properties", {})
+        .get("identity", {})
+        .get("properties", {})
+        .get("documents", {})
+    )
+    assert areas_docs.get("minItems") == 1
+    assert identity_docs.get("minItems") == 1
+
+
 def test_run_json_model_emits_json_schema_diagnostics_log(caplog) -> None:
     caplog.set_level(logging.INFO, logger="ai.responses")
     client = _FakeClient('{"ok": true}')
