@@ -6,25 +6,23 @@ import json
 import os
 import socket
 from pathlib import Path
-from typing import Any, Callable, Iterable, List, Tuple, cast
-
-try:
-    from dotenv import load_dotenv
-except Exception:  # pragma: no cover
-    load_dotenv = None
+from typing import Any, Iterable, List, Tuple, cast
 
 try:
     import streamlit as st
 except Exception:  # pragma: no cover
     st = None
 
-from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 CheckItem = Tuple[str, bool, str]
-LOGGER = get_structured_logger("ui.preflight")
+
+
+def _logger():
+    return get_structured_logger("ui.preflight")
+
+
 DEPENDENCY_CHECKS = [
     ("PyMuPDF", "fitz", "pip install pymupdf"),
     ("ReportLab", "reportlab", "pip install reportlab"),
@@ -34,16 +32,21 @@ DEPENDENCY_CHECKS = [
 
 def _maybe_load_dotenv() -> None:
     """Carica .env solo quando serve (no side-effects a import-time)."""
-    loaders: list[Callable[[], None]] = []
-    if load_dotenv:
-        loaders.append(lambda: cast(Callable[..., None], load_dotenv)(override=False))
-    loaders.append(ensure_dotenv_loaded)
-
-    for fn in loaders:
-        try:
-            fn()
-        except Exception:
-            pass
+    env_path = Path(".env")
+    try:
+        loaded = ensure_dotenv_loaded(strict=False, allow_fallback=True)
+    except Exception as exc:
+        _logger().warning(
+            "ui.preflight.dotenv_error",
+            extra={"error": repr(exc), "path": str(env_path)},
+        )
+        return
+    if not env_path.exists():
+        _logger().info("ui.preflight.dotenv_missing", extra={"path": str(env_path)})
+    _logger().info(
+        "ui.preflight.dotenv_loaded",
+        extra={"loaded": bool(loaded), "path": str(env_path)},
+    )
 
 
 def _is_importable(mod: str) -> bool:
@@ -55,6 +58,8 @@ def _is_importable(mod: str) -> bool:
 
 
 def _docker_ok() -> tuple[bool, str]:
+    from pipeline.docker_utils import check_docker_status
+
     status, hint = check_docker_status()
     return bool(status), str(hint or "")
 
@@ -94,7 +99,7 @@ def _pipeline_origin_ok() -> tuple[bool, str]:
         "Attiva il venv corretto e riesegui `pip install -e .` nella root del repo."
     )
     try:
-        LOGGER.warning(
+        _logger().warning(
             "ui.preflight.pipeline_mismatch",
             extra={"ui_root": str(ui_root), "pkg_root": str(pkg_root)},
         )
@@ -129,12 +134,16 @@ def _has_openai_key() -> bool:
 
 def _vision_schema_ok() -> tuple[bool, str]:
     def _resolve_schema_path(repo_root: Path) -> Path:
+        from pipeline.path_utils import ensure_within_and_resolve
+
         return cast(
             Path,
             ensure_within_and_resolve(repo_root, repo_root / "src" / "ai" / "schemas" / "VisionOutput.schema.json"),
         )
 
     def _load_schema_text(repo_root: Path, schema_path: Path) -> tuple[bool, str]:
+        from pipeline.path_utils import read_text_safe
+
         if not schema_path.exists():
             return False, f"schema mancante: {schema_path}"
         schema_text = read_text_safe(repo_root, schema_path, encoding="utf-8")
@@ -209,7 +218,7 @@ def _collect_port_check(docker_ok: bool) -> bool:
 
 def run_preflight() -> tuple[List[CheckItem], bool]:
     """Esegue i check di preflight (import-safe, dipendenze, schema, porte)."""
-    LOGGER.info("ui.preflight.run_start")
+    _logger().info("ui.preflight.run_start")
     _maybe_load_dotenv()
     results: List[CheckItem] = []
 
@@ -224,8 +233,9 @@ def run_preflight() -> tuple[List[CheckItem], bool]:
     port_busy = _collect_port_check(docker_ok)
     for name, ok, hint in results:
         if not ok:
-            LOGGER.warning("ui.preflight.check_failed", extra={"check": name, "hint": hint})
-    LOGGER.info(
+            _logger().warning("ui.preflight.check_failed", extra={"check": name, "hint": hint})
+
+    _logger().info(
         "ui.preflight.run_complete",
         extra={"checks": len(results), "port_busy": port_busy},
     )

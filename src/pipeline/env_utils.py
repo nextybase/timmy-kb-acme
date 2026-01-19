@@ -40,19 +40,66 @@ def ensure_dotenv_loaded(*, strict: bool = True, allow_fallback: bool = False) -
     False se gia caricato in precedenza o se `python-dotenv` non e disponibile.
     """
     global _ENV_LOADED
-    if _ENV_LOADED:
-        return False
     env_path = Path(".env")
-    if importlib.util.find_spec("dotenv") is None:
-        if strict and env_path.exists():
-            raise ConfigError("python-dotenv non disponibile ma .env presente", file_path=str(env_path))
+    if _ENV_LOADED:
+        try:
+            from dotenv import load_dotenv
+        except Exception:
+            return False
+        if not callable(load_dotenv):
+            return False
+        if getattr(load_dotenv, "__module__", "").startswith("dotenv"):
+            return False
+        try:
+            loaded: Optional[bool] = load_dotenv(override=False)
+        except Exception as exc:
+            if allow_fallback:
+                _LOGGER.warning(
+                    "env.load_failed_fallback",
+                    extra={"error": str(exc), "path": str(env_path)},
+                )
+                return False
+            raise ConfigError(f"Caricamento .env fallito: {exc}", file_path=str(env_path)) from exc
+        _LOGGER.info(
+            "env.loaded",
+            extra={"loaded": bool(loaded), "path": str(env_path)},
+        )
+        if not env_path.exists():
+            _LOGGER.info("env.dotenv_missing", extra={"path": str(env_path)})
         return False
+    _ENV_LOADED = True
+    try:
+        spec = importlib.util.find_spec("dotenv")
+    except Exception:
+        spec = None
     try:
         from dotenv import load_dotenv
-
-        loaded: Optional[bool] = load_dotenv()  # carica da CWD; non forza override
-        _ENV_LOADED = True
-        _LOGGER.info("env.loaded", extra={"loaded": bool(loaded)})
+    except Exception:
+        load_dotenv = None
+    if spec is None and not callable(load_dotenv):
+        if strict and env_path.exists():
+            raise ConfigError("python-dotenv non disponibile ma .env presente", file_path=str(env_path))
+        _LOGGER.info(
+            "env.dotenv_unavailable",
+            extra={"path": str(env_path), "env_exists": env_path.exists()},
+        )
+        if not env_path.exists():
+            _LOGGER.info("env.dotenv_missing", extra={"path": str(env_path)})
+        return False
+    try:
+        if getattr(load_dotenv, "__module__", "").startswith("dotenv"):
+            loaded: Optional[bool] = load_dotenv(
+                dotenv_path=str(env_path),
+                override=False,
+            )  # carica da CWD; non forza override
+        else:
+            loaded = load_dotenv(override=False)
+        _LOGGER.info(
+            "env.loaded",
+            extra={"loaded": bool(loaded), "path": str(env_path)},
+        )
+        if not env_path.exists():
+            _LOGGER.info("env.dotenv_missing", extra={"path": str(env_path)})
         # Caricamento deterministico da .env (senza override) per garantire le variabili.
         if env_path.exists():
             text = read_text_safe(Path.cwd(), env_path, encoding="utf-8")
@@ -70,7 +117,10 @@ def ensure_dotenv_loaded(*, strict: bool = True, allow_fallback: bool = False) -
         return True
     except Exception as exc:
         if allow_fallback:
-            _LOGGER.warning("env.load_failed_fallback", extra={"error": str(exc)})
+            _LOGGER.warning(
+                "env.load_failed_fallback",
+                extra={"error": str(exc), "path": str(env_path)},
+            )
             return False
         raise ConfigError(f"Caricamento .env fallito: {exc}", file_path=str(env_path)) from exc
     finally:

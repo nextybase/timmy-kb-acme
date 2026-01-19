@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from pipeline.exceptions import ConfigError
@@ -20,27 +21,16 @@ from timmy_kb.versioning import build_identity
 from ui import config_store
 from ui.types import StreamlitLike
 
-try:
-    from dotenv import load_dotenv
-except Exception:  # pragma: no cover
-    load_dotenv = None
-
 LOGGER = get_structured_logger("ui.bootstrap")
-
-try:
-    REPO_ROOT = get_repo_root(allow_env=False)
-except ConfigError as exc:
-    LOGGER.error("ui.bootstrap.repo_root_missing", extra={"error": str(exc)})
-    raise
 
 # REPO_ROOT_DIR serve al workspace: non rimuoverla qui.
 
 
-def _init_ui_logging() -> None:
+def _init_ui_logging(repo_root: Path) -> None:
     """Inizializza il logger condiviso della UI su `.timmy_kb/logs/ui.log`."""
     from pipeline.logging_utils import get_structured_logger
 
-    log_dir = global_logs_dir(REPO_ROOT)
+    log_dir = global_logs_dir(repo_root)
     log_file = log_dir / "ui.log"
     # Propagazione abilitata cosi i logger delle pagine ereditano l'handler file.
     os.environ.setdefault("TIMMY_LOG_PROPAGATE", "1")
@@ -53,18 +43,18 @@ def _init_ui_logging() -> None:
 LOGGER: logging.Logger = get_structured_logger("ui.preflight")
 
 
-def _lazy_bootstrap() -> logging.Logger:
+def _lazy_bootstrap(repo_root: Path) -> logging.Logger:
     """Bootstrap logging in modo idempotente (invocato all'avvio UI).
 
     Ritorna il logger `ui.preflight` da passare alle funzioni interne.
     """
     from pipeline.logging_utils import get_structured_logger
 
-    _init_ui_logging()
+    _init_ui_logging(repo_root)
     return get_structured_logger("ui.preflight")
 
 
-def _render_preflight_header(st_module: StreamlitLike, logger: logging.Logger) -> None:
+def _render_preflight_header(st_module: StreamlitLike, logger: logging.Logger, *, repo_root: Path) -> None:
     """Logo + titolo centrati per il controllo di sistema (solo schermata preflight)."""
     from ui.utils.branding import get_main_logo_path
 
@@ -73,7 +63,7 @@ def _render_preflight_header(st_module: StreamlitLike, logger: logging.Logger) -
 
     logo_path = None
     try:
-        logo_path = get_main_logo_path(REPO_ROOT)
+        logo_path = get_main_logo_path(repo_root)
     except Exception as exc:
         logger.warning("ui.preflight.logo_resolve_failed", extra={"error": repr(exc)})
 
@@ -103,23 +93,6 @@ def _render_preflight_header(st_module: StreamlitLike, logger: logging.Logger) -
     except Exception as exc:
         logger.warning("ui.preflight.header_container_failed", extra={"error": repr(exc)})
         _render(st_module)
-
-
-def _load_dotenv_best_effort(logger: logging.Logger) -> None:
-    """Carica .env solo a runtime, preservando l'import-safe della UI."""
-    if load_dotenv is None:
-        return
-    env_path = REPO_ROOT / ".env"
-    if not env_path.exists():
-        logger.info("ui.preflight.dotenv_missing", extra={"path": str(env_path)})
-        return
-    try:
-        load_dotenv(override=False)
-    except Exception as exc:
-        logger.warning(
-            "ui.preflight.dotenv_error",
-            extra={"path": str(env_path), "error": repr(exc)},
-        )
 
 
 _MIN_STREAMLIT_VERSION = (1, 50, 0)
@@ -221,6 +194,7 @@ def _run_preflight_flow(
     logger: logging.Logger,
     run_preflight,
     status_guard,
+    repo_root: Path,
 ) -> None:
     """
     Esegue il preflight, gestendo session_state e rerun/stop.
@@ -233,17 +207,6 @@ def _run_preflight_flow(
     if st_module.session_state.get("preflight_ok", False):
         return
 
-    # In runtime UI l'env REPO_ROOT_DIR può puntare alla workspace (output/...) e
-    # fallire la validazione del sentinel (.git/pyproject). In quel caso facciamo
-    # fallback deterministico su autodetect del repo (no env).
-    try:
-        repo_root = get_repo_root()
-    except ConfigError as e:
-        logger.warning(
-            "ui.repo_root.env_invalid_fallback",
-            extra={"error": str(e)},
-        )
-        repo_root = get_repo_root(allow_env=False)
     if config_store.get_skip_preflight(repo_root=repo_root):
         logger.info(
             "ui.preflight.skipped",
@@ -252,9 +215,7 @@ def _run_preflight_flow(
         st_module.session_state["preflight_ok"] = True
         return
 
-    _load_dotenv_best_effort(logger)
-
-    _render_preflight_header(st_module, logger)
+    _render_preflight_header(st_module, logger, repo_root=repo_root)
     box = st_module.container()
     with box:
         with st_module.expander("Prerequisiti", expanded=True):
@@ -348,7 +309,20 @@ def build_navigation(
 
 
 def main() -> None:
-    logger = _lazy_bootstrap()
+    # In runtime UI l'env REPO_ROOT_DIR può puntare alla workspace (output/...) e
+    # fallire la validazione del sentinel (.git/pyproject). In quel caso facciamo
+    # fallback deterministico su autodetect del repo (no env).
+    try:
+        repo_root = get_repo_root()
+    except ConfigError as exc:
+        LOGGER.warning("ui.repo_root.env_invalid_fallback", extra={"error": str(exc)})
+        try:
+            repo_root = get_repo_root(allow_env=False)
+        except ConfigError as exc2:
+            LOGGER.error("ui.bootstrap.repo_root_missing", extra={"error": str(exc2)})
+            raise
+
+    logger = _lazy_bootstrap(repo_root)
 
     try:  # noqa: E402
         import streamlit as st  # type: ignore[import]
@@ -377,7 +351,7 @@ def main() -> None:
 
     st.set_page_config(
         page_title="Onboarding NeXT - Clienti",
-        page_icon=str(get_favicon_path(REPO_ROOT)),
+        page_icon=str(get_favicon_path(repo_root)),
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -420,9 +394,10 @@ def main() -> None:
         logger=logger,
         run_preflight=run_preflight,
         status_guard=status_guard,
+        repo_root=repo_root,
     )
 
-    write_gate_capability_manifest(global_logs_dir(REPO_ROOT), env=os.environ)
+    write_gate_capability_manifest(global_logs_dir(repo_root), env=os.environ)
 
     # Navigazione principale (st.navigation + st.Page)
     build_navigation(
