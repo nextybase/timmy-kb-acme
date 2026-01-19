@@ -36,7 +36,7 @@ def test_cli_explicit_bootstrap_config() -> None:
         except SyntaxError as exc:
             lineno = exc.lineno or 0
             offset = exc.offset or 0
-            raise AssertionError(f"CLI non parseabile: {path}:{lineno}:{offset}") from exc
+            raise AssertionError(f"CLI non parsabile: {path}:{lineno}:{offset}") from exc
         for call in _iter_client_context_load_calls(tree):
             if not _has_bootstrap_config(call):
                 lineno = getattr(call, "lineno", 1)
