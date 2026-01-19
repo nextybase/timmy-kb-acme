@@ -133,10 +133,7 @@ def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):
     semantic_dir.mkdir(parents=True)
     ctx = TestClientCtx(
         slug="dummy",
-        base_dir=base_dir,
         repo_root_dir=base_dir,
-        raw_dir=raw_dir,
-        md_dir=base_dir / "book",
         semantic_dir=semantic_dir,
         config_dir=base_dir / "config",
         redact_logs=False,

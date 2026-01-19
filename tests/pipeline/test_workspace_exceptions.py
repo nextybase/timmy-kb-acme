@@ -28,14 +28,12 @@ def test_workspace_exception_str_contains_context() -> None:
 def test_workspace_layout_missing_root_raises_workspace_not_found() -> None:
     ctx = ClientContext(slug="dummy")
     ctx.repo_root_dir = None
-    ctx.base_dir = None
     with pytest.raises(WorkspaceNotFound):
         WorkspaceLayout.from_context(ctx)
 
 
-def test_workspace_layout_missing_repo_root_dir_does_not_fall_back_to_base_dir(tmp_path: Path) -> None:
+def test_workspace_layout_missing_repo_root_dir_raises(tmp_path: Path) -> None:
     ctx = ClientContext(slug="dummy")
     ctx.repo_root_dir = None
-    ctx.base_dir = tmp_path / "timmy-kb-dummy"
     with pytest.raises(WorkspaceNotFound):
         WorkspaceLayout.from_context(ctx)

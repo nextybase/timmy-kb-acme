@@ -37,6 +37,9 @@ coverage.*
 coverage.xml
 htmlcov/
 .tox/
+tests/.deep_dummy_run*/
+tests/.deep_dummy_run2*/
+tests/.deep_dummy_run_ui_repro*/
 
 # === Output Pipeline / Workspace locali ===
 output/**

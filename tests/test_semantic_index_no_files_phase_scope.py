@@ -16,10 +16,7 @@ class _DummyEmb:
 def _ctx(base: Path, book: Path) -> TestClientCtx:
     return TestClientCtx(
         slug="dummy",
-        base_dir=base,
         repo_root_dir=base,
-        raw_dir=base / "raw",
-        md_dir=book,
         semantic_dir=base / "semantic",
         config_dir=base / "config",
     )

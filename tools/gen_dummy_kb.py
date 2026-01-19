@@ -94,7 +94,7 @@ from pipeline.capabilities import dummy_kb as dummy_kb_capabilities
 # Path bootstrap (repo root + src)
 # ------------------------------------------------------------
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
-from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard  # noqa: E402
+from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard, read_text_safe  # noqa: E402
 from pipeline.workspace_layout import workspace_validation_policy  # noqa: E402
 from pipeline.vision_template import load_vision_template_sections  # noqa: E402
 
@@ -149,9 +149,6 @@ def _normalize_relative_path(value: str, *, var_name: str) -> Path:
 # ------------------------------------------------------------
 # Import delle API usate dalla UI
 # ------------------------------------------------------------
-# pre_onboarding: workspace locale + salvataggio Vision PDF (se fornito)
-from timmy_kb.cli.pre_onboarding import ensure_local_workspace_for_ui  # type: ignore
-
 # Vision (stesse firme UI)
 _vision_mod = importlib.import_module("ui.services.vision_provision")
 run_vision = getattr(_vision_mod, "run_vision")
@@ -323,6 +320,34 @@ def _brute_reset_dummy(*, logger: logging.Logger) -> Path:
     return target
 
 
+def _ensure_local_workspace_for_tooling(*, slug: str, client_name: str, vision_statement_pdf: bytes) -> None:
+    repo_override = os.environ.get("REPO_ROOT_DIR")
+    if repo_override:
+        workspace_root = Path(repo_override).expanduser().resolve()
+    else:
+        workspace_root = _client_base(slug)
+
+    for child in ("raw", "semantic", "book", "logs", "config"):
+        (workspace_root / child).mkdir(parents=True, exist_ok=True)
+
+    config_path = ensure_within_and_resolve(workspace_root, workspace_root / "config" / "config.yaml")
+    if not config_path.exists():
+        template = REPO_ROOT / "config" / "config.yaml"
+        if template.exists():
+            text = read_text_safe(template.parent, template, encoding="utf-8")
+            _safe_write_text(config_path, text, encoding="utf-8", atomic=True)
+        else:
+            _safe_write_text(config_path, "vision_statement_pdf: config/VisionStatement.pdf\n", encoding="utf-8", atomic=True)
+
+    pdf_path = ensure_within_and_resolve(workspace_root, workspace_root / "config" / "VisionStatement.pdf")
+    if not pdf_path.exists():
+        _safe_write_bytes(pdf_path, vision_statement_pdf, atomic=True)
+
+
+# Alias pubblico mantenuto per compat dei test: percorso unico layout-first.
+ensure_local_workspace_for_ui = _ensure_local_workspace_for_tooling
+
+
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(
         description="Genera una KB dummy usando gli entry-point della UI (pre_onboarding + Vision + (Drive opz.))."
@@ -479,7 +504,7 @@ def build_payload(
         deep_testing=deep_testing,
         logger=logger,
         repo_root=REPO_ROOT,
-        ensure_local_workspace_for_ui=ensure_local_workspace_for_ui,
+        ensure_local_workspace_for_ui=_ensure_local_workspace_for_tooling,
         run_vision=run_vision,
         get_env_var=get_env_var,
         ensure_within_and_resolve_fn=ensure_within_and_resolve,

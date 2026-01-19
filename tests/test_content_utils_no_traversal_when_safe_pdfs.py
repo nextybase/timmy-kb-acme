@@ -1,21 +1,36 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # tests/test_content_utils_no_traversal_when_safe_pdfs.py
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pipeline.content_utils as cu
-from tests.support.contexts import TestClientCtx
+from pipeline.workspace_layout import WorkspaceLayout
 
 
-def _ctx(base: Path, raw: Path, book: Path) -> TestClientCtx:
-    return TestClientCtx(
-        slug="dummy",
-        base_dir=base,
-        repo_root_dir=base,
-        raw_dir=raw,
-        md_dir=book,
-        semantic_dir=base / "semantic",
-        config_dir=base / "config",
-    )
+@dataclass
+class _LayoutCtx:
+    slug: str
+    repo_root_dir: Path
+    _layout: WorkspaceLayout = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._layout = WorkspaceLayout.from_context(self)
+
+    @property
+    def base_dir(self) -> Path:
+        return self._layout.base_dir
+
+    @property
+    def raw_dir(self) -> Path:
+        return self._layout.raw_dir
+
+    @property
+    def md_dir(self) -> Path:
+        return self._layout.book_dir
+
+
+def _ctx(base: Path) -> _LayoutCtx:
+    return _LayoutCtx(slug="dummy", repo_root_dir=base)
 
 
 def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
@@ -69,7 +84,7 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
     monkeypatch.setattr(cu, "_filter_safe_pdfs", boom)
 
     # Esegue la conversione passando safe_pdfs (niente traversal legacy)
-    ctx = _ctx(base, raw, book)
+    ctx = _ctx(base)
     cu.convert_files_to_structured_markdown(ctx, md_dir=book, safe_pdfs=safe_pdfs)
 
     # File attesi: un markdown per ogni PDF (stessa struttura delle cartelle raw/)

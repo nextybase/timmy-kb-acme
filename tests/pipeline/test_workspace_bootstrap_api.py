@@ -15,9 +15,6 @@ def dummy_context(tmp_path: Path) -> ClientContext:
     return ClientContext(
         slug="dummy",
         repo_root_dir=root,
-        base_dir=root,
-        raw_dir=root / "raw",
-        md_dir=root / "book",
     )
 
 
@@ -64,7 +61,7 @@ def test_bootstrap_dummy_workspace_invalid_after_corruption(tmp_path: Path, monk
 
 def _make_client_context(tmp_path: Path, slug: str) -> ClientContext:
     base = tmp_path / "output" / f"timmy-kb-{slug}"
-    return ClientContext(slug=slug, repo_root_dir=base, base_dir=base)
+    return ClientContext(slug=slug, repo_root_dir=base)
 
 
 def test_bootstrap_client_workspace_creates_valid_layout(tmp_path: Path) -> None:

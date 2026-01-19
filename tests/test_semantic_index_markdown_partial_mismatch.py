@@ -25,10 +25,7 @@ def test_index_markdown_partial_on_mismatch_inserts_and_logs(tmp_path, caplog, m
     # context minimo
     ctx = TestClientCtx(
         slug="dummy",
-        base_dir=base,
         repo_root_dir=base,
-        raw_dir=base / "raw",
-        md_dir=book,
         semantic_dir=base / "semantic",
         config_dir=base / "config",
     )

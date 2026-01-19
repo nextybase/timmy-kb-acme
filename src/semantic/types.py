@@ -33,17 +33,12 @@ class ClientContextProtocol(Protocol):
 
     Mantieni qui solo ciò che è realmente consumato dai servizi/orchestratori,
     così eviti dipendenze dure e cicliche:
-      - base_dir: radice sicura per path-safety
-      - raw_dir / md_dir: cartelle operative usate dai servizi di contenuto
+      - repo_root_dir: unico punto di verità per risolvere WorkspaceLayout
       - slug: identificatore logico del cliente
     """
 
-    # Radice percorso
-    base_dir: Path
-
-    # Cartelle operative
-    raw_dir: Path
-    md_dir: Path
+    # SSoT per risolvere WorkspaceLayout
+    repo_root_dir: Path
 
     # Metadato logico
     slug: str

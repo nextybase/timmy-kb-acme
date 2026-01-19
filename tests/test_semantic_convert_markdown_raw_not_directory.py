@@ -25,10 +25,7 @@ def test_convert_markdown_raw_not_directory_raises(tmp_path, caplog):
 
     ctx = TestClientCtx(
         slug="dummy",
-        base_dir=base,
         repo_root_dir=base,
-        raw_dir=raw,
-        md_dir=book,
         semantic_dir=base / "semantic",
         config_dir=base / "config",
     )

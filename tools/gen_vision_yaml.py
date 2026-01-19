@@ -23,7 +23,7 @@ def main() -> int:
     log = get_structured_logger("tools.gen_vision_yaml")
     base_dir = Path(args.base) / f"timmy-kb-{args.slug}"
     base_dir.mkdir(parents=True, exist_ok=True)
-    ctx = ClientContext(slug=args.slug, client_name=args.slug, base_dir=base_dir)
+    ctx = ClientContext(slug=args.slug, client_name=args.slug, repo_root_dir=base_dir)
 
     pdf_path = Path(args.pdf).resolve()
     if not pdf_path.is_file():

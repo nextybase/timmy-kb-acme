@@ -42,10 +42,7 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
 
     context = TestClientCtx(
         slug=slug,
-        base_dir=base_dir,
         repo_root_dir=base_dir,
-        raw_dir=raw,
-        md_dir=book,
         semantic_dir=sem,
         config_dir=config_dir,
     )
@@ -102,10 +99,7 @@ def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeyp
 
     context = TestClientCtx(
         slug=slug,
-        base_dir=base_dir,
         repo_root_dir=base_dir,
-        raw_dir=raw,
-        md_dir=book,
         semantic_dir=sem,
         config_dir=config_dir,
     )
@@ -154,10 +148,7 @@ def test_build_tags_csv_writes_doc_entities_db(tmp_path: Path, monkeypatch: pyte
 
     context = TestClientCtx(
         slug=slug,
-        base_dir=base_dir,
         repo_root_dir=base_dir,
-        raw_dir=raw,
-        md_dir=book,
         semantic_dir=sem,
         config_dir=config_dir,
     )

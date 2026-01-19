@@ -14,16 +14,12 @@ from timmy_kb.cli import semantic_onboarding as cli
 
 
 def _ctx(base_dir: Path) -> TestClientCtx:
-    book_dir = base_dir / "book"
     config_dir = base_dir / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
     return TestClientCtx(
         slug="dummy",
-        base_dir=base_dir,
         repo_root_dir=base_dir,
-        raw_dir=base_dir / "raw",
-        md_dir=book_dir,
         semantic_dir=base_dir / "semantic",
         config_dir=config_dir,
     )
@@ -47,7 +43,7 @@ def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_
 
     def _enrich(ctx_obj: object, logger: object, vocab_obj: object, *, slug: str) -> list[Path]:
         calls.append(("enrich", vocab_obj))
-        return [ctx.base_dir / "book" / "doc.md"]
+        return [ctx.repo_root_dir / "book" / "doc.md"]
 
     monkeypatch.setattr(cli, "require_reviewed_vocab", _require)
     monkeypatch.setattr(cli, "enrich_frontmatter", _enrich)
@@ -96,12 +92,12 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
 
     ctx = _ctx(tmp_path / "output" / "dummy")
     monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))
-    monkeypatch.setattr(cli, "run_semantic_pipeline", lambda *a, **k: (ctx.base_dir, [], []))
+    monkeypatch.setattr(cli, "run_semantic_pipeline", lambda *a, **k: (ctx.repo_root_dir, [], []))
 
     layout = SimpleNamespace(
         semantic_dir=ctx.semantic_dir,
-        book_dir=ctx.md_dir,
-        base_dir=ctx.base_dir,
+        book_dir=ctx.repo_root_dir / "book",
+        base_dir=ctx.repo_root_dir,
         config_path=ctx.config_dir / "config.yaml",
         slug=ctx.slug,
     )

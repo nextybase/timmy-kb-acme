@@ -13,11 +13,7 @@ def _make_context(base: Path, slug: str) -> ClientContext:
     return ClientContext(
         slug=slug,
         repo_root_dir=base,
-        base_dir=base,
-        raw_dir=base / "raw",
-        md_dir=base / "book",
         config_path=base / "config" / "config.yaml",
-        output_dir=base,
     )
 
 
@@ -32,7 +28,7 @@ def test_migrate_or_repair_workspace_repairs_missing_assets(tmp_path: Path) -> N
     slug = "repairable"
     context = _make_context(tmp_path / f"timmy-kb-{slug}", slug)
     workspace_bootstrap.bootstrap_client_workspace(context)
-    workspace = context.base_dir
+    workspace = context.repo_root_dir
     assert workspace is not None
     # remove README and config to simulate corruption
     (workspace / "book" / "README.md").unlink()

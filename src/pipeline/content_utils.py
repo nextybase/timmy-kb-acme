@@ -20,8 +20,10 @@ from pipeline.path_utils import iter_safe_paths  # SSoT path-safety forte
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
 from pipeline.tracing import start_decision_span
 from pipeline.types import ChunkRecord
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig, load_semantic_config
+from semantic.context_paths import resolve_context_paths
 from semantic.types import ClientContextProtocol as _ClientCtx  # SSoT dei contratti
 
 __all__ = [
@@ -35,8 +37,7 @@ __all__ = [
 
 
 class _ReadmeCtx(Protocol):
-    base_dir: Path
-    md_dir: Path
+    repo_root_dir: Path
     slug: str | None
 
 
@@ -574,8 +575,12 @@ def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
 
 def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Path:
     """Crea (o sovrascrive) README.md nella cartella markdown target."""
-    target_input: Path = md_dir if md_dir is not None else ctx.md_dir
-    target = _ensure_safe(ctx.base_dir, target_input, slug=getattr(ctx, "slug", None))
+    layout = WorkspaceLayout.from_context(ctx)  # type: ignore[arg-type]
+    paths = resolve_context_paths(layout)
+    base_dir = paths.base_dir
+    default_md_dir = paths.md_dir
+    target_input: Path = md_dir if md_dir is not None else default_md_dir
+    target = _ensure_safe(base_dir, target_input, slug=getattr(ctx, "slug", None))
     target.mkdir(parents=True, exist_ok=True)
 
     title = getattr(ctx, "slug", None) or "Knowledge Base"
@@ -609,7 +614,7 @@ def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Pat
     )
     logger = get_structured_logger("pipeline.content_utils")
     try:
-        cfg_root = getattr(ctx, "repo_root_dir", None) or ctx.base_dir
+        cfg_root = getattr(ctx, "repo_root_dir", None) or base_dir
         cfg = load_semantic_config(cfg_root)
         areas_data = cfg.mapping.get("areas") if isinstance(cfg.mapping, dict) else None
         iterable: Iterable[tuple[str, Any]]
@@ -654,8 +659,12 @@ def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Pat
 
 def generate_summary_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Path:
     """Genera SUMMARY.md elencando i .md nella cartella target (escludendo README.md e SUMMARY.md)."""
-    target_input: Path = md_dir if md_dir is not None else ctx.md_dir
-    target = _ensure_safe(ctx.base_dir, target_input, slug=getattr(ctx, "slug", None))
+    layout = WorkspaceLayout.from_context(ctx)  # type: ignore[arg-type]
+    paths = resolve_context_paths(layout)
+    base_dir = paths.base_dir
+    default_md_dir = paths.md_dir
+    target_input: Path = md_dir if md_dir is not None else default_md_dir
+    target = _ensure_safe(base_dir, target_input, slug=getattr(ctx, "slug", None))
     target.mkdir(parents=True, exist_ok=True)
 
     summary = target / "SUMMARY.md"

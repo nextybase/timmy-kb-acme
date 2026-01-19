@@ -12,8 +12,7 @@ Che cosa fa questo modulo (overview):
 - Raccoglie le variabili d'ambiente necessarie/opzionali (`_load_env`) e calcola
   la policy di redazione log (in `env_utils`).
 - Espone il dataclass `ClientContext.load(...)` che costruisce in modo coerente
-  percorsi canonici (repo_root_dir, raw_dir, md_dir, log_dir, …), impostazioni,
-  logger e flag runtime.
+  percorso canonico (`repo_root_dir`), impostazioni, logger e flag runtime.
 - Fornisce utility di tracking e correlazione (`log_error`, `log_warning`,
   `set_step_status`, `summary`, `with_stage`, `with_run_id`).
 
@@ -23,8 +22,7 @@ Linee guida rispettate:
 - **Path-safety STRONG**: i path scritti vengono verificati con `ensure_within(...)`.
 - **SSoT** per le scritture: quando si crea il config iniziale si usa
   `safe_write_text` (atomica).
-- **Compatibilità**: i campi storici (`base_dir`, `output_dir`, ecc.) restano ma
-  derivano da `repo_root_dir`.
+- **Determinismo**: `repo_root_dir` è l'unico punto di verità per il workspace.
 """
 
 from __future__ import annotations
@@ -105,8 +103,7 @@ class ClientContext:
 
     Contiene:
     - Identità cliente (`slug`, `client_name`);
-    - Percorso radice del workspace cliente **canonico** (`repo_root_dir`) e derivati locali
-      (`raw_dir`, `md_dir`, `log_dir`, ...);
+    - Percorso radice del workspace cliente **canonico** (`repo_root_dir`);
     - Configurazione YAML caricata (in `settings`) e path di riferimento
       (`config_path`, `mapping_path`);
     - Variabili d'ambiente risolte da `.env`/processo (`env`);
@@ -116,7 +113,6 @@ class ClientContext:
     Note di architettura:
     - Nessun input utente qui; gli orchestratori gestiscono UX.
     - La policy di redazione log è calcolata da `compute_redact_flag(...)`.
-    - `repo_root_dir` è il punto di verità dei path; i campi storici restano per compat.
     - `stage` è un'etichetta opzionale della fase corrente (es. "scan_raw", "build_md").
     """
 
@@ -132,13 +128,6 @@ class ClientContext:
     config_path: Optional[Path] = None
     config_dir: Optional[Path] = None
     mapping_path: Optional[Path] = None
-
-    # Campi storici (compat) - derivati da repo_root_dir
-    base_dir: Optional[Path] = None
-    output_dir: Optional[Path] = None
-    raw_dir: Optional[Path] = None
-    md_dir: Optional[Path] = None
-    log_dir: Optional[Path] = None
 
     # Risorse esterne (da .env)
     env: Dict[str, Any] = field(default_factory=dict)
@@ -231,12 +220,6 @@ class ClientContext:
             config_dir=config_path.parent,
             # FIX SSoT: path reale e validato
             mapping_path=ensure_within_and_resolve(semantic_dir, semantic_dir / SEMANTIC_MAPPING_FILE),
-            # Campi storici (compat) - derivati dal root canonico
-            base_dir=repo_root,
-            output_dir=repo_root,
-            raw_dir=repo_root / "raw",
-            md_dir=repo_root / "book",
-            log_dir=repo_root / "logs",
             logger=_logger,
             run_id=run_id,
             stage=stage,

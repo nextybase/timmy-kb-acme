@@ -22,10 +22,7 @@ def test_headless_fails_without_vocab(tmp_path, monkeypatch):
 
     ctx = TestClientCtx(
         slug="dummy",
-        base_dir=base,
         repo_root_dir=base,
-        raw_dir=raw,
-        md_dir=book,
         semantic_dir=base / "semantic",
         config_dir=base / "config",
     )

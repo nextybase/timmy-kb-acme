@@ -27,10 +27,24 @@ class DummyCtx:
     repo_root_dir: Optional[Path] = None
 
 
+def _prepare_layout(base: Path, book_dir: Path, *, strict: bool) -> None:
+    book_dir.mkdir(parents=True, exist_ok=True)
+    if not strict:
+        return
+    config_dir = base / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
+    (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (book_dir / "README.md").write_text("README", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("SUMMARY", encoding="utf-8")
+
+
 def test__list_markdown_files_happy_path(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
-    md.mkdir(parents=True)
+    _prepare_layout(base, md, strict=False)
     # Create files (only .md should be listed; sorted)
     (md / "b.md").write_text("B", encoding="utf-8")
     (md / "a.md").write_text("A", encoding="utf-8")
@@ -55,7 +69,7 @@ def test__list_markdown_files_missing_fields_raises() -> None:
 
 def test__list_markdown_files_unsafe_path_raises(tmp_path: Path) -> None:
     base = tmp_path / "safe"
-    base.mkdir()
+    _prepare_layout(base, base / "book", strict=False)
     # md_dir outside base -> unsafe
     md_outside = tmp_path / "outside"
     md_outside.mkdir()
@@ -71,8 +85,9 @@ def test__list_markdown_files_unsafe_path_raises(tmp_path: Path) -> None:
 
 def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
     base = tmp_path / "kb"
-    md = base / "book"
-    base.mkdir()
+    book = base / "book"
+    md = base / "missing"
+    _prepare_layout(base, book, strict=False)
     # md does not exist
     with pytest.raises(InputDirectoryMissing):
         _ = _list_markdown_files(
@@ -87,7 +102,7 @@ def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
 def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
-    md.mkdir(parents=True)
+    _prepare_layout(base, md, strict=True)
     # Create markdown files
     (md / "one.md").write_text("Foo and BAR appear here", encoding="utf-8")
     (md / "two.md").write_text("baz and qux", encoding="utf-8")
@@ -103,7 +118,7 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
     )
     assert Path(db_path).exists()
 
-    ctx = DummyCtx(slug="s1", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="s1", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=base)
     out = extract_semantic_concepts(cast(Any, ctx))
 
     # For conceptA: first-hit policy per file ->
@@ -119,7 +134,7 @@ def test_extract_semantic_concepts_happy_path(tmp_path: Path) -> None:
 def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
-    md.mkdir(parents=True)
+    _prepare_layout(base, md, strict=True)
 
     # Small file (should be scanned)
     (md / "small.md").write_text("alpha beta", encoding="utf-8")
@@ -134,7 +149,7 @@ def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> No
         ],
     )
     assert Path(db_path).exists()
-    ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=base)
 
     # Set threshold lower than big file size but higher than small
     out = extract_semantic_concepts(cast(Any, ctx), max_scan_bytes=1024)
@@ -145,14 +160,14 @@ def test_extract_semantic_concepts_short_circuits_on_empty_mapping(monkeypatch, 
     base = tmp_path / "kb"
     md = base / "book"
     cfg = base / "config"
-    md.mkdir(parents=True)
+    _prepare_layout(base, md, strict=True)
     (md / "x.md").write_text("irrelevant", encoding="utf-8")
 
     # Force load_semantic_mapping to return empty mapping to test short-circuit
 
     monkeypatch.setattr(se, "load_semantic_mapping", lambda context, logger=None: {})
 
-    ctx = DummyCtx(slug="s3", base_dir=base, md_dir=md, config_dir=cfg, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="s3", base_dir=base, md_dir=md, config_dir=cfg, repo_root_dir=base)
     out = extract_semantic_concepts(cast(Any, ctx))
     assert out == {}
 
@@ -160,9 +175,9 @@ def test_extract_semantic_concepts_short_circuits_on_empty_mapping(monkeypatch, 
 def test_load_semantic_mapping_requires_tags_db(tmp_path: Path) -> None:
     base = tmp_path / "kb_missing"
     book = base / "book"
-    book.mkdir(parents=True)
+    _prepare_layout(base, book, strict=True)
     (book / "noop.md").write_text("stub", encoding="utf-8")
-    ctx = DummyCtx(slug="missing", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="missing", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=base)
     with pytest.raises(PipelineError):
         se.load_semantic_mapping(cast(Any, ctx))
 
@@ -170,7 +185,7 @@ def test_load_semantic_mapping_requires_tags_db(tmp_path: Path) -> None:
 def test_extract_semantic_concepts_matches_canonical_without_aliases(tmp_path: Path) -> None:
     base = tmp_path / "kb2"
     md = base / "book"
-    md.mkdir(parents=True)
+    _prepare_layout(base, md, strict=True)
     (md / "solo.md").write_text("Cloud services overview", encoding="utf-8")
 
     db_path = build_vocab_db(
@@ -181,7 +196,7 @@ def test_extract_semantic_concepts_matches_canonical_without_aliases(tmp_path: P
     )
     assert Path(db_path).exists()
 
-    ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="s2", base_dir=base, md_dir=md, config_dir=None, repo_root_dir=base)
     out = extract_semantic_concepts(cast(Any, ctx))
     assert out["Cloud"] == [{"file": "solo.md", "keyword": "Cloud"}]
 
@@ -189,7 +204,7 @@ def test_extract_semantic_concepts_matches_canonical_without_aliases(tmp_path: P
 def test_extract_semantic_concepts_db_first(tmp_path: Path) -> None:
     base = tmp_path / "kb_db"
     book = base / "book"
-    book.mkdir(parents=True)
+    _prepare_layout(base, book, strict=True)
     (book / "concept.md").write_text("Foo canonicalOnly and BAR example", encoding="utf-8")
 
     db_path = build_vocab_db(
@@ -201,7 +216,7 @@ def test_extract_semantic_concepts_db_first(tmp_path: Path) -> None:
     )
     assert Path(db_path).exists()
 
-    ctx = DummyCtx(slug="db", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="db", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=base)
     out = extract_semantic_concepts(cast(Any, ctx))
 
     assert {d["file"] for d in out["conceptA"]} == {"concept.md"}
@@ -212,7 +227,7 @@ def test_extract_semantic_concepts_db_first(tmp_path: Path) -> None:
 def test_extract_semantic_concepts_respects_duplicate_aliases(tmp_path: Path) -> None:
     base = tmp_path / "kb_alias"
     book = base / "book"
-    book.mkdir(parents=True)
+    _prepare_layout(base, book, strict=True)
     (book / "dup.md").write_text("foo, latest", encoding="utf-8")
 
     db_path = build_vocab_db(
@@ -223,7 +238,7 @@ def test_extract_semantic_concepts_respects_duplicate_aliases(tmp_path: Path) ->
     )
     assert Path(db_path).exists()
 
-    ctx = DummyCtx(slug="dup", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="dup", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=base)
     out = extract_semantic_concepts(cast(Any, ctx))
 
     assert out["conceptA"] == [{"file": "dup.md", "keyword": "foo"}]
@@ -232,7 +247,7 @@ def test_extract_semantic_concepts_respects_duplicate_aliases(tmp_path: Path) ->
 def test_extract_semantic_concepts_handles_merge_into(tmp_path: Path) -> None:
     base = tmp_path / "kb_merge"
     book = base / "book"
-    book.mkdir(parents=True)
+    _prepare_layout(base, book, strict=True)
     (book / "legacy.md").write_text("Legacy Cloud stack", encoding="utf-8")
     db_path = build_vocab_db(
         base,
@@ -242,7 +257,7 @@ def test_extract_semantic_concepts_handles_merge_into(tmp_path: Path) -> None:
         ],
     )
     assert Path(db_path).exists()
-    ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=base)
     out = extract_semantic_concepts(cast(Any, ctx))
     assert out["Cloud"] == [{"file": "legacy.md", "keyword": "cloud"}]
 
@@ -250,7 +265,7 @@ def test_extract_semantic_concepts_handles_merge_into(tmp_path: Path) -> None:
 def test_extract_semantic_concepts_handles_nested_merge(tmp_path: Path) -> None:
     base = tmp_path / "kb_nested"
     book = base / "book"
-    book.mkdir(parents=True)
+    _prepare_layout(base, book, strict=True)
     (book / "core.md").write_text("Legacy Cloud Platform", encoding="utf-8")
     db_path = build_vocab_db(
         base,
@@ -261,7 +276,7 @@ def test_extract_semantic_concepts_handles_nested_merge(tmp_path: Path) -> None:
         ],
     )
     assert Path(db_path).exists()
-    ctx = DummyCtx(slug="nested", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="nested", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=base)
     out = extract_semantic_concepts(cast(Any, ctx))
     combined = out.get("Cloud", []) + out.get("Cloud Platform", [])
     assert len(combined) == 1
@@ -273,7 +288,7 @@ def test_extract_semantic_concepts_handles_nested_merge(tmp_path: Path) -> None:
 def test_extract_semantic_concepts_merge_preserves_priority(tmp_path: Path) -> None:
     base = tmp_path / "kb_merge_order"
     book = base / "book"
-    book.mkdir(parents=True)
+    _prepare_layout(base, book, strict=True)
     (book / "sample.md").write_text("first Cloud legacy roadmap", encoding="utf-8")
     build_vocab_db(
         base,
@@ -288,7 +303,7 @@ def test_extract_semantic_concepts_merge_preserves_priority(tmp_path: Path) -> N
         ],
     )
     assert Path(db_path).exists()
-    ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=tmp_path)
+    ctx = DummyCtx(slug="merge", base_dir=base, md_dir=book, config_dir=None, repo_root_dir=base)
     out = extract_semantic_concepts(cast(Any, ctx))
     assert out["Cloud"][0]["keyword"] == "first"
 

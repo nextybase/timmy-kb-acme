@@ -43,11 +43,7 @@ def test_dummy_validate_structure_passes_when_cartelle_yaml_present(tmp_path: Pa
     context = ClientContext(
         slug=slug,
         repo_root_dir=workspace_root,
-        base_dir=workspace_root,
-        raw_dir=workspace_root / "raw",
-        md_dir=workspace_root / "book",
         config_path=workspace_root / "config" / "config.yaml",
-        output_dir=workspace_root,
     )
     layout = bootstrap_client_workspace(context)
 
@@ -65,11 +61,7 @@ def test_dummy_validate_structure_fails_when_cartelle_yaml_missing(tmp_path: Pat
     context = ClientContext(
         slug=slug,
         repo_root_dir=workspace_root,
-        base_dir=workspace_root,
-        raw_dir=workspace_root / "raw",
-        md_dir=workspace_root / "book",
         config_path=workspace_root / "config" / "config.yaml",
-        output_dir=workspace_root,
     )
     layout = bootstrap_client_workspace(context)
 

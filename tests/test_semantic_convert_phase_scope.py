@@ -14,10 +14,7 @@ from tests.support.contexts import TestClientCtx
 def _make_ctx(base_dir: Path, raw_dir: Path, md_dir: Path) -> TestClientCtx:
     return TestClientCtx(
         slug="dummy",
-        base_dir=base_dir,
         repo_root_dir=base_dir,
-        raw_dir=raw_dir,
-        md_dir=md_dir,
         semantic_dir=base_dir / "semantic",
         config_dir=base_dir / "config",
     )
@@ -45,7 +42,7 @@ def test_convert_markdown_logs_done_once_on_success(tmp_path: Path, caplog, monk
 
     # Falsa conversione: scrive un file di contenuto in book/
     def _fake_convert(ctx, *, md_dir=None, safe_pdfs=None):  # noqa: ANN001
-        target_dir = Path(md_dir or ctx.md_dir)
+        target_dir = Path(md_dir or (ctx.repo_root_dir / "book"))
         target_dir.mkdir(parents=True, exist_ok=True)
         (target_dir / "alpha.md").write_text("# Alpha\n", encoding="utf-8")
 

@@ -17,9 +17,10 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict
 
-from pipeline.exceptions import PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within  # SSoT guardia STRONG
+from pipeline.workspace_layout import WorkspaceLayout
+from semantic.context_paths import resolve_context_paths
 from semantic.types import ClientContextProtocol as _Ctx  # SSoT: protocollo condiviso
 
 # Logger di modulo (fallback).
@@ -65,11 +66,10 @@ def clean_legacy_artifacts(
     """
     _logger = get_structured_logger(logger_name, context=context)
 
-    # Fail-fast esplicito su campi richiesti
-    if context.md_dir is None or context.base_dir is None:
-        raise PipelineError("Contesto incompleto: md_dir/base_dir mancanti")
-    book_dir: Path = context.md_dir
-    base_dir: Path = context.base_dir
+    layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
+    paths = resolve_context_paths(layout)
+    book_dir: Path = paths.md_dir
+    base_dir: Path = paths.base_dir
 
     # Guard-rail STRONG: non operare fuori dalla base cliente
     try:

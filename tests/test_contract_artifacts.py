@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from pipeline.content_utils import generate_readme_markdown, generate_summary_markdown
 from pipeline.logging_utils import get_structured_logger
 from semantic.frontmatter_service import write_summary_and_readme
 
@@ -65,6 +67,17 @@ def test_book_artifacts_are_generated(tmp_path: Path, monkeypatch: pytest.Monkey
     slug = "dummy"
     base_dir = tmp_path / f"timmy-kb-{slug}"
     monkeypatch.setenv("REPO_ROOT_DIR", str(base_dir))
+
+    def _summary_with_repo_root(paths):  # type: ignore[no-untyped-def]
+        ctx = SimpleNamespace(repo_root_dir=paths.base_dir, slug=paths.slug)
+        return generate_summary_markdown(ctx, md_dir=paths.md_dir)
+
+    def _readme_with_repo_root(paths):  # type: ignore[no-untyped-def]
+        ctx = SimpleNamespace(repo_root_dir=paths.base_dir, slug=paths.slug)
+        return generate_readme_markdown(ctx, md_dir=paths.md_dir)
+
+    monkeypatch.setattr("semantic.frontmatter_service._gen_summary", _summary_with_repo_root)
+    monkeypatch.setattr("semantic.frontmatter_service._gen_readme", _readme_with_repo_root)
 
     context = _make_context(tmp_path, slug)
     logger = get_structured_logger("contract-artifacts-test")

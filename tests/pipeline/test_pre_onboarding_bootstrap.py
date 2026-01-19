@@ -21,11 +21,7 @@ def _build_context(base: Path, slug: str) -> ClientContext:
     return ClientContext(
         slug=slug,
         repo_root_dir=base,
-        base_dir=base,
-        raw_dir=base / "raw",
-        md_dir=base / "book",
         config_path=base / "config" / "config.yaml",
-        output_dir=base,
     )
 
 

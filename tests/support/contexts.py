@@ -17,10 +17,7 @@ class TestClientCtx(ClientContextProtocol):
     """
 
     slug: str
-    base_dir: Path
     repo_root_dir: Path
-    raw_dir: Path
-    md_dir: Path
     semantic_dir: Path
     config_dir: Path
 
@@ -32,18 +29,12 @@ class TestClientCtx(ClientContextProtocol):
     @classmethod
     def from_dummy_workspace(cls, ws: dict[str, object]) -> "TestClientCtx":
         slug = str(ws["slug"])
-        base_dir = Path(ws["base_dir"])
         repo_root_dir = Path(ws["repo_root_dir"])
-        raw_dir = Path(ws["raw_dir"])
-        md_dir = Path(ws["md_dir"])
         semantic_dir = Path(ws["semantic_dir"])
         config_dir = Path(ws["config_dir"])
         return cls(
             slug=slug,
-            base_dir=base_dir,
             repo_root_dir=repo_root_dir,
-            raw_dir=raw_dir,
-            md_dir=md_dir,
             semantic_dir=semantic_dir,
             config_dir=config_dir,
         )

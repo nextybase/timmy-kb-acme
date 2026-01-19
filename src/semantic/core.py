@@ -119,9 +119,8 @@ def _sanitize_and_dedup_mapping(mapping: Dict[str, List[str]]) -> Dict[str, List
 
 
 def load_semantic_mapping(context: _CtxProto, logger: Optional[logging.Logger] = None) -> Dict[str, List[str]]:
-    base_dir = getattr(context, "base_dir", None)
-    if base_dir is None:
-        raise PipelineError("Context privo di base_dir per estrazione semantica.", slug=getattr(context, "slug", None))
+    layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
+    base_dir = layout.base_dir
     log = logger or get_structured_logger("semantic.extraction", context=context)
     vocab = load_reviewed_vocab(base_dir, log)
     if not vocab:
