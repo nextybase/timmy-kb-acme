@@ -128,7 +128,7 @@ def test_gate_capability_manifest_matches_compute_gates(tmp_path, monkeypatch: p
     assert payload["gates"]["tags"]["available"] == gates.tags
 
 
-def test_visible_page_specs_stops_on_raw_ready_error(
+def test_visible_page_specs_continues_on_raw_ready_error(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -139,14 +139,13 @@ def test_visible_page_specs_stops_on_raw_ready_error(
 
     gates = GateState(drive=True, vision=True, tags=True)
     with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError):
-            visible_page_specs(gates)
+        groups = visible_page_specs(gates)
 
-    assert any("Errore nel gating UI" in msg for msg in stub.error_messages)
     assert any("ui.gating.raw_ready_failed" in record.getMessage() for record in caplog.records)
+    assert groups
 
 
-def test_visible_page_specs_stops_on_state_error(
+def test_visible_page_specs_continues_on_state_error(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -159,8 +158,7 @@ def test_visible_page_specs_stops_on_state_error(
 
     gates = GateState(drive=True, vision=True, tags=True)
     with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError):
-            visible_page_specs(gates)
+        groups = visible_page_specs(gates)
 
-    assert any("Errore nel gating UI" in msg for msg in stub.error_messages)
     assert any("ui.gating.state_failed" in record.getMessage() for record in caplog.records)
+    assert groups

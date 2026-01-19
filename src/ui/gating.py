@@ -272,38 +272,33 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
 
     if slug:
         try:
-            ready, _path = raw_ready(slug, strict=True)
+            ready, _path = raw_ready(slug, strict=False)
             raw_ready_flag = bool(ready)
         except Exception as exc:
-            _stop_gating_error(
+            _LOGGER.error(
                 "ui.gating.raw_ready_failed",
-                "Errore nel gating UI: impossibile valutare lo stato RAW.",
-                slug=slug,
-                error=exc,
+                extra={"slug": slug, "path": "", "error": str(exc)},
             )
-            return {}
+            raw_ready_flag = False
         try:
-            tagging_ready_flag, _ = tagging_ready(slug, strict=True)
+            tagging_ready_flag, _ = tagging_ready(slug, strict=False)
         except Exception as exc:
-            _stop_gating_error(
+            _LOGGER.error(
                 "ui.gating.tagging_ready_failed",
-                "Errore nel gating UI: impossibile valutare lo stato tagging.",
-                slug=slug,
-                error=exc,
+                extra={"slug": slug, "path": "", "error": str(exc)},
             )
-            return {}
+            tagging_ready_flag = False
         try:
             state_value = get_state(slug) or ""
             state_norm = state_value.strip().lower()
             semantic_ready = state_norm in SEMANTIC_READY_STATES
         except Exception as exc:
-            _stop_gating_error(
+            _LOGGER.error(
                 "ui.gating.state_failed",
-                "Errore nel gating UI: impossibile leggere lo stato cliente.",
-                slug=slug,
-                error=exc,
+                extra={"slug": slug, "path": "", "error": str(exc)},
             )
-            return {}
+            state_norm = ""
+            semantic_ready = False
     slug_key = slug or "<none>"
     last_state = _LAST_RAW_READY.get(slug_key)
     if not raw_ready_flag and last_state is not False:
