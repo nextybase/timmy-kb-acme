@@ -31,6 +31,7 @@ from pipeline.logging_utils import get_structured_logger, redact_secrets
 from pipeline.path_utils import ensure_within  # STRONG guard per write/delete & validazioni
 from pipeline.proc_utils import CmdError, run_cmd, wait_for_port
 from pipeline.settings import Settings
+from pipeline.workspace_layout import WorkspaceLayout
 
 # Default consolidati (evitiamo hard-code sparsi)
 _DEFAULT_HOST_PREVIEW_PORT = 4000
@@ -395,19 +396,23 @@ def run_gitbook_docker_preview(
     if not getattr(context, "slug", None):
         raise PipelineError("Slug cliente mancante nel contesto per preview", slug=None)
 
+    layout = WorkspaceLayout.from_context(context)
+    base_dir = layout.base_dir
+    md_dir = layout.book_dir
+
     # Path-safety STRONG: md_dir deve essere sotto base_dir
     try:
-        ensure_within(context.base_dir, context.md_dir)
+        ensure_within(base_dir, md_dir)
     except Exception as e:
         raise PreviewError(
-            f"Percorso markdown non sicuro: {context.md_dir} ({e})",
+            f"Percorso markdown non sicuro: {md_dir} ({e})",
             slug=context.slug,
-            file_path=context.md_dir,
+            file_path=md_dir,
         )
 
     host_port, container_port = _resolve_ports(context, port)
 
-    md_output_path = Path(context.md_dir).resolve()
+    md_output_path = Path(md_dir).resolve()
     logger.info(
         _maybe_redact("Directory per anteprima", redact_logs),
         extra={

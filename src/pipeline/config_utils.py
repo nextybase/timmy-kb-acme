@@ -57,7 +57,7 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidationError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within, read_text_safe
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
 from pipeline.settings import Settings as ContextSettings
 from pipeline.workspace_layout import WorkspaceLayout
 
@@ -259,19 +259,21 @@ def get_client_config(context: ClientContext) -> ClientConfigPayload:
 # ----------------------------------------------------------
 def validate_preonboarding_environment(context: ClientContext, base_dir: Optional[Path] = None) -> None:
     """Verifica la coerenza minima dell'ambiente prima del pre-onboarding."""
-    base_dir = base_dir or context.base_dir
-    if base_dir is None or context.config_path is None:
+    layout = WorkspaceLayout.from_context(context)
+    resolved_base_dir = base_dir or layout.base_dir
+    config_path = layout.config_path
+    if config_path is None:
         raise PipelineError(
             "Contesto incompleto: base_dir/config_path mancanti",
             slug=context.slug,
         )
 
-    if not context.config_path.exists():
+    if not config_path.exists():
         logger.error(
             "pipeline.config_utils.config_missing",
-            extra={"config_path": str(context.config_path)},
+            extra={"config_path": str(config_path)},
         )
-        raise PreOnboardingValidationError(f"Config cliente non trovato: {context.config_path}")
+        raise PreOnboardingValidationError(f"Config cliente non trovato: {config_path}")
 
     _, cfg_payload, available = _extract_context_settings(context)
     if available:
@@ -282,14 +284,14 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
             from pipeline.yaml_utils import yaml_read
 
             # Path-safety in LETTURA
-            safe_cfg_path = ensure_within_and_resolve(context.config_path.parent, context.config_path)
+            safe_cfg_path = ensure_within_and_resolve(config_path.parent, config_path)
             raw_cfg = yaml_read(safe_cfg_path.parent, safe_cfg_path)
         except Exception as e:
             logger.error(
                 "pipeline.config_utils.config_read_error",
-                extra={"config_path": str(context.config_path), "error": str(e)[:200]},
+                extra={"config_path": str(config_path), "error": str(e)[:200]},
             )
-            raise PreOnboardingValidationError(f"Errore lettura config {context.config_path}: {e}") from e
+            raise PreOnboardingValidationError(f"Errore lettura config {config_path}: {e}") from e
 
         if not isinstance(raw_cfg, dict):
             logger.error(
@@ -310,7 +312,7 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
         raise PreOnboardingValidationError(f"Chiavi obbligatorie mancanti in config: {missing}")
 
     # Verifica/creazione directory richieste (logs)
-    logs_dir = ensure_within_and_resolve(base_dir, base_dir / "logs")
+    logs_dir = ensure_within_and_resolve(resolved_base_dir, resolved_base_dir / "logs")
     if not logs_dir.exists():
         logger.warning(
             "pipeline.config_utils.logs_dir_missing",
@@ -339,11 +341,12 @@ def merge_client_config_from_template(
     logger: logging.Logger | None = None,
 ) -> Path:
     """Unisce il config cliente con il template mantenendo chiavi sensibili."""
-    if context.config_path is None or context.base_dir is None:
+    layout = WorkspaceLayout.from_context(context)
+    config_path = layout.config_path
+    base_dir = layout.base_dir
+    if config_path is None:
         raise PipelineError("Contesto incompleto: config_path/base_dir mancanti", slug=context.slug)
 
-    config_path = cast(Path, context.config_path)
-    base_dir = cast(Path, context.base_dir)
     log = logger or globals().get("logger")
 
     if not template_path.exists():
@@ -434,13 +437,14 @@ def update_config_with_drive_ids(
     Raises:
         ConfigError: se la lettura/scrittura del config fallisce o se il file e assente.
     """
-    if context.config_path is None or context.base_dir is None:
+    layout = WorkspaceLayout.from_context(context)
+    config_path = layout.config_path
+    base_dir = layout.base_dir
+    if config_path is None:
         raise PipelineError(
             "Contesto incompleto: config_path/base_dir mancanti",
             slug=context.slug,
         )
-    config_path = cast(Path, context.config_path)
-    base_dir = cast(Path, context.base_dir)
 
     if not config_path.exists():
         raise ConfigError(f"Config file non trovato: {config_path}")

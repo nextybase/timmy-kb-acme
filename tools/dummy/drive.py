@@ -11,12 +11,31 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from pipeline.workspace_layout import WorkspaceLayout
 
-class _Ctx:
-    """Contesto minimo compatibile con runner Drive (serve .base_dir)."""
 
-    def __init__(self, base_dir: Path) -> None:
-        self.base_dir = base_dir
+class _LayoutCtx:
+    """
+    Contesto minimale layout-first compatibile con runner Drive.
+    Espone solo repo_root_dir e deriva i path via WorkspaceLayout.
+    """
+
+    def __init__(self, *, slug: str, repo_root_dir: Path) -> None:
+        self.slug = slug
+        self.repo_root_dir = repo_root_dir
+        self._layout = WorkspaceLayout.from_context(self)
+
+    @property
+    def base_dir(self) -> Path:
+        return self._layout.base_dir
+
+    @property
+    def raw_dir(self) -> Path:
+        return self._layout.raw_dir
+
+    @property
+    def md_dir(self) -> Path:
+        return self._layout.book_dir
 
 
 def call_drive_min(
@@ -29,7 +48,7 @@ def call_drive_min(
     """Chiama ensure_drive_minimal_and_upload_config con firme UI. Skip silenzioso se non disponibile."""
     if not callable(ensure_drive_minimal_and_upload_config):
         return None
-    ctx = _Ctx(base_dir)
+    ctx = _LayoutCtx(slug=slug, repo_root_dir=base_dir)
     try:
         # firma principale (ctx, slug, client_folder_id=None, logger=None)
         return ensure_drive_minimal_and_upload_config(ctx, slug=slug, client_folder_id=None, logger=logger)  # type: ignore[arg-type]
@@ -48,7 +67,18 @@ def call_drive_build_from_mapping(
     """Chiama build_drive_from_mapping come fa la UI (se disponibile)."""
     if not callable(build_drive_from_mapping):
         return None
-    return build_drive_from_mapping(slug=slug, client_name=client_name)  # type: ignore[misc]
+
+    # Dummy / tooling path: NON ricaricare ClientContext
+    # Passiamo direttamente base_dir per evitare dipendenze legacy
+    try:
+        return build_drive_from_mapping(
+            slug=slug,
+            client_name=client_name,
+            base_dir=base_dir,
+        )  # type: ignore[misc]
+    except TypeError:
+        # fallback legacy (UI): mantiene compat ma può fallire se usa ClientContext
+        return build_drive_from_mapping(slug=slug, client_name=client_name)  # type: ignore[misc]
 
 
 def call_drive_emit_readmes(
