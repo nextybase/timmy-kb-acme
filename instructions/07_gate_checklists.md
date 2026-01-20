@@ -10,7 +10,7 @@ Fornisce **strumenti di valutazione** per l'Engineering Gatekeeper (AI),
 che opera esclusivamente tramite OCP-plane.
 
 Riferimenti normativi:
-- `instructions/05_pipeline_workspace_state_machine.md`
+- `instructions/05_pipeline_state_machine.md`
 - `instructions/06_promptchain_workspace_mapping.md`
 - `instructions/08_gate_evidence_and_retry_contract.md`
 - `instructions/02_prompt_chain_lifecycle.md`

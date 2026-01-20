@@ -10,7 +10,7 @@ vincola e rende coerenti definizioni già presenti nei documenti sorgente.
 
 Fonti normative:
 - `instructions/02_prompt_chain_lifecycle.md` - lifecycle e action families
-- `instructions/05_pipeline_workspace_state_machine.md` - stati workspace
+- `instructions/05_pipeline_state_machine.md` - stati workspace
 - `instructions/07_gate_checklists.md` - checklist operative dei gate
 - `instructions/08_gate_evidence_and_retry_contract.md` - Evidence / QA / Skeptic Gate
 
@@ -46,7 +46,7 @@ Se esiste un conflitto, **prevale questo documento** come binding SSoT.
 
 Riferimenti:
 - `instructions/02_prompt_chain_lifecycle.md`
-- `instructions/05_pipeline_workspace_state_machine.md`
+- `instructions/05_pipeline_state_machine.md`
 
 | Lifecycle phase | Workspace state(s) ammessi | Allowed action families |
 |-----------------|----------------------------|--------------------------|

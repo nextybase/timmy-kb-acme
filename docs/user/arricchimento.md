@@ -161,7 +161,7 @@ L'avanzamento a stati come `FRONTMATTER_ENRICH`, `VISUALIZATION_REFRESH`, `PREVI
 avviene **solo** se:
 - i gate richiesti emettono Decision Record PASS,
 - secondo quanto definito in:
-  - `instructions/05_pipeline_workspace_state_machine.md`
+  - `instructions/05_pipeline_state_machine.md`
   - `instructions/06_promptchain_workspace_mapping.md`.
 
 ---

@@ -54,7 +54,7 @@ Se un comportamento non è descritto qui, **non è ammesso** nel sistema.
 - `02_prompt_chain_lifecycle.md` - **attivo**
 - `03_gatekeepers_contracts.md` - **attivo**
 - `04_microagents_work_orders.md` - **attivo**
-- `05_pipeline_workspace_state_machine.md` - **attivo**
+- `05_pipeline_state_machine.md` - **attivo**
 - `06_promptchain_workspace_mapping.md` - **attivo**
 - `07_gate_checklists.md` - **attivo**
 - `08_gate_evidence_and_retry_contract.md` - **attivo**
