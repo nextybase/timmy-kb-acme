@@ -23,3 +23,14 @@
    - Codex applica la patch, produce diff/report/QA, e si ferma.
    - L'OCP valuta evidenze e alimenta lo Skeptic Gate; solo PASS libera il prompt successivo.
    - Il branch viene approvato e mergeato solo dopo tutti i checkpoints e con il commit finale redatto in italiano.
+
+## Enforcement & References
+
+- **Enforcement:**
+  - Manual: governance OCP/Prompt Chain (processo).
+  - QA per prompt come indicata in questo workflow.
+  - Merge gate e Skeptic Gate (processo).
+- **References:**
+  - [Prompt Chain spec](../../system/specs/promptchain_spec.md)
+  - [Runbook Codex](../../system/ops/runbook_codex.md)
+  - [.codex/PROMPTS.md](../../.codex/PROMPTS.md)

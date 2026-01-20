@@ -212,3 +212,17 @@ Ogni modifica a:
 
 La divergenza tra comportamento e questa guida
 è da considerarsi **non conforme** alla Beta 1.0.
+
+## Enforcement & References
+
+- **Enforcement:**
+  - CI workflows: [secret-scan](../../.github/workflows/secret-scan.yml),
+    [dependency-scan](../../.github/workflows/dependency-scan.yml),
+    [docker-lint](../../.github/workflows/docker-lint.yml).
+  - Pre-commit hooks: [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml).
+  - Branch protection e required checks su `main` (processo repo).
+- **References:**
+  - [Coding Rules](../developer/coding_rule.md)
+  - [Architecture Overview](../../system/architecture.md)
+  - [Configurazione](../configurazione.md)
+  - [MANIFEST.md](../../MANIFEST.md)

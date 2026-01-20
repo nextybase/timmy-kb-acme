@@ -160,3 +160,13 @@ Per questo Assistant valgono regole aggiuntive:
 In sintesi, il Tag KG Builder e uno strumento per far emergere in modo ordinato e trasparente la struttura probabilistica del dominio, che sara poi consolidata dal lavoro congiunto di esseri umani e altri moduli NeXT.
 
 ---
+
+## Enforcement & References
+
+- **Enforcement:**
+  - Manual: governance HiTL e review umana dei risultati (processo).
+  - Prompt Chain e contratti operativi (processo).
+- **References:**
+  - [MANIFEST.md](../../MANIFEST.md)
+  - [Prompt Chain spec](../../system/specs/promptchain_spec.md)
+  - [Guida Codex](guida_codex.md)

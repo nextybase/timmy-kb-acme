@@ -68,3 +68,13 @@ PR obbligatorie verso `main`. Protezioni:
 - SSoT: `ensure_within` in `pipeline.path_utils`.
 
 Queste modifiche sono retro-compatibili a livello di CLI (MINOR  1.2.x), con breaking nullo lato utente.
+
+## Enforcement & References
+
+- **Enforcement:**
+  - Git workflow e branching descritti qui (processo repo).
+  - Tagging e release su `main` con aggiornamento `CHANGELOG.md`.
+  - PR review e status checks richiesti su `main`.
+- **References:**
+  - [Coding Rules](../developer/coding_rule.md#10-git--pr-policy)
+  - [CHANGELOG.md](../../CHANGELOG.md)

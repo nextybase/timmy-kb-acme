@@ -231,3 +231,16 @@ Questa guida è pensata per darti una mappa operativa chiara:
 - Prompt Chain come percorso principale,
 - uso diretto di Codex in VS Code quando serve più agilità,
 - sempre con HiTL, Probabilismo e SSoT come linea guida di fondo.
+
+## Enforcement & References
+
+- **Enforcement:**
+  - Manual: uso Prompt Chain e review HiTL (processo).
+  - Guardrail tests: `tests/architecture/test_facade_imports.py`,
+    `tests/architecture/test_dev_does_not_import_ui.py`.
+  - CI docs encoding guard: [ci.yaml](../../.github/workflows/ci.yaml).
+- **References:**
+  - [Prompt Chain spec](../../system/specs/promptchain_spec.md)
+  - [Runbook Codex](../../system/ops/runbook_codex.md)
+  - [AGENTS index](../../system/ops/agents_index.md)
+  - [.codex/CONSTITUTION.md](../../.codex/CONSTITUTION.md)

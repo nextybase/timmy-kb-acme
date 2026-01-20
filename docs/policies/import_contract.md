@@ -51,3 +51,14 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
 ## Note operative
 - Runner/entrypoint (es. CLI Streamlit/pytest) possono toccare `sys.path` solo se non c'è alternativa e devono documentare il motivo; i moduli di libreria non possono farlo.
 - Documentare ogni eccezione nel changelog e rimuovere i workaround appena possibile.
+
+## Enforcement & References
+
+- **Enforcement:**
+  - Architettura tests: `tests/architecture/test_facade_imports.py`,
+    `tests/architecture/test_dev_does_not_import_ui.py`.
+  - Manual checks con i comandi `rg` indicati nel documento.
+  - Code review su import e namespace legacy (processo).
+- **References:**
+  - [Coding Rules](../developer/coding_rule.md)
+  - [Architecture Overview](../../system/architecture.md)
