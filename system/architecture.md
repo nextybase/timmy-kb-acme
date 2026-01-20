@@ -1,5 +1,10 @@
 # System Architecture
 
+> **Authority:** questo documento e il riferimento canonico per la mappa dei
+> componenti e delle responsabilita. Le guide narrative devono linkare qui e non
+> duplicare i contenuti. Per regole tecniche e di stile vedi
+> [docs/developer/coding_rule.md](../docs/developer/coding_rule.md).
+
 This document defines:
 - the architectural invariants of the Timmy-KB runtime,
 - the execution model and responsibility boundaries,

@@ -22,7 +22,7 @@ python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive
 # 4) Preview locale (HonKit via Docker): gestita via adapter/UI (vedi runbook)
 # non esiste un entrypoint `python -m pipeline.honkit_preview`
 ```
-Note: in locale il workspace vive di default in `output/timmy-kb-<slug>/` (derivatives); in ambienti dedicati usa un workspace fuori dalla repo root. Vedi [Developer Guide](docs/developer/developer_guide.md) (ALERT / Workspace Discipline).
+Note: in locale il workspace vive di default in `output/timmy-kb-<slug>/` (derivatives); in ambienti dedicati usa un workspace fuori dalla repo root. Vedi [Coding Rules](coding_rule.md#workspace-discipline-repo-vs-runtime).
 
 ## Flusso 2: UI Streamlit + workspace cliente
 ```bash
@@ -52,6 +52,8 @@ python -m streamlit run onboarding_ui.py
 - cSpell su docs: `pre-commit run cspell --files docs/developer/developer_quickstart.md`.
 
 ## Link utili
-- Developer Guide: principi architetturali, SSoT e policy operative.
+- Developer Guide: contesto e onboarding (non normativo).
+- Coding Rules: regole operative e stile.
+- Architecture Overview: mappa dei componenti e responsabilita.
 - Runbook Codex: flussi operativi per agenti (path-safety, scritture atomiche).
 - Configurazione: esempi e regole per `config/config.yaml` e `.env`.

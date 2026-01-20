@@ -2,6 +2,11 @@
 
 > **TL;DR:** consulta queste regole prima di toccare pipeline o UI: usa gli helper SSoT, niente side-effect a import-time, logging e path-safety sono vincolanti.
 
+> **Authority:** questo documento e normativo per regole tecniche e stile.
+> In caso di conflitto, prevale sulle guide narrative. Riferimento
+> complementare per mappa e responsabilita:
+> [Architecture Overview](../../system/architecture.md).
+
 Regole di sviluppo per **Timmy KB**. Questa e la base iniziale: nessun riferimento a legacy o migrazioni. Obiettivo: codice coerente, sicuro e riproducibile.
 
 ---
@@ -14,6 +19,35 @@ Regole di sviluppo per **Timmy KB**. Questa e la base iniziale: nessun riferimen
 - **Parita di firma** dei wrapper UI rispetto al backend (`pipeline.*`, `semantic.*`).
 - Ogni CLI/orchestratore deve dichiarare esplicitamente `bootstrap_config`; il default e vietato nei CLI.
 - tools/dummy = runtime strict (`bootstrap_config=False`); tools/smoke = permissivo ma esplicito (`bootstrap_config=True`).
+
+---
+
+## 1bis) Configurazione (SSoT)
+
+Il file `config/config.yaml` e la fonte unica per i parametri condivisi. Esempio
+per LLM **diretti**:
+
+```yaml
+ai:
+  vision:
+    model: gpt-4o-mini-2024-07-18   # modello per le chiamate dirette
+    strict_output: true             # abilita validazioni strutturali quando necessario
+    assistant_id_env: OBNEXT_ASSISTANT_ID  # usato solo dal flusso Assistant
+```
+
+Regole:
+- Le **chiamate dirette** (Responses/Chat Completions) leggono sempre `ai.vision.model`.
+- Il flusso **Assistant** usa l'ID letto dall'ambiente il cui nome e in `ai.vision.assistant_id_env`.
+- Accesso runtime **solo** tramite `pipeline.settings.Settings` / `ClientContext.settings` (UI inclusa); niente letture YAML manuali.
+- Config cliente: usare l'API unica prevista dal core (es. `pipeline.config_utils.load_client_settings(context)` / `context.settings` / `as_dict()`) ed evitare derivazioni ad-hoc.
+
+Getter consigliato lato UI:
+
+```python
+from ui.config_store import get_vision_model
+
+model = get_vision_model()  # passa sempre da Settings.load (SSoT)
+```
 
 ---
 
@@ -68,6 +102,28 @@ log.info("semantic.index.start", extra={"slug": "acme"})
 
 ---
 
+## 3bis) Frontmatter (SSoT)
+
+Per il parsing/dump del frontmatter Markdown e per letture con cache usa sempre
+`pipeline.frontmatter_utils`:
+
+- `parse_frontmatter(text) -> (meta, body)` e `dump_frontmatter(meta)` sono l'SSoT.
+- `read_frontmatter(base, path, use_cache=True)` effettua path-safety e caching (invalidazione su mtime/size).
+- Evita implementazioni duplicate in moduli di dominio: delega ai wrapper compat gia presenti.
+- La cache del frontmatter `_FRONTMATTER_CACHE` e LRU bounded (256 entry): nei run lunghi/Streamlit e buona pratica chiamare `clear_frontmatter_cache()` quando rilasci workspace o dopo batch estesi.
+- I workflow semantici orchestrati da `semantic.api` la svuotano automaticamente a fine run per garantire isolamento tra esecuzioni consecutive.
+
+Esempio rapido:
+
+```python
+from pipeline.frontmatter_utils import read_frontmatter, dump_frontmatter
+
+meta, body = read_frontmatter(base_dir, md_path)
+new_text = dump_frontmatter({**meta, "title": "Nuovo titolo"}) + body
+```
+
+---
+
 ## 4) Dipendenze (pip-tools)
 - Pin esclusivamente in `requirements*.txt`/`constraints.txt` **generati** da `pip-compile`.
 - Modifichi i sorgenti `requirements*.in` e rigeneri con:
@@ -89,6 +145,16 @@ pip install -r requirements-optional.txt
 ---
 
 ## 5) I/O sicuro & Path-safety
+### Workspace discipline (repo vs runtime)
+- **Decisione Beta:** la repo root non deve mai diventare stato runtime; contiene solo artefacts versionati.
+- **Definizioni (rigide):**
+  - *Artefacts* = input versionati che determinano il comportamento (codice, config, policy, schemi).
+  - *Derivatives* = output generati a runtime (output, log, cache, index, tmp, build).
+- **Stop-the-line (Git):** se `git status` mostra file non tracciati o modificati fuori policy (fuori policy = qualsiasi file o directory non versionata che non sia codice, configurazione o documentazione), fermati e ripulisci.
+- **Stop-the-line (ignored):** se `git status --ignored` o `git clean -ndx` mostra derivatives, fermati e rimuovili dal repo.
+- **Decisione Beta:** vietati backup ad-hoc nel repo (`*.bak`, `.git.bak`, copie manuali, snapshot).
+- **Runtime solo disposable:** ammesso solo se usa e getta, non richiesto per correttezza, e fuori dal repo.
+
 - Deriva i path **solo** dagli helper della pipeline; non costruire stringhe manualmente verso `output/`.
 - Valida e risolvi i path prima dell'uso; scritture **atomiche**.
 - Mai seguire symlink non attesi in `raw/`/`book/`.
@@ -141,7 +207,8 @@ In particolare i flussi che toccano Google Drive devono leggere gli `ID` (`drive
 
 La risoluzione workspace è fail-fast: chi richiama `WorkspaceLayout.from_context`, `WorkspaceLayout.from_slug` o `WorkspaceLayout.from_workspace` in runtime deve aspettarsi `WorkspaceNotFound`, `WorkspaceLayoutInvalid` o `WorkspaceLayoutInconsistent` e non provare a creare o riparare il layout. Solo `bootstrap_client_workspace`, `bootstrap_dummy_workspace` e `migrate_or_repair_workspace` possono intervenire per rigenerare directory mancanti o sincronizzare asset semantic; i runtime devono limitarsi a loggare l'errore e restituirlo all'orchestratore.
 
-Per esempi operativi completi e per seguire il flusso slug → `ClientContext` → `WorkspaceLayout`, rimanda alla sezione "Workspace SSoT (WorkspaceLayout)" del Developer Guide.
+Per il razionale e l'onboarding vedi il Developer Guide; per la mappa e le
+invarianti vedi [Architecture Overview](../../system/architecture.md).
 
 ---
 
@@ -151,6 +218,27 @@ Per esempi operativi completi e per seguire il flusso slug → `ClientContext` �
 - Non catturare eccezioni generiche senza rilanciarle/loggarle.
 - Nei moduli interni e vietato usare `sys.exit()`/`input()`; solo gli orchestratori CLI gestiscono il processo.
 - Mappa gli esiti in **exit codes** standard laddove previsto (0/2/30/40).
+
+---
+
+## 6bis) Retriever (ricerca)
+
+- `search(...)` restituisce `list[SearchResult]` tipizzata (`content`, `meta`, `score`).
+- Hardening errori: le eccezioni di embedding vengono intercettate e loggate come `retriever.query.embed_failed`, con ritorno `[]` per evitare crash negli orchestratori UI/CLI.
+- Throttling: il guard emette `retriever.throttle.deadline` quando il budget latenza si esaurisce; `candidate_limit` configurato viene clampato e loggato.
+- Il budget di latenza (`throttle.latency_budget_ms`) viene verificato prima di embedding e fetch dal DB: i call-site devono considerare `[]` anche come timeout/errore gestito e loggare l'evento utente se necessario.
+
+---
+
+## 6ter) Retriever: contratto minimo di osservabilita
+
+1) Ogni query emette `retriever.query.started` con `response_id` e campi base.
+2) Ogni fetch emette `retriever.candidates.fetched` includendo `budget_hit` e contatori.
+3) Ogni ritorno `[]` e disambiguato da almeno un evento tra:
+   - deadline/budget (`retriever.throttle.deadline`, `retriever.latency_budget.hit`)
+   - errore embedding gestito (`retriever.query.embed_failed`)
+   - input invalid/skipped (`retriever.query.invalid`, `retriever.query.skipped`)
+4) Nessuna degradazione silenziosa: se un controllo fallisce, deve esistere un evento esplicito.
 
 ---
 
@@ -183,6 +271,34 @@ make ci-safe
 - Workflow OCP e gate: vedi [`docs/policies/OCP_WORKFLOW.md`](../policies/OCP_WORKFLOW.md).
 
 Solo dopo questa fase la modifica è pronta per PR.
+
+---
+
+## 8bis) Definition of Done - v1.0 Beta (Determinismo / Low Entropy)
+
+### Principio
+
+Per la Beta, il determinismo e richiesto nei processi e nella gestione degli artefatti.
+Le degradazioni sono ammesse solo se:
+1) deterministiche, 2) osservabili, 3) disambiguabili.
+
+### Retriever: contratto minimo di osservabilita
+
+1) Ogni query emette `retriever.query.started` con `response_id` e campi base.
+2) Ogni fetch emette `retriever.candidates.fetched` includendo `budget_hit` e contatori.
+3) Ogni ritorno `[]` e disambiguato da almeno un evento tra:
+   - deadline/budget (`retriever.throttle.deadline`, `retriever.latency_budget.hit`)
+   - errore embedding gestito (`retriever.query.embed_failed`)
+   - input invalid/skipped (`retriever.query.invalid`, `retriever.query.skipped`)
+4) Nessuna degradazione silenziosa: se un controllo fallisce, deve esistere un evento esplicito.
+
+### Waiver
+
+E possibile accettare una non-conformita solo se:
+- e documentata nel PR,
+- ha un issue linkato,
+- non e silenziosa (log/evento presente),
+- non altera artefatti in modo non deterministico.
 
 ---
 

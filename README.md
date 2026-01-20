@@ -68,7 +68,7 @@ Usalo per interpretare il ledger in modo deterministico.
 
 ### Igiene workspace
 - I derivatives runtime restano fuori dal controllo versione e fuori dalla repo root: `output/`, `logs/`, `.timmy_kb/`, `.streamlit/`, cache pytest/ruff/mypy e `node_modules/` sono ignorati.
-- Se compaiono nel working tree, rimuovili prima di eseguire un commit o spostali fuori dal repository. Vedi [Developer Guide](docs/developer/developer_guide.md) (ALERT / Workspace Discipline).
+- Se compaiono nel working tree, rimuovili prima di eseguire un commit o spostali fuori dal repository. Vedi [Coding Rules](docs/developer/coding_rule.md#workspace-discipline-repo-vs-runtime).
 
 ---
 
@@ -88,7 +88,7 @@ Usalo per interpretare il ledger in modo deterministico.
 
 ## Documentazione & riferimenti
 - [User Guide](docs/user/user_guide.md) - flussi UI/CLI, Vision, workspace.
-- [Developer Guide](docs/developer/developer_guide.md) - SSoT, pipeline, logging, get_vision_model().
+- [Developer Guide](docs/developer/developer_guide.md) - contesto e onboarding (non normativo).
 - [Coding Rules](docs/developer/coding_rule.md) e [Architecture Overview](system/architecture.md).
 - [Configuration split](docs/developer/configurazione.md) e [Runbook Codex](system/ops/runbook_codex.md).
 - [CONTRIBUTING](CONTRIBUTING.md) - policy PR e micro-PR.

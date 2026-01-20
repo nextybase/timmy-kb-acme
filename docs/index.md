@@ -45,7 +45,7 @@ Questi documenti descrivono **cosa fa il sistema e cosa osserva l'utente**, senz
 
 Materiali per chi **sviluppa o mantiene Timmy-KB**.
 
-- **[Developer Guide](developer/developer_guide.md)** - principi architetturali, logging, test.
+- **[Developer Guide](developer/developer_guide.md)** - contesto e onboarding (non normativo).
 - **[Developer Quickstart](developer/developer_quickstart.md)** - percorsi minimi di lavoro (CLI/UI).
 - **[Coding Rules](developer/coding_rule.md)** - stile, tipizzazione, logging, I/O sicuro.
 - **[Configurazione](developer/configurazione.md)** - YAML, `.env`, SSoT, wiring OIDC.
