@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 
 import yaml
 
-from pipeline.exceptions import InputDirectoryMissing, PipelineError
+from pipeline.exceptions import EnrichmentError, InputDirectoryMissing, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths, read_text_safe
@@ -146,6 +146,35 @@ def extract_semantic_concepts(
         logger.warning("semantic.extract.mapping_empty", extra={"slug": context.slug})
         return {}
     files = _list_markdown_files(context, logger)
+
+    # Pre-carica i contenuti una volta sola: se non riesci a leggere un input, non puoi garantire determinismo.
+    normalized_by_file: dict[Path, str] = {}
+    for file in files:
+        if max_scan_bytes is not None and file.stat().st_size > max_scan_bytes:
+            logger.info(
+                "semantic.extract.skip_large_md",
+                extra={
+                    "slug": context.slug,
+                    "file_path": str(file),
+                    "bytes": file.stat().st_size,
+                    "limit": max_scan_bytes,
+                },
+            )
+            continue
+        try:
+            content = read_text_safe(context.md_dir, file, encoding="utf-8")
+        except Exception as exc:
+            # hard-fail: input incompleto => output non attestabile
+            raise PipelineError(
+                "Lettura markdown fallita: impossibile garantire estrazione deterministica.",
+                slug=getattr(context, "slug", None),
+                file_path=str(file),
+            ) from exc
+        normalized_by_file[file] = re.sub(
+            r"[\u200B\u200C\u200D\uFEFF]",
+            "",
+            unicodedata.normalize("NFC", content),
+        ).lower()
     extracted: Dict[str, List[Dict[str, str]]] = {}
     for concept, keywords in mapping.items():
         if not keywords:
@@ -164,25 +193,7 @@ def extract_semantic_concepts(
             norm_kws.append(normalized)
         patterns = [_term_to_pattern(k) for k in norm_kws]
         matches: List[Dict[str, str]] = []
-        for file in files:
-            try:
-                if max_scan_bytes is not None and file.stat().st_size > max_scan_bytes:
-                    logger.info(
-                        "semantic.extract.skip_large_md",
-                        extra={
-                            "slug": context.slug,
-                            "file_path": str(file),
-                            "bytes": file.stat().st_size,
-                            "limit": max_scan_bytes,
-                        },
-                    )
-                    continue
-                content = read_text_safe(context.md_dir, file, encoding="utf-8")
-                normalized_content = re.sub(
-                    r"[\u200B\u200C\u200D\uFEFF]",
-                    "",
-                    unicodedata.normalize("NFC", content),
-                ).lower()
+        for file, normalized_content in normalized_by_file.items():
                 hit_idx: Optional[int] = None
                 for i, pat in enumerate(patterns):
                     if pat.search(normalized_content):
@@ -190,11 +201,6 @@ def extract_semantic_concepts(
                         break
                 if hit_idx is not None:
                     matches.append({"file": file.name, "keyword": norm_kws[hit_idx]})
-            except Exception as exc:
-                logger.warning(
-                    "semantic.extract.read_failed",
-                    extra={"slug": context.slug, "file_path": str(file), "error": str(exc)},
-                )
         extracted[concept] = matches
     logger.info("semantic.extract.completed", extra={"slug": context.slug})
     return extracted
@@ -218,11 +224,22 @@ def enrich_markdown_folder(context: _CtxProto, logger: Optional[logging.Logger] 
             "count": len(files),
         },
     )
+    failures: list[tuple[str, str]] = []
     for file in files:
         try:
             _enrich_md(context, file, logger)
-        except Exception:
-            pass
+        except Exception as exc:
+            failures.append((str(file), str(exc)))
+            logger.error(
+                "semantic.enrich.failed",
+                extra={"slug": context.slug, "file_path": str(file), "error": str(exc)},
+            )
+    if failures:
+        raise EnrichmentError(
+            f"Arricchimento fallito su {len(failures)} file markdown (run non attestabile).",
+            slug=getattr(context, "slug", None),
+            file_path=str(getattr(context, "md_dir", "")),
+        )
     logger.info("semantic.enrich.completed", extra={"slug": context.slug})
 
 

@@ -140,3 +140,20 @@ Timmy-KB distingue nettamente i domini di tolleranza all'errore:
 
 Runtime behavior is governed by `instructions/10_runtime_strict_contract_beta.md`.
 Questa asimmetria protegge l'envelope epistemico: l'incertezza del dialogo agentico resta osservabile e governata, mentre l'operatività pretende fallimenti espliciti e telemetria (log/eventi/exit code) che rendano verificabili cause e impatti.
+
+---
+
+### 10. Capabilities (Core vs Optional adapters)
+
+La separazione tra core deterministico e integrazioni opzionali è parte della
+struttura architetturale (ambienti dedicati, feature disponibili per capability).
+
+| Capability | Ambito | Regola fail-fast |
+|---|---|---|
+| Core deterministico (pipeline, artefatti locali, workspace layout, gating, ledger) | Runtime core | Strict/fail-fast; nessun fallback silenzioso |
+| Adapter opzionali (es. Google Drive) | Integrazioni capability-gated | Prerequisiti espliciti; assenza è un esito verificabile "feature unavailable" |
+
+Per gli adapter opzionali:
+- prerequisiti: extras `.[drive]`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`;
+- se mancano, la capability deve fallire in modo esplicito (errore di capability), non in modo degradato;
+- `--dry-run` e modalità locali sono first-class e non dipendono dalla presenza di Drive.

@@ -61,6 +61,23 @@ Its absence MUST cause hard-fail.
 
 ---
 
+## 2bis. Capabilities (Core vs Optional adapters)
+
+The architecture distinguishes a deterministic core from optional adapters.
+Optional integrations are capability-gated and **not** part of the runtime core.
+
+| Capability | Scope | Fail-fast rule |
+|---|---|---|
+| Deterministic core (pipeline, local artifacts, workspace layout, gating, ledger) | Runtime core | Strict/fail-fast; no silent fallback |
+| Optional adapters (e.g., Google Drive) | Capability-gated integrations | Explicit prerequisites; absence yields a verifiable "feature unavailable" error |
+
+Optional adapter prerequisites (Drive):
+- extras `.[drive]`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`;
+- missing prerequisites MUST raise an explicit capability error (no degraded behavior);
+- `--dry-run` and local modes are first-class and do not depend on Drive.
+
+---
+
 ## 3. Input Validity Rules
 
 **3.1 -- Vision Statement**
