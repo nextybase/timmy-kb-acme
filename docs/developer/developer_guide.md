@@ -1,8 +1,8 @@
 # Developer Guide v1.0 Beta
 
-> **Nota di autorita:** questo documento e narrativo e non normativo. Spiega
+> **Nota di autorità:** questo documento è narrativo e non normativo. Spiega
 > razionale, onboarding e contesto. Le regole tecniche vincolanti sono in
-> [Coding Rules](coding_rule.md); la mappa tecnica e le responsabilita sono in
+> [Coding Rules](coding_rule.md); la mappa tecnica e le responsabilità sono in
 > [Architecture Overview](../../system/architecture.md).
 
 ## Executive summary
@@ -115,7 +115,7 @@ helper SSoT. Le regole vincolanti e gli esempi operativi sono in
 ## Workspace SSoT (WorkspaceLayout)
 
 `WorkspaceLayout` resta la fonte canonica per struttura e validazione. Per
-invarianti, eccezioni e responsabilita vedi
+invarianti, eccezioni e responsabilità vedi
 [Coding Rules](coding_rule.md#percorsi-del-workspace-e-workspacelayout) e
 [Architecture Overview](../../system/architecture.md#workspace-layout-ssot-of-structure).
 

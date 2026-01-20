@@ -1,7 +1,7 @@
 # System Architecture
 
-> **Authority:** questo documento e il riferimento canonico per la mappa dei
-> componenti e delle responsabilita. Le guide narrative devono linkare qui e non
+> **Authority:** questo documento è il riferimento canonico per la mappa dei
+> componenti e delle responsabilità. Le guide narrative devono linkare qui e non
 > duplicare i contenuti. Per regole tecniche e di stile vedi
 > [docs/developer/coding_rule.md](../docs/developer/coding_rule.md).
 

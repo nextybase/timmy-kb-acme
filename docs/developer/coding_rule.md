@@ -2,9 +2,9 @@
 
 > **TL;DR:** consulta queste regole prima di toccare pipeline o UI: usa gli helper SSoT, niente side-effect a import-time, logging e path-safety sono vincolanti.
 
-> **Authority:** questo documento e normativo per regole tecniche e stile.
+> **Authority:** questo documento è normativo per regole tecniche e stile.
 > In caso di conflitto, prevale sulle guide narrative. Riferimento
-> complementare per mappa e responsabilita:
+> complementare per mappa e responsabilità:
 > [Architecture Overview](../../system/architecture.md).
 
 Regole di sviluppo per **Timmy KB**. Questa e la base iniziale: nessun riferimento a legacy o migrazioni. Obiettivo: codice coerente, sicuro e riproducibile.
