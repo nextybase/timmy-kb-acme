@@ -74,7 +74,7 @@ py src/kg_build.py --slug acme
 > questo step quando necessario.
 
 # 4) Conversione + arricchimento + README/SUMMARY (+ preview opz.)
-Esegui la pipeline semantica con gli helper modulari:
+Esegui la pipeline semantica con gli helper modulari; ricava i path dal `WorkspaceLayout` (SSoT).
 
 ```bash
 python - <<'PY'
@@ -82,16 +82,19 @@ from pathlib import Path
 
 from pipeline.context import ClientContext
 from pipeline.logging_utils import get_structured_logger
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.convert_service import convert_markdown
 from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
 from semantic.vocab_loader import load_reviewed_vocab
 
 slug = "acme"
-ctx = ClientContext.load(Path.cwd(), slug=slug)
+ctx = ClientContext.load(slug=slug, require_env=True, bootstrap_config=False)
+layout = WorkspaceLayout.from_context(ctx)
+base_dir = layout.base_dir
 log = get_structured_logger("docs.semantic", context={"slug": slug})
 
 convert_markdown(ctx, log, slug=slug)
-vocab = load_reviewed_vocab(ctx.base_dir, log)
+vocab = load_reviewed_vocab(base_dir, log)
 enrich_frontmatter(ctx, log, vocab, slug=slug, allow_empty_vocab=True)
 write_summary_and_readme(ctx, log, slug=slug)
 PY

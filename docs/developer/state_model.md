@@ -10,15 +10,9 @@ Non introduce un "motore di stato": formalizza **termini, stati, transizioni e r
 
 ### Workspace State (stato canonico)
 Lo **stato del workspace** è la proiezione del **dato verificabile**:
-**`workspace_state` è derivato esclusivamente dal Decision Ledger e ancorato alla `latest_run`**.
+**`workspace_state` = `to_state` dell'ultima decisione `ALLOW`**, ordinata per `decided_at` e tie-breaker `decision_id`.
 
-Interpretazione: "cosa è *vero adesso* nel workspace", perché la `latest_run` è quella che ha definito l'assetto corrente degli artefatti.
-
-Regola formale (Beta):
-- `latest_run` = ultima entry in `runs` (ordering deterministico)
-- `workspace_state` = `to_state` dell'ultima decisione `ALLOW` **nella `latest_run`**, ordinata per `decided_at` e tie-breaker `decision_id`
-
-> Nota: questa scelta evita la "composizione" di gate provenienti da run diverse.
+Interpretazione: "cosa è *vero adesso* nel workspace", indipendentemente dall'esito dell'ultima run.
 
 ### Last Run Status (telemetria / health)
 Lo **stato dell'ultima run** descrive "cosa è successo nell'ultima esecuzione":
@@ -28,59 +22,104 @@ Lo **stato dell'ultima run** descrive "cosa è successo nell'ultima esecuzione":
 Interpretazione: "l'ultima esecuzione è andata bene o male?".
 Non sostituisce il `workspace_state`.
 
-> Regola: **lo stato canonico è sempre `workspace_state`** e deriva dalla `latest_run`. La run più recente è anche il riferimento per la telemetria/health.
-
----
-
-## Monotonicità e regressione (Beta)
-In Beta, lo stato **non è monotono**: è ammessa **regressione** se una run successiva sostituisce gli artefatti e quindi ridefinisce uno stato "più basso".
-
-Esempio: se una run successiva rigenera solo il CSV tag (senza stub), lo stato canonico può passare da `TAGS_READY` a `TAGS_CSV_READY`.
+> Regola: **lo stato canonico è sempre `workspace_state`**. La run più recente è informazione di salute/telemetria.
 
 ---
 
 ## Stati canonici (Beta 1.0)
 
-| State | Significato | Trigger |
-|---|---|---|
-| NEW | Workspace iniziale non ancora bootstrap | nessuna run o decisione |
-| WORKSPACE_READY | Pre-onboarding completato | pre_onboarding ALLOW |
-| TAGS_CSV_READY | CSV tag generato / checkpoint raggiunto | tag_onboarding ALLOW (checkpoint) |
-| TAGS_READY | Stub semantico completato | tag_onboarding ALLOW (dummy) |
-| SEMANTIC_READY | Onboarding semantico completato | semantic_onboarding ALLOW |
+| Stato | Significato | Note |
+|------|-------------|------|
+| `NEW` | Workspace non pronto | Ingresso logico del flusso |
+| `WORKSPACE_READY` | Struttura base pronta (cartelle + config) | Prodotto da pre_onboarding |
+| `TAGS_CSV_READY` | CSV tag generato (checkpoint) | Percorso standard/strict |
+| `TAGS_READY` | Stub semantico tag generato | **Solo dummy esplicito** |
+| `SEMANTIC_READY` | Pipeline semantica completata | Richiede prerequisiti coerenti |
 
 ---
 
-## Transizioni canoniche (Beta)
+## Transizioni ammesse (Beta 1.0)
 
-### pre_onboarding
-- `NEW` -> `WORKSPACE_READY`
+### Gate: pre_onboarding
+- `NEW → WORKSPACE_READY` (ALLOW)
+- `NEW → WORKSPACE_READY` (DENY) = tentativo fallito (target di transizione, non stato raggiunto)
 
-### tag_onboarding
-- default: `WORKSPACE_READY` -> `TAGS_CSV_READY`
-- dummy: `WORKSPACE_READY` -> `TAGS_READY`
+### Gate: tag_onboarding
+Percorso standard (default / strict):
+- `WORKSPACE_READY → TAGS_CSV_READY` (ALLOW)
 
-### semantic_onboarding
-- `TAGS_READY` -> `SEMANTIC_READY`
+Percorso dummy (solo esplicito):
+- `WORKSPACE_READY → TAGS_READY` (ALLOW) **solo se** `--dummy` e strict disattivo
+
+Errori:
+- `WORKSPACE_READY → TAGS_*` (DENY) = fallimento del gate (target non raggiunto)
+
+### Gate: semantic_onboarding
+- `TAGS_READY → SEMANTIC_READY` (ALLOW)
+- `TAGS_READY → SEMANTIC_READY` (DENY) = fallimento del gate (target non raggiunto)
+
+> Nota: se in Beta il percorso standard si ferma a `TAGS_CSV_READY`, l'esecuzione end-to-end richiede esplicitamente dummy per arrivare a `TAGS_READY` (vedi Policy).
 
 ---
 
-## Dummy mode (audit)
+## Semantica di ALLOW / DENY (regola di interpretazione)
 
+### ALLOW
+Una decisione `ALLOW` indica che la transizione è considerata **completata** e che gli artefatti previsti per quello stato sono stati **persistiti**.
+
+### DENY
+Una decisione `DENY` indica un **tentativo fallito**.
+`to_state` in `DENY` rappresenta il **target della transizione**, non lo stato raggiunto.
+
+> Regola: lo stato del workspace **non avanza mai** a causa di un `DENY`.
+
+---
+
+## Policy Strict vs Dummy (contratto operativo)
+
+### Strict (`TIMMY_BETA_STRICT=1`)
+- Blocca la generazione degli stub.
+- In tag_onboarding lo stato massimo raggiungibile è `TAGS_CSV_READY`.
+- È la modalità raccomandata per Beta in ambienti reali/dedicati.
+
+### Dummy (`--dummy`)
+- Abilita eccezionalmente la generazione degli stub end-to-end.
+- È ammesso **solo** se esplicitamente richiesto tramite flag.
+- Se strict è attivo, **dummy non ha effetto**.
+
+### Auditabilità
 Quando `--dummy` è usato:
-- `evidence_json` include `dummy_mode: true`
-- `rationale` contiene il substring `"dummy"`
-- lo stato target può essere `TAGS_READY`
+- `evidence_json.dummy_mode = true`
+- `rationale` contiene esplicitamente una traccia (es. `ok_dummy_mode`)
+
+> Regola d'oro: se nel ledger compare `TAGS_READY`, allora **è stato usato dummy** (o si è violata la policy).
 
 ---
 
 ## Derivazione e reporting (ledger-status)
 
 ### Output minimo garantito
+- `current_state` = `workspace_state` (ultimo ALLOW)
+- `gates` = ultima decisione per gate (ordinamento stabile)
 - `latest_run` = ultima run (se presente)
-- `current_state` = `workspace_state` (ultimo `ALLOW` **nella latest_run**)
-- `gates` = ultime decisioni per gate **nella latest_run** (ordinamento stabile)
 
 ### Interpretazione operativa consigliata
 - `workspace_state` risponde: "dove siamo davvero?"
 - `latest_run + verdict` risponde: "l'ultima esecuzione è sana?"
+
+Esempi:
+- `workspace_state = SEMANTIC_READY` + ultima run DENY → workspace valido, ma **ultima esecuzione fallita** (health degradata).
+- `workspace_state = TAGS_CSV_READY` + dummy_mode unknown → standard/strict, end-to-end non eseguito.
+
+---
+
+## Non previsto (intenzionale, Beta 1.0)
+- Migrazioni/versioning del ledger
+- Motore di inferenza dello stato oltre "latest decision"
+- UI/Dashboard di stato
+- Auto-promotion o fallback silenziosi
+
+---
+
+## Conseguenze pratiche (una riga)
+Lo stato è una **proiezione verificabile del ledger**: chi legge il ledger deve poter ricostruire "cosa è vero" senza interpretazioni creative.

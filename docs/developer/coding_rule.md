@@ -131,8 +131,9 @@ raw_dir = layout.raw_dir
 log_file = layout.log_file
 
 # NON corretto (deprecato)
-raw_dir = ctx.base_dir / "raw"
-log_file = ctx.base_dir / "logs" / "log.txt"
+base_dir = layout.base_dir
+raw_dir = base_dir / "raw"
+log_file = base_dir / "logs" / "log.txt"
 ```
 
 Qualsiasi nuovo modulo introdotto nel progetto deve usare `WorkspaceLayout` per risolvere il workspace. Non sono ammessi fallback manuali basati su concatenazioni di stringhe o `Path.join` sui percorsi del workspace. Gli helper `resolve_raw_dir` e `workspace_root` non sono più disponibili: ogni path deve venire da `WorkspaceLayout` e ogni creazione/riparazione dal trio `pipeline.workspace_bootstrap.*`.
