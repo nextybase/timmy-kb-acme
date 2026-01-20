@@ -30,10 +30,13 @@ except Exception:  # pragma: no cover - ambiente senza google-auth
 
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
 from pipeline.settings import Settings
 
 # Coerenza con le altre pagine UI
 from ui.chrome import header, sidebar  # vedi home.py per lo stesso schema
+
+LOGGER = get_structured_logger("ui.admin")
 
 # ---------- Chrome coerente ----------
 # L'entrypoint imposta page_config; qui solo header+sidebar come in home.py
@@ -49,11 +52,25 @@ SESSION_TTL_SECONDS = 3600
 
 
 @lru_cache(maxsize=1)
-def _load_settings() -> Optional[Settings]:
+def _load_settings() -> Settings:
     try:
         return Settings.load(REPO_ROOT)
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        # Beta 1.0 STRICT: la pagina admin non può degradare silenziosamente.
+        try:
+            LOGGER.error(
+                "ui.admin.settings_load_failed",
+                extra={"error": repr(exc)},
+            )
+        except Exception:
+            # Non mascherare l'errore se il logger fallisce
+            pass
+        raise ConfigError(
+            "Impossibile caricare la configurazione globale. "
+            "La pagina Admin richiede una config valida per operare.",
+            code="ui.admin.settings.load_failed",
+            component="admin",
+        ) from exc
 
 
 @lru_cache(maxsize=1)

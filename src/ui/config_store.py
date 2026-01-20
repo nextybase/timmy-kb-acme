@@ -11,7 +11,7 @@ from pipeline.config_utils import load_client_settings
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.settings import Settings
 from ui.utils.context_cache import get_client_context
 
@@ -102,15 +102,22 @@ def _load_client_config(slug: str) -> tuple[Path, GlobalConfig]:
             return Path(cfg_path), cast(GlobalConfig, settings)
         try:
             return Path(cfg_path), cast(GlobalConfig, dict(vars(settings)))
-        except Exception:
-            return Path(cfg_path), {}
-    except Exception as exc:
-        try:
-            text = read_text_safe(cfg_path.parent, cfg_path, encoding="utf-8")
-            data = yaml.safe_load(text) or {}
-            return Path(cfg_path), cast(GlobalConfig, data if isinstance(data, dict) else {})
-        except Exception:
-            raise ConfigError(f"Config cliente non leggibile: {exc}", slug=slug, file_path=str(cfg_path)) from exc
+        except Exception as exc:  # noqa: BLE001
+            raise ConfigError(
+                "Impossibile convertire le settings cliente in dict (as_dict/dict/vars falliti).",
+                slug=slug,
+                file_path=str(cfg_path),
+            ) from exc
+    except Exception as exc:  # noqa: BLE001
+        _logger.error(
+            "ui.config_store.client_config_load_failed",
+            extra={"slug": slug, "file_path": str(cfg_path), "error": str(exc)},
+        )
+        raise ConfigError(
+            "Config cliente non caricabile: provisioning/config non valida.",
+            slug=slug,
+            file_path=str(cfg_path),
+        ) from exc
 
 
 def get_config_dir() -> Path:
@@ -123,50 +130,51 @@ def get_config_path() -> Path:
 
 def _load_config() -> GlobalConfig:
     """Carica config/config.yaml tramite Settings (SSoT non segreto)."""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if not CONFIG_FILE.exists():
-        safe_write_text(CONFIG_FILE, "{}\n", encoding="utf-8", atomic=True)
+        raise ConfigError(
+            "Config globale mancante: atteso config/config.yaml (provisioning richiesto).",
+            file_path=str(CONFIG_FILE),
+        )
     try:
         settings = Settings.load(REPO_ROOT, config_path=CONFIG_FILE, logger=_logger)
         if hasattr(settings, "as_dict"):
             return cast(GlobalConfig, settings.as_dict())
         raise AttributeError("settings.as_dict missing")
-    except Exception as exc:
-        _logger.warning(
+    except Exception as exc:  # noqa: BLE001
+        _logger.error(
             "ui.config_store.global_config_load_failed",
             extra={"error": str(exc), "file_path": str(CONFIG_FILE)},
         )
-        try:
-            text = read_text_safe(CONFIG_FILE.parent, CONFIG_FILE, encoding="utf-8")
-            data = yaml.safe_load(text) or {}
-            return cast(GlobalConfig, data if isinstance(data, dict) else {})
-        except Exception:
-            return {}
+        raise ConfigError(
+            "Impossibile caricare la config globale (config/config.yaml). "
+            "Runtime strict: correggi provisioning/config.",
+            file_path=str(CONFIG_FILE),
+        ) from exc
 
 
 def _load_repo_config(repo_root: Path) -> GlobalConfig:
     """Carica config/config.yaml per un repo specifico."""
     cfg_dir = _resolve_path(repo_root, repo_root / "config")
     cfg_file = _resolve_path(cfg_dir, cfg_dir / "config.yaml")
-    cfg_dir.mkdir(parents=True, exist_ok=True)
     if not cfg_file.exists():
-        safe_write_text(cfg_file, "{}\n", encoding="utf-8", atomic=True)
+        raise ConfigError(
+            "Config repo mancante: atteso config/config.yaml (provisioning richiesto).",
+            file_path=str(cfg_file),
+        )
     try:
         settings = Settings.load(repo_root, config_path=cfg_file, logger=_logger)
         if hasattr(settings, "as_dict"):
             return cast(GlobalConfig, settings.as_dict())
         raise AttributeError("settings.as_dict missing")
-    except Exception as exc:
-        _logger.warning(
-            "ui.config_store.global_config_load_failed",
+    except Exception as exc:  # noqa: BLE001
+        _logger.error(
+            "ui.config_store.repo_config_load_failed",
             extra={"error": str(exc), "file_path": str(cfg_file)},
         )
-        try:
-            text = read_text_safe(cfg_file.parent, cfg_file, encoding="utf-8")
-            data = yaml.safe_load(text) or {}
-            return cast(GlobalConfig, data if isinstance(data, dict) else {})
-        except Exception:
-            return {}
+        raise ConfigError(
+            "Impossibile caricare la config repo (config/config.yaml). Runtime strict: correggi provisioning/config.",
+            file_path=str(cfg_file),
+        ) from exc
 
 
 def _save_repo_config(cfg: GlobalConfig, repo_root: Path) -> None:
@@ -208,7 +216,7 @@ def get_skip_preflight(*, repo_root: Path | None = None) -> bool:
     Legacy supportato (OR secco, non "fallback morbidi"): skip_preflight top-level
     """
     root = repo_root or REPO_ROOT
-    cfg: GlobalConfig = _load_repo_config(root) or {}
+    cfg: GlobalConfig = _load_repo_config(root)
 
     ui = cfg.get("ui")
     ui_skip = False
@@ -224,7 +232,7 @@ def set_skip_preflight(flag: bool, *, repo_root: Path | None = None) -> None:
     Setter coerente con la chiave canonica: ui.skip_preflight
     """
     root = repo_root or REPO_ROOT
-    cfg: GlobalConfig = _load_repo_config(root) or {}
+    cfg: GlobalConfig = _load_repo_config(root)
     ui = cfg.get("ui")
     if not isinstance(ui, dict):
         ui = {}

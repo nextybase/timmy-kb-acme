@@ -92,9 +92,18 @@ def _refresh_context_settings(context: ClientContext) -> None:
             config_path=cast(Path, context.config_path),
             slug=context.slug,
         )
-    except Exception:
-        # best-effort: se fallisce lasciamo il contesto invariato
-        pass
+    except Exception as exc:  # noqa: BLE001
+        # Beta 1.0 STRICT: qui NON rendiamo fatal (write già avvenuta),
+        # ma è vietato un fallback silenzioso in runtime.
+        logger.warning(
+            "pipeline.config_utils.context_settings_refresh_failed",
+            extra={
+                "slug": context.slug,
+                "repo_root_dir": str(context.repo_root_dir),
+                "config_path": str(context.config_path),
+                "error": str(exc)[:200],
+            },
+        )
 
 
 def load_client_settings(
@@ -139,8 +148,26 @@ def load_client_settings(
         else:
             try:
                 payload = dict(vars(settings_raw))
-            except Exception:
-                payload = {}
+            except Exception as exc:  # noqa: BLE001
+                # Beta 1.0 STRICT: vietato degradare a payload vuoto.
+                # Se Settings.load(...) restituisce un oggetto non convertibile,
+                # è un errore di provisioning/compat.
+                if logger:
+                    logger.error(
+                        "pipeline.config_utils.settings_payload_coerce_failed",
+                        extra={
+                            "slug": context.slug,
+                            "repo_root_dir": str(root_dir),
+                            "config_path": str(cfg_path),
+                            "error": str(exc)[:200],
+                            "settings_type": type(settings_raw).__name__,
+                        },
+                    )
+                raise ConfigError(
+                    "Impossibile convertire Settings in payload dict (mapping/vars falliti). Runtime strict.",
+                    slug=context.slug,
+                    file_path=str(cfg_path),
+                ) from exc
         settings = ContextSettings(config_path=cast(Path, cfg_path), data=payload)
     context.settings = settings
     return settings

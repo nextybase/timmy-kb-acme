@@ -20,6 +20,7 @@ def _setup_repo_config(tmp_path: Path, payload: dict) -> Path:
 def test_get_vision_model_reads_value_from_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg_payload = {"ai": {"vision": {"model": "gpt-4.1-mini-2025-04-14"}}}
     cfg_path = _setup_repo_config(tmp_path, cfg_payload)
+    monkeypatch.setattr(config_store, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(config_store, "CONFIG_DIR", cfg_path.parent)
     monkeypatch.setattr(config_store, "CONFIG_FILE", cfg_path)
 
@@ -28,6 +29,7 @@ def test_get_vision_model_reads_value_from_config(tmp_path: Path, monkeypatch: p
 
 def test_get_vision_model_missing_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg_path = _setup_repo_config(tmp_path, {})
+    monkeypatch.setattr(config_store, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(config_store, "CONFIG_DIR", cfg_path.parent)
     monkeypatch.setattr(config_store, "CONFIG_FILE", cfg_path)
 
