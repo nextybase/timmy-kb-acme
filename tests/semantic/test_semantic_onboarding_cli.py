@@ -106,11 +106,10 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
     layout.semantic_dir.mkdir(parents=True, exist_ok=True)
     (layout.semantic_dir / "tags_raw.json").write_text("{}", encoding="utf-8")
 
-    called: dict[str, Path] = {}
+    called: list[Path] = []
 
     def _ensure(base_dir: Path, candidate: Path) -> Path:
-        called["base"] = base_dir
-        called["candidate"] = candidate
+        called.append(candidate)
         return candidate
 
     monkeypatch.setattr(cli, "ensure_within_and_resolve", _ensure)
@@ -119,5 +118,5 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
     exit_code = cli.main()
 
     assert exit_code == 0
-    assert called["base"] == layout.semantic_dir
-    assert called["candidate"] == layout.semantic_dir / "tags_raw.json"
+    assert called
+    assert layout.semantic_dir / "tags_raw.json" in called

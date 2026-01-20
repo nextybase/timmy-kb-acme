@@ -46,8 +46,8 @@ def test_ledger_status_anchored_to_latest_run(tmp_path: Path, monkeypatch, capsy
             run_id="run-a",
             slug=slug,
             gate_name="semantic_onboarding",
-            from_state="TAGS_READY",
-            to_state="SEMANTIC_READY",
+            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+            to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
             verdict=decision_ledger.DECISION_ALLOW,
             subject="semantic_onboarding",
             decided_at="2026-01-01T00:00:01Z",
@@ -66,8 +66,8 @@ def test_ledger_status_anchored_to_latest_run(tmp_path: Path, monkeypatch, capsy
             run_id="run-b",
             slug=slug,
             gate_name="pre_onboarding",
-            from_state="NEW",
-            to_state="WORKSPACE_READY",
+            from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
+            to_state=decision_ledger.STATE_SEMANTIC_INGEST,
             verdict=decision_ledger.DECISION_ALLOW,
             subject="pre_onboarding",
             decided_at="2026-01-02T00:00:01Z",
@@ -80,8 +80,8 @@ def test_ledger_status_anchored_to_latest_run(tmp_path: Path, monkeypatch, capsy
             run_id="run-b",
             slug=slug,
             gate_name="tag_onboarding",
-            from_state="WORKSPACE_READY",
-            to_state="TAGS_CSV_READY",
+            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+            to_state=decision_ledger.STATE_SEMANTIC_INGEST,
             verdict=decision_ledger.DECISION_ALLOW,
             subject="tag_onboarding",
             decided_at="2026-01-02T00:00:02Z",
@@ -102,7 +102,7 @@ def test_ledger_status_anchored_to_latest_run(tmp_path: Path, monkeypatch, capsy
     status = json.loads(json_line)
 
     assert status["latest_run"]["run_id"] == "run-b"
-    assert status["current_state"] == "TAGS_CSV_READY"
+    assert status["current_state"] == decision_ledger.STATE_SEMANTIC_INGEST
 
     gate_names = [gate["gate_name"] for gate in status["gates"]]
     assert gate_names == sorted(gate_names)
@@ -129,8 +129,8 @@ def test_ledger_status_fails_fast_on_old_sqlite(tmp_path: Path, monkeypatch) -> 
             run_id="run-old",
             slug=slug,
             gate_name="tag_onboarding",
-            from_state="WORKSPACE_READY",
-            to_state="TAGS_CSV_READY",
+            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+            to_state=decision_ledger.STATE_SEMANTIC_INGEST,
             verdict=decision_ledger.DECISION_ALLOW,
             subject="tag_onboarding",
             decided_at="2026-01-01T00:00:01Z",

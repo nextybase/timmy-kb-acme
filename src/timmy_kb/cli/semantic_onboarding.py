@@ -183,6 +183,25 @@ def main() -> int:
                     logger,
                     slug=slug,
                 )
+                decision_ledger.record_decision(
+                    ledger_conn,
+                    decision_id=uuid.uuid4().hex,
+                    run_id=run_id,
+                    slug=slug,
+                    gate_name="semantic_onboarding",
+                    from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                    to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                    verdict=decision_ledger.DECISION_ALLOW,
+                    subject="semantic_onboarding",
+                    decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    evidence_json=_build_evidence_json(
+                        layout=layout,
+                        requested=requested,
+                        effective=effective,
+                        outcome="ok",
+                    ),
+                    rationale="ok",
+                )
 
                 # 3) Costruisci il Knowledge Graph dei tag (Tag KG Builder)
                 semantic_dir = layout.semantic_dir
@@ -198,6 +217,30 @@ def main() -> int:
                         extra={"slug": slug, "reason": "semantic/tags_raw.json assente"},
                     )
                     tag_kg_effective = "skipped"
+                if tag_kg_effective == "built":
+                    kg_json = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.json")
+                    kg_md = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.md")
+                    if kg_json.exists() and kg_md.exists():
+                        decision_ledger.record_decision(
+                            ledger_conn,
+                            decision_id=uuid.uuid4().hex,
+                            run_id=run_id,
+                            slug=slug,
+                            gate_name="semantic_onboarding",
+                            from_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                            to_state=decision_ledger.STATE_VISUALIZATION_REFRESH,
+                            verdict=decision_ledger.DECISION_ALLOW,
+                            subject="tag_kg_builder",
+                            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            evidence_json=_build_evidence_json(
+                                layout=layout,
+                                requested=requested,
+                                effective=effective,
+                                outcome="ok",
+                                tag_kg_effective=tag_kg_effective,
+                            ),
+                            rationale="ok",
+                        )
             except (ConfigError, PipelineError) as exc:
                 # Mappa verso exit code deterministici (no traceback non gestiti)
                 original_error = _summarize_error(exc)
@@ -209,8 +252,8 @@ def main() -> int:
                         run_id=run_id,
                         slug=slug,
                         gate_name="semantic_onboarding",
-                        from_state="TAGS_READY",
-                        to_state="SEMANTIC_READY",
+                        from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                        to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
                         verdict=decision_ledger.DECISION_DENY,
                         subject="semantic_onboarding",
                         decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -256,8 +299,8 @@ def main() -> int:
                         run_id=run_id,
                         slug=slug,
                         gate_name="semantic_onboarding",
-                        from_state="TAGS_READY",
-                        to_state="SEMANTIC_READY",
+                        from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                        to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
                         verdict=decision_ledger.DECISION_DENY,
                         subject="semantic_onboarding",
                         decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -293,27 +336,6 @@ def main() -> int:
                     ) from ledger_exc
                 logger.exception("cli.semantic_onboarding.unexpected_error", extra={"slug": slug, "error": str(exc)})
                 return code
-
-        decision_ledger.record_decision(
-            ledger_conn,
-            decision_id=uuid.uuid4().hex,
-            run_id=run_id,
-            slug=slug,
-            gate_name="semantic_onboarding",
-            from_state="TAGS_READY",
-            to_state="SEMANTIC_READY",
-            verdict=decision_ledger.DECISION_ALLOW,
-            subject="semantic_onboarding",
-            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            evidence_json=_build_evidence_json(
-                layout=layout,
-                requested=requested,
-                effective=effective,
-                outcome="ok",
-                tag_kg_effective=tag_kg_effective,
-            ),
-            rationale="ok",
-        )
 
         # Riepilogo artefatti (best-effort, non influenza l'exit code)
         summary_extra: dict[str, object] = {}

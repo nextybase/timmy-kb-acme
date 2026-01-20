@@ -14,6 +14,11 @@ from pipeline.workspace_layout import WorkspaceLayout
 __all__ = [
     "DECISION_ALLOW",
     "DECISION_DENY",
+    "STATE_WORKSPACE_BOOTSTRAP",
+    "STATE_SEMANTIC_INGEST",
+    "STATE_FRONTMATTER_ENRICH",
+    "STATE_VISUALIZATION_REFRESH",
+    "STATE_PREVIEW_READY",
     "NormativeDecisionRecord",
     "ledger_path_from_layout",
     "open_ledger",
@@ -25,6 +30,19 @@ __all__ = [
 DECISION_ALLOW: Final[str] = "ALLOW"
 DECISION_DENY: Final[str] = "DENY"
 _DECISION_VALUES: Final[set[str]] = {DECISION_ALLOW, DECISION_DENY}
+STATE_WORKSPACE_BOOTSTRAP: Final[str] = "WORKSPACE_BOOTSTRAP"
+STATE_SEMANTIC_INGEST: Final[str] = "SEMANTIC_INGEST"
+STATE_FRONTMATTER_ENRICH: Final[str] = "FRONTMATTER_ENRICH"
+STATE_VISUALIZATION_REFRESH: Final[str] = "VISUALIZATION_REFRESH"
+STATE_PREVIEW_READY: Final[str] = "PREVIEW_READY"
+_CANONICAL_STATE_ORDER: Final[tuple[str, ...]] = (
+    STATE_WORKSPACE_BOOTSTRAP,
+    STATE_SEMANTIC_INGEST,
+    STATE_FRONTMATTER_ENRICH,
+    STATE_VISUALIZATION_REFRESH,
+    STATE_PREVIEW_READY,
+)
+_CANONICAL_STATES: Final[set[str]] = set(_CANONICAL_STATE_ORDER)
 NORMATIVE_PASS: Final[str] = "PASS"
 NORMATIVE_PASS_WITH_CONDITIONS: Final[str] = "PASS_WITH_CONDITIONS"
 NORMATIVE_BLOCK: Final[str] = "BLOCK"
@@ -133,6 +151,8 @@ def record_decision(
     evidence_json: str | None = None,
     rationale: str | None = None,
 ) -> None:
+    _validate_state(from_state, field_name="from_state")
+    _validate_state(to_state, field_name="to_state")
     if verdict not in _DECISION_VALUES:
         raise ValueError(f"Verdetto non valido: {verdict}")
     _insert_row(
@@ -155,6 +175,14 @@ def record_decision(
         hint="record_decision",
         slug=slug,
     )
+
+
+def _validate_state(value: str, *, field_name: str) -> None:
+    if value not in _CANONICAL_STATES:
+        raise ConfigError(
+            f"State '{value}' non canonico per ledger ({field_name}).",
+            file_path=None,
+        )
 
 
 def record_normative_decision(conn: sqlite3.Connection, record: NormativeDecisionRecord) -> None:
