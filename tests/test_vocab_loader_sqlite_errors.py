@@ -37,8 +37,8 @@ def test_raises_configerror_on_query_failure(tmp_path: Path, monkeypatch: pytest
 
     monkeypatch.setattr(vl, "_load_tags_reviewed", _boom, raising=True)
 
-    with pytest.raises(ConfigError) as ei:
+    with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
         _ = vl.load_reviewed_vocab(base, _NoopLogger())
 
     err = ei.value
-    assert getattr(err, "file_path", None) == db
+    assert getattr(err, "file_path", None) == str(db)

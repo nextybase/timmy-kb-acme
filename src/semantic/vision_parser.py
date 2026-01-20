@@ -59,9 +59,20 @@ def _normalize_text(raw: str) -> str:
     return _clean_text(text.strip())
 
 
+REQUIRED_VISION_SECTIONS: Tuple[str, ...] = (
+    "vision",
+    "mission",
+    "framework_etico",
+    "goal",
+    "prodotto_azienda",
+    "mercato",
+)
+
+
 def _split_sections(text: str) -> Dict[str, str]:
     if not text:
-        return {}
+        missing = ", ".join(REQUIRED_VISION_SECTIONS)
+        raise ConfigError(f"Vision sections missing or empty: {missing}")
 
     patterns: List[Tuple[re.Pattern[str], str]] = [
         (re.compile(r"^\s*vision\b", re.IGNORECASE | re.MULTILINE), "vision"),
@@ -79,7 +90,8 @@ def _split_sections(text: str) -> Dict[str, str]:
             positions.append((match.start(), key))
 
     if not positions:
-        return {}
+        missing = ", ".join(REQUIRED_VISION_SECTIONS)
+        raise ConfigError(f"Vision sections missing or empty: {missing}")
 
     positions.sort(key=lambda item: item[0])
     sections: Dict[str, str] = {}
@@ -89,6 +101,11 @@ def _split_sections(text: str) -> Dict[str, str]:
         body = text[start:end]
         body = re.sub(r"^.*?(\n|$)", "", body, count=1, flags=re.DOTALL)
         sections[key] = body.strip()
+
+    missing_sections = [key for key in REQUIRED_VISION_SECTIONS if not _normalize_block(sections.get(key, ""))]
+    if missing_sections:
+        missing = ", ".join(missing_sections)
+        raise ConfigError(f"Vision sections missing or empty: {missing}")
 
     return sections
 
@@ -165,18 +182,23 @@ def _strip_heading(text: str, *labels: str) -> str:
 def _split_goal_baskets(goal_text: str) -> Dict[str, List[str]]:
     buckets: Dict[str, List[str]] = {"b3": [], "b6": [], "b12": []}
     if not goal_text:
-        return buckets
+        raise ConfigError("Goal format invalid: expected 'Goal N' blocks")
 
     formatted = _format_bullets(goal_text)
     pattern = re.compile(
         r"^-+\s*Goal\s*(\d+)\s*[-\u2013]?\s*(.*?)(?=\n-+\s*Goal\s*\d+|\Z)",
         re.IGNORECASE | re.DOTALL | re.MULTILINE,
     )
+    found = False
     for match in pattern.finditer(formatted):
-        number = int(match.group(1))
+        found = True
+        try:
+            number = int(match.group(1))
+        except ValueError as exc:
+            raise ConfigError("Goal format invalid: expected 'Goal N' blocks") from exc
         body = _clean_text(" ".join(match.group(2).split()))
         if not body:
-            continue
+            raise ConfigError("Goal format invalid: expected 'Goal N' blocks")
         if number <= 1:
             buckets["b3"].append(body)
         elif number == 2:
@@ -184,8 +206,8 @@ def _split_goal_baskets(goal_text: str) -> Dict[str, List[str]]:
         else:
             buckets["b12"].append(body)
 
-    if all(not values for values in buckets.values()):
-        raise ConfigError("Goal format non conforme: attesi blocchi 'Goal N'")
+    if not found:
+        raise ConfigError("Goal format invalid: expected 'Goal N' blocks")
 
     return buckets
 

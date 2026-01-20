@@ -24,11 +24,11 @@ def test_returns_empty_when_db_missing(tmp_path: Path):
     sem.mkdir(parents=True, exist_ok=True)
     db = sem / "tags.db"
 
-    with pytest.raises(ConfigError, match="Vocabolario canonico assente") as ei:
+    with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
         _ = vl.load_reviewed_vocab(base, _NoopLogger())
 
     err = ei.value
-    assert getattr(err, "file_path", None) == db
+    assert getattr(err, "file_path", None) == str(db)
 
 
 def test_raises_configerror_on_db_open_failure(tmp_path: Path, monkeypatch: Any):
@@ -46,11 +46,11 @@ def test_raises_configerror_on_db_open_failure(tmp_path: Path, monkeypatch: Any)
 
     monkeypatch.setattr("sqlite3.connect", _boom, raising=True)
 
-    with pytest.raises(ConfigError) as ei:
+    with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
         _ = vl.load_reviewed_vocab(base, _NoopLogger())
 
     err = ei.value
-    assert getattr(err, "file_path", None) == db
+    assert getattr(err, "file_path", None) == str(db)
 
 
 def test_path_guard_is_enforced(tmp_path: Path, monkeypatch: Any):

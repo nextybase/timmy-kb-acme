@@ -39,10 +39,13 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
     - lista di dict:   [{"canonical": str, "alias": str}, ...]
     - lista di tuple:  [(canonical:str, alias:str), ...]
     - lista di liste:  [[canonical, alias], ...]
-    - altro/non riconosciuto -> {}
+    - altro/non riconosciuto -> ConfigError
     """
     out: Dict[str, list[str]] = defaultdict(list)
     seen_aliases: Dict[str, Set[str]] = defaultdict(set)
+
+    def _raise_invalid() -> None:
+        raise ConfigError("Canonical vocab shape invalid")
 
     def _append_alias(canon_value: Any, alias_value: Any) -> None:
         canon = str(canon_value).strip().casefold()
@@ -195,6 +198,8 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
                     seen.add(alias_str)
                     ordered.append(alias_str)
                 result[str(canon)] = {"aliases": ordered}
+            if not result:
+                _raise_invalid()
             return result
         # formato storage: {"tags": [ {name, action, synonyms?}, ... ]}
         items = cast(Any, data).get("tags") if hasattr(data, "get") else None
@@ -202,6 +207,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
             processed = _build_from_tag_rows(items)
             if processed:
                 return processed
+            _raise_invalid()
 
         # mapping semplice: canon -> Iterable[alias]
         try:
@@ -211,9 +217,11 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
                 else:
                     for a in aliases:
                         _append_alias(canon, a)
-            return {k: {"aliases": v} for k, v in out.items()}
+            if out:
+                return {k: {"aliases": v} for k, v in out.items()}
+            _raise_invalid()
         except Exception:
-            pass  # tenteremo i casi successivi
+            _raise_invalid()
 
     # 2) lista di dict/tuple/list
     if isinstance(data, Sequence) and not isinstance(data, (str, bytes)):
@@ -229,8 +237,10 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
                     _append_alias(canon, alias)
         if out:
             return {k: {"aliases": v} for k, v in out.items()}
+        _raise_invalid()
 
     # 3) fallback: shape non riconosciuta
+    _raise_invalid()
     return {}
 
 
@@ -245,16 +255,15 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
             "semantic.vocab.loader_missing",
             extra={"event": "semantic.vocab.loader_missing", "file_path": str(db_path)},
         )
-        raise ConfigError("Loader tags_store mancante per tags.db.", file_path=db_path)
+        raise ConfigError("tags.db missing or unreadable", file_path=str(db_path))
     try:
         raw = _load_tags_reviewed(str(db_path))  # accetta str/Path
-    except sqlite3.Error as exc:  # errori SQLite (query/cursor)
-        err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
-        err_type = type(exc).__name__
-        raise ConfigError(
-            f"Errore lettura DB del vocabolario: {err_type}: {err_line}",
-            file_path=db_path,
-        ) from exc
+    except Exception as exc:  # errori SQLite (query/cursor)
+        LOGGER.warning(
+            "semantic.vocab.load_failed",
+            extra={"file_path": str(db_path), "error": str(exc)},
+        )
+        raise ConfigError("tags.db missing or unreadable", file_path=str(db_path)) from exc
     return _to_vocab(raw)
 
 
@@ -328,30 +337,19 @@ def load_reviewed_vocab(
             file_path=db_path,
             canon_count=0,
         )
-        raise ConfigError("Vocabolario canonico assente (tags.db).", file_path=db_path)
-
-    if _load_tags_reviewed is None:
-        if strict:
-            raise ConfigError("Loader tags_store mancante in modalità strict.", file_path=db_path)
-        logger.warning(
-            "semantic.vocab.tags_store_missing",
-            extra={"slug": slug, "file_path": str(db_path)},
-        )
-        raise ConfigError("Loader tags_store mancante per tags.db.", file_path=db_path)
+        raise ConfigError("tags.db missing or unreadable", file_path=str(db_path))
 
     try:
         con = sqlite3.connect(str(db_path))
         con.close()
     except Exception as exc:
-        err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
-        err_type = type(exc).__name__
-        raise ConfigError(
-            f"Impossibile aprire il DB del vocabolario: {err_type}: {err_line}",
-            file_path=db_path,
-        ) from exc
+        logger.warning(
+            "semantic.vocab.open_failed",
+            extra={"file_path": str(db_path), "error": str(exc), "slug": slug},
+        )
+        raise ConfigError("tags.db missing or unreadable", file_path=str(db_path)) from exc
 
-    vocab_raw = load_tags_reviewed_db(db_path)
-    vocab = _to_vocab(vocab_raw)
+    vocab = load_tags_reviewed_db(db_path)
     if not vocab:
         _log_vocab_event(
             logger,
@@ -360,7 +358,7 @@ def load_reviewed_vocab(
             file_path=db_path,
             canon_count=0,
         )
-        raise ConfigError("Vocabolario canonico vuoto (tags.db).", file_path=db_path)
+        raise ConfigError("Canonical vocab shape invalid", file_path=str(db_path))
 
     _log_vocab_event(
         logger,

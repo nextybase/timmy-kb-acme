@@ -20,7 +20,7 @@ def test_load_vocab_missing_db_returns_empty_and_logs(tmp_path: Path, capsys: py
     base = _mk_workspace(tmp_path)
     logger = get_structured_logger("test.vocab.missing")
 
-    with pytest.raises(ConfigError, match="Vocabolario canonico assente"):
+    with pytest.raises(ConfigError, match="tags.db missing or unreadable"):
         load_reviewed_vocab(base, logger)
     out = capsys.readouterr().out
     assert "semantic.vocab.db_missing" in out
@@ -37,7 +37,7 @@ def test_load_vocab_empty_db_warns(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(vl, "load_tags_reviewed_db", lambda p: {}, raising=True)
 
     logger = get_structured_logger("test.vocab.empty")
-    with pytest.raises(ConfigError, match="Vocabolario canonico vuoto"):
+    with pytest.raises(ConfigError, match="Canonical vocab shape invalid"):
         load_reviewed_vocab(base, logger)
     out = capsys.readouterr().out
     assert "semantic.vocab.db_empty" in out
@@ -54,7 +54,7 @@ def test_load_vocab_empty_db_strict_raises(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(vl, "load_tags_reviewed_db", lambda p: {}, raising=True)
 
     logger = get_structured_logger("test.vocab.empty.strict")
-    with pytest.raises(ConfigError, match="Vocabolario canonico vuoto"):
+    with pytest.raises(ConfigError, match="Canonical vocab shape invalid"):
         load_reviewed_vocab(base, logger, strict=True)
 
 
@@ -71,7 +71,7 @@ def test_load_vocab_valid_info(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
     }
     import semantic.vocab_loader as vl
 
-    monkeypatch.setattr(vl, "load_tags_reviewed_db", lambda p: data, raising=True)
+    monkeypatch.setattr(vl, "load_tags_reviewed_db", lambda p: vl._to_vocab(data), raising=True)
 
     logger = get_structured_logger("test.vocab.ok")
     vocab = load_reviewed_vocab(base, logger)
