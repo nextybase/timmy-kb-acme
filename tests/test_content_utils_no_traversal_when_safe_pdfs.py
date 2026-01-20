@@ -82,6 +82,7 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cu, "_iter_category_pdfs", boom)
     monkeypatch.setattr(cu, "_filter_safe_pdfs", boom)
+    monkeypatch.setattr(cu, "_extract_pdf_text", lambda *args, **kwargs: "contenuto pdf")
 
     # Esegue la conversione passando safe_pdfs (niente traversal legacy)
     ctx = _ctx(base)

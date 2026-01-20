@@ -249,28 +249,34 @@ def _extract_pdf_text(
     *,
     slug: str | None,
     logger: logging.Logger,
-) -> str | None:
-    """Legge tutto il testo dal PDF (normalized) oppure None su failure."""
+) -> str:
+    """Legge tutto il testo dal PDF (normalized) con hard-fail su errori."""
     try:
         from nlp.nlp_keywords import extract_text_from_pdf
-    except Exception as exc:  # pragma: no cover - import fallback
-        logger.debug(
-            "pipeline.content.extract_text_missing",
-            extra={"slug": slug, "file_path": str(pdf_path), "error": str(exc)},
-        )
-        return None
+    except Exception as exc:  # pragma: no cover - dependency error
+        raise PipelineError(
+            "PDF extractor dependency missing: nlp.nlp_keywords.extract_text_from_pdf not available.",
+            slug=slug,
+            file_path=str(pdf_path),
+        ) from exc
 
     try:
         raw_text = extract_text_from_pdf(str(pdf_path))
     except Exception as exc:
-        logger.debug(
-            "pipeline.content.extract_text_failed",
-            extra={"slug": slug, "file_path": str(pdf_path), "error": str(exc)},
-        )
-        return None
+        raise PipelineError(
+            "PDF text extraction failed.",
+            slug=slug,
+            file_path=str(pdf_path),
+        ) from exc
 
     normalized = _normalize_excerpt(raw_text)
-    return normalized if normalized else None
+    if not normalized:
+        raise PipelineError(
+            "PDF text extraction returned empty content.",
+            slug=slug,
+            file_path=str(pdf_path),
+        )
+    return normalized
 
 
 def _chunk_pdf_text(text: str, *, chunk_chars: int = 1200, max_chunks: int = 4) -> list[str]:
@@ -307,12 +313,10 @@ def _extract_pdf_excerpt(
     logger: logging.Logger,
     text: str | None = None,
     max_chars: int = _PDF_EXCERPT_MAX_CHARS,
-) -> str | None:
-    """Restituisce il testo pulito (max_chars) estratto da un PDF (fallback None)."""
+) -> str:
+    """Restituisce il testo pulito (max_chars) estratto da un PDF (hard-fail su errori)."""
     if not text:
         text = _extract_pdf_text(pdf_path, slug=slug, logger=logger)
-    if not text:
-        return None
     excerpt = text[:max_chars].rstrip()
     if len(text) > max_chars:
         excerpt += "..."
@@ -340,8 +344,7 @@ def _write_markdown_for_pdf(
     logger = get_structured_logger("pipeline.content_utils", context={"slug": slug})
     text = _extract_pdf_text(pdf_path, slug=slug, logger=logger)
     excerpt = _extract_pdf_excerpt(pdf_path, slug=slug, logger=logger, text=text)
-    safe_text = text or ""
-    chunks = _chunk_pdf_text(safe_text, chunk_chars=900, max_chunks=4)
+    chunks = _chunk_pdf_text(text, chunk_chars=900, max_chunks=4)
     chunk_summaries = _build_chunk_summaries(chunks)
     body_parts: list[str] = []
     if excerpt:

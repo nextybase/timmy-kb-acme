@@ -22,6 +22,7 @@ def test_write_markdown_logs_frontmatter_read_failure(monkeypatch, caplog, tmp_p
         raise PipelineError("frontmatter corrupted")
 
     monkeypatch.setattr(cu, "read_frontmatter", _raise_frontmatter)
+    monkeypatch.setattr(cu, "_extract_pdf_text", lambda *args, **kwargs: "contenuto pdf")
 
     caplog.set_level(logging.WARNING)
 

@@ -2,6 +2,7 @@
 # tests/test_convert_markdown_rerun_processes_new_pdfs.py
 from pathlib import Path
 
+import pipeline.content_utils as cu
 from semantic.convert_service import convert_markdown
 
 
@@ -37,7 +38,7 @@ def _touch(pdf_path: Path) -> None:
     pdf_path.write_bytes(b"%PDF-1.4\n%dummy\n")  # contenuto minimale
 
 
-def test_convert_markdown_rerun_processes_new_pdfs(tmp_path: Path):
+def test_convert_markdown_rerun_processes_new_pdfs(monkeypatch, tmp_path: Path):
     base = tmp_path / "kb"
     ctx = _Ctx(base, slug="dummy")
     logger = _NoopLogger()
@@ -51,6 +52,7 @@ def test_convert_markdown_rerun_processes_new_pdfs(tmp_path: Path):
     (base / "book").mkdir(parents=True, exist_ok=True)
     (base / "book" / "README.md").write_text("# Placeholder\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Placeholder\n", encoding="utf-8")
+    monkeypatch.setattr(cu, "_extract_pdf_text", lambda *args, **kwargs: "contenuto pdf")
 
     # Primo run: un PDF in raw/foo -> deve produrre book/foo/a.md
     _touch(ctx.raw_dir / "foo" / "a.pdf")

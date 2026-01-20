@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # tests/test_content_utils.py  (aggiunta di due test mirati)
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +57,42 @@ def test_validate_markdown_dir_traversal_includes_slug_in_message(tmp_path: Path
     assert "slug=dummy" in str(err)
 
 
+def test_extract_pdf_text_raises_on_empty(tmp_path: Path, monkeypatch: Any) -> None:
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_text("dummy", encoding="utf-8")
+
+    monkeypatch.setattr("nlp.nlp_keywords.extract_text_from_pdf", lambda _path: "  ")
+    logger = logging.getLogger("test.content.extract")
+    with pytest.raises(PipelineError, match="empty content"):
+        cu._extract_pdf_text(pdf_path, slug="dummy", logger=logger)
+
+
+def test_extract_pdf_text_raises_on_failure(tmp_path: Path, monkeypatch: Any) -> None:
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_text("dummy", encoding="utf-8")
+
+    def _boom(_path: str) -> str:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("nlp.nlp_keywords.extract_text_from_pdf", _boom)
+    logger = logging.getLogger("test.content.extract")
+    with pytest.raises(PipelineError, match="extraction failed"):
+        cu._extract_pdf_text(pdf_path, slug="dummy", logger=logger)
+
+
+def test_extract_pdf_text_real_path_success(tmp_path: Path, monkeypatch: Any) -> None:
+    pdf_path = tmp_path / "sample.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%dummy\n")
+
+    def _fake_extract(_path: str) -> str:
+        return "Testo reale estratto dal PDF"
+
+    monkeypatch.setattr("nlp.nlp_keywords.extract_text_from_pdf", _fake_extract)
+    logger = logging.getLogger("test.content.realpath")
+    text = cu._extract_pdf_text(pdf_path, slug="dummy", logger=logger)
+    assert "Testo reale estratto" in text
+
+
 def test_write_markdown_for_pdf_preserves_created_at(tmp_path: Path, monkeypatch: Any):
     ctx = _Ctx(tmp_path, slug="dummy")
     raw_root = tmp_path / "raw"
@@ -72,6 +109,7 @@ def test_write_markdown_for_pdf_preserves_created_at(tmp_path: Path, monkeypatch
 
     rel_pdf = pdf_path.relative_to(raw_root).as_posix()
     candidates = {rel_pdf: {"tags": ["inaugurazione", "vision"]}}
+    monkeypatch.setattr(cu, "_extract_pdf_text", lambda *args, **kwargs: "contenuto pdf")
 
     first_md = cu._write_markdown_for_pdf(pdf_path, raw_root, target_root, candidates, cfg, slug=ctx.slug)
     meta_before, body_before = read_frontmatter(target_root, first_md)
@@ -106,6 +144,7 @@ def test_write_markdown_for_pdf_uses_cache_when_unchanged(tmp_path: Path, monkey
 
     rel_pdf = pdf_path.relative_to(raw_root).as_posix()
     candidates = {rel_pdf: {"tags": ["inaugurazione", "vision"]}}
+    monkeypatch.setattr(cu, "_extract_pdf_text", lambda *args, **kwargs: "contenuto pdf")
 
     first_md = cu._write_markdown_for_pdf(pdf_path, raw_root, target_root, candidates, cfg, slug="dummy")
     meta_before, body_before = read_frontmatter(target_root, first_md, use_cache=False)
@@ -152,6 +191,7 @@ def test_write_markdown_for_pdf_adds_excerpt_when_available(tmp_path: Path, monk
     rel_pdf = pdf_path.relative_to(raw_root).as_posix()
     candidates = {rel_pdf: {"tags": ["inaugurazione", "vision"]}}
     excerpt_text = "Testo estratto e normalizzato"
+    monkeypatch.setattr(cu, "_extract_pdf_text", lambda *args, **kwargs: "contenuto pdf")
     monkeypatch.setattr(cu, "_extract_pdf_excerpt", lambda *args, **kwargs: excerpt_text)
 
     md = cu._write_markdown_for_pdf(

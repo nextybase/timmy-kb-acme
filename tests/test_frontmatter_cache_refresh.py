@@ -5,7 +5,7 @@ from pipeline import content_utils as cu
 from semantic.config import SemanticConfig
 
 
-def test_frontmatter_cache_updates_after_write(tmp_path: Path) -> None:
+def test_frontmatter_cache_updates_after_write(monkeypatch, tmp_path: Path) -> None:
     raw_root = tmp_path / "raw"
     target_root = tmp_path / "book"
     raw_root.mkdir()
@@ -13,6 +13,7 @@ def test_frontmatter_cache_updates_after_write(tmp_path: Path) -> None:
 
     pdf_path = raw_root / "doc.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n%")
+    monkeypatch.setattr(cu, "_extract_pdf_text", lambda *args, **kwargs: "contenuto pdf")
 
     cu.clear_frontmatter_cache()
 
