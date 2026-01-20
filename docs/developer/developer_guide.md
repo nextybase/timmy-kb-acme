@@ -148,6 +148,25 @@ invarianti, eccezioni e responsabilità vedi
 
 ---
 
+## Storage & Knowledge Base (conceptual overview)
+
+In Beta 1.0 la base di conoscenza usa SQLite come SSoT per tag e knowledge base:
+`semantic/kb.sqlite` è l’unico backend supportato.
+Il database rappresenta la persistenza degli artefatti semantici e dei metadati
+utili a ricerca e arricchimento, mantenendo idempotenza e ripetibilità dei run
+senza entrare nei dettagli di schema.
+Non è configurazione, non è cache effimera e non è stato runtime “libero” nella
+repo root: vive nel workspace e segue il perimetro deterministico.
+La scelta di un solo storage locale e auditabile riduce l’entropia e rende i
+risultati tracciabili e riproducibili.
+
+Dove guardare:
+- [ADR-0001: SQLite come SSoT](../adr/0001-sqlite-ssot-tags.md)
+- [Test suite](test_suite.md)
+- [Architecture Overview](../../system/architecture.md)
+
+---
+
 ## Retriever (ricerca)
 
 Questa sezione descrive il comportamento atteso del retriever. I requisiti
