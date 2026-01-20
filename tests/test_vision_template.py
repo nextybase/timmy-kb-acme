@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.exceptions import ConfigError
 from pipeline import vision_template as vt
+from pipeline.exceptions import ConfigError
 
 
 def _set_template_path(monkeypatch: pytest.MonkeyPatch, path: Path) -> None:

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Tuple, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within
 from semantic.document_ingest import read_document
 
@@ -22,6 +23,7 @@ else:
 
 vision_run_params = SimpleNamespace(run_for_vision=SimpleNamespace(use_kb=False))
 # Forziamo la prima fase Vision a NON usare la KB per evitare contaminazioni semantiche
+_LOGGER = get_structured_logger("semantic.vision_parser")
 
 
 def _read_pdf_text(pdf_path: Path) -> str:
@@ -29,7 +31,11 @@ def _read_pdf_text(pdf_path: Path) -> str:
         doc = read_document(pdf_path)
         return cast(str, doc.full_text)
     except Exception as exc:  # pragma: no cover
-        raise RuntimeError(f"Impossibile leggere il PDF: {exc}") from exc
+        _LOGGER.warning(
+            "semantic.vision_parser.read_failed",
+            extra={"file_path": str(pdf_path), "error": str(exc)},
+        )
+        raise ConfigError("Impossibile leggere il PDF.", file_path=str(pdf_path)) from exc
 
 
 def _clean_text(text: str) -> str:
