@@ -87,4 +87,3 @@ Quando `--dummy` è usato:
 ### Interpretazione operativa consigliata
 - `workspace_state` risponde: "dove siamo davvero?"
 - `latest_run + verdict` risponde: "l'ultima esecuzione è sana?"
-

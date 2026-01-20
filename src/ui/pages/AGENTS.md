@@ -23,4 +23,4 @@ Binding rules for the Streamlit page modules under `src/ui/pages/`: enforce Stre
 
 # References
 - system/ops/agents_index.md
-- docs/streamlit_ui.md
+- docs/developer/streamlit_ui.md

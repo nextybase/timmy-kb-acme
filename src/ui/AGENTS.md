@@ -3,7 +3,7 @@ Rules for the Streamlit onboarding UI that prioritize correct gating and safe I/
 
 
 # Rules (overrides)
-- Follow `docs/streamlit_ui.md` for routing, state management, I/O, and logging; the flow should cover configuration → Drive (provisioning + README + RAW download) → Semantics (convert/enrich → README/SUMMARY → Preview).
+- Follow `docs/developer/streamlit_ui.md` for routing, state management, I/O, and logging; the flow should cover configuration → Drive (provisioning + README + RAW download) → Semantics (convert/enrich → README/SUMMARY → Preview).
 - Gate the Semantica tab so it is enabled only when `raw/` is present locally.
 - Use native routing with `st.Page`, `st.navigation`, and helpers such as `ui.utils.route_state`/`ui.utils.slug`; avoid non-idempotent side effects.
 - Enforce path-safe I/O with `ensure_within_and_resolve`, `safe_write_text`/`safe_write_bytes`, and `iter_safe_pdfs` (no unexpected `os.walk`).
@@ -17,4 +17,4 @@ Rules for the Streamlit onboarding UI that prioritize correct gating and safe I/
 
 # References
 - system/ops/agents_index.md
-- docs/streamlit_ui.md
+- docs/developer/streamlit_ui.md
