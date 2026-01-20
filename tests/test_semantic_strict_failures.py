@@ -19,9 +19,7 @@ class _Ctx:
         self.enrich_enabled = True
 
 
-def test_enrich_markdown_folder_raises_on_first_failure(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_enrich_markdown_folder_raises_on_first_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     base = tmp_path / "kb"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
@@ -36,9 +34,7 @@ def test_enrich_markdown_folder_raises_on_first_failure(
         se.enrich_markdown_folder(_Ctx(base), logging.getLogger("test.enrich.strict"))
 
 
-def test_extract_semantic_concepts_raises_on_read_failure(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_extract_semantic_concepts_raises_on_read_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     base = tmp_path / "kb"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)

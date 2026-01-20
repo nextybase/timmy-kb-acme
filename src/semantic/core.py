@@ -194,13 +194,13 @@ def extract_semantic_concepts(
         patterns = [_term_to_pattern(k) for k in norm_kws]
         matches: List[Dict[str, str]] = []
         for file, normalized_content in normalized_by_file.items():
-                hit_idx: Optional[int] = None
-                for i, pat in enumerate(patterns):
-                    if pat.search(normalized_content):
-                        hit_idx = i
-                        break
-                if hit_idx is not None:
-                    matches.append({"file": file.name, "keyword": norm_kws[hit_idx]})
+            hit_idx: Optional[int] = None
+            for i, pat in enumerate(patterns):
+                if pat.search(normalized_content):
+                    hit_idx = i
+                    break
+            if hit_idx is not None:
+                matches.append({"file": file.name, "keyword": norm_kws[hit_idx]})
         extracted[concept] = matches
     logger.info("semantic.extract.completed", extra={"slug": context.slug})
     return extracted

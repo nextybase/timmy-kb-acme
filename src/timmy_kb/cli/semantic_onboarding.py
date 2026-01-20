@@ -37,6 +37,7 @@ from semantic.frontmatter_service import (  # noqa: F401  # esposto per monkeypa
 from semantic.types import SemanticContextProtocol
 from storage import decision_ledger
 from timmy_kb.cli.kg_builder import build_kg_for_workspace
+from timmy_kb.versioning import build_env_fingerprint
 
 
 def get_paths(slug: str) -> dict[str, Path]:
@@ -95,6 +96,10 @@ def _build_evidence_json(
         "requested": requested,
         "effective": effective_final,
         "outcome": outcome,  # ok | deny_config | deny_pipeline | deny_unexpected
+        # Policy: Environment Certification (best-effort evidence)
+        "timmy_env": os.getenv("TIMMY_ENV", "dev"),
+        "timmy_beta_strict_env": os.getenv("TIMMY_BETA_STRICT"),
+        "env_fingerprint": build_env_fingerprint(),
     }
     if exit_code is not None:
         payload["exit_code"] = int(exit_code)

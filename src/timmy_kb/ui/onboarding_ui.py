@@ -17,7 +17,7 @@ from typing import Any
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.paths import get_repo_root, global_logs_dir
-from timmy_kb.versioning import build_identity
+from timmy_kb.versioning import build_env_fingerprint, build_identity
 from ui import config_store
 from ui.types import StreamlitLike
 
@@ -367,6 +367,8 @@ def main() -> None:
         port = os.getenv("PORT") or os.getenv("STREAMLIT_SERVER_PORT") or os.getenv("SERVER_PORT")
         st.session_state["_startup_logged"] = True
         identity = build_identity()
+        fp = build_env_fingerprint()
+        preflight_skipped = bool(config_store.get_skip_preflight(repo_root=repo_root))
         logger.info(
             "ui.startup",
             extra={
@@ -374,6 +376,8 @@ def main() -> None:
                 "streamlit_version": getattr(st, "__version__", "unknown"),
                 "port": port,
                 "mode": "streamlit",
+                "env_fingerprint": fp,
+                "preflight_skipped_by_config": preflight_skipped,
             },
         )
 

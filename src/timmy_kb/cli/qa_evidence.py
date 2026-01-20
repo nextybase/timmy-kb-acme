@@ -16,6 +16,7 @@ from pipeline.paths import get_repo_root
 from pipeline.proc_utils import CmdError, run_cmd
 from pipeline.qa_evidence import write_qa_evidence
 from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from timmy_kb.versioning import build_env_fingerprint
 
 
 def _parse_args() -> argparse.Namespace:
@@ -38,6 +39,7 @@ def main() -> int:
         redact_logs=settings.redact_logs,
         enable_tracing=settings.tracing_enabled,
     )
+    logger.info("cli.qa_evidence.started", extra={"env_fingerprint": build_env_fingerprint()})
 
     ctx = ClientContext.load(slug=slug, require_env=False, run_id=run_id, bootstrap_config=False)
     with workspace_validation_policy(skip_validation=True):

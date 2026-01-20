@@ -79,6 +79,7 @@ Qui vivono le regole operative che definiscono i confini del sistema:
 - **[Security & compliance](policies/security.md)** - segreti, OIDC, branch protection.
 - **[Contratti operativi](policies/import_contract.md)** - import/export, invarianti di pipeline.
 - **[Core rules per assistant](policies/next_core_for_assistants.md)** - regole comuni per i moduli AI nell'ecosistema NeXT.
+- **[Environment certification](policies/environment_certification.md)** - requisiti per ambiente certificato e run conformi.
 
 Se un comportamento viola un documento in questa sezione, è da considerarsi un errore nel perimetro applicativo, senza sovrascrivere `MANIFEST.md` o `instructions/*`.
 

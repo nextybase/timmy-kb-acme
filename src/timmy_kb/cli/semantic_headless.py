@@ -16,6 +16,7 @@ from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_poli
 from semantic.api import require_reviewed_vocab
 from semantic.convert_service import convert_markdown
 from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
+from timmy_kb.versioning import build_env_fingerprint
 
 __all__ = [
     "build_markdown_headless",
@@ -139,6 +140,8 @@ def run_semantic_headless(
 ) -> dict[str, object]:
     log = _setup_logger(log_level, slug=slug)
     env = os.getenv("TIMMY_ENV", "dev")
+    fp = build_env_fingerprint()
+    log.info("semantic.headless.started", extra={"slug": slug, "env_fingerprint": fp})
 
     with start_root_trace(
         "reindex",
@@ -161,6 +164,7 @@ def run_semantic_headless(
             log.exception("semantic.headless.context_load_failed", extra={"error": str(exc)})
             return {
                 "slug": slug,
+                "env_fingerprint": fp,
                 "status": "config_error",
                 "stage": "context",
                 "converted_count": 0,
@@ -172,6 +176,7 @@ def run_semantic_headless(
             log.exception("semantic.headless.context_unexpected", extra={"error": str(exc)})
             return {
                 "slug": slug,
+                "env_fingerprint": fp,
                 "status": "error",
                 "stage": "context",
                 "converted_count": 0,
@@ -188,6 +193,7 @@ def run_semantic_headless(
             log.exception("semantic.headless.run_config_error", extra={"error": str(exc)})
             return {
                 "slug": slug,
+                "env_fingerprint": fp,
                 "status": "config_error",
                 "stage": "run",
                 "converted_count": 0,
@@ -199,6 +205,7 @@ def run_semantic_headless(
             log.exception("semantic.headless.run_failed", extra={"error": str(exc)})
             return {
                 "slug": slug,
+                "env_fingerprint": fp,
                 "status": "error",
                 "stage": "run",
                 "converted_count": 0,
@@ -213,10 +220,11 @@ def run_semantic_headless(
         event="cli.semantic_headless.completed",
         slug=slug,
         artifacts=int(conv),
-        extra={"enriched_count": int(enr)},
+        extra={"enriched_count": int(enr), "env_fingerprint": fp},
     )
     return {
         "slug": slug,
+        "env_fingerprint": fp,
         "status": "success",
         "stage": "run",
         "converted_count": conv,

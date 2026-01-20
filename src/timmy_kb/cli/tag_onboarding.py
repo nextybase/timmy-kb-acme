@@ -71,6 +71,7 @@ from storage import decision_ledger
 from storage.tags_store import clear_doc_terms, derive_db_path_from_yaml_path, ensure_schema_v2, get_conn, has_doc_terms
 from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
 from storage.tags_store import upsert_document, upsert_folder
+from timmy_kb.versioning import build_env_fingerprint
 
 from . import tag_onboarding_raw as tag_onboarding_raw_module
 from .tag_onboarding_context import ContextResources, prepare_context
@@ -121,6 +122,10 @@ def _build_ledger_evidence(
         "effective_mode": effective_mode,
         "gate_scope": "intra_state",
         "state_transition": False,
+        # Policy: Environment Certification (best-effort evidence)
+        "timmy_env": os.getenv("TIMMY_ENV"),
+        "timmy_beta_strict_env": os.getenv("TIMMY_BETA_STRICT"),
+        "env_fingerprint": build_env_fingerprint(),
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 

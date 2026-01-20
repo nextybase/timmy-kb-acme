@@ -4,7 +4,7 @@
 
 - **Audience:** developers, tech writers, QA, maintainers, and the repo-aware agent Codex.
 - **Scope:** local operations, UI/CLI flows, OpenAI/Drive integrations, secure I/O and path safety, rollback, and incident response.
-- **Canonical references:** [Developer Guide](../../docs/developer/developer_guide.md), [Coding Rules](../../docs/developer/coding_rule.md), [Architecture Overview](../architecture.md), [AGENTS Index](agents_index.md), [.codex/WORKFLOWS](../../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../../.codex/CHECKLISTS.md), [User Guide](../../docs/user/user_guide.md), [.codex/USER_DEV_SEPARATION](../../.codex/USER_DEV_SEPARATION.md).
+- **Canonical references:** [Developer Guide](../../docs/developer/developer_guide.md), [Coding Rules](../../docs/developer/coding_rule.md), [Architecture Overview](../architecture.md), [AGENTS Index](agents_index.md), [Environment Certification Policy](../../docs/policies/environment_certification.md), [.codex/WORKFLOWS](../../.codex/WORKFLOWS.md), [.codex/CHECKLISTS](../../.codex/CHECKLISTS.md), [User Guide](../../docs/user/user_guide.md), [.codex/USER_DEV_SEPARATION](../../.codex/USER_DEV_SEPARATION.md).
 
 ## Visual summary of the Codex system
 

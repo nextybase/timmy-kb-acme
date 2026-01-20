@@ -16,6 +16,7 @@ from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_valid_slug, ensure_within_and_resolve
 from pipeline.workspace_layout import WorkspaceLayout
 from timmy_kb.cli.kg_builder import build_kg_for_workspace
+from timmy_kb.versioning import build_env_fingerprint
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -93,7 +94,10 @@ def kg_build_main(
     layout.logs_dir.mkdir(parents=True, exist_ok=True)
     log_file = layout.log_file
     logger = get_structured_logger("kg_build", log_file=log_file, context=context, run_id=run_id)
-    logger.info("cli.kg_build.started", extra={"workspace": str(workspace), "namespace": namespace})
+    logger.info(
+        "cli.kg_build.started",
+        extra={"workspace": str(workspace), "namespace": namespace, "env_fingerprint": build_env_fingerprint()},
+    )
 
     try:
         with phase_scope(logger, stage="tag_kg.build", customer=slug):

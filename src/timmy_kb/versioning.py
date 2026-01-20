@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from importlib import metadata
+from typing import Any
 
 from pipeline.logging_utils import get_structured_logger
 
@@ -28,3 +29,61 @@ def get_package_version() -> str:
 
 def build_identity() -> dict[str, str]:
     return {"ui_release": UI_RELEASE, "package_version": get_package_version()}
+
+
+def _safe_get_distribution_version(dist_name: str) -> str | None:
+    try:
+        return metadata.version(dist_name)
+    except Exception:
+        return None
+
+
+def _best_effort_git_sha() -> str | None:
+    """
+    Best-effort: ritorna l'HEAD SHA se disponibile.
+    Non deve mai causare failure (policy: evidence, non enforcement).
+    """
+    try:
+        import subprocess
+
+        res = subprocess.run(  # noqa: S603
+            ["git", "rev-parse", "HEAD"],  # noqa: S607
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if res.returncode == 0:
+            sha = (res.stdout or "").strip()
+            return sha or None
+    except Exception:
+        pass
+    return None
+
+
+def build_env_fingerprint() -> dict[str, Any]:
+    """
+    Fingerprint ambiente (best-effort, no hard deps).
+    Usato per auditabilita': NON deve influenzare flusso o determinismo.
+    """
+    import os
+    import platform
+    import sys
+
+    fp: dict[str, Any] = {
+        "git_sha": _best_effort_git_sha(),
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
+        "timmy_env": os.getenv("TIMMY_ENV"),
+        "timmy_beta_strict": os.getenv("TIMMY_BETA_STRICT"),
+        "tags_nlp_backend": os.getenv("TAGS_NLP_BACKEND"),
+        "spacy_model": os.getenv("SPACY_MODEL"),
+        # distribuzioni "soft" (se installate)
+        "streamlit_version": _safe_get_distribution_version("streamlit"),
+        "spacy_version": _safe_get_distribution_version("spacy"),
+        "sentence_transformers_version": _safe_get_distribution_version("sentence-transformers"),
+        "pymupdf_version": _safe_get_distribution_version("PyMuPDF"),
+        "reportlab_version": _safe_get_distribution_version("reportlab"),
+        "google_api_client_version": _safe_get_distribution_version("google-api-python-client"),
+        "pypdf_version": _safe_get_distribution_version("pypdf"),
+    }
+    return fp
