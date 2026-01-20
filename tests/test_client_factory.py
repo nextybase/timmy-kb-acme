@@ -14,7 +14,10 @@ from pipeline.exceptions import ConfigError
 
 def test_make_openai_client_requires_modern_sdk(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")  # pragma: allowlist secret
-    monkeypatch.setattr(client_factory, "_load_settings", lambda: None)
+    settings_stub = types.SimpleNamespace(
+        openai_settings=types.SimpleNamespace(timeout=30, max_retries=5, http2_enabled=True)
+    )
+    monkeypatch.setattr(client_factory, "_load_settings", lambda: settings_stub)
 
     class LegacyOpenAI:
         def __init__(self, **_kwargs: Any) -> None:
@@ -59,3 +62,23 @@ def test_make_openai_client_success(monkeypatch):
     assert captured_kwargs["timeout"] == 30.0
     assert captured_kwargs["max_retries"] == 5
     assert captured_kwargs["http2"] is True
+
+
+def test_make_openai_client_fails_if_settings_not_loadable(monkeypatch):
+    # Beta 1.0 STRICT: se Settings.load fallisce, il runtime deve fermarsi.
+    monkeypatch.setenv("OPENAI_API_KEY", "secret")  # pragma: allowlist secret
+
+    # Evita dipendenze dal SDK: basta che get_openai_ctor sia risolvibile.
+    monkeypatch.setattr(client_factory, "get_openai_ctor", lambda: (lambda **_kwargs: object()))
+
+    def _boom(_root):
+        raise FileNotFoundError("config missing")
+
+    monkeypatch.setattr(client_factory.Settings, "load", _boom)
+
+    with pytest.raises(ConfigError) as excinfo:
+        make_openai_client()
+
+    msg = str(excinfo.value).lower()
+    assert "config" in msg
+    assert "strict" in msg or "beta" in msg

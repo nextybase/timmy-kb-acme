@@ -5,8 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from ai.check import run_vision_dummy_check
 from pipeline.exceptions import ConfigError
+from tools.ai_checks import run_vision_dummy_check
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

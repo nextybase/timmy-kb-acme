@@ -6,7 +6,7 @@ Carica visionstatement.yaml del dummy, esegue analyze_vision_sections e stampa u
 """
 from __future__ import annotations
 
-from ai.check import debug_dummy_vision_sections
+from tools.ai_checks import debug_dummy_vision_sections
 
 
 def main() -> None:

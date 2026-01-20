@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 from pipeline.capabilities import get_openai_ctor
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
@@ -51,13 +51,12 @@ def make_openai_client():
     base_url_env = get_env_var("OPENAI_BASE_URL", default=None)
     project_env = get_env_var("OPENAI_PROJECT", default=None)
     settings_obj = _load_settings()
-    if settings_obj is not None:
-        openai_cfg = settings_obj.openai_settings
-        client_kwargs["timeout"] = float(openai_cfg.timeout)
-        client_kwargs["max_retries"] = int(openai_cfg.max_retries)
-        if openai_cfg.http2_enabled:
-            client_kwargs["http2"] = True
-        LOGGER.info("openai.client.config_from_yaml", extra={"source": "config"})
+    openai_cfg = settings_obj.openai_settings
+    client_kwargs["timeout"] = float(openai_cfg.timeout)
+    client_kwargs["max_retries"] = int(openai_cfg.max_retries)
+    if openai_cfg.http2_enabled:
+        client_kwargs["http2"] = True
+    LOGGER.info("openai.client.config_from_yaml", extra={"source": "config"})
 
     if base_url_env:
         client_kwargs["base_url"] = _normalize_base_url(base_url_env)
@@ -77,11 +76,26 @@ def make_openai_client():
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _load_settings() -> Optional[Settings]:
+def _load_settings() -> Settings:
     try:
         return Settings.load(_REPO_ROOT)
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        # Beta 1.0 STRICT: niente fallback silenziosi in runtime.
+        # Se la config globale non è caricabile è un errore di provisioning.
+        try:
+            LOGGER.error(
+                "openai.client.settings_load_failed",
+                extra={"error": repr(exc), "repo_root": str(_REPO_ROOT)},
+            )
+        except Exception:
+            # In caso di logger non disponibile o handler rotti, non mascheriamo l'errore.
+            pass
+        raise ConfigError(
+            "Impossibile caricare la configurazione globale (config/config.yaml). "
+            "In Beta 1.0 il runtime è strict: correggi la config o il provisioning e riprova.",
+            code="openai.client.settings.load_failed",
+            component="client_factory",
+        ) from exc
 
 
 LOGGER = get_structured_logger("ai.client_factory")
