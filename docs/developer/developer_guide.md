@@ -28,6 +28,23 @@ Per un percorso rapido step-by-step vedi anche [Developer Quickstart](developer_
 
 ---
 
+## Auxiliary developer tools
+
+La cartella `tools/` contiene script di supporto per sviluppatori e manutentori
+(migrazioni, smoke test, verifiche, utilita occasionali).
+Questi strumenti non fanno parte del core runtime deterministico e possono
+contenere fallback o comportamenti non deterministici.
+Il loro uso e opzionale e contestuale.
+
+- [`tools/gen_vision_yaml.py`](../../tools/gen_vision_yaml.py) - genera lo skeleton YAML del Vision Statement.
+- [`tools/gen_dummy_kb.py`](../../tools/gen_dummy_kb.py) - genera workspace dummy per smoke test.
+- [`tools/forbid_control_chars.py`](../../tools/forbid_control_chars.py) - verifica caratteri di controllo/encoding.
+- [`tools/retriever_benchmark.py`](../../tools/retriever_benchmark.py) - benchmark rapido del retriever.
+- [`tools/observability_stack.py`](../../tools/observability_stack.py) - avvio stack locale di osservabilita.
+
+Per il core deterministico, le regole operative e le invarianti di runtime fanno
+riferimento esclusivo a `src/`, `Coding Rules` e `Architecture Overview`.
+
 ## Obiettivi
 
 Questa guida sintetizza gli obiettivi di qualita (SSoT, logging strutturato,
