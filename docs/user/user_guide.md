@@ -10,6 +10,16 @@ Per la cornice filosofica del progetto vedi [MANIFEST.md](../../MANIFEST.md).
 
 Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
+## Normative context
+
+Questo progetto adotta una separazione intenzionale tra:
+- documentazione tecnica operativa (cartella `docs/`)
+- documentazione normativa e di governance ([MANIFEST.md](../../MANIFEST.md), [instructions/](../../instructions/))
+
+Le guide in `docs/` descrivono *come* utilizzare ed estendere il sistema.
+I vincoli su *cosa è consentito o vietato*, i ruoli, i gate decisionali e le
+macchine a stati sono definiti esclusivamente nelle fonti normative.
+
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
 > Avvio interfaccia: `streamlit run onboarding_ui.py` (la UI risolve il repo root via SSoT e non si affida a `REPO_ROOT_DIR`).
 

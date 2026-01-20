@@ -5,6 +5,16 @@
 > [Coding Rules](coding_rule.md); la mappa tecnica e le responsabilità sono in
 > [Architecture Overview](../../system/architecture.md).
 
+## Normative context
+
+Questo progetto adotta una separazione intenzionale tra:
+- documentazione tecnica operativa (cartella `docs/`)
+- documentazione normativa e di governance ([MANIFEST.md](../../MANIFEST.md), [instructions/](../../instructions/))
+
+Le guide in `docs/` descrivono *come* utilizzare ed estendere il sistema.
+I vincoli su *cosa è consentito o vietato*, i ruoli, i gate decisionali e le
+macchine a stati sono definiti esclusivamente nelle fonti normative.
+
 ## Executive summary
 
 Questo testo accompagna chi costruisce il sistema, ricordando che il valore è nel disegnare condizioni epistemiche condivise, non nel consegnare soluzioni autonome: ogni scelta tecnica nasce dal confronto con un contesto incerto e ogni modifica aggiorna una narrativa di responsabilità collettiva.

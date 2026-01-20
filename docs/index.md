@@ -15,6 +15,16 @@ Per la cornice valoriale ed epistemica di riferimento consulta il file `MANIFEST
 
 La documentazione è organizzata per **ruolo e funzione**. Usa l'indice seguente come mappa di navigazione, non come ordine di lettura obbligatorio.
 
+## Normative context
+
+Questo progetto adotta una separazione intenzionale tra:
+- documentazione tecnica operativa (cartella `docs/`)
+- documentazione normativa e di governance ([MANIFEST.md](../MANIFEST.md), [instructions/](../instructions/))
+
+Le guide in `docs/` descrivono *come* utilizzare ed estendere il sistema.
+I vincoli su *cosa è consentito o vietato*, i ruoli, i gate decisionali e le
+macchine a stati sono definiti esclusivamente nelle fonti normative.
+
 ---
 
 ## Entry point
