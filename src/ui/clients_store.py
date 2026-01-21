@@ -65,7 +65,7 @@ def _base_repo_root() -> Path:
         except Exception as exc:
             raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {workspace_root}") from exc
         if "<slug>" in str(workspace_root) or _is_client_workspace(resolved):
-            LOG.warning(
+            LOG.info(
                 "ui.clients_store.workspace_root_ignored",
                 extra={"workspace_root_dir": str(workspace_root)},
             )
@@ -79,7 +79,7 @@ def _base_repo_root() -> Path:
         except Exception:
             return REPO_ROOT
         if _is_client_workspace(resolved) and not _coerce_allow_client_db():
-            LOG.warning(
+            LOG.info(
                 "ui.clients_store.repo_root_in_client",
                 extra={
                     "repo_root_dir": str(resolved),
@@ -293,7 +293,7 @@ def set_state(slug: str, new_state: str) -> bool:
     else:
         try:
             event = "client_state_noop" if found else "client_state_missing"
-            LOG.warning(event, extra={"slug": slug_norm, "state": new_state})
+            LOG.info(event, extra={"slug": slug_norm, "state": new_state})
         except Exception:
             pass
     return changed

@@ -196,16 +196,20 @@ def raw_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, Optio
     Predicate canonico per raw_ready: richiede layout/config validi e almeno un PDF in raw/.
     Ritorna (ready, raw_dir) per logging/gating.
     """
+    slug_value = (slug or "").strip().lower()
+    if not slug_value:
+        # NOT_APPLICABLE: niente slug => niente gating su raw
+        return True, None
     try:
-        layout = get_ui_workspace_layout(slug or "", require_env=False)
+        layout = get_ui_workspace_layout(slug_value, require_env=False)
     except Exception as exc:
         if strict:
             raise
-        _log_workspace_failure(
-            "ui.workspace.raw_ready_failed",
-            exc,
-            extra={"slug": slug or "", "stage": "layout", "strict": bool(strict)},
-        )
+        # Drastico ma non bug-friendly:
+        # - se il layout non si può risolvere perché manca il contesto/slug, non bloccare la UI
+        # - per errori reali (config/permessi/altro), non dichiarare ready
+        if isinstance(exc, ConfigError):
+            return True, None
         return False, None
 
     # Vision gating: raw/ non è semanticamente rilevante finché la Vision non è completata
@@ -214,7 +218,7 @@ def raw_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, Optio
         # NOT_APPLICABLE: evita warning e check prematuri su raw/
         return True, None
 
-    ready, raw_dir = has_raw_pdfs(slug, strict=strict)
+    ready, raw_dir = has_raw_pdfs(slug_value, strict=strict)
     # `has_raw_pdfs` giù verifica slug/layout; il controllo su config/layout è quindi implicito.
     if not ready:
         return False, raw_dir or layout.raw_dir
