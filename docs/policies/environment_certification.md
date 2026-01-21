@@ -1,6 +1,6 @@
 # Environment Certification Policy
 
-Status: draft  
+Status: draft
 Owner: Team C
 
 ## Scopo

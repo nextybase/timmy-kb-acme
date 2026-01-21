@@ -9,7 +9,6 @@ Responsabilità:
 - Validare/minimizzare la configurazione e generare/aggiornare `config.yaml`.
 - Creare struttura locale e la struttura remota su Google Drive.
 - Caricare `config.yaml` su Drive e aggiornare il config locale con gli ID remoti.
-- Copiare i template semantici di base nella cartella `semantic/` cliente.
 
 Note architetturali:
 - Gli orchestratori gestiscono I/O utente e terminazione del processo
@@ -20,7 +19,7 @@ Note architetturali:
 """
 # Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
 
-# Fase pre-Vision (MINIMAL): nessun uso di YAML.
+# Fase pre-Vision (MINIMAL): nessun output semantico.
 # 1) LOCALE: crea raw/, book/, config/ e scrive config/config.yaml
 # 2) DRIVE: crea cartella cliente + raw/ + contrattualistica/ e carica config.yaml
 
@@ -30,7 +29,6 @@ import argparse
 import datetime as _dt
 import json
 import logging
-import shutil
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -44,7 +42,7 @@ from pipeline.config_utils import (
 )
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var
-from pipeline.exceptions import ConfigError, PipelineError, WorkspaceNotFound
+from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.file_utils import safe_write_bytes, safe_write_text  # SSoT scritture atomiche
 from pipeline.logging_utils import (
     get_structured_logger,
@@ -57,7 +55,6 @@ from pipeline.logging_utils import (
 from pipeline.metrics import start_metrics_server_once
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_valid_slug, ensure_within, read_text_safe  # STRONG guard SSoT
-from pipeline.paths import get_repo_root
 from pipeline.tracing import start_root_trace
 from pipeline.types import WorkflowResult
 from pipeline.workspace_bootstrap import bootstrap_client_workspace as _pipeline_bootstrap_client_workspace
@@ -115,19 +112,6 @@ def _require_drive_utils() -> None:
         raise ConfigError(msg)
 
 
-def _resolve_yaml_structure_file() -> Path:
-    """Ritorna il percorso canonico dello YAML per la struttura cartelle."""
-    repo_root = get_repo_root(allow_env=False)
-    template_dir = repo_root / "system" / "assets" / "templates"
-    path = template_dir / "cartelle_raw.yaml"
-    if not path.is_file():
-        raise ConfigError(
-            "File YAML per struttura cartelle non trovato nel percorso canonico.",
-            file_path=str(path),
-        )
-    return path
-
-
 def _sync_env(context: ClientContext, *, require_env: bool) -> None:
     """Allinea nel `context.env` le variabili critiche lette da os.environ."""
     for key in ("SERVICE_ACCOUNT_FILE", "DRIVE_ID"):
@@ -135,88 +119,6 @@ def _sync_env(context: ClientContext, *, require_env: bool) -> None:
             val = get_env_var(key, required=require_env)
             if val:
                 context.env[key] = val
-
-
-def bootstrap_semantic_templates(
-    repo_root: Path, context: ClientContext, client_name: str, logger: logging.Logger
-) -> None:
-    """
-    Copia i template semantici globali nella cartella cliente:
-    - cartelle_raw.yaml -> semantic/cartelle_raw.yaml
-    - default_semantic_mapping.yaml -> semantic/tags_reviewed.yaml (+ blocco context)
-
-    Nota: duplica automaticamente anche semantic_mapping.yaml nella cartella semantic/ per compatibilita UI.
-    """
-    if not context.slug:
-        raise WorkspaceNotFound("Contesto incompleto: slug mancante", slug=context.slug)
-    if repo_root is None:
-        raise WorkspaceNotFound("Contesto incompleto: repo_root_dir mancante", slug=context.slug)
-
-    layout = WorkspaceLayout.from_context(context)
-    semantic_dir = layout.semantic_dir
-    semantic_dir.mkdir(parents=True, exist_ok=True)
-
-    template_dir = repo_root / "system" / "assets" / "templates"
-    struct_src = _resolve_yaml_structure_file()
-    mapping_src = template_dir / "default_semantic_mapping.yaml"
-
-    struct_dst = semantic_dir / "cartelle_raw.yaml"
-    mapping_dst = semantic_dir / "tags_reviewed.yaml"  # nuovo nome allineato alla UI
-
-    ensure_within(semantic_dir, struct_dst)
-    ensure_within(semantic_dir, mapping_dst)
-
-    if not struct_dst.exists() and struct_src.exists():
-        shutil.copy2(struct_src, struct_dst)
-        logger.info(
-            "cli.pre_onboarding.semantic_template_copied",
-            extra={"slug": context.slug, "file_path": str(struct_dst)},
-        )
-
-    if not mapping_dst.exists() and mapping_src.exists():
-        shutil.copy2(mapping_src, mapping_dst)
-        logger.info(
-            "cli.pre_onboarding.semantic_template_copied",
-            extra={"slug": context.slug, "file_path": str(mapping_dst)},
-        )
-
-    # Iniezione blocco `context` nel mapping (scrittura atomica)
-    try:
-        import yaml
-
-        data: Dict[str, Any] = {}
-        if mapping_dst.exists():
-            try:
-                from pipeline.yaml_utils import yaml_read
-
-                loaded = yaml_read(mapping_dst.parent, mapping_dst) or {}
-                if isinstance(loaded, dict):
-                    data = loaded
-            except Exception:
-                data = {}
-
-        ctx = {
-            "slug": context.slug,
-            "client_name": client_name or context.slug,
-            "created_at": _dt.datetime.utcnow().strftime("%Y-%m-%d"),
-        }
-
-        # Prepend `context` solo se non già presente
-        if "context" not in data:
-            data = {"context": ctx, **data}
-            payload = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
-            ensure_within(semantic_dir, mapping_dst)
-            safe_write_text(mapping_dst, payload, atomic=True)
-            logger.info(
-                "cli.pre_onboarding.semantic_mapping_context_injected",
-                extra={"slug": context.slug, "file_path": str(mapping_dst)},
-            )
-
-    except Exception as e:  # non blocca il flusso
-        logger.warning(
-            "cli.pre_onboarding.semantic_mapping_context_inject_failed",
-            extra={"slug": context.slug, "err": str(e).splitlines()[:1]},
-        )
 
 
 # ------- FUNZIONI ESTRATTE: piccole, testabili, senza side-effects esterni -------
@@ -318,15 +220,7 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     if client_name:
         cfg["client_name"] = client_name
 
-    # Default coerenti con la nuova UI (path relativi alla sandbox cliente)
-    cfg.setdefault("cartelle_raw_yaml", "semantic/cartelle_raw.yaml")
-    cfg.setdefault("semantic_mapping_yaml", "semantic/tags_reviewed.yaml")
-
     write_client_config_file(context, cfg)
-
-    # Nota: non usare path relativi a src/timmy_kb come repo root per evitare workspace spurii.
-    repo_root = get_repo_root(allow_env=False)
-    bootstrap_semantic_templates(repo_root, context, client_name, logger)
 
     ensure_within(base_dir, layout.raw_dir)
     ensure_within(base_dir, layout.book_dir)

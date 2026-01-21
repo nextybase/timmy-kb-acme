@@ -7,7 +7,7 @@ Pagina Streamlit per configurare un workspace cliente.
 - I riferimenti ai segreti restano in .env: la pagina mostra soltanto il nome della variabile.
 - Espone in più:
   - il tuning runtime del retriever (ui.config_store),
-  - gli editor YAML semantici (semantic_mapping/cartelle_raw).
+  - gli editor YAML semantici (semantic_mapping).
 """
 
 from __future__ import annotations

@@ -52,14 +52,14 @@ output/
    +--- raw/                # PDF originali (per categoria)
    +--- contrattualistica/  # Documenti legali
    +--- book/               # Markdown generati + indici
-   +--- semantic/           # semantic_mapping.yaml, cartelle_raw.yaml, tags*
+   +--- semantic/           # semantic_mapping.yaml, tags*
    +--- config/             # config.yaml, VisionStatement.pdf
    +--- logs/
 ```
 
 Se Drive e' configurato, la stessa struttura viene replicata sotto **\<DRIVE\_ID>/**.
 
-Template seed: `system/assets/templates/cartelle_raw.yaml` e `system/assets/templates/default_semantic_mapping.yaml` (copiati nel workspace da `pre_onboarding`, nessun override tramite ENV).
+Template seed: nessun template semantico viene copiato nel workspace da `pre_onboarding`.
 
 ---
 
@@ -82,7 +82,6 @@ Cosa produce:
 
 - **areas**: chiave -> { ambito, descrizione, (keywords opzionali) }
 - **system\_folders**: sezioni fisse (es. identity/vision/mission/glossario...)
-- \`semantic/cartelle\_raw\.yaml\`: albero cartelle per **raw/** + **contrattualistica/**
 - \`config/config.yaml\`: dati cliente e (piu' avanti) gli ID Drive.
 
 > Se il PDF e' povero/atipico, rivedi in seguito il mapping via **Settings -> Semantica (YAML)**.
@@ -92,7 +91,6 @@ Cosa produce:
 Provisioning struttura su **Drive**:
 
 - Crea \`/raw\` e \`/contrattualistica\`.
-- Crea le **sottocartelle di raw/** dalle **areas** del mapping.
 - Carica \`config.yaml\` su Drive e salva localmente gli **ID** (cartella cliente/raw/contrattualistica).
 
 > Lo step 2 **non** rigenera il mapping: serve solo a creare/allineare le cartelle.

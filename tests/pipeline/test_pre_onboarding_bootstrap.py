@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from pipeline.context import ClientContext
-from pipeline.exceptions import ConfigError
 from timmy_kb.cli import pre_onboarding
 
 
@@ -65,55 +64,3 @@ def test_pre_onboarding_local_structure_invokes_bootstrap(
     # Regression guard: non creare output spurio sotto src/timmy_kb/
     assert not (src_timmy_kb / "output" / "timmy-kb-dummy").exists()
     assert not (src_timmy_kb / "output" / f"timmy-kb-{slug}").exists()
-
-
-def test_bootstrap_semantic_templates_writes_cartelle_raw_only_in_workspace(
-    tmp_path: Path, logger: logging.Logger, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    slug = "test-client"
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
-
-    template_src = repo_root / "_templates" / "cartelle_raw.yaml"
-    template_src.parent.mkdir(parents=True)
-    template_payload = "version: 1\nfolders:\n  - key: governance\n    title: Governance\n"
-    template_src.write_text(template_payload, encoding="utf-8")
-
-    context = _build_context(workspace_root, slug)
-    pre_onboarding.bootstrap_client_workspace(context)
-
-    monkeypatch.setattr(pre_onboarding, "_resolve_yaml_structure_file", lambda: template_src)
-
-    pre_onboarding.bootstrap_semantic_templates(repo_root, context, client_name="Test Client", logger=logger)
-
-    expected_dst = workspace_root / "semantic" / "cartelle_raw.yaml"
-    assert expected_dst.is_file()
-    assert expected_dst.read_text(encoding="utf-8") == template_payload
-
-    wrong_repo_dst = repo_root / "semantic" / "cartelle_raw.yaml"
-    assert not wrong_repo_dst.exists()
-
-
-def test_resolve_yaml_structure_file_uses_template_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    repo_root = tmp_path / "repo"
-    template_path = repo_root / "system" / "assets" / "templates" / "cartelle_raw.yaml"
-    template_path.parent.mkdir(parents=True)
-    template_path.write_text(
-        "version: 1\nfolders:\n  - key: governance\n    title: Governance\n",
-        encoding="utf-8",
-    )
-
-    monkeypatch.setattr(pre_onboarding, "get_repo_root", lambda allow_env=False: repo_root)
-
-    assert pre_onboarding._resolve_yaml_structure_file() == template_path
-
-
-def test_resolve_yaml_structure_file_missing_template_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-
-    monkeypatch.setattr(pre_onboarding, "get_repo_root", lambda allow_env=False: repo_root)
-
-    with pytest.raises(ConfigError):
-        pre_onboarding._resolve_yaml_structure_file()

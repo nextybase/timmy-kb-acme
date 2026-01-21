@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, TypedDict, runtime_checkable
 
 from .constants import SEMANTIC_DIR_NAME, SEMANTIC_MAPPING_FILE
+from .env_constants import REPO_ROOT_ENV, WORKSPACE_ROOT_ENV
 from .env_utils import compute_redact_flag, get_bool, get_env_var
 from .exceptions import ConfigError, InvalidSlug
 from .file_utils import safe_write_text
@@ -265,9 +266,13 @@ class ClientContext:
         """Determina la root del workspace cliente.
 
         Priorità:
-        - ENV `REPO_ROOT_DIR` (espansa e risolta).
         - Parametro `repo_root_dir` passato in `ClientContext.load(...)`.
+        - ENV `REPO_ROOT_DIR` (se contiene .git/pyproject è root repo; altrimenti workspace diretta).
+        - ENV `WORKSPACE_ROOT_DIR` (espansa e risolta, con placeholder "<slug>").
         """
+        workspace_env = env_vars.get(WORKSPACE_ROOT_ENV)
+        env_root = env_vars.get(REPO_ROOT_ENV)
+
         if repo_root_override:
             try:
                 root = Path(str(repo_root_override)).expanduser().resolve()
@@ -279,29 +284,46 @@ class ClientContext:
             )
             return root
 
-        env_root = env_vars.get("REPO_ROOT_DIR")
         if env_root:
             try:
-                root = Path(str(env_root)).expanduser().resolve()
-                repo_root = Path(__file__).resolve().parents[2]
-                if root == repo_root:
-                    # Ignoriamo l'override se punta alla radice repo, per evitare workspace
-                    # creati direttamente nella repo stessa (fallimento UI).
-                    env_root = None
-                else:
-                    expected = f"timmy-kb-{slug}"
-                    if root.name.startswith("timmy-kb-") and root.name != expected:
-                        root = root.parent / expected
-                    logger.info(
-                        "context.repo_root_dir_env",
-                        extra={"slug": slug, "repo_root_dir": str(root)},
-                    )
-                    return root
+                base_root = Path(str(env_root)).expanduser().resolve()
             except Exception as e:
-                raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root}", slug=slug) from e
+                raise ConfigError(f"{REPO_ROOT_ENV} non valido: {env_root}", slug=slug) from e
+            if (base_root / ".git").exists() or (base_root / "pyproject.toml").exists():
+                expected = f"timmy-kb-{slug}"
+                if base_root.name.startswith("timmy-kb-"):
+                    root = base_root if base_root.name == expected else base_root.parent / expected
+                else:
+                    root = base_root / "output" / expected
+            else:
+                root = base_root
+            logger.info(
+                "context.repo_root_dir_env",
+                extra={"slug": slug, "repo_root_dir": str(root)},
+            )
+            return root
+
+        if workspace_env:
+            try:
+                raw = str(workspace_env)
+                if "<slug>" in raw:
+                    raw = raw.replace("<slug>", slug)
+                root = Path(raw).expanduser().resolve()
+                expected = f"timmy-kb-{slug}"
+                if root.name == "output":
+                    root = root / expected
+                elif root.name.startswith("timmy-kb-") and root.name != expected:
+                    root = root.parent / expected
+                logger.info(
+                    "context.workspace_root_dir_env",
+                    extra={"slug": slug, "repo_root_dir": str(root)},
+                )
+                return root
+            except Exception as e:
+                raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {workspace_env}", slug=slug) from e
 
         raise ConfigError(
-            "REPO_ROOT_DIR mancante: specifica un workspace root canonico.",
+            f"{WORKSPACE_ROOT_ENV}/{REPO_ROOT_ENV} mancanti: specifica un workspace root canonico.",
             slug=slug,
         )
 
@@ -414,8 +436,9 @@ class ClientContext:
         env_vars["ENV"] = get_env_var("ENV", default=None)
         env_vars["CI"] = get_env_var("CI", default=None)
         env_vars["VISION_SAVE_SNAPSHOT"] = get_env_var("VISION_SAVE_SNAPSHOT", default=None)
-        # NEW: override del root repo (sposta output altrove)
-        env_vars["REPO_ROOT_DIR"] = get_env_var("REPO_ROOT_DIR", default=None)
+        # Root globali/workspace
+        env_vars[REPO_ROOT_ENV] = get_env_var(REPO_ROOT_ENV, default=None)
+        env_vars[WORKSPACE_ROOT_ENV] = get_env_var(WORKSPACE_ROOT_ENV, default=None)
 
         # Versione booleana di CI per chiamanti legacy
         env_vars["_CI_BOOL"] = get_bool("CI", default=False)

@@ -154,12 +154,12 @@ I prefissi non sono decorativi: servono a collegare i file alle entita, alimenta
 output/timmy-kb-<slug>/
    raw/        # PDF
    book/       # Markdown + SUMMARY.md + README.md
-   semantic/   # cartelle_raw.yaml, semantic_mapping.yaml, tags_raw.csv,  tags.db
+   semantic/   # semantic_mapping.yaml, tags_raw.csv, tags.db
    config/     # config.yaml (con eventuali ID Drive)
    logs/
 ```
 
-Template seed (repo): `system/assets/templates/cartelle_raw.yaml` e `system/assets/templates/default_semantic_mapping.yaml`, copiati nel workspace durante `pre_onboarding`.
+Template seed (repo): nessun template semantico copiato nel workspace durante `pre_onboarding`.
 
 ---
 

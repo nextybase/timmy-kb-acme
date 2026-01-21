@@ -232,14 +232,11 @@ def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
 
     # File creati
     mapping = Path(result["mapping"])
-    cartelle = Path(result["cartelle_raw"])
-    assert mapping.exists() and cartelle.exists()
+    assert mapping.exists()
 
     # YAML parsabili e consistenti (assert meno rigidi per compat con refactor)
     mdata = yaml.safe_load(mapping.read_text(encoding="utf-8"))
-    cdata = yaml.safe_load(cartelle.read_text(encoding="utf-8"))
     assert isinstance(mdata, dict) and "context" in mdata
-    assert "version" in cdata and isinstance(cdata.get("folders"), list)
 
     # Ha passato un unico messaggio utente coerente
     assert captured["user_messages"] and isinstance(captured["user_messages"][0]["content"], str)

@@ -16,9 +16,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
 
     # Finti path YAML
     mapping = base / "semantic" / "semantic_mapping.yaml"
-    cartelle = base / "semantic" / "cartelle_raw.yaml"
     mapping.write_text("context:\n  slug: x\n", encoding="utf-8")
-    cartelle.write_text("version: 1\nfolders: []\n", encoding="utf-8")
 
     class _DummyCtx:
         def __init__(self, base_dir: Path):
@@ -84,6 +82,9 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
         def info(self, *a, **k):
             return None
 
+        def warning(self, *a, **k):
+            return None
+
         def expander(self, *a, **k):
             class _Exp:
                 def __enter__(self_inner):
@@ -118,7 +119,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(landing, "get_client_context", lambda *_args, **_kwargs: _DummyCtx(base), raising=True)
 
     def _fake_provision(ctx, log, *, slug, pdf_path, model):
-        return {"yaml_paths": {"mapping": str(mapping), "cartelle_raw": str(cartelle)}}
+        return {"mapping": str(mapping)}
 
     monkeypatch.setattr(landing.vision_services, "provision_from_vision_with_config", _fake_provision, raising=True)
 
@@ -128,7 +129,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     # Verifica che sia stato mostrato un box con i path assoluti
     found = False
     for data in dummy.json_calls:
-        if str(mapping) == data.get("mapping") and str(cartelle) == data.get("cartelle_raw"):
+        if str(mapping) == data.get("mapping"):
             found = True
             break
     assert found, "Box percorsi mancanti dopo provisioning"

@@ -1,0 +1,99 @@
+version: 1
+source: vision
+context:
+  slug: dummy
+areas:
+- key: progetto
+  ambito: operativo
+  descrizione_breve: Progetti di sviluppo sostenibile in Sicilia.
+  descrizione_dettagliata:
+    include:
+    - Progetto NeXT Sicilia
+    - Progetto Digitalizzazione PMI
+    exclude: []
+    artefatti_note: Focus sui progetti operativi.
+  documents:
+  - PRJ-001
+  - PRJ-002
+  - PRJ-003
+  artefatti: []
+  correlazioni:
+    entities:
+    - id: progetto
+      label: Progetto
+      syn:
+      - Iniziativa
+      - Proposta
+    - id: milestone
+      label: Milestone
+      syn:
+      - Traguardo
+      - Obiettivo
+    relations:
+    - subj: Progetto
+      pred: includes
+      obj: Milestone
+      card: 1:N
+    chunking_hints: []
+- key: obiettivo
+  ambito: operativo
+  descrizione_breve: Definizione di obiettivi strategici.
+  descrizione_dettagliata:
+    include:
+    - Ridurre effort del 20%
+    - Introdurre AI in 10 PMI
+    exclude: []
+    artefatti_note: Focus sugli obiettivi a breve termine.
+  documents:
+  - OBJ-001
+  - OBJ-002
+  - OBJ-003
+  artefatti: []
+  correlazioni:
+    entities:
+    - id: obiettivo
+      label: Obiettivo
+      syn:
+      - Target
+      - Scopo
+    relations: []
+    chunking_hints: []
+- key: milestone
+  ambito: operativo
+  descrizione_breve: Traguardi da raggiungere nei progetti.
+  descrizione_dettagliata:
+    include:
+    - Completamento onboarding
+    - Rilascio prototipo Timmy v0.1
+    exclude: []
+    artefatti_note: Focus sulle scadenze importanti.
+  documents:
+  - MLS-001
+  - MLS-002
+  - MLS-003
+  artefatti: []
+  correlazioni:
+    entities:
+    - id: milestone
+      label: Milestone
+      syn:
+      - Traguardo
+      - Obiettivo
+    relations: []
+    chunking_hints: []
+entities: []
+relations: []
+er_model: {}
+system_folders:
+  identity:
+    documents:
+    - identity_doc_1
+    - identity_doc_2
+  glossario:
+    artefatti: []
+    terms_hint: []
+metadata_policy:
+  chunk_length_tokens:
+    target: 150
+    overlap: 10
+  mandatory_fields: []

@@ -11,6 +11,7 @@ from typing import Any, Optional, Union, cast
 import yaml
 
 from pipeline.context import validate_slug
+from pipeline.env_constants import REPO_ROOT_ENV, WORKSPACE_ROOT_ENV
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
@@ -25,6 +26,8 @@ DEFAULT_DB_FILE: Path = Path("clients.yaml")
 DB_DIR: Path = DEFAULT_DB_DIR
 DB_FILE: Path = DEFAULT_DB_FILE
 PATH_ENV = "CLIENTS_DB_PATH"
+ALLOW_CLIENT_DB_ENV = "ALLOW_CLIENTS_DB_IN_CLIENT"
+LOG = get_structured_logger("ui.clients_store")
 
 
 def _optional_env(name: str) -> Optional[str]:
@@ -37,13 +40,55 @@ def _optional_env(name: str) -> Optional[str]:
         return None
 
 
+def _is_client_workspace(path: Path) -> bool:
+    # Workspace cliente: output/timmy-kb-<slug>
+    try:
+        parent = path.parent
+    except Exception:
+        return False
+    return parent.name == "output" and path.name.startswith("timmy-kb-")
+
+
+def _coerce_allow_client_db() -> bool:
+    raw = _optional_env(ALLOW_CLIENT_DB_ENV)
+    if raw is None:
+        return False
+    return str(raw).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+
+
 def _base_repo_root() -> Path:
-    override = os.environ.get("REPO_ROOT_DIR")
+    workspace_root = _optional_env(WORKSPACE_ROOT_ENV)
+    if workspace_root:
+        try:
+            raw = str(workspace_root)
+            resolved = Path(raw.replace("<slug>", "")).expanduser().resolve()
+        except Exception as exc:
+            raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {workspace_root}") from exc
+        if "<slug>" in str(workspace_root) or _is_client_workspace(resolved):
+            LOG.warning(
+                "ui.clients_store.workspace_root_ignored",
+                extra={"workspace_root_dir": str(workspace_root)},
+            )
+        else:
+            return resolved
+
+    override = os.environ.get(REPO_ROOT_ENV)
     if override:
         try:
-            return Path(override).expanduser().resolve()
+            resolved = Path(override).expanduser().resolve()
         except Exception:
             return REPO_ROOT
+        if _is_client_workspace(resolved) and not _coerce_allow_client_db():
+            LOG.warning(
+                "ui.clients_store.repo_root_in_client",
+                extra={
+                    "repo_root_dir": str(resolved),
+                    "action": "fallback_repo_root",
+                    "hint": f"Usa {WORKSPACE_ROOT_ENV} o abilita {ALLOW_CLIENT_DB_ENV}=1 per test/dummy.",
+                },
+            )
+            return REPO_ROOT
+        return resolved
     return REPO_ROOT
 
 
@@ -110,9 +155,6 @@ def _db_file() -> Path:
         relative = _normalize_relative(DB_FILE, var_name="DB_FILE")
     target = base_dir / relative
     return cast(Path, ensure_within_and_resolve(base_dir, target))
-
-
-LOG = get_structured_logger("ui.clients_store")
 
 
 @dataclass

@@ -46,32 +46,26 @@ def _is_gate_error(exc: BaseException) -> bool:
 
 def _existing_vision_artifacts(base_dir: Path) -> Dict[str, str]:
     """Restituisce i path agli artefatti Vision già presenti (se esistono)."""
-    payload = {"mapping": "", "cartelle_raw": ""}
+    payload = {"mapping": ""}
     try:
         semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
     except Exception:
         return payload
 
     mapping = semantic_dir / "semantic_mapping.yaml"
-    cartelle = semantic_dir / "cartelle_raw.yaml"
     if mapping.exists():
         payload["mapping"] = str(mapping)
-    if cartelle.exists():
-        payload["cartelle_raw"] = str(cartelle)
     return payload
 
 
 def _verify_offline_artifacts(base_dir: Path, repo_pdf: Path) -> Dict[str, Any]:
     semantic_dir = Path(ensure_within_and_resolve(base_dir, base_dir / "semantic"))
     mapping = semantic_dir / "semantic_mapping.yaml"
-    cartelle = semantic_dir / "cartelle_raw.yaml"
     workspace_pdf = Path(ensure_within_and_resolve(base_dir, base_dir / "config" / "VisionStatement.pdf"))
 
     missing: List[str] = []
     if not mapping.exists():
         missing.append(str(mapping))
-    if not cartelle.exists():
-        missing.append(str(cartelle))
     if not workspace_pdf.exists():
         missing.append(str(workspace_pdf))
 
@@ -85,7 +79,6 @@ def _verify_offline_artifacts(base_dir: Path, repo_pdf: Path) -> Dict[str, Any]:
                 "missing": [],
                 "paths": {
                     "mapping": str(mapping),
-                    "cartelle_raw": str(cartelle),
                     "vision_pdf": str(workspace_pdf),
                 },
                 "error": "VisionStatement.pdf non sincronizzato con la repo.",
@@ -96,7 +89,6 @@ def _verify_offline_artifacts(base_dir: Path, repo_pdf: Path) -> Dict[str, Any]:
             "missing": [],
             "paths": {
                 "mapping": str(mapping),
-                "cartelle_raw": str(cartelle),
                 "vision_pdf": str(workspace_pdf),
             },
             "error": f"Impossibile leggere VisionStatement.pdf: {exc}",
@@ -107,7 +99,6 @@ def _verify_offline_artifacts(base_dir: Path, repo_pdf: Path) -> Dict[str, Any]:
         "missing": [],
         "paths": {
             "mapping": str(mapping),
-            "cartelle_raw": str(cartelle),
             "vision_pdf": str(workspace_pdf),
         },
     }
@@ -327,7 +318,6 @@ def run_healthcheck(
             extra={
                 "slug": slug,
                 "mapping": verified.get("paths", {}).get("mapping"),
-                "cartelle_raw": verified.get("paths", {}).get("cartelle_raw"),
                 "vision_pdf": verified.get("paths", {}).get("vision_pdf"),
             },
         )
@@ -344,7 +334,6 @@ def run_healthcheck(
             "status": "ok_offline",
             "base_dir": str(base_dir),
             "mapping_yaml": verified["paths"]["mapping"],
-            "cartelle_raw_yaml": verified["paths"]["cartelle_raw"],
             "pdf_path": verified["paths"]["vision_pdf"],
         }
 
@@ -435,7 +424,6 @@ def run_healthcheck(
         "pdf_path": str(workspace_pdf),
         "base_dir": str(base_dir),
         "mapping_yaml": vision_result.get("mapping"),
-        "cartelle_raw_yaml": vision_result.get("cartelle_raw"),
         "semantic_mapping_content": mapping_text,
         "vision_skipped": run_skipped,
     }

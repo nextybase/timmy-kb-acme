@@ -47,10 +47,6 @@ def test_init_workspace_skips_drive_when_helper_missing(
         semantic_dir = root / "semantic"
         semantic_dir.mkdir(parents=True, exist_ok=True)
         (semantic_dir / "semantic_mapping.yaml").write_text("version: 1\n", encoding="utf-8")
-        (semantic_dir / "cartelle_raw.yaml").write_text(
-            "version: 1\nfolders:\n  - key: governance\n    title: Governance\n",
-            encoding="utf-8",
-        )
 
     stub = _make_st()
     stub.session_state = {"new_client.phase": "iniziale", "new_client.slug": "", "client_name": ""}
@@ -127,12 +123,11 @@ def test_init_workspace_skips_drive_when_helper_missing(
         assert stub.success_messages is not None
         if stub.error_messages:
             assert stub.error_messages == [
-                "Per aprire il workspace servono i due YAML in semantic/. Esegui prima 'Inizializza Workspace'."
+                "Per aprire il workspace serve semantic/semantic_mapping.yaml. " "Esegui prima 'Inizializza Workspace'."
             ]
         assert stub.session_state.get("new_client.phase") == "pronto_apertura"
         assert stub.session_state.get("new_client.slug") == slug
         assert bootstrap_called["count"] == 1
-        assert (workspace_root / "raw" / "governance").exists()
         assert any("ui.drive.provisioning_skipped" in record.getMessage() for record in caplog.records)
     finally:
         if workspace_root.exists():

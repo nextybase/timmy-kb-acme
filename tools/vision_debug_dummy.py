@@ -30,7 +30,6 @@ def main(argv: list[str] | None = None) -> int:
     print(f"use_kb: {result.get('use_kb')}")
     print(f"strict_output: {result.get('strict_output')}")
     print(f"mapping: {result.get('mapping_path')}")
-    print(f"cartelle_raw: {result.get('cartelle_raw_path')}")
     return 0
 
 

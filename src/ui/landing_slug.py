@@ -401,7 +401,7 @@ def render_workspace_summary(
                     pdf_path=pdf_path,
                     model=get_vision_model(),
                 )
-                yaml_paths = cast(Dict[str, str], result.get("yaml_paths") or {})
+                yaml_paths = {"mapping": cast(str, result.get("mapping", ""))}
                 vision_state["yaml_paths"] = yaml_paths
                 vision_state["workspace_created"] = True
                 vision_state["needs_creation"] = False
@@ -411,8 +411,7 @@ def render_workspace_summary(
                 try:
                     base_dir = Path(vision_state["base_dir"])
                     mapping_abs = str(ensure_within_and_resolve(base_dir, Path(yaml_paths.get("mapping", ""))))
-                    cartelle_abs = str(ensure_within_and_resolve(base_dir, Path(yaml_paths.get("cartelle_raw", ""))))
-                    st.json({"mapping": mapping_abs, "cartelle_raw": cartelle_abs}, expanded=False)
+                    st.json({"mapping": mapping_abs}, expanded=False)
                 except Exception as exc:
                     # Non bloccare la UX, ma evita silent degradation: traccia l'errore.
                     (log or get_structured_logger("ui.landing_slug")).warning(
@@ -435,23 +434,20 @@ def render_workspace_summary(
 
     base_dir_str = cast(Optional[str], vision_state.get("base_dir"))
     yaml_paths = cast(Dict[str, str], vision_state.get("yaml_paths") or {})
-    if not base_dir_str or "mapping" not in yaml_paths or "cartelle_raw" not in yaml_paths:
+    if not base_dir_str or "mapping" not in yaml_paths:
         st.warning("Workspace creato ma non sono disponibili gli YAML generati.")
         return False, slug, client_name
 
     base_dir_path = Path(base_dir_str)
     try:
         mapping_path = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["mapping"]))
-        cartelle_path = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["cartelle_raw"]))
         mapping_content = read_text_safe(base_dir_path, mapping_path, encoding="utf-8")
-        cartelle_content = read_text_safe(base_dir_path, cartelle_path, encoding="utf-8")
     except Exception:
         st.warning("Non è stato possibile leggere le ultime configurazioni YAML generate.")
         return False, slug, client_name
 
-    with st.expander("YAML generati (vision/cartelle)", expanded=False):
+    with st.expander("YAML generati (vision)", expanded=False):
         st.code(mapping_content, language="yaml")
-        st.code(cartelle_content, language="yaml")
 
     return True, slug, client_name
 

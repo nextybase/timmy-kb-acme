@@ -21,7 +21,6 @@ def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) 
     (base_dir / "raw").mkdir(parents=True, exist_ok=True)
     (base_dir / "config" / "config.yaml").write_text("dummy: true\n", encoding="utf-8")
     (base_dir / "semantic" / "semantic_mapping.yaml").write_text("", encoding="utf-8")
-    (base_dir / "semantic" / "cartelle_raw.yaml").write_text("", encoding="utf-8")
     (base_dir / "semantic" / "tags.db").write_bytes(b"")
     (base_dir / "book" / "README.md").write_text("# Dummy\n", encoding="utf-8")
     (base_dir / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
@@ -35,7 +34,6 @@ def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) 
     else:
         monkeypatch.setattr(gen_dummy_mod, "_run_vision_with_timeout", lambda **_: (False, {"error": "boom"}))
     monkeypatch.setattr(gen_dummy_mod, "_call_drive_min", lambda *a, **k: {})
-    monkeypatch.setattr(gen_dummy_mod, "_call_drive_build_from_mapping", lambda *a, **k: {})
     monkeypatch.setattr(gen_dummy_mod, "_write_basic_semantic_yaml", lambda *a, **k: {})
     monkeypatch.setattr(gen_dummy_mod, "_register_client", lambda *a, **k: None)
     monkeypatch.setattr(gen_dummy_mod, "_validate_dummy_structure", lambda *a, **k: None)
@@ -135,13 +133,10 @@ def test_logs_namespaced_on_failure(caplog, tmp_path, monkeypatch):
     base_dir = tmp_path / "timmy-kb-dummy"
     sentinel_path = base_dir / "semantic" / ".vision_hash"
     mapping_path = base_dir / "semantic" / "semantic_mapping.yaml"
-    cartelle_path = base_dir / "semantic" / "cartelle_raw.yaml"
     if sentinel_path.exists():
         sentinel_path.unlink()
     if mapping_path.exists():
         mapping_path.unlink()
-    if cartelle_path.exists():
-        cartelle_path.unlink()
     args = ["--slug", "dummy", "--name", "Dummy", "--no-drive"]
     try:
         exit_code = gen_dummy_main(args)

@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import os
-from os import PathLike
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, cast
 
 from ..exceptions import ConfigError, DriveUploadError
 from ..logging_utils import get_structured_logger
-from ..path_utils import ensure_within_and_resolve, sanitize_filename, validate_slug
-from ..workspace_layout import WorkspaceLayout
 
 logger = get_structured_logger("pipeline.drive.upload")
 
@@ -92,75 +89,6 @@ def _delete_file_hard(service: Any, file_id: str) -> None:
         except (TypeError, ValueError):
             pass
         raise
-
-
-# ---------------------------------------------------------------------------
-# YAML utils
-# ---------------------------------------------------------------------------
-
-
-def _normalize_yaml_structure(data: Any) -> Dict[str, Any]:
-    if isinstance(data, dict):
-        return data
-    raise ConfigError("Struttura YAML non valida: atteso un dict.")
-
-
-def _extract_structural_raw_names(mapping: Dict[str, Any]) -> List[str]:
-    """Estrae i nomi delle categorie RAW di primo livello dal mapping canonico.
-
-    Formato canonico supportato:
-      - {"folders": [{"key": "<name>", "title": "<title>"}]}
-
-    Se trova schema legacy (es. "raw"), solleva ConfigError.
-    """
-    if "raw" in mapping:
-        raise ConfigError(
-            "Schema cartelle_raw.yaml non valido: usa 'folders' con chiavi canoniche (legacy 'raw' non supportato)."
-        )
-
-    folders = mapping.get("folders")
-    if not isinstance(folders, list):
-        raise ConfigError("Schema cartelle_raw.yaml non valido: 'folders' mancante o non e' una lista.")
-
-    names: List[str] = []
-    for item in folders:
-        if not isinstance(item, dict):
-            raise ConfigError("Schema cartelle_raw.yaml non valido: folders deve contenere oggetti.")
-        key = item.get("key") or item.get("name")
-        if not key:
-            raise ConfigError("Schema cartelle_raw.yaml non valido: ogni folder richiede 'key'.")
-        cleaned = sanitize_filename(str(key))
-        if cleaned:
-            names.append(cleaned)
-
-    if not names:
-        raise ConfigError("Schema cartelle_raw.yaml non valido: 'folders' non puo' essere vuoto.")
-
-    out: List[str] = []
-    seen: set[str] = set()
-    for n in names:
-        if n not in seen:
-            out.append(n)
-            seen.add(n)
-    return out
-
-
-def _read_yaml_structure(yaml_path: Union[str, PathLike[str]]) -> Dict[str, Any]:
-    p = Path(str(yaml_path))
-    if not p.exists():
-        raise ConfigError(f"File YAML di struttura non trovato: {yaml_path}")
-    try:
-        from ..yaml_utils import yaml_read
-
-        data = yaml_read(p.parent, p) or {}
-    except Exception as e:  # noqa: BLE001
-        raise ConfigError(f"Impossibile leggere/parsing YAML: {e}") from e
-    return _normalize_yaml_structure(data)
-
-
-# ---------------------------------------------------------------------------
-# Upload del config.yaml (fase 1)
-# ---------------------------------------------------------------------------
 
 
 def _resolve_local_config_path(context: Any) -> Path:
@@ -324,29 +252,6 @@ def create_drive_folder(
     return new_id
 
 
-def create_drive_raw_children_from_yaml(
-    service: Any,
-    yaml_path: Union[str, PathLike[str]],
-    raw_parent_id: str,
-    *,
-    redact_logs: bool = False,
-) -> Dict[str, str]:
-    """Crea **solo** le sottocartelle immediate di `raw/` in Drive, leggendo lo YAML."""
-    mapping = _read_yaml_structure(yaml_path)
-    raw_names = _extract_structural_raw_names(mapping)
-
-    result: Dict[str, str] = {}
-    for name in raw_names:
-        folder_id = create_drive_folder(service, name, raw_parent_id, redact_logs=redact_logs)
-        result[name] = folder_id
-
-    logger.info(
-        "drive.upload.raw_children.created",
-        extra={"raw_parent": _maybe_redact(raw_parent_id, redact_logs), "keys": list(result.keys())[:10]},
-    )
-    return result
-
-
 def create_drive_minimal_structure(
     service: Any,
     client_folder_id: str,
@@ -369,130 +274,6 @@ def create_drive_minimal_structure(
         },
     )
     return structure
-
-
-def create_drive_structure_from_yaml(
-    service: Any,
-    yaml_path: Union[str, PathLike[str]],
-    client_folder_id: str,
-    *,
-    existing_raw_id: Optional[str] = None,
-    existing_contrattualistica_id: Optional[str] = None,
-    redact_logs: bool = False,
-) -> Dict[str, str]:
-    """Crea la struttura Drive completa (raw + sottocartelle) usando un file YAML.
-
-    Se `existing_raw_id` o `existing_contrattualistica_id` sono forniti, viene riutilizzata
-    quella cartella invece di crearla da zero.
-    """
-    structure: Dict[str, str] = {}
-    if existing_raw_id:
-        structure["raw"] = existing_raw_id
-    if existing_contrattualistica_id:
-        structure["contrattualistica"] = existing_contrattualistica_id
-
-    if not existing_raw_id or not existing_contrattualistica_id:
-        base_structure = create_drive_minimal_structure(
-            service,
-            client_folder_id,
-            redact_logs=redact_logs,
-        )
-        structure = {**base_structure, **structure}
-        existing_raw_id = structure.get("raw") or existing_raw_id
-        existing_contrattualistica_id = structure.get("contrattualistica") or existing_contrattualistica_id
-
-    if not existing_raw_id:
-        raise DriveUploadError("Creazione cartella RAW fallita: ID non reperito.")
-
-    raw_children = create_drive_raw_children_from_yaml(
-        service,
-        yaml_path,
-        existing_raw_id,
-        redact_logs=redact_logs,
-    )
-
-    combined: Dict[str, str] = {**structure}
-    combined.update(raw_children)
-
-    logger.info(
-        "drive.upload.structure.yaml",
-        extra={
-            "client_folder": _maybe_redact(client_folder_id, redact_logs),
-            "raw_children": list(raw_children.keys())[:10],
-        },
-    )
-    return combined
-
-
-# ---------------------------------------------------------------------------
-# Locale: API di creazione cartelle (fase 2, children-only)
-# ---------------------------------------------------------------------------
-
-
-def create_local_raw_children_from_yaml(
-    context: Any,
-    yaml_path: Union[str, PathLike[str]],
-) -> List[Path]:
-    """Crea **solo** le sottocartelle immediate di `raw/` in locale, leggendo lo YAML."""
-    layout = WorkspaceLayout.from_context(context)
-    base_dir = layout.base_dir
-    raw_dir = ensure_within_and_resolve(base_dir, layout.raw_dir)
-    _ensure_dir(raw_dir)
-
-    mapping = _read_yaml_structure(yaml_path)
-    raw_names = _extract_structural_raw_names(mapping)
-
-    written: List[Path] = []
-    for name in raw_names:
-        p = ensure_within_and_resolve(raw_dir, raw_dir / name)
-        _ensure_dir(p)
-        written.append(p)
-
-    logger.info("local.raw_children.created", extra={"count": len(written), "base": str(raw_dir)})
-    return written
-
-
-def create_local_base_structure(
-    *,
-    context: Any,
-    yaml_structure_file: Union[str, PathLike[str]],
-) -> Dict[str, Path]:
-    """Crea la struttura locale (raw/, book/, config/, semantic/) e le sottocartelle raw/."""
-    slug = getattr(context, "slug", None)
-    if not isinstance(slug, str) or not slug:
-        raise DriveUploadError("Contesto privo di slug: impossibile creare struttura locale.")
-    validate_slug(slug)
-
-    layout = WorkspaceLayout.from_context(context)
-    base_dir = layout.base_dir
-    raw_dir = ensure_within_and_resolve(base_dir, layout.raw_dir)
-    book_dir = ensure_within_and_resolve(base_dir, layout.book_dir)
-    config_dir = ensure_within_and_resolve(base_dir, layout.config_path.parent)
-    semantic_dir = ensure_within_and_resolve(base_dir, layout.semantic_dir)
-
-    _ensure_dir(base_dir)
-    for path in (raw_dir, book_dir, config_dir, semantic_dir):
-        _ensure_dir(path)
-
-    mapping = _read_yaml_structure(yaml_structure_file)
-    raw_names = _extract_structural_raw_names(mapping)
-    for name in raw_names:
-        _ensure_dir(raw_dir / name)
-
-    logger.info(
-        "local.base_structure.created",
-        extra={
-            "base": str(base_dir),
-            "raw_children": raw_names[:10],
-        },
-    )
-    return {
-        "base_dir": base_dir,
-        "raw_dir": raw_dir,
-        "book_dir": book_dir,
-        "config_dir": config_dir,
-        "semantic_dir": semantic_dir,
-    }
 
 
 def delete_drive_file(

@@ -53,7 +53,6 @@ def test_load_dummy_helpers_missing(monkeypatch):
 
 def test_load_dummy_drive_helpers(monkeypatch):
     expected = _make_module(
-        call_drive_build_from_mapping=lambda: "build",
         call_drive_emit_readmes=lambda: "emit",
         call_drive_min=lambda: "min",
     )

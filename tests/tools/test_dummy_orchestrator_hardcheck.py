@@ -35,7 +35,7 @@ def _write_required_dummy_files(workspace_root: Path) -> None:
     (workspace_root / "raw" / "sample.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
 
 
-def test_dummy_validate_structure_passes_when_cartelle_yaml_present(tmp_path: Path, logger: logging.Logger) -> None:
+def test_dummy_validate_structure_passes_when_mapping_present(tmp_path: Path, logger: logging.Logger) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     slug = "dummy-hc"
@@ -48,15 +48,11 @@ def test_dummy_validate_structure_passes_when_cartelle_yaml_present(tmp_path: Pa
     layout = bootstrap_client_workspace(context)
 
     _write_required_dummy_files(layout.base_dir)
-    (layout.semantic_dir / "cartelle_raw.yaml").write_text(
-        "version: 1\nfolders:\n  - key: governance\n    title: Governance\n",
-        encoding="utf-8",
-    )
 
     validate_dummy_structure(layout.base_dir, logger)
 
 
-def test_dummy_validate_structure_fails_when_cartelle_yaml_missing(tmp_path: Path, logger: logging.Logger) -> None:
+def test_dummy_validate_structure_fails_when_mapping_missing(tmp_path: Path, logger: logging.Logger) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     slug = "dummy-hc"
@@ -69,10 +65,11 @@ def test_dummy_validate_structure_fails_when_cartelle_yaml_missing(tmp_path: Pat
     layout = bootstrap_client_workspace(context)
 
     _write_required_dummy_files(layout.base_dir)
+    (layout.semantic_dir / "semantic_mapping.yaml").unlink()
 
     with pytest.raises(RuntimeError) as exc:
         validate_dummy_structure(layout.base_dir, logger)
-    assert "cartelle_raw" in str(exc.value)
+    assert "semantic_mapping" in str(exc.value)
 
 
 def test_deep_compiles_yaml_before_vision(
@@ -130,7 +127,6 @@ def test_deep_compiles_yaml_before_vision(
         ClientContext=None,
         get_client_config=None,
         ensure_drive_minimal_and_upload_config=None,
-        build_drive_from_mapping=None,
         emit_readmes_for_raw=None,
         run_vision_with_timeout_fn=_run_vision_with_timeout_fn,
         load_mapping_categories_fn=lambda _: {"contracts": {"ambito": "Contracts", "descrizione": "", "keywords": []}},
@@ -142,7 +138,6 @@ def test_deep_compiles_yaml_before_vision(
         write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
         validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
         call_drive_min_fn=lambda *_args, **_kwargs: None,
-        call_drive_build_from_mapping_fn=lambda *_args, **_kwargs: None,
         call_drive_emit_readmes_fn=lambda *_args, **_kwargs: None,
     )
 
@@ -177,14 +172,10 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
             return "DEEP"
         return default
 
-    drive_calls = {"min": 0, "build": 0, "readmes": 0}
+    drive_calls = {"min": 0, "readmes": 0}
 
     def _call_drive_min_fn(*_args: object, **_kwargs: object) -> dict[str, Any]:
         drive_calls["min"] += 1
-        return {"ok": True}
-
-    def _call_drive_build_from_mapping_fn(*_args: object, **_kwargs: object) -> dict[str, Any]:
-        drive_calls["build"] += 1
         return {"ok": True}
 
     def _call_drive_emit_readmes_fn(*_args: object, **_kwargs: object) -> dict[str, Any]:
@@ -217,7 +208,6 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
         ClientContext=None,
         get_client_config=None,
         ensure_drive_minimal_and_upload_config=None,
-        build_drive_from_mapping=None,
         emit_readmes_for_raw=None,
         run_vision_with_timeout_fn=_run_vision_with_timeout_fn,
         load_mapping_categories_fn=lambda _: {},
@@ -229,7 +219,6 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
         write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
         validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
         call_drive_min_fn=_call_drive_min_fn,
-        call_drive_build_from_mapping_fn=_call_drive_build_from_mapping_fn,
         call_drive_emit_readmes_fn=_call_drive_emit_readmes_fn,
     )
 
@@ -239,7 +228,7 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
     assert "quota/billing" in vision_check["details"].lower()
     assert payload["health"]["external_checks"]["drive_hardcheck"]["ok"] is True
     assert any("downgraded to smoke" in err.lower() for err in payload["health"]["errors"])
-    assert drive_calls == {"min": 1, "build": 1, "readmes": 1}
+    assert drive_calls == {"min": 1, "readmes": 1}
 
 
 def test_deep_testing_non_quota_vision_failure_still_raises(
@@ -293,7 +282,6 @@ def test_deep_testing_non_quota_vision_failure_still_raises(
             ClientContext=None,
             get_client_config=None,
             ensure_drive_minimal_and_upload_config=None,
-            build_drive_from_mapping=None,
             emit_readmes_for_raw=None,
             run_vision_with_timeout_fn=_run_vision_with_timeout_fn,
             load_mapping_categories_fn=lambda _: {},
@@ -305,6 +293,5 @@ def test_deep_testing_non_quota_vision_failure_still_raises(
             write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
             validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
             call_drive_min_fn=lambda *_args, **_kwargs: None,
-            call_drive_build_from_mapping_fn=lambda *_args, **_kwargs: None,
             call_drive_emit_readmes_fn=lambda *_args, **_kwargs: None,
         )

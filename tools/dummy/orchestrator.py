@@ -21,7 +21,6 @@ from pipeline.path_utils import ensure_within_and_resolve
 from semantic.core import compile_document_to_vision_yaml
 
 from .bootstrap import build_generic_vision_template_pdf, ensure_golden_dummy_pdf
-from .drive import call_drive_build_from_mapping, call_drive_emit_readmes, call_drive_min
 from .semantic import (
     ensure_book_skeleton,
     ensure_local_readmes,
@@ -31,6 +30,7 @@ from .semantic import (
     write_basic_semantic_yaml,
     write_minimal_tags_raw,
 )
+from .drive import call_drive_emit_readmes, call_drive_min
 from .vision import run_vision_with_timeout
 
 
@@ -130,7 +130,6 @@ def validate_dummy_structure(base_dir: Path, logger: logging.Logger) -> None:
     required_files = [
         ("config", base_dir / "config" / "config.yaml"),
         ("semantic_mapping", base_dir / "semantic" / "semantic_mapping.yaml"),
-        ("cartelle_raw", base_dir / "semantic" / "cartelle_raw.yaml"),
         ("tags_db", base_dir / "semantic" / "tags.db"),
         ("book_readme", base_dir / "book" / "README.md"),
         ("book_summary", base_dir / "book" / "SUMMARY.md"),
@@ -233,7 +232,6 @@ def build_dummy_payload(
     ClientContext: Any,
     get_client_config: Callable[[Any], Dict[str, Any]] | None,
     ensure_drive_minimal_and_upload_config: Callable[..., Any] | None,
-    build_drive_from_mapping: Callable[..., Any] | None,
     emit_readmes_for_raw: Callable[..., Any] | None,
     run_vision_with_timeout_fn: Callable[..., tuple[bool, Optional[dict[str, Any]]]] = run_vision_with_timeout,
     load_mapping_categories_fn: Callable[[Path], Dict[str, Dict[str, Any]]] = load_mapping_categories,
@@ -245,7 +243,6 @@ def build_dummy_payload(
     write_minimal_tags_raw_fn: Callable[[Path], Path] = write_minimal_tags_raw,
     validate_dummy_structure_fn: Callable[[Path, logging.Logger], None] | None = validate_dummy_structure,
     call_drive_min_fn: Callable[..., Optional[dict[str, Any]]] = call_drive_min,
-    call_drive_build_from_mapping_fn: Callable[..., Optional[dict[str, Any]]] = call_drive_build_from_mapping,
     call_drive_emit_readmes_fn: Callable[..., Optional[dict[str, Any]]] = call_drive_emit_readmes,
 ) -> Dict[str, Any]:
     vision_mode = _resolve_vision_mode(get_env_var)
@@ -298,7 +295,6 @@ def build_dummy_payload(
     semantic_dir = base_dir / "semantic"
     sentinel_path = semantic_dir / ".vision_hash"
     mapping_path = semantic_dir / "semantic_mapping.yaml"
-    cartelle_path = semantic_dir / "cartelle_raw.yaml"
 
     categories_for_readmes: Dict[str, Dict[str, Any]] = {}
     vision_completed = False
@@ -344,7 +340,7 @@ def build_dummy_payload(
         raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg))
 
     vision_already_completed = False
-    if enable_vision and (sentinel_path.exists() or (mapping_path.exists() and cartelle_path.exists())):
+    if enable_vision and (sentinel_path.exists() or mapping_path.exists()):
         vision_already_completed = True
         vision_completed = True
         vision_status = "ok"
@@ -417,7 +413,6 @@ def build_dummy_payload(
             )
             raise HardCheckError(msg, _hardcheck_health("drive_hardcheck", msg))
     drive_min_info: Dict[str, Any] | None = None
-    drive_build_info: Dict[str, Any] | None = None
     drive_readmes_info: Dict[str, Any] | None = None
     if enable_vision and not vision_already_completed:
         start = perf_counter()
@@ -520,18 +515,17 @@ def build_dummy_payload(
         categories_for_readmes = load_mapping_categories_fn(base_dir)
 
     if vision_mode == "smoke" and enable_semantic:
-        if write_basic_semantic_yaml_fn and (not mapping_path.exists() or not cartelle_path.exists()):
-            try:
-                basic_payload = write_basic_semantic_yaml_fn(base_dir, slug=slug, client_name=client_name)
-                if not categories_for_readmes and isinstance(basic_payload, dict):
-                    basic_categories = basic_payload.get("categories")
-                    if isinstance(basic_categories, dict):
-                        categories_for_readmes = basic_categories
-            except Exception as exc:
-                logger.warning(
-                    "tools.gen_dummy_kb.semantic_basic_failed",
-                    extra={"slug": slug, "error": str(exc)},
-                )
+        try:
+            basic_payload = write_basic_semantic_yaml_fn(base_dir, slug=slug, client_name=client_name)
+            if not categories_for_readmes and isinstance(basic_payload, dict):
+                basic_categories = basic_payload.get("categories")
+                if isinstance(basic_categories, dict):
+                    categories_for_readmes = basic_categories
+        except Exception as exc:
+            logger.warning(
+                "tools.gen_dummy_kb.semantic_basic_failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
         if not categories_for_readmes:
             categories_for_readmes = load_mapping_categories_fn(base_dir)
 
@@ -576,13 +570,6 @@ def build_dummy_payload(
                 base_dir,
                 logger,
                 ensure_drive_minimal_and_upload_config,
-            )
-            drive_build_info = call_drive_build_from_mapping_fn(
-                slug,
-                client_name,
-                base_dir,
-                logger,
-                build_drive_from_mapping,
             )
             drive_readmes_info = call_drive_emit_readmes_fn(
                 slug,
@@ -676,10 +663,8 @@ def build_dummy_payload(
             "config": str(base_dir / "config" / "config.yaml"),
             "vision_pdf": str(pdf_path_resolved),
             "semantic_mapping": str(base_dir / "semantic" / "semantic_mapping.yaml"),
-            "cartelle_raw": str(base_dir / "semantic" / "cartelle_raw.yaml"),
         },
         "drive_min": drive_min_info or {},
-        "drive_build": drive_build_info or {},
         "drive_readmes": drive_readmes_info or {},
         "config_ids": cfg_out,
         "vision_used": bool(vision_completed),

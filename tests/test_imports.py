@@ -35,10 +35,8 @@ def test_reexports_present() -> None:
         "get_file_metadata",
         "_retry",
         "create_drive_folder",
-        "create_drive_structure_from_yaml",
         "upload_config_to_drive_folder",
         "delete_drive_file",
-        "create_local_base_structure",
         "download_drive_pdfs_to_local",
     }
     missing = [name for name in expected if not hasattr(mod, name)]

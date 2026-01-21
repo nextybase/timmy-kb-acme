@@ -49,6 +49,25 @@ def _sanitize_slug(value: Any) -> Optional[str]:
     return slug
 
 
+def _slug_in_registry(slug: str) -> bool:
+    try:
+        from ui.clients_store import get_all as _get_all
+    except Exception as exc:
+        LOGGER.warning("ui.slug.registry_load_failed", exc_info=exc)
+        return False
+    try:
+        for entry in _get_all():
+            try:
+                if entry.slug.strip().lower() == slug:
+                    return True
+            except Exception:
+                continue
+    except Exception as exc:
+        LOGGER.warning("ui.slug.registry_scan_failed", exc_info=exc)
+        return False
+    return False
+
+
 def _clear_gating_cache() -> None:
     try:
         from ui.gating import reset_gating_cache as _reset  # lazy import per evitare cicli
@@ -90,7 +109,11 @@ def _load_persisted() -> Optional[str]:
         if not isinstance(raw, dict):
             return None
         value = raw.get("active_slug")
-        return _sanitize_slug(value)  # sanifica anche il persistito
+        slug = _sanitize_slug(value)  # sanifica anche il persistito
+        if slug and not _slug_in_registry(slug):
+            LOGGER.info("ui.slug.persist_ignored", extra={"slug": slug, "reason": "not_in_registry"})
+            return None
+        return slug
     except Exception as exc:
         path_str = str(path) if "path" in locals() else None
         LOGGER.warning("ui.slug.persist_load_failed", extra={"path": path_str}, exc_info=exc)

@@ -8,11 +8,10 @@ def test_emit_readmes_guard_when_drive_utils_missing(monkeypatch):
     # Simula funzioni pipeline drive mancanti
     monkeypatch.setattr(dr, "get_drive_service", None, raising=False)
     monkeypatch.setattr(dr, "create_drive_folder", None, raising=False)
-    monkeypatch.setattr(dr, "create_drive_structure_from_yaml", None, raising=False)
     monkeypatch.setattr(dr, "upload_config_to_drive_folder", None, raising=False)
 
     with pytest.raises(RuntimeError) as exc:
-        dr.emit_readmes_for_raw("smk", base_root="output", require_env=False, ensure_structure=False)
+        dr.emit_readmes_for_raw("smk", base_root="output", require_env=False)
     assert "pip install" in str(exc.value) and "drive" in str(exc.value).lower()
 
 

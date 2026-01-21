@@ -125,7 +125,6 @@ def test_manage_tags_editor_syncs_db(tmp_path: Path, monkeypatch: pytest.MonkeyP
     semantic_dir = base_dir / "semantic"
     semantic_dir.mkdir(parents=True)
     (semantic_dir / "semantic_mapping.yaml").write_text("version: 1\n", encoding="utf-8")
-    (semantic_dir / "cartelle_raw.yaml").write_text("version: 1\n", encoding="utf-8")
     yaml_path = semantic_dir / "tags_reviewed.yaml"
     yaml_path.write_text("version: 2\nkeep_only_listed: true\ntags: []\n", encoding="utf-8")
     st_stub.session_state["tags_yaml_editor"] = yaml_path.read_text(encoding="utf-8")

@@ -38,7 +38,6 @@ class DummyHelpers:
 
 @dataclass(frozen=True)
 class DriveBindings:
-    call_drive_build_from_mapping: Callable[..., Any]
     call_drive_emit_readmes: Callable[..., Any]
     call_drive_min: Callable[..., Any]
 
@@ -82,7 +81,6 @@ def load_dummy_drive_helpers(prefixes: Sequence[str] | None = None) -> DriveBind
     drive = _import_dummy_module("drive", prefixes)
 
     return DriveBindings(
-        call_drive_build_from_mapping=getattr(drive, "call_drive_build_from_mapping"),
         call_drive_emit_readmes=getattr(drive, "call_drive_emit_readmes"),
         call_drive_min=getattr(drive, "call_drive_min"),
     )

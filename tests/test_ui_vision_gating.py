@@ -41,7 +41,6 @@ def test_ui_gating_hash_file_and_block_then_force(
     pdf = dummy_workspace["vision_pdf"]
     slug = dummy_workspace["slug"]
     mapping_path = dummy_workspace["semantic_mapping"]
-    cartelle_path = dummy_workspace["cartelle_raw"]
     ctx = dummy_ctx
     logger = dummy_logger
 
@@ -54,13 +53,11 @@ def test_ui_gating_hash_file_and_block_then_force(
     hash_path = base / "semantic" / ".vision_hash"
     original_hash = hash_path.read_text(encoding="utf-8") if hash_path.exists() else None
     original_mapping = mapping_path.read_text(encoding="utf-8")
-    original_cartelle = cartelle_path.read_text(encoding="utf-8")
 
     def _stub(*a, **k):
         return {
             "yaml_paths": {
                 "mapping": str(mapping_path),
-                "cartelle_raw": str(cartelle_path),
             }
         }
 
@@ -133,7 +130,6 @@ def test_ui_gating_hash_file_and_block_then_force(
         else:
             hash_path.write_text(original_hash, encoding="utf-8")
         mapping_path.write_text(original_mapping, encoding="utf-8")
-        cartelle_path.write_text(original_cartelle, encoding="utf-8")
 
 
 def test_vision_mode_smoke_skips_without_touching_hash(

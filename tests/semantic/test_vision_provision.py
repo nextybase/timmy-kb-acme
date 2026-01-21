@@ -196,9 +196,7 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
     # assert file paths
     mapping = Path(res["mapping"])
-    raw = Path(res["cartelle_raw"])
     assert mapping.is_file(), "semantic_mapping.yaml non scritto"
-    assert raw.is_file(), "cartelle_raw.yaml non scritto"
 
     # contenuto semantic_mapping.yaml
     m = yaml.safe_load(mapping.read_text(encoding="utf-8"))
@@ -210,15 +208,6 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     a0 = m["areas"][0]
     assert "documents" in a0 and len(a0["documents"]) >= 1
     assert "artefatti" in a0
-
-    # contenuto cartelle_raw.yaml
-    r = yaml.safe_load(raw.read_text(encoding="utf-8"))
-    assert r["source"] == "vision"
-    keys = [f["key"] for f in r["folders"]]
-    assert "identity" in keys and "glossario" in keys
-    # examples derivano da documents/include
-    gov = next(f for f in r["folders"] if f["key"] == "governance")
-    assert len(gov["examples"]) >= 1
 
 
 def test_provision_ignores_engine_in_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -272,7 +261,6 @@ def test_provision_retention_fallback_on_zero(tmp_path: Path, monkeypatch: pytes
         captured["retention_days"] = retention_days
         return {
             "mapping": str(prepared.paths.mapping_yaml),
-            "cartelle_raw": str(prepared.paths.cartelle_yaml),
         }
 
     monkeypatch.setattr(vp, "_persist_outputs", _fake_persist)
@@ -317,7 +305,6 @@ def test_provision_halt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Nessun YAML deve essere scritto
     sem_dir = tmp_path / "semantic"
     assert not (sem_dir / "semantic_mapping.yaml").exists()
-    assert not (sem_dir / "cartelle_raw.yaml").exists()
 
 
 def test_provision_with_prepared_prompt_skips_pdf_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -355,8 +342,7 @@ def test_provision_with_prepared_prompt_skips_pdf_read(tmp_path: Path, monkeypat
     )
 
     mapping = Path(res["mapping"])
-    raw = Path(res["cartelle_raw"])
-    assert mapping.exists() and raw.exists()
+    assert mapping.exists()
 
     user_messages = captured.get("user_messages")
     assert isinstance(user_messages, list) and user_messages, "user_messages non valorizzato."
@@ -414,7 +400,6 @@ def test_provision_with_config_skips_env(tmp_path: Path, monkeypatch: pytest.Mon
     )
 
     assert Path(res["mapping"]).exists()
-    assert Path(res["cartelle_raw"]).exists()
     assert captured.get("assistant_id") == "config-asst"
 
 
@@ -454,7 +439,6 @@ def test_semantic_with_config_does_not_reresolve_policy(tmp_path: Path, monkeypa
     )
 
     assert Path(res["mapping"]).exists()
-    assert Path(res["cartelle_raw"]).exists()
 
 
 def test_analyze_sections_happy_path():
@@ -572,9 +556,7 @@ def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
 
-    paths = vp._Paths(
-        base_dir=tmp_path, semantic_dir=tmp_path, mapping_yaml=tmp_path / "a", cartelle_yaml=tmp_path / "b"
-    )
+    paths = vp._Paths(base_dir=tmp_path, semantic_dir=tmp_path, mapping_yaml=tmp_path / "a")
     prepared = vp._VisionPrepared(
         slug="s",
         display_name="d",

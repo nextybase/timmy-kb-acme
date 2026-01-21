@@ -29,11 +29,9 @@ Client/Lettura:
 
 Upload/Strutture:
 - `create_drive_folder(service, name, parent_id, ...)` → crea una cartella.
-- `create_drive_structure_from_yaml(service, yaml_path, client_folder_id, ...)`
-  → albero Drive da YAML.
+- `create_drive_minimal_structure(service, client_folder_id, ...)` ??' struttura base (raw + contrattualistica).
 - `upload_config_to_drive_folder(service, context, parent_id, ...)` → carica config.
 - `delete_drive_file(service, file_id)` → rimozione file/cartella.
-- `create_local_base_structure(context, yaml_structure_file)` → struttura locale.
 
 Download:
 - `download_drive_pdfs_to_local(service, remote_root_folder_id, local_root_dir, ...)`
@@ -65,9 +63,6 @@ from .drive.download_steps import DriveCandidate, compute_created, discover_cand
 from .drive.upload import (
     create_drive_folder,
     create_drive_minimal_structure,
-    create_drive_raw_children_from_yaml,
-    create_drive_structure_from_yaml,
-    create_local_base_structure,
     delete_drive_file,
     upload_config_to_drive_folder,
 )
@@ -87,11 +82,8 @@ __all__: list[str] = [
     # upload / strutture
     "create_drive_folder",
     "create_drive_minimal_structure",
-    "create_drive_raw_children_from_yaml",
-    "create_drive_structure_from_yaml",
     "upload_config_to_drive_folder",
     "delete_drive_file",
-    "create_local_base_structure",
     # download
     "download_drive_pdfs_to_local",
     "DriveCandidate",

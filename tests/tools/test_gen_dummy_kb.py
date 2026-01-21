@@ -53,7 +53,6 @@ def test_build_payload_without_vision(monkeypatch: pytest.MonkeyPatch, tmp_path:
         lambda **_: (_ for _ in ()).throw(AssertionError("vision non dovrebbe essere chiamata")),
     )
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", lambda *a, **k: {"ok": True})
-    monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", lambda *a, **k: {"done": True})
     original_validate = gen_dummy_kb._validate_dummy_structure
     called = False
 
@@ -78,13 +77,11 @@ def test_build_payload_without_vision(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert payload["drive_used"] is False
     assert payload["vision_used"] is False
     assert payload["drive_min"] == {}
-    assert payload["drive_build"] == {}
     assert payload["fallback_used"] is False
     assert payload["local_readmes"]
     assert "health" in payload
     assert isinstance(payload["health"].get("readmes_count"), int)
     assert (workspace / "semantic" / "semantic_mapping.yaml").exists()
-    assert (workspace / "semantic" / "cartelle_raw.yaml").exists()
     assert (workspace / "semantic" / "tags.db").exists()
     assert (workspace / "book" / "README.md").exists()
     assert (workspace / "book" / "SUMMARY.md").exists()
@@ -109,11 +106,7 @@ def test_build_payload_with_drive(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     def _fake_drive_min(*_: Any, **__: Any) -> dict[str, Any]:
         return {"folder": "id123"}
 
-    def _fake_drive_build(*_: Any, **__: Any) -> dict[str, Any]:
-        return {"downloaded": 5}
-
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", _fake_drive_min)
-    monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", _fake_drive_build)
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_emit_readmes", lambda *a, **k: {"uploaded": 2})
     monkeypatch.setattr(gen_dummy_kb, "_validate_dummy_structure", lambda *a, **k: None)
 
@@ -129,7 +122,6 @@ def test_build_payload_with_drive(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     assert payload["drive_used"] is True
     assert payload["vision_used"] is False
     assert payload["drive_min"] == {"folder": "id123"}
-    assert payload["drive_build"] == {"downloaded": 5}
     assert payload["drive_readmes"] == {"uploaded": 2}
     assert payload["fallback_used"] is False
     assert payload["local_readmes"]
@@ -161,7 +153,6 @@ def test_build_payload_skips_vision_if_already_done(monkeypatch: pytest.MonkeyPa
     )
     monkeypatch.setattr(gen_dummy_kb, "_register_client", lambda *a, **k: None)
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", lambda *a, **k: {})
-    monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", lambda *a, **k: {})
     monkeypatch.setattr(gen_dummy_kb, "_validate_dummy_structure", lambda *a, **k: None)
 
     sentinel_path = workspace / "config" / ".vision_hash"
@@ -210,7 +201,6 @@ def test_build_payload_does_not_register_client(monkeypatch: pytest.MonkeyPatch,
         lambda **_: (True, None),
     )
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", lambda *a, **k: {})
-    monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", lambda *a, **k: {})
     monkeypatch.setattr(gen_dummy_kb, "run_vision", lambda *a, **k: None)
     monkeypatch.setattr(gen_dummy_kb, "ClientContext", None)
     monkeypatch.setattr(gen_dummy_kb, "get_client_config", lambda *_: {})  # type: ignore[misc]
@@ -255,7 +245,6 @@ def test_build_payload_smoke_writes_minimal_artifacts(monkeypatch: pytest.Monkey
     monkeypatch.setattr(gen_dummy_kb, "ClientContext", None)
     monkeypatch.setattr(gen_dummy_kb, "get_client_config", lambda *_: {})  # type: ignore[misc]
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", lambda *a, **k: {})
-    monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", lambda *a, **k: {})
     original_validate = gen_dummy_kb._validate_dummy_structure
     called = False
 
@@ -278,7 +267,6 @@ def test_build_payload_smoke_writes_minimal_artifacts(monkeypatch: pytest.Monkey
     assert payload["vision_used"] is False
     assert payload["fallback_used"] is False
     assert (workspace / "semantic" / "semantic_mapping.yaml").exists()
-    assert (workspace / "semantic" / "cartelle_raw.yaml").exists()
     assert (workspace / "semantic" / "tags.db").exists()
     assert (workspace / "book" / "README.md").exists()
     assert (workspace / "book" / "SUMMARY.md").exists()
@@ -310,7 +298,6 @@ def test_build_payload_deep_fails_on_vision_error(monkeypatch: pytest.MonkeyPatc
         lambda **_: (False, {"error": "boom"}),
     )
     monkeypatch.setattr(gen_dummy_kb, "_call_drive_min", lambda *a, **k: {})
-    monkeypatch.setattr(gen_dummy_kb, "_call_drive_build_from_mapping", lambda *a, **k: {})
     monkeypatch.setattr(gen_dummy_kb, "_validate_dummy_structure", lambda *a, **k: None)
     monkeypatch.setattr(
         gen_dummy_kb,

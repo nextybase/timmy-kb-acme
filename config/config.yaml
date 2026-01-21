@@ -1,13 +1,11 @@
-cartelle_raw_yaml: cartelle_raw.yaml
 meta:
   N_VER: 0
   DATA_VER: ''
   client_name: prova srl
-  semantic_mapping_yaml: semantic/tags_reviewed.yaml
   vision_statement_pdf: config/VisionStatement.pdf
 ui:
   skip_preflight: true
-  allow_local_only: true
+  allow_local_only: false
   admin_local_mode: false
 ai:
   openai:

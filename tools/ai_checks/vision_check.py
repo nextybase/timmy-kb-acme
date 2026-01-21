@@ -91,7 +91,6 @@ def run_vision_dummy_check(
         "use_kb": resolved.use_kb,
         "strict_output": resolved.strict_output,
         "mapping_path": result.get("mapping"),
-        "cartelle_raw_path": result.get("cartelle_raw"),
     }
     if verbose:
         output["config"] = cfg

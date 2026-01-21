@@ -52,7 +52,6 @@ def test_cli_success_returns_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         # Non scriviamo davvero file: al CLI basta il dict di ritorno
         return {
             "mapping": str(tmp_path / "semantic_mapping.yaml"),
-            "cartelle_raw": str(tmp_path / "cartelle_raw.yaml"),
         }
 
     monkeypatch.setattr(cli, "run_vision_with_gating", _fake_provision)

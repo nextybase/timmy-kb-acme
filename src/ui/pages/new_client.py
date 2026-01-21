@@ -31,7 +31,7 @@ from ui.clients_store import ClientEntry, set_state, upsert_client
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
 from ui.errors import to_user_message
 from ui.imports import getattr_if_callable, import_first
-from ui.utils import set_slug
+from ui.utils import clear_active_slug, set_slug
 from ui.utils.context_cache import get_client_context, invalidate_client_context
 from ui.utils.html import esc_url_component
 from ui.utils.merge import deep_merge_dict
@@ -50,45 +50,21 @@ _vision_module = import_first(
 )
 run_vision = getattr(_vision_module, "run_vision")
 
-BuildDriveCallable = Callable[..., Dict[str, str]]
 EnsureDriveCallable = Callable[..., Path]
 _drive_runner = import_first(
     "ui.services.drive_runner",
     "src.ui.services.drive_runner",
-)
-_build_drive_from_mapping_impl = cast(
-    Optional[BuildDriveCallable],
-    getattr_if_callable(_drive_runner, "build_drive_from_mapping"),
 )
 _ensure_drive_minimal_impl = cast(
     Optional[EnsureDriveCallable],
     getattr_if_callable(_drive_runner, "ensure_drive_minimal_and_upload_config"),
 )
 
-_local_structure_module = import_first(
-    "ui.services.local_structure",
-    "src.ui.services.local_structure",
-)
-_materialize_local_raw_impl = cast(
-    Optional[Callable[..., Any]],
-    getattr_if_callable(_local_structure_module, "materialize_local_raw_from_cartelle"),
-)
-
-build_drive_from_mapping: Optional[BuildDriveCallable]
-if _build_drive_from_mapping_impl:
-    build_drive_from_mapping = _build_drive_from_mapping_impl
-else:
-    build_drive_from_mapping = None
-
 _ensure_drive_minimal: Optional[EnsureDriveCallable]
 if _ensure_drive_minimal_impl:
     _ensure_drive_minimal = _ensure_drive_minimal_impl
 else:
     _ensure_drive_minimal = None
-
-materialize_local_raw_from_cartelle: Optional[Callable[..., Any]] = (
-    _materialize_local_raw_impl if _materialize_local_raw_impl else None
-)
 
 
 def _load_repo_settings() -> Settings:
@@ -204,7 +180,7 @@ def _has_drive_ids(slug: str) -> bool:
 
 def _exists_semantic_files(slug: str, layout: WorkspaceLayout | None = None) -> bool:
     sd = _semantic_dir_client(slug, layout=layout)
-    return (sd / "semantic_mapping.yaml").exists() and (sd / "cartelle_raw.yaml").exists()
+    return (sd / "semantic_mapping.yaml").exists()
 
 
 def _mirror_repo_config_into_client(
@@ -411,6 +387,15 @@ sidebar(None)
 
 st.subheader("Nuovo cliente")
 
+# La pagina "Nuovo cliente" non deve ereditare lo slug da alcun layer.
+if not st.session_state.get("__new_client_slug_cleared", False):
+    clear_active_slug(persist=True, update_query=True)
+    st.session_state["__new_client_slug_cleared"] = True
+    try:
+        getattr(st, "rerun", lambda: None)()
+    except Exception:
+        pass
+
 # Chiavi di stato UI (effimere, non persistite)
 slug_state_key = "new_client.slug"
 phase_state_key = "new_client.phase"
@@ -452,6 +437,15 @@ preview_prompt = st.checkbox(
 # Slug determinato localmente (non cambiamo fasi/stati finché non premi i pulsanti)
 candidate_slug = (slug or "").strip()
 effective_slug = (current_slug or candidate_slug) or ""
+if candidate_slug:
+    try:
+        validate_slug(candidate_slug)
+    except (ConfigError, ValueError) as exc:
+        LOGGER.warning("ui.new_client.slug_sync_failed", extra={"slug": candidate_slug, "error": str(exc)})
+    else:
+        if st.session_state.get(slug_state_key) != candidate_slug:
+            set_slug(candidate_slug, persist=False, update_query=False)
+            st.session_state[slug_state_key] = candidate_slug
 
 # ------------------------------------------------------------------
 # STEP 1 - Inizializza Workspace (crea struttura + salva PDF + Vision → YAML)
@@ -633,19 +627,6 @@ if current_phase == UI_PHASE_INIT:
                         logger=ui_logger,
                         preview_prompt=preview_prompt,
                     )
-                    cartelle_path = _semantic_dir_client(s, layout=layout) / "cartelle_raw.yaml"
-                    if not cartelle_path.exists():
-                        raise ConfigError(
-                            "Vision completata ma cartelle_raw.yaml mancante in semantic/.",
-                            slug=s,
-                            file_path=str(cartelle_path),
-                        )
-                    if materialize_local_raw_from_cartelle is None:
-                        raise ConfigError(
-                            "Servizio struttura RAW locale non disponibile.",
-                            slug=s,
-                        )
-                    materialize_local_raw_from_cartelle(slug=s, require_env=False)
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Vision completata.", state="complete")
                     step_progress.progress(100, text="Vision completata.")
@@ -748,7 +729,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
     eff = st.session_state.get(slug_state_key) or effective_slug
     layout = _require_layout(eff)
     if not _exists_semantic_files(eff, layout=layout):
-        st.error("Per aprire il workspace servono i due YAML in semantic/. Esegui prima 'Inizializza Workspace'.")
+        st.error("Per aprire il workspace serve semantic/semantic_mapping.yaml. Esegui prima 'Inizializza Workspace'.")
         st.stop()
 
     has_drive_ids = _has_drive_ids(eff)
@@ -761,54 +742,24 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
 
     display_name = st.session_state.get("client_name") or (name or eff)
 
-    if build_drive_from_mapping is None:
-        if local_only_mode:
-            LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})
-            _log_diagnostics(
-                eff,
-                "warning",
-                "ui.drive.not_configured_local_only",
-                extra={"slug": eff},
-                layout=layout,
-            )
-            _upsert_client_registry(eff, display_name)
-            st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
-            st.session_state["client_name"] = display_name
-            st.success("Drive non configurato, continuo in locale.")
-        else:
-            st.warning(
-                "Funzionalità Drive non disponibili. Installa gli extra `pip install .[drive]` "
-                "e imposta `DRIVE_ID`/`SERVICE_ACCOUNT_FILE`."
-            )
-    else:
-        try:
-            if not _has_drive_ids(eff) and not local_only_mode:
-                st.error("Config privo degli ID Drive. Ripeti 'Inizializza Workspace' dopo aver configurato Drive.")
-                st.stop()
+    if not _has_drive_ids(eff) and not local_only_mode:
+        st.error("Config privo degli ID Drive. Ripeti 'Inizializza Workspace' dopo aver configurato Drive.")
+        st.stop()
 
-            with status_guard(
-                "Provisiono la struttura Drive...",
-                expanded=True,
-                error_label="Errore durante il provisioning Drive",
-            ) as status:
+    if local_only_mode:
+        LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})
+        _log_diagnostics(
+            eff,
+            "warning",
+            "ui.drive.not_configured_local_only",
+            extra={"slug": eff},
+            layout=layout,
+        )
+        st.success("Drive non configurato, continuo in locale.")
 
-                def _cb(step: int, total: int, label: str) -> None:
-                    pct = int(step * 100 / max(total, 1))
-                    if status is not None and hasattr(status, "update"):
-                        status.update(
-                            label=f"Provisiono la struttura Drive... {pct}% - {label}",
-                            state="running",
-                        )
-
-                _ = build_drive_from_mapping(slug=eff, client_name=display_name, progress=_cb)
-                if status is not None and hasattr(status, "update"):
-                    status.update(label="Struttura Drive creata correttamente.", state="complete")
-
-            _upsert_client_registry(eff, display_name)
-            st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
-            st.success("Struttura Drive creata correttamente.")
-        except Exception as e:
-            st.error(f"Errore durante la creazione struttura Drive: {e}")
+    _upsert_client_registry(eff, display_name)
+    st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
+    st.session_state["client_name"] = display_name
 
 # ------------------------------------------------------------------
 # STEP 3 - Link finale

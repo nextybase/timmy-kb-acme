@@ -65,7 +65,6 @@ class _PayloadPaths(TypedDict):
     config: str
     vision_pdf: str
     semantic_mapping: str
-    cartelle_raw: str
 
 
 class _PayloadConfigIds(TypedDict, total=False):
@@ -78,7 +77,6 @@ class _DummyPayload(TypedDict):
     client_name: str
     paths: _PayloadPaths
     drive_min: Dict[str, Any]
-    drive_build: Dict[str, Any]
     drive_readmes: Dict[str, Any]
     config_ids: _PayloadConfigIds
     vision_used: bool
@@ -123,7 +121,6 @@ _load_mapping_categories = _dummy_helpers.load_mapping_categories
 _write_basic_semantic_yaml = getattr(_dummy_helpers, "write_basic_semantic_yaml", None)
 _run_vision_with_timeout = _dummy_helpers.run_vision_with_timeout
 
-_call_drive_build_from_mapping = _drive_helpers.call_drive_build_from_mapping
 _call_drive_emit_readmes = _drive_helpers.call_drive_emit_readmes
 _call_drive_min = _drive_helpers.call_drive_min
 
@@ -159,12 +156,10 @@ _drive_mod, _drive_attrs, _drive_import_error = _strict_optional_import(
     feature_name="drive_runner",
     attrs={
         "ensure_drive_minimal_and_upload_config": "ensure_drive_minimal_and_upload_config",
-        "build_drive_from_mapping": "build_drive_from_mapping",
         "emit_readmes_for_raw": "emit_readmes_for_raw",
     },
 )
 ensure_drive_minimal_and_upload_config = _drive_attrs.get("ensure_drive_minimal_and_upload_config")
-build_drive_from_mapping = _drive_attrs.get("build_drive_from_mapping")
 emit_readmes_for_raw = _drive_attrs.get("emit_readmes_for_raw")
 
 _cleanup_mod, _cleanup_attrs, _cleanup_import_error = _strict_optional_import(
@@ -516,7 +511,6 @@ def build_payload(
         ClientContext=ClientContext,
         get_client_config=get_client_config,
         ensure_drive_minimal_and_upload_config=ensure_drive_minimal_and_upload_config,
-        build_drive_from_mapping=build_drive_from_mapping,
         emit_readmes_for_raw=emit_readmes_for_raw,
         run_vision_with_timeout_fn=_run_vision_with_timeout,
         load_mapping_categories_fn=_load_mapping_categories,
@@ -526,7 +520,6 @@ def build_payload(
         ensure_book_skeleton_fn=_ensure_book_skeleton,
         validate_dummy_structure_fn=_validate_dummy_structure,
         call_drive_min_fn=_call_drive_min,
-        call_drive_build_from_mapping_fn=_call_drive_build_from_mapping,
         call_drive_emit_readmes_fn=_call_drive_emit_readmes,
     )
 
@@ -573,6 +566,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             enable_vision = False
 
     prev_repo_root_dir = os.environ.get("REPO_ROOT_DIR")
+    prev_workspace_root_dir = os.environ.get("WORKSPACE_ROOT_DIR")
     prev_vision_mode = os.environ.get("VISION_MODE")
     prev_clients_db_dir = os.environ.get("CLIENTS_DB_DIR")
     prev_clients_db_file = os.environ.get("CLIENTS_DB_FILE")
@@ -584,6 +578,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             base_override = Path(args.base_dir).expanduser().resolve()
             workspace_override = base_override / f"timmy-kb-{slug}"
             os.environ["REPO_ROOT_DIR"] = str(workspace_override)
+            os.environ["WORKSPACE_ROOT_DIR"] = str(base_override)
             # Bootstrap minimale del workspace dummy: crea le cartelle base per evitare
             # fallimenti di validazione (raw/semantic/book/logs/config).
             for child in ("raw", "semantic", "book", "logs", "config"):
@@ -682,6 +677,10 @@ def main(argv: Optional[list[str]] = None) -> int:
                 os.environ.pop("REPO_ROOT_DIR", None)
             else:
                 os.environ["REPO_ROOT_DIR"] = prev_repo_root_dir
+            if prev_workspace_root_dir is None:
+                os.environ.pop("WORKSPACE_ROOT_DIR", None)
+            else:
+                os.environ["WORKSPACE_ROOT_DIR"] = prev_workspace_root_dir
         if prev_vision_mode is None:
             os.environ.pop("VISION_MODE", None)
         else:

@@ -96,26 +96,6 @@ def _render_default_mapping_yaml(slug: str, client_name: str) -> str:
     )
 
 
-def _render_default_cartelle_yaml(slug: str) -> str:
-    return (
-        dedent(
-            f"""\
-            version: 1
-            folders:
-              - "raw/contracts"
-              - "raw/reports"
-              - "raw/presentations"
-            system_folders:
-              identity: "book/identity"
-              glossario: "book/glossario"
-            meta:
-              source: "dummy"
-              slug: {_yaml_quote(slug)}
-            """
-        ).strip()
-        + "\n"
-    )
-
 
 def _default_mapping_data(slug: str, client_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
     mapping = {
@@ -142,13 +122,7 @@ def _default_mapping_data(slug: str, client_name: str) -> tuple[dict[str, Any], 
         },
         "system_folders": {"identity": "book/identity", "glossario": "book/glossario"},
     }
-    cartelle = {
-        "version": 1,
-        "folders": ["raw/contracts", "raw/reports", "raw/presentations"],
-        "system_folders": {"identity": "book/identity", "glossario": "book/glossario"},
-        "meta": {"source": "dummy", "slug": slug},
-    }
-    return mapping, cartelle
+    return mapping, {}
 
 
 def _mapping_categories_from_default(mapping: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -181,7 +155,6 @@ def write_basic_semantic_yaml(base_dir: Path, *, slug: str, client_name: str) ->
     """
     Genera YAML "basici" senza passare da Vision:
       - semantic/semantic_mapping.yaml
-      - semantic/cartelle_raw.yaml
     Crea anche le cartelle raw/ di base (contracts/reports/presentations).
     """
     sem_dir = base_dir / "semantic"
@@ -190,11 +163,9 @@ def write_basic_semantic_yaml(base_dir: Path, *, slug: str, client_name: str) ->
     for name in ("contracts", "reports", "presentations"):
         (raw_dir / name).mkdir(parents=True, exist_ok=True)
 
-    mapping_data, cartelle_data = _default_mapping_data(slug, client_name)
+    mapping_data, _ = _default_mapping_data(slug, client_name)
     mapping_path = sem_dir / "semantic_mapping.yaml"
-    cartelle_path = sem_dir / "cartelle_raw.yaml"
     _safe_dump_yaml(mapping_path, mapping_data, fallback=_render_default_mapping_yaml(slug, client_name))
-    _safe_dump_yaml(cartelle_path, cartelle_data, fallback=_render_default_cartelle_yaml(slug))
 
     # Genera contenuti minimi in book/ per i test smoke (alpha/beta + README/SUMMARY).
     book_dir = base_dir / "book"
@@ -212,7 +183,7 @@ def write_basic_semantic_yaml(base_dir: Path, *, slug: str, client_name: str) ->
 
     categories = _mapping_categories_from_default(mapping_data)
 
-    return {"mapping": str(mapping_path), "cartelle": str(cartelle_path), "categories": categories}
+    return {"mapping": str(mapping_path), "categories": categories}
 
 
 def _render_local_readme_bytes(title: str, descr: str, examples: list[str]) -> tuple[bytes, str]:

@@ -65,7 +65,6 @@ logger = get_structured_logger("pipeline.config_utils")
 
 
 class ClientConfigPayload(TypedDict, total=False):
-    cartelle_raw_yaml: str
     semantic_defaults: dict[str, Any]
     semantic_mapping_path: str
     client_name: str
@@ -302,10 +301,8 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
         )
         raise PreOnboardingValidationError(f"Config cliente non trovato: {config_path}")
 
-    _, cfg_payload, available = _extract_context_settings(context)
-    if available:
-        cfg = cfg_payload
-    else:
+    _, _, available = _extract_context_settings(context)
+    if not available:
         try:
             from pipeline.path_utils import ensure_within_and_resolve
             from pipeline.yaml_utils import yaml_read
@@ -326,17 +323,6 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
                 extra={"config_path": str(context.config_path)},
             )
             raise PreOnboardingValidationError("Config YAML non valido o vuoto.")
-        cfg = dict(raw_cfg)
-
-    # Chiavi obbligatorie minime
-    required_keys = ["cartelle_raw_yaml"]
-    missing = [k for k in required_keys if k not in cfg]
-    if missing:
-        logger.error(
-            "pipeline.config_utils.missing_required_keys",
-            extra={"missing_keys": missing},
-        )
-        raise PreOnboardingValidationError(f"Chiavi obbligatorie mancanti in config: {missing}")
 
     # Verifica/creazione directory richieste (logs)
     logs_dir = ensure_within_and_resolve(resolved_base_dir, resolved_base_dir / "logs")

@@ -56,7 +56,6 @@ La decisione si articola in sei punti:
    - Il tool esegue un insieme di verifiche obbligatorie su file e directory fondamentali:
      - `config/config.yaml`
      - `semantic/semantic_mapping.yaml`
-     - `semantic/cartelle_raw.yaml`
      - `semantic/tags.db`
      - `book/README.md`
      - `book/SUMMARY.md`

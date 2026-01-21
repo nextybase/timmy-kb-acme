@@ -28,17 +28,17 @@ BANNED_PATTERNS = [
     ),
     _Pattern(
         "legacy_cartelle_raw_path",
-        r"(src[/\\\\]config[/\\\\]cartelle_raw\.yaml|config[/\\\\]cartelle_raw\.yaml)",
+        r"(src[/\\\\]config[/\\\\]cartelle_raw\\.yaml|config[/\\\\]cartelle_raw\\.yaml)",
         "cartelle_raw.yaml must live under system/assets/templates/ only.",
     ),
     _Pattern(
         "legacy_cartelle_raw_join",
-        r"src\s*/\s*\"config\"\s*/\s*\"cartelle_raw\.yaml\"",
+        r"src\\s*/\\s*\"config\"\\s*/\\s*\"cartelle_raw\\.yaml\"",
         "cartelle_raw.yaml must not be resolved via src/config shims.",
     ),
     _Pattern(
         "repo_root_semantic_mapping_candidate",
-        r"(repo_root_dir|repo_root)[^\n]*(semantic[/\\\\]semantic_mapping\.yaml|\"semantic\"\s*/\s*\"semantic_mapping\.yaml\")",
+        r"(repo_root_dir|repo_root)[^\\n]*(semantic[/\\\\]semantic_mapping\\.yaml|\"semantic\"\\s*/\\s*\"semantic_mapping\\.yaml\")",
         "Repo-root semantic_mapping.yaml candidate is forbidden.",
     ),
 ]
@@ -47,12 +47,12 @@ MAPPING_LOADER = REPO_ROOT / "src" / "semantic" / "mapping_loader.py"
 MAPPING_LOADER_PATTERNS = [
     _Pattern(
         "repo_candidate_label",
-        r"\byield\s+\"repo\"",
+        r"\\byield\\s+\"repo\"",
         "iter_mapping_candidates must not yield repo candidates.",
     ),
     _Pattern(
         "repo_root_semantic_candidate",
-        r"(Path\(\s*repo_root_dir\s*\)\s*/\s*\"semantic\"|repo_root_dir\s*/\s*\"semantic\")",
+        r"(Path\\(\\s*repo_root_dir\\s*\\)\\s*/\\s*\"semantic\"|repo_root_dir\\s*/\\s*\"semantic\")",
         "Repo-root semantic_mapping.yaml candidate is forbidden.",
     ),
 ]

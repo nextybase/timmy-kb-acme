@@ -61,8 +61,7 @@ def _hash_sentinel(base_dir: Path) -> Path:
 def _artifacts_paths(base_dir: Path) -> Dict[str, Path]:
     sdir = _semantic_dir(base_dir)
     mapping = ensure_within_and_resolve(sdir, sdir / "semantic_mapping.yaml")
-    cartelle = ensure_within_and_resolve(sdir, sdir / "cartelle_raw.yaml")
-    return {"mapping": cast(Path, mapping), "cartelle": cast(Path, cartelle)}
+    return {"mapping": cast(Path, mapping)}
 
 
 def _vision_yaml_path(base_dir: Path, *, pdf_path: Optional[Path] = None) -> Path:
@@ -139,7 +138,6 @@ def run_vision_with_gating(
             "skipped": True,
             "hash": "",
             "mapping": "",
-            "cartelle_raw": "",
             "mode": "SMOKE",
         }
 
@@ -158,7 +156,7 @@ def run_vision_with_gating(
     last_digest = (last or {}).get("hash")
 
     art = _artifacts_paths(base_dir)
-    gate_hit = (last_digest == digest) and art["mapping"].exists() and art["cartelle"].exists()
+    gate_hit = (last_digest == digest) and art["mapping"].exists()
     logger.info("ui.vision.gate", extra={"slug": slug, "hit": gate_hit})
     if gate_hit and not force:
         raise ConfigError(
@@ -208,7 +206,6 @@ def run_vision_with_gating(
         "skipped": False,
         "hash": digest,
         "mapping": cast(str, result.get("mapping", "")),
-        "cartelle_raw": cast(str, result.get("cartelle_raw", "")),
     }
 
 

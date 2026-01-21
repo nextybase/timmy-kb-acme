@@ -69,7 +69,6 @@ def test_semantic_toggle_skips_artifact_calls(tmp_path: Path) -> None:
         ClientContext=None,
         get_client_config=None,
         ensure_drive_minimal_and_upload_config=None,
-        build_drive_from_mapping=None,
         emit_readmes_for_raw=None,
         run_vision_with_timeout_fn=lambda **_: (_raise_if_called(), None),  # type: ignore[return-value]
         load_mapping_categories_fn=_raise_if_called,

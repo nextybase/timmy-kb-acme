@@ -309,8 +309,8 @@ def dummy_workspace(tmp_path_factory):
       - book/ (con README.md e SUMMARY.md di default)
       - semantic/* (SOLO se DUMMY_WS_WITH_SEMANTIC=1; default: ON per retro-compatibilità test)
 
-    Ritorna un dict con percorsi utili (anche le chiavi 'semantic_mapping' e 'cartelle_raw'
-    sono sempre presenti nel dict; i file possono non esistere se DUMMY_WS_WITH_SEMANTIC=0).
+    Ritorna un dict con percorsi utili (chiave 'semantic_mapping' sempre presente;
+    i file possono non esistere se DUMMY_WS_WITH_SEMANTIC=0).
     """
     base_parent = tmp_path_factory.mktemp("kbws")
     clients_db_relative = Path("clients_db/clients.yaml")
@@ -344,7 +344,6 @@ def dummy_workspace(tmp_path_factory):
 
     sem_dir = base / "semantic"
     sem_map = sem_dir / "semantic_mapping.yaml"
-    sem_cart = sem_dir / "cartelle_raw.yaml"
 
     # --- Locale minimo sempre presente ---
     cfg.parent.mkdir(parents=True, exist_ok=True)
@@ -394,11 +393,6 @@ def dummy_workspace(tmp_path_factory):
                 "context:\n" f"  slug: {DUMMY_SLUG}\n" f"  client_name: Dummy {DUMMY_SLUG}\n",
                 encoding="utf-8",
             )
-        if not sem_cart.exists():
-            sem_cart.write_text(
-                "version: 1\n" "folders: []\n" "context:\n" f"  slug: {DUMMY_SLUG}\n",
-                encoding="utf-8",
-            )
 
     # Assert minimi sempre veri nel modello pre-Vision
     assert cfg.exists(), "config/config.yaml mancante"
@@ -409,7 +403,6 @@ def dummy_workspace(tmp_path_factory):
     # Gli assert sui semantic restano condizionati dal flag
     if with_semantic:
         assert sem_map.exists(), "semantic/semantic_mapping.yaml mancante"
-        assert sem_cart.exists(), "semantic/cartelle_raw.yaml mancante"
 
     clients_db_dir = base / "clients_db"
     clients_db_dir.mkdir(parents=True, exist_ok=True)
@@ -420,7 +413,6 @@ def dummy_workspace(tmp_path_factory):
         "config": cfg,
         "vision_pdf": pdf,
         "semantic_mapping": sem_map,
-        "cartelle_raw": sem_cart,
         "book_dir": book,
         "raw_dir": raw_dir,
         "slug": DUMMY_SLUG,

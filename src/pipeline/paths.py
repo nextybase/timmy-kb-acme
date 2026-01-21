@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Sequence, Tuple
 
 from .constants import LOGS_DIR_NAME
+from .env_constants import REPO_ROOT_ENV
 from .exceptions import ConfigError, PathTraversalError
 from .logging_utils import get_structured_logger
 from .path_utils import ensure_within, ensure_within_and_resolve
@@ -55,13 +56,13 @@ def _validate_repo_root_env(value: str) -> Path:
             "paths.repo_root.env_invalid",
             extra={"repo_root_dir": value, "reason": "not_exists"},
         )
-        raise ConfigError(f"REPO_ROOT_DIR non esiste: {resolved}")
+        raise ConfigError(f"{REPO_ROOT_ENV} non esiste: {resolved}")
     if not _has_sentinel(resolved):
         LOGGER.error(
             "paths.repo_root.env_invalid",
             extra={"repo_root_dir": value, "reason": "sentinel_missing"},
         )
-        raise ConfigError(f"REPO_ROOT_DIR manca di sentinel .git/pyproject: {resolved}")
+        raise ConfigError(f"{REPO_ROOT_ENV} manca di sentinel .git/pyproject: {resolved}")
     return resolved
 
 
@@ -74,7 +75,7 @@ def get_repo_root(*, allow_env: bool = True) -> Path:
     Fail-fast con ConfigError se non trova una root valida.
     """
     if allow_env:
-        env_root = os.getenv("REPO_ROOT_DIR")
+        env_root = os.getenv(REPO_ROOT_ENV)
         if env_root:
             resolved_env = _validate_repo_root_env(env_root)
             LOGGER.info("paths.repo_root.env", extra={"repo_root": str(resolved_env)})

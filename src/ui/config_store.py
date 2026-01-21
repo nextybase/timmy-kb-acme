@@ -101,13 +101,20 @@ def _load_client_config(slug: str) -> tuple[Path, GlobalConfig]:
         if isinstance(settings, dict):
             return Path(cfg_path), cast(GlobalConfig, settings)
         try:
-            return Path(cfg_path), cast(GlobalConfig, dict(vars(settings)))
+            raw = dict(vars(settings))
         except Exception as exc:  # noqa: BLE001
             raise ConfigError(
                 "Impossibile convertire le settings cliente in dict (as_dict/dict/vars falliti).",
                 slug=slug,
                 file_path=str(cfg_path),
             ) from exc
+        if not raw:
+            raise ConfigError(
+                "Impossibile convertire le settings cliente in dict (as_dict/dict/vars falliti).",
+                slug=slug,
+                file_path=str(cfg_path),
+            )
+        return Path(cfg_path), cast(GlobalConfig, raw)
     except Exception as exc:  # noqa: BLE001
         _logger.error(
             "ui.config_store.client_config_load_failed",

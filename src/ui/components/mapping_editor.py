@@ -25,22 +25,6 @@ MAPPING_RESERVED = {
     "metadata_policy",
 }
 
-# -------- Caricamento mapping di default (da config/) --------
-
-
-def load_default_mapping() -> Dict[str, Any]:
-    """Carica il mapping di default dai template canonici del repository."""
-    repo_root = Path(__file__).resolve().parents[3]  # .../src/ui/components -> .../src -> repo
-    template_root = repo_root / "system" / "assets" / "templates"
-    path = template_root / "default_semantic_mapping.yaml"
-    if not path.is_file():
-        raise FileNotFoundError(f"Mapping default non trovato: {path}")
-    data = yaml_load(path)
-    if not isinstance(data, dict):
-        raise TypeError("default_semantic_mapping.yaml deve contenere un oggetto YAML")
-    return data
-
-
 # -------- Split/Build/Validate (editor) --------
 
 

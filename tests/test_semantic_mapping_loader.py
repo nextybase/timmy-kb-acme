@@ -28,35 +28,6 @@ def test_load_semantic_mapping_prefers_workspace(tmp_path):
     assert mapping == {"concept": ["tag-one"]}
 
 
-def test_load_semantic_mapping_template_fallback(tmp_path):
-    repo = tmp_path / "repo"
-    config_dir = None
-    template_dir = repo / "system" / "assets" / "templates"
-    template_dir.mkdir(parents=True)
-    (template_dir / "default_semantic_mapping.yaml").write_text(
-        "concept:\n  tags:\n    - template-tag\n",
-        encoding="utf-8",
-    )
-
-    mapping = load_semantic_mapping(_ctx(config_dir=config_dir, repo_root_dir=repo))
-
-    assert mapping == {"concept": ["template-tag"]}
-
-
-def test_load_semantic_mapping_default_fallback(tmp_path):
-    repo = tmp_path / "repo"
-    (repo / "system" / "assets" / "templates").mkdir(parents=True)
-    (repo / "system" / "assets" / "templates" / "default_semantic_mapping.yaml").write_text(
-        "concept:\n  - default-tag\n",
-        encoding="utf-8",
-    )
-    ctx = _ctx(config_dir=None, repo_root_dir=repo)
-
-    mapping = load_semantic_mapping(ctx)
-
-    assert mapping == {"concept": ["default-tag"]}
-
-
 def test_load_semantic_mapping_invalid_keywords_raises(tmp_path):
     repo = tmp_path / "repo"
     cfg = tmp_path / "cfg"
@@ -78,7 +49,7 @@ def test_load_semantic_mapping_missing_raises(tmp_path):
         load_semantic_mapping(ctx)
 
 
-def test_iter_mapping_candidates_exposes_only_workspace_and_template(tmp_path):
+def test_iter_mapping_candidates_exposes_only_workspace(tmp_path):
     cfg = tmp_path / "cfg"
     repo = tmp_path / "repo"
     cfg.mkdir()
@@ -94,4 +65,4 @@ def test_iter_mapping_candidates_exposes_only_workspace_and_template(tmp_path):
         )
     )
 
-    assert [source for source, _, _ in candidates] == ["workspace", "template"]
+    assert [source for source, _, _ in candidates] == ["workspace"]

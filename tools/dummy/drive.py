@@ -57,30 +57,6 @@ def call_drive_min(
         return ensure_drive_minimal_and_upload_config(slug=slug, client_name=client_name)  # type: ignore[misc]
 
 
-def call_drive_build_from_mapping(
-    slug: str,
-    client_name: str,
-    base_dir: Path,
-    logger: logging.Logger,
-    build_drive_from_mapping: Callable[..., Any] | None,
-) -> Optional[dict[str, Any]]:
-    """Chiama build_drive_from_mapping come fa la UI (se disponibile)."""
-    if not callable(build_drive_from_mapping):
-        return None
-
-    # Dummy / tooling path: NON ricaricare ClientContext
-    # Passiamo direttamente base_dir per evitare dipendenze legacy
-    try:
-        return build_drive_from_mapping(
-            slug=slug,
-            client_name=client_name,
-            base_dir=base_dir,
-        )  # type: ignore[misc]
-    except TypeError:
-        # fallback legacy (UI): mantiene compat ma può fallire se usa ClientContext
-        return build_drive_from_mapping(slug=slug, client_name=client_name)  # type: ignore[misc]
-
-
 def call_drive_emit_readmes(
     slug: str,
     base_dir: Path,
@@ -96,7 +72,6 @@ def call_drive_emit_readmes(
             slug,
             base_root=base_root,
             require_env=False,
-            ensure_structure=False,
         )
     except Exception as exc:  # noqa: BLE001
         message = str(exc)
@@ -122,4 +97,4 @@ def call_drive_emit_readmes(
         return None
 
 
-__all__ = ["call_drive_min", "call_drive_build_from_mapping", "call_drive_emit_readmes"]
+__all__ = ["call_drive_min", "call_drive_emit_readmes"]

@@ -29,7 +29,7 @@ from pipeline.vision_template import load_vision_template_sections
 from semantic.core import compile_document_to_vision_yaml
 from semantic.pdf_utils import PdfExtractError, extract_text_from_pdf
 from semantic.validation import validate_context_slug
-from semantic.vision_utils import json_to_cartelle_raw_yaml, vision_to_semantic_mapping_yaml
+from semantic.vision_utils import vision_to_semantic_mapping_yaml
 
 # Logger strutturato di modulo
 EVENT = "semantic.vision"
@@ -423,7 +423,6 @@ class _Paths:
     base_dir: Path
     semantic_dir: Path
     mapping_yaml: Path
-    cartelle_yaml: Path
 
 
 @dataclass(frozen=True)
@@ -446,8 +445,7 @@ def _resolve_paths(ctx_base_dir: str) -> _Paths:
     base = Path(ctx_base_dir)
     sem_dir = ensure_within_and_resolve(base, base / "semantic")
     mapping_yaml = ensure_within_and_resolve(sem_dir, sem_dir / "semantic_mapping.yaml")
-    cartelle_yaml = ensure_within_and_resolve(sem_dir, sem_dir / "cartelle_raw.yaml")
-    return _Paths(base, sem_dir, mapping_yaml, cartelle_yaml)
+    return _Paths(base, sem_dir, mapping_yaml)
 
 
 def _parse_required_sections(raw_text: str) -> Dict[str, str]:
@@ -870,9 +868,6 @@ def _persist_outputs(
     mapping_yaml_str = vision_to_semantic_mapping_yaml(payload, slug=slug)
     safe_write_text(prepared.paths.mapping_yaml, mapping_yaml_str)
 
-    cartelle_yaml_str = json_to_cartelle_raw_yaml(payload, slug=slug, raw_folders=None)
-    safe_write_text(prepared.paths.cartelle_yaml, cartelle_yaml_str)
-
     ts = datetime.now(timezone.utc).isoformat()
     try:
         import importlib.metadata as _ilm
@@ -888,7 +883,7 @@ def _persist_outputs(
         "vision_engine": "responses",
         "input_mode": "inline-only",
         "strict_output": True,
-        "yaml_paths": mask_paths(prepared.paths.mapping_yaml, prepared.paths.cartelle_yaml),
+        "yaml_paths": mask_paths(prepared.paths.mapping_yaml),
         "sdk_version": _sdk_version,
         "project": _optional_env("OPENAI_PROJECT") or "",
         "base_url": _optional_env("OPENAI_BASE_URL") or "",
@@ -909,7 +904,6 @@ def _persist_outputs(
 
     return {
         "mapping": str(prepared.paths.mapping_yaml),
-        "cartelle_raw": str(prepared.paths.cartelle_yaml),
     }
 
 

@@ -160,11 +160,6 @@ class MetaSection:
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "MetaSection":
-        if "cartelle_raw_yaml" in data:
-            raise ConfigError(
-                "meta.cartelle_raw_yaml non supportato: usa cartelle_raw_yaml top-level.",
-                file_path=str(config_path),
-            )
         return cls(
             n_ver=_extract_int(
                 data.get("N_VER"),
@@ -191,7 +186,7 @@ class MetaSection:
                 data.get("semantic_mapping_yaml"),
                 "meta.semantic_mapping_yaml",
                 config_path=config_path,
-                default="semantic/tags_reviewed.yaml",
+                default=None,
             ),
             vision_statement_pdf=_extract_optional_str(
                 data.get("vision_statement_pdf"),
@@ -418,13 +413,6 @@ class Settings:
         repo_root = repo_root.resolve()
         cfg_path = (config_path or (repo_root / "config" / "config.yaml")).resolve()
         payload = yaml_read(repo_root, cfg_path) or {}
-        if isinstance(payload, Mapping):
-            meta = payload.get("meta")
-            if isinstance(meta, Mapping) and "cartelle_raw_yaml" in meta:
-                raise ConfigError(
-                    "meta.cartelle_raw_yaml non supportato: usa cartelle_raw_yaml top-level.",
-                    file_path=str(cfg_path),
-                )
         instance = cls(config_path=cfg_path, data=payload)
         if logger:
             extra = {"file_path": str(cfg_path)}

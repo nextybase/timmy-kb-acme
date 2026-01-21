@@ -68,10 +68,9 @@ _prepare_prompt_yaml = VISION_BINDINGS.prepare_yaml_with_config
 
 @dataclass(frozen=True)
 class VisionArtifacts:
-    """Riferimenti ai due artefatti SSoT prodotti da Vision."""
+    """Riferimenti all'artefatto SSoT prodotto da Vision."""
 
     mapping_yaml: Path
-    cartelle_yaml: Path
 
 
 def resolve_vision_retention_days(ctx: Any) -> int:
@@ -106,8 +105,7 @@ def _hash_sentinel(base_dir: Path) -> Path:
 def _artifacts_paths(base_dir: Path) -> VisionArtifacts:
     sdir = _semantic_dir(base_dir)
     mapping = ensure_within_and_resolve(sdir, sdir / "semantic_mapping.yaml")
-    cartelle = ensure_within_and_resolve(sdir, sdir / "cartelle_raw.yaml")
-    return VisionArtifacts(mapping_yaml=cast(Path, mapping), cartelle_yaml=cast(Path, cartelle))
+    return VisionArtifacts(mapping_yaml=cast(Path, mapping))
 
 
 def _vision_yaml_path(base_dir: Path, *, pdf_path: Optional[Path] = None) -> Path:
@@ -123,7 +121,7 @@ def _vision_yaml_path(base_dir: Path, *, pdf_path: Optional[Path] = None) -> Pat
 
 def _artifacts_exist(base_dir: Path) -> bool:
     art = _artifacts_paths(base_dir)
-    return art.mapping_yaml.exists() and art.cartelle_yaml.exists()
+    return art.mapping_yaml.exists()
 
 
 def _load_last_hash(base_dir: Path) -> Optional[Dict[str, Any]]:
@@ -218,8 +216,7 @@ def provision_from_vision_with_config(
         {
           "skipped": bool,
           "hash": "<sha256>",
-          "mapping": "<abs path>",
-          "cartelle_raw": "<abs path>"
+          "mapping": "<abs path>"
         }
     """
     base_dir = getattr(ctx, "base_dir", None)

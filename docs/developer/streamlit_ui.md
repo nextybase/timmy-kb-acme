@@ -26,6 +26,7 @@ Queste linee guida descrivono il modulo Streamlit come parte dell'ambiente Timmy
 - [New pages](#new-pages)
 - [Path-safety (lettura/scrittura)](#path-safety-letturascrittura)
   - [Flusso consigliato](#flusso-consigliato)
+  - [Workspace root (REPO_ROOT_DIR / WORKSPACE_ROOT_DIR)](#workspace-root-repo_root_dir--workspace_root_dir)
   - [Esempi pratici](#esempi-pratici)
 - [Scan PDF sicuro (DRY)](#scan-pdf-sicuro-dry)
 - [Eventi di log strutturati](#eventi-di-log-strutturati)
@@ -161,6 +162,13 @@ Checklist minima per una pagina nuova:
 3. Valida tramite `pipeline.path_utils.ensure_within_and_resolve` e scrivi con helper atomici (`safe_write_text`, `safe_write_bytes`, ecc.).
 
 > Gli helper legacy `resolve_raw_dir` e `workspace_root` seguono ancora la firma compatibile, ma non devono essere usati nei nuovi modules che già hanno il layout; preferisci sempre `layout.raw_dir`/`layout.base_dir`.
+
+### Workspace root (REPO_ROOT_DIR / WORKSPACE_ROOT_DIR)
+
+- `REPO_ROOT_DIR` ha precedenza quando impostato: se contiene `.git` o `pyproject.toml` viene trattato come root repo e deriva `output/timmy-kb-<slug>`, altrimenti viene usato come workspace diretta (legacy/test).
+- `WORKSPACE_ROOT_DIR` viene usato quando `REPO_ROOT_DIR` manca; accetta anche il placeholder `<slug>` e viene risolto in un path assoluto, utile per puntare a una workspace cliente specifica.
+- Se entrambe sono assenti, la pipeline richiede un workspace root canonico via API.
+- Su Windows e Linux usare path assoluti coerenti (niente drive letter nei path relativi).
 
 ### Esempi pratici
 

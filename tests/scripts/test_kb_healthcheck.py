@@ -31,7 +31,7 @@ def test_kb_healthcheck_sets_used_file_search_and_excerpt(tmp_path: Path, monkey
     monkeypatch.setattr(kb, "_client_base", lambda slug: tmp_path / f"ws-{slug}")
 
     def _fake_run_vision(*args: Any, **kwargs: Any) -> dict[str, str]:
-        return {"mapping": str(mapping), "cartelle_raw": ""}
+        return {"mapping": str(mapping)}
 
     monkeypatch.setattr(kb, "run_vision", _fake_run_vision)
 
@@ -53,10 +53,6 @@ def test_kb_healthcheck_offline_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     config_dir.mkdir(parents=True, exist_ok=True)
 
     (semantic_dir / "semantic_mapping.yaml").write_text("foo: bar\n", encoding="utf-8")
-    (semantic_dir / "cartelle_raw.yaml").write_text(
-        "version: 1\nfolders:\n  - key: governance\n    title: Governance\n",
-        encoding="utf-8",
-    )
     (config_dir / "VisionStatement.pdf").write_bytes(b"pdf")
 
     monkeypatch.setattr(kb, "_repo_pdf_path", lambda: repo_pdf)

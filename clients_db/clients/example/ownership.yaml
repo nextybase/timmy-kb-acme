@@ -1,9 +1,0 @@
-schema_version: "1"
-superadmin: "@nextybase/ops"
-ownership:
-  user:
-    - "@nextybase/user-channel"
-  dev:
-    - "@nextybase/dev-channel"
-  architecture:
-    - "@nextybase/architecture"

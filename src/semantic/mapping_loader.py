@@ -106,7 +106,3 @@ def iter_mapping_candidates(
     if config_dir is not None:
         cfg_base = Path(config_dir)
         yield "workspace", cfg_base, cfg_base / mapping_filename
-
-    template_root = Path(repo_default_dir or repo_root_dir)
-    template_base = template_root / "system" / "assets" / "templates"
-    yield "template", template_base, template_base / "default_semantic_mapping.yaml"

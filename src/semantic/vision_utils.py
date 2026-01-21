@@ -8,7 +8,7 @@ Allineato al refactor Vision (Fase 1):
 - i termini per il tagging restano in semantic/tags_reviewed.yaml (SSoT reviewed)
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import yaml
 
@@ -17,13 +17,13 @@ from pipeline.exceptions import ConfigError
 
 def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
     """
-    Converte il payload Vision v1.0 in tags_reviewed.yaml (1:1 con il JSON dell'assistente).
+    Converte il payload Vision v1.0 in semantic_mapping.yaml (1:1 con il JSON dell'assistente).
     Nessun uso di 'keywords' legacy.
     """
     if not isinstance(data, dict):
         raise ConfigError("Vision data: atteso un oggetto JSON.")
     if data.get("status") == "halt":
-        raise ConfigError("Vision HALT: impossibile generare tags_reviewed.yaml senza struttura base.")
+        raise ConfigError("Vision HALT: impossibile generare semantic_mapping.yaml senza struttura base.")
 
     areas = data.get("areas")
     if not isinstance(areas, list) or not (3 <= len(areas) <= 9):
@@ -148,86 +148,4 @@ def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
     if metadata_policy:
         payload["metadata_policy"] = metadata_policy
 
-    return yaml.safe_dump(payload, allow_unicode=True, sort_keys=False, width=100)
-
-
-def json_to_cartelle_raw_yaml(
-    data: Dict[str, Any],
-    slug: str,
-    raw_folders: Optional[Dict[str, List[str]]] = None,
-) -> str:
-    """
-    Converte il payload Vision v1.0-beta in semantic/_raw_from_mapping.yaml.
-    examples <- documents (fallback: descrizione_dettagliata.include)
-    + system folders: identity/ e glossario/
-    """
-    if not isinstance(data, dict):
-        raise ConfigError("Vision data: atteso un oggetto JSON.")
-    if data.get("status") == "halt":
-        raise ConfigError("Vision HALT: impossibile generare cartelle_raw da struttura assente.")
-
-    areas = data.get("areas")
-    if not isinstance(areas, list) or not (3 <= len(areas) <= 9):
-        raise ConfigError("Vision data: 'areas' deve contenere tra 3 e 9 elementi.")
-
-    folders: List[Dict[str, Any]] = []
-    for idx, area in enumerate(areas):
-        if not isinstance(area, dict):
-            raise ConfigError(f"Vision data: area #{idx} non è un oggetto JSON.")
-        key = area.get("key")
-        ambito = area.get("ambito")
-        descr_breve = area.get("descrizione_breve", "")
-
-        docs = area.get("documents") or []
-        if isinstance(docs, str):
-            docs = [docs]
-        examples = [str(x).strip() for x in docs if str(x).strip()]
-        if not examples:
-            raise ConfigError(f"Vision data: documents mancanti per area '{key}'")
-
-        folders.append(
-            {
-                "key": str(key),
-                "title": str(ambito) if isinstance(ambito, str) and ambito.strip() else str(key),
-                "description": str(descr_breve) if isinstance(descr_breve, str) else "",
-                "examples": examples,
-            }
-        )
-
-    sys = data.get("system_folders") or {}
-    if isinstance(sys, dict):
-        ident = sys.get("identity")
-        if isinstance(ident, dict):
-            identity_docs = ident.get("documents") or []
-            if isinstance(identity_docs, str):
-                identity_docs = [identity_docs]
-            if not isinstance(identity_docs, list):
-                identity_docs = []
-            folders.append(
-                {
-                    "key": "identity",
-                    "title": "Identità",
-                    "description": "Documenti identificativi e titoli abilitanti",
-                    "examples": [str(x).strip() for x in identity_docs if str(x).strip()],
-                }
-            )
-        gloss = sys.get("glossario")
-        if isinstance(gloss, dict):
-            gloss_arts = gloss.get("artefatti") or []
-            if isinstance(gloss_arts, str):
-                gloss_arts = [gloss_arts]
-            if not isinstance(gloss_arts, list):
-                gloss_arts = []
-            folders.append(
-                {
-                    "key": "glossario",
-                    "title": "Glossario",
-                    "description": "Termini e definizioni vincolanti (artefatti di sistema)",
-                    "examples": [str(x).strip() for x in gloss_arts if str(x).strip()],
-                }
-            )
-
-    payload: Dict[str, Any] = {"version": 1, "source": "vision", "context": {"slug": slug}, "folders": folders}
-    if isinstance(raw_folders, dict):
-        payload["raw_folders"] = raw_folders
     return yaml.safe_dump(payload, allow_unicode=True, sort_keys=False, width=100)
