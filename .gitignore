@@ -132,7 +132,9 @@ yarn-error.log*
 .stylelintcache
 clients_db/*
 !clients_db/clients/
-!clients_db/clients/**
+clients_db/clients/*
+!clients_db/clients/example/
+!clients_db/clients/example/**
 
 # E2E reports
 playwright-report/

@@ -598,6 +598,24 @@ if current_phase == UI_PHASE_INIT:
                         if status is not None and hasattr(status, "update"):
                             status.update(label="Drive pronto (cartelle + config aggiornato).", state="complete")
                         progress.progress(60, text="Drive pronto (cartelle + config aggiornato).")
+
+                        # NOTA IMPORTANTE:
+                        # La fase di provisioning Drive aggiorna il file config.yaml del cliente su disco
+                        # inserendo gli ID drive_* (drive_folder_id, drive_raw_folder_id).
+                        # Tuttavia Streamlit e il layer di contesto possono mantenere una versione
+                        # cache-ata della configurazione in memoria.
+                        #
+                        # Senza un reload esplicito, i check successivi (_has_drive_ids)
+                        # possono leggere una config obsoleta e fallire erroneamente.
+                        #
+                        # Forziamo quindi l'invalidazione e il reload del contesto cliente
+                        # per garantire coerenza tra stato su disco e stato in memoria.
+                        invalidate_client_context(s)
+                        ctx = get_client_context(
+                            s,
+                            require_env=False,
+                            force_reload=True,
+                        )
                     except Exception as exc:
                         if status is not None and hasattr(status, "update"):
                             status.update(label="Errore durante il provisioning Drive.", state="error")
@@ -732,6 +750,8 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         st.error("Per aprire il workspace serve semantic/semantic_mapping.yaml. Esegui prima 'Inizializza Workspace'.")
         st.stop()
 
+    # Il controllo resta invariato, ma grazie al reload forzato
+    # ora leggerà la configurazione aggiornata.
     has_drive_ids = _has_drive_ids(eff)
     local_only_mode = ui_allow_local_only_enabled()
     if not has_drive_ids and not local_only_mode:
