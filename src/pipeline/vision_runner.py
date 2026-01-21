@@ -87,6 +87,31 @@ def _sha256_of_file(base_dir: Path, path: Path, chunk_size: int = 8192) -> str:
     return h.hexdigest()
 
 
+def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, base_dir: Path, slug: str) -> None:
+    layout = WorkspaceLayout.from_workspace(Path(base_dir), slug=slug)
+    mapping_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "semantic_mapping.yaml")
+    categories = raw_categories_from_semantic_mapping(
+        semantic_dir=layout.semantic_dir,
+        mapping_path=Path(mapping_path),
+    )
+    if not categories:
+        raise ConfigError("semantic_mapping.yaml non contiene aree valide: impossibile materializzare raw/")
+    for name in categories:
+        target = ensure_within_and_resolve(layout.raw_dir, layout.raw_dir / name)
+        target.mkdir(parents=True, exist_ok=True)
+    if getattr(ctx, "drive_raw_folder_id", None):
+        create_drive_structure_from_names(
+            ctx=ctx,
+            folder_names=categories,
+            parent_folder_id=ctx.drive_raw_folder_id,
+            log=logger,
+        )
+    logger.info(
+        "vision.raw_structure.done",
+        extra={"local_count": len(categories), "drive_enabled": bool(getattr(ctx, "drive_raw_folder_id", None))},
+    )
+
+
 def _load_last_hash(base_dir: Path) -> Optional[Dict[str, Any]]:
     """
     Legge il sentinel JSON se presente.
@@ -144,9 +169,13 @@ def run_vision_with_gating(
             "mode": "SMOKE",
         }
 
-    base_dir = getattr(ctx, "base_dir", None)
+    base_dir = getattr(ctx, "repo_root_dir", None) or getattr(ctx, "base_dir", None)
     if not base_dir:
-        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+        raise ConfigError("Context privo di repo_root_dir/base_dir per Vision onboarding.", slug=slug)
+    if hasattr(ctx, "repo_root_dir") and getattr(ctx, "repo_root_dir", None) is None:
+        raise ConfigError("Context privo di repo_root_dir per Vision onboarding.", slug=slug)
+    if hasattr(ctx, "slug") and getattr(ctx, "slug", None) is None:
+        raise ConfigError("Context privo di slug per Vision onboarding.", slug=slug)
 
     pdf_path = Path(pdf_path)
     safe_pdf = cast(Path, ensure_within_and_resolve(base_dir, pdf_path))
@@ -162,6 +191,7 @@ def run_vision_with_gating(
     gate_hit = (last_digest == digest) and art["mapping"].exists()
     logger.info("ui.vision.gate", extra={"slug": slug, "hit": gate_hit})
     if gate_hit and not force:
+        _materialize_raw_structure(ctx, logger, base_dir=Path(base_dir), slug=slug)
         raise ConfigError(
             "Vision già eseguito per questo PDF. Usa la modalità 'Forza rigenerazione' per procedere.",
             slug=slug,
@@ -202,31 +232,7 @@ def run_vision_with_gating(
     except HaltError:
         raise
 
-    try:
-        layout = WorkspaceLayout.from_context(ctx)
-        mapping_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "semantic_mapping.yaml")
-        categories = raw_categories_from_semantic_mapping(
-            semantic_dir=layout.semantic_dir,
-            mapping_path=Path(mapping_path),
-        )
-        if not categories:
-            raise ConfigError("semantic_mapping.yaml non contiene aree valide: impossibile materializzare raw/")
-        for name in categories:
-            target = ensure_within_and_resolve(layout.raw_dir, layout.raw_dir / name)
-            target.mkdir(parents=True, exist_ok=True)
-        if getattr(ctx, "drive_raw_folder_id", None):
-            create_drive_structure_from_names(
-                ctx=ctx,
-                folder_names=categories,
-                parent_folder_id=ctx.drive_raw_folder_id,
-                log=logger,
-            )
-        logger.info(
-            "vision.raw_structure.done",
-            extra={"local_count": len(categories), "drive_enabled": bool(getattr(ctx, "drive_raw_folder_id", None))},
-        )
-    except Exception as exc:
-        logger.warning("vision.raw_structure.failed", extra={"error": str(exc)})
+    _materialize_raw_structure(ctx, logger, base_dir=Path(base_dir), slug=slug)
 
     _save_hash(base_dir, digest=digest, model=resolved_config.model)
     logger.info("ui.vision.update_hash", extra={"slug": slug, "file_path": str(_hash_sentinel(base_dir))})
