@@ -22,10 +22,19 @@ DEFAULT_VISION_PDF = (
 
 
 def client_base(slug: str, repo_root: Path, get_env_var: Callable[[str, str | None], str | None]) -> Path:
-    env_root = get_env_var("REPO_ROOT_DIR", default=None)
+    env_root = get_env_var("WORKSPACE_ROOT_DIR", default=None)
     if env_root:
         try:
-            return Path(env_root).expanduser().resolve()
+            raw = str(env_root)
+            if "<slug>" in raw:
+                raw = raw.replace("<slug>", slug)
+            root = Path(raw).expanduser().resolve()
+            expected = f"timmy-kb-{slug}"
+            if root.name == "output":
+                return root / expected
+            if root.name.startswith("timmy-kb-") and root.name != expected:
+                return root.parent / expected
+            return root
         except Exception:
             pass
     return repo_root / "output" / f"timmy-kb-{slug}"

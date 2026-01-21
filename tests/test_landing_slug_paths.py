@@ -14,6 +14,7 @@ def test_base_dir_for_prefers_clientcontext(tmp_path: Path, monkeypatch: Any) ->
     semantic.api.get_paths."""
     repo_root = tmp_path / "repo-root"
     repo_root.mkdir()
+    (repo_root / ".git").mkdir()
 
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
 

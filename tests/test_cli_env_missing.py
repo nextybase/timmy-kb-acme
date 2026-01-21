@@ -18,7 +18,8 @@ def test_tag_onboarding_cli_missing_env_returns_configerror_code(tmp_path: Path)
 
     env = dict(os.environ)
     # Garantisce workspace isolato (evita scritture fuori sandbox test)
-    env["REPO_ROOT_DIR"] = str(client_dir)
+    env["WORKSPACE_ROOT_DIR"] = str(client_dir)
+    env.pop("REPO_ROOT_DIR", None)
     # Rimuovi le variabili richieste dalla sorgente Drive
     env.pop("SERVICE_ACCOUNT_FILE", None)
     env.pop("DRIVE_ID", None)

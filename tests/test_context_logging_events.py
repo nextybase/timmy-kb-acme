@@ -22,8 +22,9 @@ class _Mem(logging.Handler):
 
 
 def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    # Forza REPO_ROOT_DIR da ENV verso una cartella temporanea vuota
-    repo_root = tmp_path / f"kb-{DUMMY_SLUG}"
+    # Forza REPO_ROOT_DIR verso una repo root temporanea con sentinel
+    repo_root = tmp_path / "repo-root"
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
 
     # Logger strutturato con handler in memoria
@@ -34,7 +35,8 @@ def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
 
     # require_env=False per non dipendere da variabili esterne
     ctx = ClientContext.load(DUMMY_SLUG, logger=lg, require_env=False)
-    assert ctx.repo_root_dir == repo_root.resolve()
+    expected_root = repo_root / "output" / f"timmy-kb-{DUMMY_SLUG}"
+    assert ctx.repo_root_dir == expected_root.resolve()
 
     # Verifica eventi
     events = {r.msg for r in mem.records}

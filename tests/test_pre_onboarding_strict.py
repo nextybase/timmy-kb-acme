@@ -15,7 +15,8 @@ def test_ensure_local_workspace_for_ui_merge_failure_is_fatal(tmp_path: Path, mo
     (template_root / "config").mkdir(parents=True, exist_ok=True)
     (template_root / "config" / "config.yaml").write_text("client_name: Template\n", encoding="utf-8")
 
-    monkeypatch.setenv("REPO_ROOT_DIR", str(workspace_root))
+    monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(workspace_root))
     monkeypatch.setenv("TEMPLATE_CONFIG_ROOT", str(template_root))
 
     def _boom(*_args, **_kwargs):

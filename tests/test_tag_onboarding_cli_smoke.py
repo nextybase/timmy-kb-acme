@@ -88,7 +88,8 @@ def test_tag_onboarding_cli_scan_raw_and_nlp_respect_context(tmp_path: Path):
     repo_root = Path(__file__).resolve().parents[1]
 
     env = dict(os.environ)
-    env["REPO_ROOT_DIR"] = str(client_dir)
+    env["WORKSPACE_ROOT_DIR"] = str(client_dir)
+    env.pop("REPO_ROOT_DIR", None)
     existing_path = env.get("PYTHONPATH")
     src_path = str(repo_root / "src")
     path_elements = [str(stub_root), src_path]

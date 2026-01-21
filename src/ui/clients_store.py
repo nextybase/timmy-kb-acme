@@ -46,7 +46,7 @@ def _is_client_workspace(path: Path) -> bool:
         parent = path.parent
     except Exception:
         return False
-    return parent.name == "output" and path.name.startswith("timmy-kb-")
+    return path.name.startswith("timmy-kb-") or parent.name == "output"
 
 
 def _coerce_allow_client_db() -> bool:

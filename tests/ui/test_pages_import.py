@@ -30,6 +30,7 @@ def test_ui_pages_import_stub(module_name: str, monkeypatch: pytest.MonkeyPatch,
     st_stub.query_params["slug"] = DUMMY_SLUG
     monkeypatch.setenv("PREVIEW_MODE", "stub")
     monkeypatch.setenv("STREAMLIT_SERVER_HEADLESS", "true")
+    (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path))
     monkeypatch.setenv("PREVIEW_LOG_DIR", str(tmp_path / "preview_logs"))
     monkeypatch.chdir(tmp_path)

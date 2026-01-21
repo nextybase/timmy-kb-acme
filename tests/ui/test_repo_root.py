@@ -1,4 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+import importlib
+import sys
+
 from ui.utils.repo_root import get_repo_root
 
 
@@ -19,6 +22,7 @@ def test_get_repo_root_env_valid(monkeypatch, tmp_path) -> None:
     repo.mkdir()
     (repo / ".git").mkdir()
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo))
+    assert get_repo_root() == repo
     assert get_repo_root(allow_env=True) == repo
 
 
@@ -32,3 +36,21 @@ def test_get_repo_root_env_disabled(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("REPO_ROOT_DIR", str(other))
     monkeypatch.chdir(repo)
     assert get_repo_root(allow_env=False) == repo
+
+
+def test_ui_modules_use_env_repo_root(monkeypatch, tmp_path) -> None:
+    repo = tmp_path / "ui-repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    monkeypatch.setenv("REPO_ROOT_DIR", str(repo))
+
+    for name in ("ui.config_store", "ui.landing_slug", "ui.fine_tuning.yaml_io"):
+        sys.modules.pop(name, None)
+
+    config_store = importlib.import_module("ui.config_store")
+    landing = importlib.import_module("ui.landing_slug")
+    yaml_io = importlib.import_module("ui.fine_tuning.yaml_io")
+
+    assert config_store.REPO_ROOT == repo
+    assert landing.REPO_ROOT == repo
+    assert yaml_io.repo_root() == repo

@@ -38,10 +38,12 @@ def test_init_workspace_skips_drive_when_helper_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     slug = "dummy"
+    repo_root = tmp_path / "repo-root"
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.chdir(tmp_path)
     # Isola il repo root per il test: evita che le write vadano sotto l'output reale.
-    monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path))
-    workspace_root = tmp_path
+    monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
+    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
 
     def _ensure_semantic_assets(root: Path) -> None:
         semantic_dir = root / "semantic"

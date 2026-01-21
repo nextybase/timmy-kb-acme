@@ -23,7 +23,7 @@ from ui.types import StreamlitLike
 
 LOGGER = get_structured_logger("ui.bootstrap")
 
-# REPO_ROOT_DIR serve al workspace: non rimuoverla qui.
+# REPO_ROOT_DIR deve puntare alla repo root; WORKSPACE_ROOT_DIR definisce il workspace.
 
 
 def _init_ui_logging(repo_root: Path) -> None:
@@ -309,18 +309,11 @@ def build_navigation(
 
 
 def main() -> None:
-    # In runtime UI l'env REPO_ROOT_DIR può puntare alla workspace (output/...) e
-    # fallire la validazione del sentinel (.git/pyproject). In quel caso facciamo
-    # fallback deterministico su autodetect del repo (no env).
     try:
         repo_root = get_repo_root()
     except ConfigError as exc:
-        LOGGER.warning("ui.repo_root.env_invalid_fallback", extra={"error": str(exc)})
-        try:
-            repo_root = get_repo_root(allow_env=False)
-        except ConfigError as exc2:
-            LOGGER.error("ui.bootstrap.repo_root_missing", extra={"error": str(exc2)})
-            raise
+        LOGGER.error("ui.bootstrap.repo_root_invalid", extra={"error": str(exc)})
+        raise
 
     logger = _lazy_bootstrap(repo_root)
 

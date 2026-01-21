@@ -6,6 +6,7 @@ from typing import Any, Dict, cast
 
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from ui.utils.repo_root import get_repo_root
 
 try:
     import yaml
@@ -16,8 +17,7 @@ SECTION_ORDER = ["Vision", "Mission", "Framework Etico", "Goal", "Contesto Opera
 
 
 def repo_root() -> Path:
-    # src/ui/fine_tuning/yaml_io.py -> parents[3] = repo root
-    return Path(__file__).resolve().parents[3]
+    return get_repo_root(allow_env=True)
 
 
 def root_yaml_path() -> Path:

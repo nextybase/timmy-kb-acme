@@ -66,7 +66,8 @@ ops:
 def test_book_artifacts_are_generated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "dummy"
     base_dir = tmp_path / f"timmy-kb-{slug}"
-    monkeypatch.setenv("REPO_ROOT_DIR", str(base_dir))
+    monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(base_dir))
 
     def _summary_with_repo_root(paths):  # type: ignore[no-untyped-def]
         ctx = SimpleNamespace(repo_root_dir=paths.base_dir, slug=paths.slug)

@@ -173,6 +173,7 @@ def _isolate_clients_db(tmp_path_factory: pytest.TempPathFactory) -> None:
     per evitare scritture nel repository durante pytest.
     """
     base_root = tmp_path_factory.mktemp("pytest_repo_root")
+    (base_root / ".git").mkdir(parents=True, exist_ok=True)
     clients_db_dir = base_root / "clients_db" / ".pytest_clients_db"
     clients_db_dir.mkdir(parents=True, exist_ok=True)
     ui_state_path = clients_db_dir / "ui_state.json"

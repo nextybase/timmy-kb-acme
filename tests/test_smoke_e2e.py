@@ -47,7 +47,8 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     )
 
     # Forza la root repo al workspace temporaneo
-    monkeypatch.setenv("REPO_ROOT_DIR", str(workspace))
+    monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(workspace))
 
     # Genera PDF 'cattivi'
     long_name = ("very_long_name_" * 8)[:150] + ".pdf"

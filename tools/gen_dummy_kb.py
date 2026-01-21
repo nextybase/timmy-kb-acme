@@ -316,9 +316,17 @@ def _brute_reset_dummy(*, logger: logging.Logger) -> Path:
 
 
 def _ensure_local_workspace_for_tooling(*, slug: str, client_name: str, vision_statement_pdf: bytes) -> None:
-    repo_override = os.environ.get("REPO_ROOT_DIR")
-    if repo_override:
-        workspace_root = Path(repo_override).expanduser().resolve()
+    workspace_override = os.environ.get("WORKSPACE_ROOT_DIR")
+    if workspace_override:
+        raw = str(workspace_override)
+        if "<slug>" in raw:
+            raw = raw.replace("<slug>", slug)
+        workspace_root = Path(raw).expanduser().resolve()
+        expected = f"timmy-kb-{slug}"
+        if workspace_root.name == "output":
+            workspace_root = workspace_root / expected
+        elif workspace_root.name.startswith("timmy-kb-") and workspace_root.name != expected:
+            workspace_root = workspace_root.parent / expected
     else:
         workspace_root = _client_base(slug)
 
@@ -355,7 +363,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     ap.add_argument(
         "--base-dir",
         default=None,
-        help="Directory radice in cui creare il workspace (override esplicito di REPO_ROOT_DIR).",
+        help="Directory radice in cui creare il workspace (override esplicito di WORKSPACE_ROOT_DIR).",
     )
     ap.add_argument(
         "--clients-db",
@@ -499,7 +507,7 @@ def build_payload(
         deep_testing=deep_testing,
         logger=logger,
         repo_root=REPO_ROOT,
-        ensure_local_workspace_for_ui=_ensure_local_workspace_for_tooling,
+        ensure_local_workspace_for_ui=ensure_local_workspace_for_ui,
         run_vision=run_vision,
         get_env_var=get_env_var,
         ensure_within_and_resolve_fn=ensure_within_and_resolve,
@@ -577,8 +585,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if args.base_dir:
             base_override = Path(args.base_dir).expanduser().resolve()
             workspace_override = base_override / f"timmy-kb-{slug}"
-            os.environ["REPO_ROOT_DIR"] = str(workspace_override)
-            os.environ["WORKSPACE_ROOT_DIR"] = str(base_override)
+            os.environ["WORKSPACE_ROOT_DIR"] = str(workspace_override)
             # Bootstrap minimale del workspace dummy: crea le cartelle base per evitare
             # fallimenti di validazione (raw/semantic/book/logs/config).
             for child in ("raw", "semantic", "book", "logs", "config"):

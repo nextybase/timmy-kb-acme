@@ -134,7 +134,12 @@ def _load_global_settings(repo_root: Path | None = None, config_path: Path | Non
     """
     from .settings import Settings
 
-    root = repo_root or Path(__file__).resolve().parents[2]
+    if repo_root is None:
+        from .paths import get_repo_root
+
+        root = get_repo_root(allow_env=True)
+    else:
+        root = repo_root
     try:
         return Settings.load(root, config_path=config_path)
     except Exception as exc:

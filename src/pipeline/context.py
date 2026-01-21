@@ -267,17 +267,25 @@ class ClientContext:
 
         Priorità:
         - Parametro `repo_root_dir` passato in `ClientContext.load(...)`.
-        - ENV `REPO_ROOT_DIR` (se contiene .git/pyproject è root repo; altrimenti workspace diretta).
+        - ENV `REPO_ROOT_DIR` (solo repo root con sentinel .git/pyproject; workspace = output/timmy-kb-<slug>).
         - ENV `WORKSPACE_ROOT_DIR` (espansa e risolta, con placeholder "<slug>").
         """
         workspace_env = env_vars.get(WORKSPACE_ROOT_ENV)
         env_root = env_vars.get(REPO_ROOT_ENV)
+
+        def _reject_workspace_sentinels(root: Path) -> None:
+            if (root / ".git").exists() or (root / "pyproject.toml").exists():
+                raise ConfigError(
+                    f"Workspace non valido: contiene sentinel .git/pyproject: {root}",
+                    slug=slug,
+                )
 
         if repo_root_override:
             try:
                 root = Path(str(repo_root_override)).expanduser().resolve()
             except Exception as e:
                 raise ConfigError(f"repo_root_dir non valido: {repo_root_override}", slug=slug) from e
+            _reject_workspace_sentinels(root)
             logger.info(
                 "context.repo_root_dir_override",
                 extra={"slug": slug, "repo_root_dir": str(root)},
@@ -289,14 +297,16 @@ class ClientContext:
                 base_root = Path(str(env_root)).expanduser().resolve()
             except Exception as e:
                 raise ConfigError(f"{REPO_ROOT_ENV} non valido: {env_root}", slug=slug) from e
-            if (base_root / ".git").exists() or (base_root / "pyproject.toml").exists():
-                expected = f"timmy-kb-{slug}"
-                if base_root.name.startswith("timmy-kb-"):
-                    root = base_root if base_root.name == expected else base_root.parent / expected
-                else:
-                    root = base_root / "output" / expected
-            else:
-                root = base_root
+            if not base_root.exists():
+                raise ConfigError(f"{REPO_ROOT_ENV} non esiste: {base_root}", slug=slug)
+            if not (base_root / ".git").exists() and not (base_root / "pyproject.toml").exists():
+                raise ConfigError(
+                    f"{REPO_ROOT_ENV} manca di sentinel .git/pyproject: {base_root}",
+                    slug=slug,
+                )
+            expected = f"timmy-kb-{slug}"
+            root = base_root / "output" / expected
+            _reject_workspace_sentinels(root)
             logger.info(
                 "context.repo_root_dir_env",
                 extra={"slug": slug, "repo_root_dir": str(root)},
@@ -314,6 +324,7 @@ class ClientContext:
                     root = root / expected
                 elif root.name.startswith("timmy-kb-") and root.name != expected:
                     root = root.parent / expected
+                _reject_workspace_sentinels(root)
                 logger.info(
                     "context.workspace_root_dir_env",
                     extra={"slug": slug, "repo_root_dir": str(root)},

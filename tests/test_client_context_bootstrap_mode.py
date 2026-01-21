@@ -11,12 +11,13 @@ from tests.conftest import DUMMY_SLUG
 
 
 def test_load_without_bootstrap_requires_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    repo_root = tmp_path / f"timmy-kb-{DUMMY_SLUG}"
+    repo_root = tmp_path / "repo-root"
     repo_root.mkdir(parents=True, exist_ok=True)
-    (repo_root / "config").mkdir(parents=True, exist_ok=True)
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
 
-    expected_path = repo_root / "config" / "config.yaml"
+    workspace_root = repo_root / "output" / f"timmy-kb-{DUMMY_SLUG}"
+    expected_path = workspace_root / "config" / "config.yaml"
     with pytest.raises(ConfigError) as exc_info:
         ClientContext.load(
             DUMMY_SLUG,

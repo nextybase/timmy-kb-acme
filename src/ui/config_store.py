@@ -14,6 +14,7 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.settings import Settings
 from ui.utils.context_cache import get_client_context
+from ui.utils.repo_root import get_repo_root
 
 try:
     from pipeline.context import ClientContext
@@ -21,7 +22,7 @@ except Exception:  # pragma: no cover
     ClientContext = type("ClientContext", (), {})
 
 # Base sicura ancorata al repo
-REPO_ROOT: Path = Path(__file__).resolve().parents[2]
+REPO_ROOT: Path = get_repo_root(allow_env=True)
 
 
 def _resolve_path(base: Path, target: Path) -> Path:

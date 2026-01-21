@@ -42,6 +42,7 @@ def e2e_environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Dict[s
     repo_root = Path(__file__).resolve().parents[2]
     sandbox = tmp_path_factory.mktemp("e2e_repo")
     slug = "dummy"
+    (sandbox / ".git").mkdir(parents=True, exist_ok=True)
 
     clients_dir = sandbox / "clients_db"
     clients_dir.mkdir(parents=True, exist_ok=True)

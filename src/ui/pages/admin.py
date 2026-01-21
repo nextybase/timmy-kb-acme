@@ -12,7 +12,6 @@ import subprocess
 import time
 from functools import lru_cache
 from importlib import import_module
-from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import urlencode
 
@@ -35,6 +34,7 @@ from pipeline.settings import Settings
 
 # Coerenza con le altre pagine UI
 from ui.chrome import header, sidebar  # vedi home.py per lo stesso schema
+from ui.utils.repo_root import get_repo_root
 
 LOGGER = get_structured_logger("ui.admin")
 
@@ -43,7 +43,7 @@ LOGGER = get_structured_logger("ui.admin")
 header(None, title="Admin", subtitle="Gestione autenticazione e configurazioni amministrative.")
 sidebar(None)
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = get_repo_root(allow_env=True)
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 - endpoint pubblico OAuth2

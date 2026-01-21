@@ -37,7 +37,9 @@ def _prepare_workspace(tmp_path: Path, *, slug: str) -> tuple[Path, SimpleNamesp
 
 @pytest.fixture(autouse=True)
 def _isolate_repo_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path / "kb-root"))
+    repo_root = tmp_path / "kb-root"
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
 
 
 def test_ingest_rejects_outside_base(monkeypatch, tmp_path: Path) -> None:

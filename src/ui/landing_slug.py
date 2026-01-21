@@ -16,6 +16,7 @@ from pipeline.workspace_layout import WorkspaceLayout
 from timmy_kb.cli.pre_onboarding import ensure_local_workspace_for_ui
 from ui.config_store import get_vision_model
 from ui.utils.context_cache import get_client_context
+from ui.utils.repo_root import get_repo_root
 from ui.utils.workspace import get_ui_workspace_layout
 
 from .services import vision_provision as vision_services
@@ -55,7 +56,7 @@ def _safe_rerun() -> None:
             log.warning("ui.landing_slug.safe_rerun_failed", extra={"error": repr(exc)})
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = get_repo_root(allow_env=True)
 
 UI_STATE_PREFIX = "ui."
 

@@ -66,7 +66,8 @@ def test_client_context_exposes_settings(
     repo_with_config: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("REPO_ROOT_DIR", str(repo_with_config))
+    monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(repo_with_config))
     ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False)
     assert isinstance(ctx.settings, Settings)
     assert ctx.settings.vision_model == "gpt-4o-mini-2024-07-18"
@@ -79,7 +80,8 @@ def test_client_context_logger_respects_ops_level(
     repo_with_config: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("REPO_ROOT_DIR", str(repo_with_config))
+    monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(repo_with_config))
     ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False)
     logger = ctx.logger or ctx._get_logger()
     assert logger.level == logging.DEBUG

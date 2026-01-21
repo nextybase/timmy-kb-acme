@@ -20,7 +20,7 @@ from pipeline.path_utils import ensure_within_and_resolve
 def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
     """
     Determina la base_dir del workspace cliente privilegiando ClientContext
-    (che rispetta override come REPO_ROOT_DIR). Fallback a semantic.api.get_paths
+    (che rispetta override come WORKSPACE_ROOT_DIR). Fallback a semantic.api.get_paths
     solo se necessario per non rompere la UI in ambienti minimi.
     """
     # 1) Prova ClientContext

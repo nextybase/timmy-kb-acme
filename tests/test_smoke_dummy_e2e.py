@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,7 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
     """
     slug = "dummy"
     clients_db_relative = Path("clients_db/clients.yaml")
+    workspace_root = tmp_path / f"timmy-kb-{slug}"
 
     # Esegui lo script con base dir forzata al tmp_path del test
     repo_root = Path(__file__).resolve().parents[1]
@@ -31,11 +33,13 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
         "--clients-db",
         clients_db_relative.as_posix(),
     ]
-    ret = subprocess.run(cmd, check=False, capture_output=True, text=True, cwd=repo_root)
+    env = dict(os.environ)
+    env["REPO_ROOT_DIR"] = str(repo_root)
+    ret = subprocess.run(cmd, check=False, capture_output=True, text=True, cwd=repo_root, env=env)
     assert ret.returncode == 0, f"CLI fallita (rc={ret.returncode}). stdout:\n{ret.stdout}\nstderr:\n{ret.stderr}"
 
     # Verifica che la generazione sia avvenuta *solo* sotto tmp_path
-    base = tmp_path / f"timmy-kb-{slug}"
+    base = workspace_root
     assert base.is_dir(), f"Workspace non creato: {base}"
 
     # Percorsi minimi attesi dal generatore dummy
@@ -48,8 +52,8 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
     for p in (alpha, beta, readme, summary):
         assert p.is_file(), f"File mancante: {p}"
 
-    # Registry clienti: la dummy ora viene registrata nel DB locale (workspace root)
-    clients_db_file = tmp_path / clients_db_relative
+    # Registry clienti: la dummy viene registrata nel DB locale della repo
+    clients_db_file = repo_root / clients_db_relative
     assert clients_db_file.exists(), "Registry clienti non generato"
     assert "dummy" in clients_db_file.read_text(encoding="utf-8"), "Slug dummy non presente nel registry"
     assert not (base / clients_db_relative).exists(), "Registry clienti duplicato nel workspace cliente"
