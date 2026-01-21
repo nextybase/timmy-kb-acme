@@ -207,6 +207,13 @@ def raw_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, Optio
             extra={"slug": slug or "", "stage": "layout", "strict": bool(strict)},
         )
         return False, None
+
+    # Vision gating: raw/ non è semanticamente rilevante finché la Vision non è completata
+    vision_hash = layout.semantic_dir / ".vision_hash"
+    if not vision_hash.exists():
+        # NOT_APPLICABLE: evita warning e check prematuri su raw/
+        return True, None
+
     ready, raw_dir = has_raw_pdfs(slug, strict=strict)
     # `has_raw_pdfs` giù verifica slug/layout; il controllo su config/layout è quindi implicito.
     if not ready:
