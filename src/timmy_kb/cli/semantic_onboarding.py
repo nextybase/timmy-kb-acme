@@ -190,7 +190,7 @@ def main() -> int:
                     logger,
                     slug=slug,
                 )
-                try:
+                if getattr(ctx, "drive_raw_folder_id", None):
                     layout = WorkspaceLayout.from_context(ctx)
                     mapping_path = ensure_within_and_resolve(
                         layout.semantic_dir,
@@ -204,16 +204,12 @@ def main() -> int:
                         raise ConfigError(
                             "semantic_mapping.yaml non contiene aree valide: impossibile creare raw su Drive"
                         )
-
-                    if getattr(ctx, "drive_raw_folder_id", None):
-                        create_drive_structure_from_names(
-                            ctx=ctx,
-                            folder_names=categories,
-                            parent_folder_id=ctx.drive_raw_folder_id,
-                            log=logger,
-                        )
-                except Exception as e:
-                    logger.warning("cli.raw_structure.drive_failed", extra={"error": str(e)})
+                    create_drive_structure_from_names(
+                        ctx=ctx,
+                        folder_names=categories,
+                        parent_folder_id=ctx.drive_raw_folder_id,
+                        log=logger,
+                    )
                 decision_ledger.record_decision(
                     ledger_conn,
                     decision_id=uuid.uuid4().hex,

@@ -13,6 +13,7 @@ from typing import Any, Dict, List
 import yaml
 
 from pipeline.exceptions import ConfigError
+from pipeline.semantic_mapping_validation import validate_area_dict, validate_area_key, validate_areas_list
 
 
 def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
@@ -25,16 +26,23 @@ def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
     if data.get("status") == "halt":
         raise ConfigError("Vision HALT: impossibile generare semantic_mapping.yaml senza struttura base.")
 
-    areas = data.get("areas")
-    if not isinstance(areas, list) or not (3 <= len(areas) <= 9):
-        raise ConfigError("Vision data: 'areas' deve contenere tra 3 e 9 elementi.")
+    areas = validate_areas_list(
+        data.get("areas"),
+        error_message="Vision data: 'areas' deve contenere tra 3 e 9 elementi.",
+        min_len=3,
+        max_len=9,
+    )
 
     normalized_areas: List[Dict[str, Any]] = []
     for idx, area in enumerate(areas):
-        if not isinstance(area, dict):
-            raise ConfigError(f"Vision data: area #{idx} non è un oggetto JSON.")
+        area_dict = validate_area_dict(area, error_message=f"Vision data: area #{idx} non è un oggetto JSON.")
+        raw_key = validate_area_key(
+            area_dict,
+            key_field="key",
+            error_message=f"Vision data: areas[{idx}].key mancante o vuoto.",
+        )
         entry: Dict[str, Any] = {
-            "key": str(area.get("key", "")).strip(),
+            "key": str(raw_key).strip(),
             "ambito": str(area.get("ambito", "")).strip(),
             "descrizione_breve": str(area.get("descrizione_breve", "")).strip(),
         }

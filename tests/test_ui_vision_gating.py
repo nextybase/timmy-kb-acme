@@ -53,6 +53,7 @@ def test_ui_gating_hash_file_and_block_then_force(
     hash_path = base / "semantic" / ".vision_hash"
     original_hash = hash_path.read_text(encoding="utf-8") if hash_path.exists() else None
     original_mapping = mapping_path.read_text(encoding="utf-8")
+    mapping_path.write_text("areas:\n  - key: governance\n", encoding="utf-8")
 
     def _stub(*a, **k):
         return {

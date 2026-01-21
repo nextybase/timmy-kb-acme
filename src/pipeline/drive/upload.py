@@ -6,11 +6,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
-import yaml
-
 from ..exceptions import ConfigError, DriveUploadError
 from ..logging_utils import get_structured_logger
-from ..path_utils import read_text_safe
 
 logger = get_structured_logger("pipeline.drive.upload")
 
@@ -288,42 +285,10 @@ def create_drive_structure_from_yaml(
     redact_logs: bool = False,
 ) -> Dict[str, str]:
     """Crea le sottocartelle Drive a partire da un file YAML (raw structure)."""
-    if not parent_folder_id:
-        raise DriveUploadError("Parent ID mancante per struttura YAML.")
-    if not yaml_path.exists():
-        raise ConfigError(f"File YAML struttura mancante: {yaml_path}")
-
-    raw = read_text_safe(yaml_path.parent, yaml_path, encoding="utf-8")
-    data = yaml.safe_load(raw) or {}
-    folders = data.get("folders") or []
-    if not isinstance(folders, list):
-        raise ConfigError("Struttura YAML non valida: 'folders' deve essere una lista.")
-
-    from .client import get_drive_service
-
-    service = get_drive_service(ctx)
-    local_logger = log if log is not None else logger
-    created: Dict[str, str] = {}
-    for item in folders:
-        if not isinstance(item, dict):
-            continue
-        name = item.get("name")
-        if isinstance(name, str) and name.strip():
-            folder_name = name.strip()
-            created[folder_name] = create_drive_folder(
-                service,
-                folder_name,
-                parent_folder_id,
-                redact_logs=redact_logs,
-            )
-    local_logger.info(
-        "drive.upload.structure.yaml",
-        extra={
-            "parent": _maybe_redact(parent_folder_id, redact_logs),
-            "folders": list(created.keys()),
-        },
+    raise RuntimeError(
+        "create_drive_structure_from_yaml è disabilitato in Beta 1.0. "
+        "Usa create_drive_structure_from_names con nomi derivati da semantic_mapping.yaml."
     )
-    return created
 
 
 def create_drive_structure_from_names(

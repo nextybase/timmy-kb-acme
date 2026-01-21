@@ -868,23 +868,6 @@ def _persist_outputs(
     mapping_yaml_str = vision_to_semantic_mapping_yaml(payload, slug=slug)
     safe_write_text(prepared.paths.mapping_yaml, mapping_yaml_str)
 
-    raw_structure: dict = {}
-    try:
-        mapping_data = yaml.safe_load(mapping_yaml_str) or {}
-        raw_structure = _mapping_to_raw_structure(mapping_data)
-    except Exception:
-        raw_structure = {}
-    raw_yaml_path = ensure_within_and_resolve(
-        prepared.paths.semantic_dir,
-        prepared.paths.semantic_dir / "cartelle_raw.yaml",
-    )
-    safe_write_text(
-        raw_yaml_path,
-        yaml.safe_dump(raw_structure, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-        atomic=True,
-    )
-
     ts = datetime.now(timezone.utc).isoformat()
     try:
         import importlib.metadata as _ilm
@@ -922,24 +905,6 @@ def _persist_outputs(
     return {
         "mapping": str(prepared.paths.mapping_yaml),
     }
-
-
-def _mapping_to_raw_structure(semantic_mapping: dict) -> dict:
-    """Deriva la struttura delle cartelle raw/ a partire da semantic_mapping.yaml."""
-    areas = semantic_mapping.get("areas") or []
-    categories: list[str] = []
-
-    for area in areas:
-        if not isinstance(area, dict):
-            continue
-        name = area.get("name")
-        if isinstance(name, str) and name.strip():
-            categories.append(name.strip())
-
-    if not categories:
-        categories = ["inbox"]
-
-    return {"folders": [{"name": category} for category in categories]}
 
 
 def provision_from_vision_with_config(

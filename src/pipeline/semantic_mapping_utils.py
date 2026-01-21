@@ -8,6 +8,7 @@ import yaml
 
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, to_kebab
+from pipeline.semantic_mapping_validation import validate_area_dict, validate_area_key, validate_areas_list
 
 _RESERVED = {
     "context",
@@ -24,13 +25,15 @@ _RESERVED = {
     "metadata_policy",
 }
 
+# Campo canonico per derivare i nomi cartella raw/ dalle aree Vision.
+_AREA_NAME_FIELD = "key"
+
 
 def raw_categories_from_semantic_mapping(*, semantic_dir: Path, mapping_path: Path) -> List[str]:
     """Deriva l'elenco delle sottocartelle raw/ direttamente da semantic_mapping.yaml.
 
     Supporta:
     - formato Vision: mapping["areas"] = [ {...} ... ]
-    - fallback interno (senza file legacy): top-level dict keys non riservate
 
     Ritorna una lista kebab-case, ordinata e senza duplicati.
     """
@@ -45,24 +48,28 @@ def raw_categories_from_semantic_mapping(*, semantic_dir: Path, mapping_path: Pa
 
     names: List[str] = []
 
-    areas = data.get("areas")
-    if isinstance(areas, list) and areas:
-        for a in areas:
-            if not isinstance(a, dict):
-                continue
-            key_raw = a.get("key") or a.get("ambito") or a.get("title") or ""
-            k = to_kebab(str(key_raw))
-            if k:
-                names.append(k)
-    else:
-        # fallback "shape-based" (non crea file, non usa cartelle_raw.yaml)
-        for k, v in data.items():
-            if k in _RESERVED:
-                continue
-            if isinstance(v, dict):
-                kk = to_kebab(str(k))
-                if kk:
-                    names.append(kk)
+    areas = validate_areas_list(
+        data.get("areas"),
+        error_message="semantic_mapping.yaml non conforme: 'areas' mancante o vuoto.",
+        min_len=1,
+    )
+
+    for idx, area in enumerate(areas):
+        area_dict = validate_area_dict(
+            area,
+            error_message=f"semantic_mapping.yaml non conforme: areas[{idx}] deve essere un oggetto.",
+        )
+        raw_name = validate_area_key(
+            area_dict,
+            key_field=_AREA_NAME_FIELD,
+            error_message=f"semantic_mapping.yaml non conforme: areas[{idx}] manca del campo '{_AREA_NAME_FIELD}'.",
+        )
+        k = to_kebab(raw_name)
+        if not k:
+            raise ConfigError(
+                f"semantic_mapping.yaml non conforme: areas[{idx}].{_AREA_NAME_FIELD} non valido dopo normalizzazione."
+            )
+        names.append(k)
 
     # determinismo
     return sorted(set(names))
