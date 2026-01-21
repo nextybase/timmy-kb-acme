@@ -20,11 +20,12 @@ _T = TypeVar("_T")
 
 
 from pipeline.context import ClientContext
-from pipeline.drive.upload import create_drive_structure_from_yaml
+from pipeline.drive.upload import create_drive_structure_from_names
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.semantic_mapping_utils import raw_categories_from_semantic_mapping
 from pipeline.tracing import start_root_trace
 from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
 from semantic.api import require_reviewed_vocab  # noqa: F401  # esposto per monkeypatch nei test CLI
@@ -190,11 +191,24 @@ def main() -> int:
                     slug=slug,
                 )
                 try:
-                    raw_yaml = layout.semantic_dir / "cartelle_raw.yaml"
-                    if getattr(ctx, "drive_raw_folder_id", None) and raw_yaml.exists():
-                        create_drive_structure_from_yaml(
+                    layout = WorkspaceLayout.from_context(ctx)
+                    mapping_path = ensure_within_and_resolve(
+                        layout.semantic_dir,
+                        layout.semantic_dir / "semantic_mapping.yaml",
+                    )
+                    categories = raw_categories_from_semantic_mapping(
+                        semantic_dir=layout.semantic_dir,
+                        mapping_path=Path(mapping_path),
+                    )
+                    if not categories:
+                        raise ConfigError(
+                            "semantic_mapping.yaml non contiene aree valide: impossibile creare raw su Drive"
+                        )
+
+                    if getattr(ctx, "drive_raw_folder_id", None):
+                        create_drive_structure_from_names(
                             ctx=ctx,
-                            yaml_path=raw_yaml,
+                            folder_names=categories,
                             parent_folder_id=ctx.drive_raw_folder_id,
                             log=logger,
                         )

@@ -326,6 +326,56 @@ def create_drive_structure_from_yaml(
     return created
 
 
+def create_drive_structure_from_names(
+    *,
+    ctx: Any,
+    folder_names: List[str],
+    parent_folder_id: str,
+    log: Any | None = None,
+    redact_logs: bool = False,
+) -> Dict[str, str]:
+    """Crea (o riusa) sottocartelle Drive sotto parent_folder_id a partire da una lista di nomi.
+
+    - Nessun file intermedio.
+    - Idempotente (riusa se già esiste).
+    - Ordinamento deterministico.
+    """
+    if not parent_folder_id:
+        raise DriveUploadError("Parent ID mancante per struttura da nomi.")
+    if not isinstance(folder_names, list):
+        raise ConfigError("folder_names deve essere una lista.")
+
+    from .client import get_drive_service
+
+    service = get_drive_service(ctx)
+    local_logger = log if log is not None else logger
+
+    cleaned: List[str] = []
+    for name in folder_names:
+        if isinstance(name, str) and name.strip():
+            cleaned.append(name.strip())
+
+    cleaned = sorted(set(cleaned))
+
+    created: Dict[str, str] = {}
+    for folder_name in cleaned:
+        created[folder_name] = create_drive_folder(
+            service,
+            folder_name,
+            parent_folder_id,
+            redact_logs=redact_logs,
+        )
+
+    local_logger.info(
+        "drive.upload.structure.names",
+        extra={
+            "parent": _maybe_redact(parent_folder_id, redact_logs),
+            "folders": list(created.keys()),
+        },
+    )
+    return created
+
+
 def delete_drive_file(
     service: Any,
     file_id: str,
