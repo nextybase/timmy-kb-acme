@@ -20,6 +20,7 @@ _T = TypeVar("_T")
 
 
 from pipeline.context import ClientContext
+from pipeline.drive.upload import create_drive_structure_from_yaml
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.observability_config import get_observability_settings
@@ -188,6 +189,17 @@ def main() -> int:
                     logger,
                     slug=slug,
                 )
+                try:
+                    raw_yaml = layout.semantic_dir / "cartelle_raw.yaml"
+                    if getattr(ctx, "drive_raw_folder_id", None) and raw_yaml.exists():
+                        create_drive_structure_from_yaml(
+                            ctx=ctx,
+                            yaml_path=raw_yaml,
+                            parent_folder_id=ctx.drive_raw_folder_id,
+                            log=logger,
+                        )
+                except Exception as e:
+                    logger.warning("cli.raw_structure.drive_failed", extra={"error": str(e)})
                 decision_ledger.record_decision(
                     ledger_conn,
                     decision_id=uuid.uuid4().hex,

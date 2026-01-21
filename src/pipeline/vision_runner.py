@@ -18,12 +18,16 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
+import yaml
+
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
+from pipeline.drive.upload import create_drive_structure_from_yaml
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.vision_provision import HaltError
 from semantic.vision_provision import provision_from_vision_with_config as _provision_from_pdf
 from semantic.vision_provision import provision_from_vision_yaml_with_config as _provision_from_yaml
@@ -198,6 +202,41 @@ def run_vision_with_gating(
             )
     except HaltError:
         raise
+
+    try:
+        layout = WorkspaceLayout.from_context(ctx)
+        raw_yaml = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "cartelle_raw.yaml")
+        if raw_yaml.exists():
+            try:
+                raw_text = read_text_safe(layout.semantic_dir, raw_yaml, encoding="utf-8")
+                data = yaml.safe_load(raw_text) or {}
+                for item in (data.get("folders") or []):
+                    if not isinstance(item, dict):
+                        continue
+                    name = item.get("name")
+                    if isinstance(name, str) and name.strip():
+                        target = ensure_within_and_resolve(layout.raw_dir, layout.raw_dir / name.strip())
+                        target.mkdir(parents=True, exist_ok=True)
+            except Exception as exc:
+                logger.warning(
+                    "vision.raw_structure.local_failed",
+                    extra={"error": str(exc), "path": str(raw_yaml)},
+                )
+        if getattr(ctx, "drive_raw_folder_id", None) and raw_yaml.exists():
+            try:
+                create_drive_structure_from_yaml(
+                    ctx=ctx,
+                    yaml_path=raw_yaml,
+                    parent_folder_id=ctx.drive_raw_folder_id,
+                    log=logger,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "vision.raw_structure.drive_failed",
+                    extra={"error": str(exc), "path": str(raw_yaml)},
+                )
+    except Exception as exc:
+        logger.warning("vision.raw_structure.layout_failed", extra={"error": str(exc)})
 
     _save_hash(base_dir, digest=digest, model=resolved_config.model)
     logger.info("ui.vision.update_hash", extra={"slug": slug, "file_path": str(_hash_sentinel(base_dir))})
