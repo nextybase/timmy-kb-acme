@@ -167,8 +167,14 @@ def _client_vision_yaml_path(slug: str, layout: WorkspaceLayout | None = None) -
 
 
 def _has_drive_ids(slug: str) -> bool:
+    """Ritorna True se nel config del cliente sono presenti gli ID Drive minimi.
+
+    Nota: dopo il provisioning Drive la UI può avere un contesto cache-ato.
+    Per garantire determinismo (stato su disco = stato letto), forziamo reload.
+    """
     try:
-        ctx = get_client_context(slug, require_env=False)
+        invalidate_client_context(slug)
+        ctx = get_client_context(slug, require_env=False, force_reload=True)
     except Exception:
         return False
     try:
@@ -762,7 +768,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
 
     display_name = st.session_state.get("client_name") or (name or eff)
 
-    if not _has_drive_ids(eff) and not local_only_mode:
+    if not has_drive_ids and not local_only_mode:
         st.error("Config privo degli ID Drive. Ripeti 'Inizializza Workspace' dopo aver configurato Drive.")
         st.stop()
 
