@@ -40,10 +40,10 @@ def load_semantic_mapping(context: _Ctx, logger: Optional[logging.Logger] = None
         mapping_filename=SEMANTIC_MAPPING_FILE,
     )
 
-    for source, base_dir, file_path in candidates:
+    for source, repo_root_dir, file_path in candidates:
         try:
             result = load_mapping_file(
-                base_dir=base_dir,
+                repo_root_dir=repo_root_dir,
                 file_path=file_path,
                 slug=getattr(context, "slug", None),
                 yaml_read=yaml_read,

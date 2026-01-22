@@ -59,7 +59,7 @@ def test_build_chunk_records_rejects_paths_outside_base(tmp_path: Path) -> None:
     outside.write_text("Fuori", encoding="utf-8")
 
     with pytest.raises(PipelineError, match="Markdown path fuori perimetro"):
-        build_chunk_records_from_markdown_files(slug, [outside], base_dir=base_dir)
+        build_chunk_records_from_markdown_files(slug, [outside], perimeter_root=base_dir)
 
 
 def test_build_chunk_records_accepts_paths_inside_base(tmp_path: Path) -> None:
@@ -69,6 +69,6 @@ def test_build_chunk_records_accepts_paths_inside_base(tmp_path: Path) -> None:
     inside = base_dir / "inside.md"
     inside.write_text("Dentro", encoding="utf-8")
 
-    records = build_chunk_records_from_markdown_files(slug, [inside], base_dir=base_dir)
+    records = build_chunk_records_from_markdown_files(slug, [inside], perimeter_root=base_dir)
     assert len(records) == 1
     assert records[0]["source_path"] == "inside.md"

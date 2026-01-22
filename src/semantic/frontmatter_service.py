@@ -43,16 +43,16 @@ __all__ = [
 ]
 
 
-def _get_vision_statement_path(base_dir: Path) -> Path:
-    return base_dir / "config" / "vision_statement.yaml"
+def _get_vision_statement_path(repo_root_dir: Path) -> Path:
+    return repo_root_dir / "config" / "vision_statement.yaml"
 
 
-def _load_vision_text(base_dir: Path) -> str:
-    path = _get_vision_statement_path(base_dir)
+def _load_vision_text(repo_root_dir: Path) -> str:
+    path = _get_vision_statement_path(repo_root_dir)
     if not path.exists():
         return ""
     try:
-        safe = ensure_within_and_resolve(base_dir, path)
+        safe = ensure_within_and_resolve(repo_root_dir, path)
         text = read_text_safe(safe.parent, safe, encoding="utf-8")
         return str(text)
     except Exception:
@@ -124,14 +124,20 @@ def _layout_note_text(top_levels: list[str]) -> str:
     )
 
 
-def _append_layout_note_to_readme(base_dir: Path, book_dir: Path, logger: logging.Logger, *, slug: str) -> None:
-    layout_path = base_dir / "semantic" / "layout_proposal.yaml"
+def _append_layout_note_to_readme(
+    repo_root_dir: Path,
+    book_dir: Path,
+    logger: logging.Logger,
+    *,
+    slug: str,
+) -> None:
+    layout_path = repo_root_dir / "semantic" / "layout_proposal.yaml"
     top_levels = _read_layout_top_levels(layout_path)
     if not top_levels:
         return
-    ensure_within(base_dir, layout_path)
+    ensure_within(repo_root_dir, layout_path)
     readme_path = book_dir / "README.md"
-    ensure_within(base_dir, readme_path)
+    ensure_within(repo_root_dir, readme_path)
     if not readme_path.exists():
         return
     try:
@@ -159,14 +165,14 @@ def _layout_summary_text(top_levels: list[str]) -> str:
     )
 
 
-def _write_layout_summary(base_dir: Path, book_dir: Path, logger: logging.Logger, *, slug: str) -> None:
-    layout_path = base_dir / "semantic" / "layout_proposal.yaml"
+def _write_layout_summary(repo_root_dir: Path, book_dir: Path, logger: logging.Logger, *, slug: str) -> None:
+    layout_path = repo_root_dir / "semantic" / "layout_proposal.yaml"
     top_levels = _read_layout_top_levels(layout_path)
     if not top_levels:
         return
     summary_path = book_dir / "layout_summary.md"
     try:
-        ensure_within(base_dir, summary_path)
+        ensure_within(repo_root_dir, summary_path)
     except Exception:
         return
     content = _layout_summary_text(top_levels)

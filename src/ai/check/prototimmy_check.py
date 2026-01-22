@@ -9,14 +9,17 @@ from ai.prototimmy import ProtoTimmyChainResult, run_prototimmy_chain, run_proto
 def run_prototimmy_dummy_check(
     *,
     workspace_slug: Optional[str] = None,
-    base_dir: Optional[str] = None,
+    repo_root_dir: Optional[str] = None,
     verbose: bool = False,
 ) -> Dict[str, Any]:
     """
     Esegue ping + catena protoTimmy -> Planner -> OCP usando il layer ai.prototimmy.
     """
-    ping_result = run_prototimmy_ping(base_dir=base_dir)
-    chain_result: ProtoTimmyChainResult = run_prototimmy_chain(base_dir=base_dir, workspace_slug=workspace_slug)
+    ping_result = run_prototimmy_ping(repo_root_dir=repo_root_dir)
+    chain_result: ProtoTimmyChainResult = run_prototimmy_chain(
+        repo_root_dir=repo_root_dir,
+        workspace_slug=workspace_slug,
+    )
 
     return {
         "ok": chain_result.ok,

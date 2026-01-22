@@ -468,7 +468,7 @@ def index_markdown_to_db(
             slug,
             files,
             chunking="heading",
-            base_dir=book_dir,
+            perimeter_root=book_dir,
         )
         collected = _collect_chunk_records(
             chunk_records,

@@ -30,9 +30,9 @@ class ProtoTimmyChainResult:
     workspace_slug: Optional[str] = None
 
 
-def _load_settings(base_dir: Optional[str] = None) -> Settings:
+def _load_settings(repo_root_dir: Optional[str] = None) -> Settings:
     repo_root = Path(__file__).resolve().parents[2]
-    root = Path(base_dir) if base_dir else repo_root
+    root = Path(repo_root_dir) if repo_root_dir else repo_root
     return Settings.load(root)
 
 
@@ -86,8 +86,8 @@ def _build_prototimmy_invocation(
     return invocation
 
 
-def run_prototimmy_ping(*, base_dir: Optional[str] = None) -> ProtoTimmyStepResult:
-    settings = _load_settings(base_dir)
+def run_prototimmy_ping(*, repo_root_dir: Optional[str] = None) -> ProtoTimmyStepResult:
+    settings = _load_settings(repo_root_dir)
     cfg = resolve_prototimmy_config(settings)
     prompt = _proto_ping_prompt()
     resp = run_text_model(
@@ -108,10 +108,10 @@ def run_prototimmy_ping(*, base_dir: Optional[str] = None) -> ProtoTimmyStepResu
 
 def run_prototimmy_chain(
     *,
-    base_dir: Optional[str] = None,
+    repo_root_dir: Optional[str] = None,
     workspace_slug: Optional[str] = None,
 ) -> ProtoTimmyChainResult:
-    settings = _load_settings(base_dir)
+    settings = _load_settings(repo_root_dir)
     proto_cfg = resolve_prototimmy_config(settings)
     planner_cfg = resolve_planner_config(settings)
     ocp_cfg = resolve_ocp_executor_config(settings)

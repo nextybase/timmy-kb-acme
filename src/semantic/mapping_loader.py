@@ -20,7 +20,7 @@ __all__ = [
 
 
 class _YamlReader(Protocol):
-    def __call__(self, base_dir: Path, file_path: Path) -> Dict[str, object] | None: ...
+    def __call__(self, repo_root_dir: Path, file_path: Path) -> Dict[str, object] | None: ...
 
 
 @dataclass(frozen=True)
@@ -75,15 +75,15 @@ def _has_phase1_keywords(raw: Any) -> bool:
 
 def load_mapping_file(
     *,
-    base_dir: Path,
+    repo_root_dir: Path,
     file_path: Path,
     slug: Optional[str],
     yaml_read: _YamlReader,
     source: str,
 ) -> MappingLoadResult:
     """Carica, valida e normalizza un file di mapping."""
-    ensure_within(base_dir, file_path)
-    raw = yaml_read(base_dir, file_path) or {}
+    ensure_within(repo_root_dir, file_path)
+    raw = yaml_read(repo_root_dir, file_path) or {}
     if _has_phase1_keywords(raw):
         raise ConfigError(
             "Uso scorretto: 'keywords' non è previsto in semantic_mapping.yaml (Fase 1).",
@@ -102,7 +102,7 @@ def iter_mapping_candidates(
     repo_default_dir: Optional[Path],
     mapping_filename: str,
 ) -> Iterable[tuple[str, Path, Path]]:
-    """Restituisce una sequenza di candidati (origine, base_dir, file_path)."""
+    """Restituisce una sequenza di candidati (origine, repo_root_dir, file_path)."""
     if config_dir is not None:
         cfg_base = Path(config_dir)
         yield "workspace", cfg_base, cfg_base / mapping_filename

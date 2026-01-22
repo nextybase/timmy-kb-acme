@@ -134,14 +134,14 @@ def _titleize(name: str) -> str:
     return " ".join(p.capitalize() for p in parts) if parts else name
 
 
-def _ensure_safe(base_dir: Path, candidate: Path, *, slug: str | None = None) -> Path:
-    """Path-safety SSoT: risolve e valida `candidate` entro `base_dir` in un'unica operazione.
+def _ensure_safe(perimeter_root: Path, candidate: Path, *, slug: str | None = None) -> Path:
+    """Path-safety SSoT: risolve e valida `candidate` entro `perimeter_root` in un'unica operazione.
 
     Delegato a `pipeline.path_utils.ensure_within_and_resolve` per evitare TOCTOU/symlink games
     e mantenere le eccezioni tipizzate della pipeline (es. PathTraversalError/ConfigError).
     """
     try:
-        return cast(Path, ensure_within_and_resolve(base_dir, candidate))
+        return cast(Path, ensure_within_and_resolve(perimeter_root, candidate))
     except PathTraversalError as exc:
         raise PathTraversalError(str(exc), slug=slug, file_path=str(candidate)) from exc
 
@@ -169,7 +169,7 @@ def _run_id_from_logger(logger: logging.Logger) -> str | None:
 
 
 def _filter_safe_pdfs(
-    base_dir: Path,
+    perimeter_root: Path,
     raw_root: Path,
     pdfs: Iterable[Path],
     *,
@@ -468,7 +468,7 @@ def _iter_category_pdfs(raw_root: Path) -> list[tuple[Path, list[Path]]]:
 def _discover_safe_pdfs(
     raw_root: Path,
     *,
-    base_dir: Path,
+    perimeter_root: Path,
     slug: str | None = None,
     logger: logging.Logger | None = None,
 ) -> tuple[list[Path], CategoryGroups]:
@@ -487,7 +487,7 @@ def _discover_safe_pdfs(
         on_skip=_on_skip,
     )
     root_pdfs = _filter_safe_pdfs(
-        base_dir,
+        perimeter_root,
         raw_root,
         sorted(root_candidates, key=lambda p: p.name.lower()),
         slug=slug,
@@ -499,7 +499,7 @@ def _discover_safe_pdfs(
 
 def _plan_pdf_groups(
     *,
-    base_dir: Path,
+    perimeter_root: Path,
     raw_root: Path,
     safe_pdfs: list[Path] | None,
     slug: str | None,
@@ -510,7 +510,7 @@ def _plan_pdf_groups(
         return _group_safe_pdfs_by_category(raw_root, safe_pdfs)
     return _discover_safe_pdfs(
         raw_root,
-        base_dir=base_dir,
+        perimeter_root=perimeter_root,
         slug=slug,
         logger=logger,
     )
@@ -739,7 +739,7 @@ def convert_files_to_structured_markdown(
     logger = get_structured_logger("pipeline.content_utils", context={"slug": getattr(ctx, "slug", None)})
 
     root_pdfs, cat_items = _plan_pdf_groups(
-        base_dir=base,
+        perimeter_root=base,
         raw_root=raw_root,
         safe_pdfs=safe_pdfs,
         slug=getattr(ctx, "slug", None),
@@ -779,13 +779,13 @@ def build_chunk_records_from_markdown_files(
     *,
     created_at: str | None = None,
     chunking: Literal["file", "heading"] = "file",
-    base_dir: Path | str | None = None,
+    perimeter_root: Path | str | None = None,
 ) -> list[ChunkRecord]:
     """Costruisce ChunkRecord v0: un file markdown ► un chunk (indice 0)."""
 
     timestamp = created_at or datetime.now(timezone.utc).isoformat()
     records: list[ChunkRecord] = []
-    base_path = Path(base_dir) if base_dir is not None else None
+    base_path = Path(perimeter_root) if perimeter_root is not None else None
     resolved_base = base_path.resolve() if base_path is not None else None
     for raw_path in md_paths:
         path = raw_path if isinstance(raw_path, Path) else Path(raw_path)

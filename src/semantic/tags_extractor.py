@@ -50,7 +50,7 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
     Regole:
     - SOFT: is_safe_subpath() per filtrare rapidamente path sospetti.
-    - STRONG (SSoT): ensure_within(base_dir, <target>) prima di mkdir/copy (write).
+    - STRONG (SSoT): ensure_within(repo_root_dir, <target>) prima di mkdir/copy (write).
     - Idempotenza: se esiste e ha stessa dimensione, salta la copia.
     - Error handling: raccoglie errori di copia e, se presenti, solleva PipelineError a fine ciclo.
 
@@ -63,7 +63,7 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
     """
     src_dir = normalize_path(src_dir)
     raw_dir = normalize_path(raw_dir)
-    base_dir = raw_dir.parent  # SSoT: sandbox cliente (output/timmy-kb-<slug>)
+    repo_root_dir = raw_dir.parent  # SSoT: sandbox cliente (output/timmy-kb-<slug>)
 
     if not src_dir.is_dir():
         raise FileNotFoundError(f"Percorso locale non valido: {src_dir}")
@@ -94,8 +94,8 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
 
         # STRONG (SSoT): autorizzazione write su dir e file di destinazione
         try:
-            ensure_within(base_dir, dst.parent)
-            ensure_within(base_dir, dst)
+            ensure_within(repo_root_dir, dst.parent)
+            ensure_within(repo_root_dir, dst)
         except Exception as e:
             # Qui manteniamo un log e saltiamo: path non valido per policy SSoT
             logger.warning(
