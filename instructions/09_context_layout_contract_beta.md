@@ -11,7 +11,7 @@ Definire il contratto definitivo "Context/Layout" per la 1.0 Beta: un solo perim
 - **context**: oggetto di contesto di esecuzione (slug, repo_root_dir, config) usato per costruire il layout.
 - **WorkspaceLayout**: struttura che espone i path canonici del workspace cliente.
 - **repo_root_dir**: root del repository; è un input obbligatorio del contratto.
-- **book_dir**: directory canonica del Knowledge Book (markdown normalizzati) prodotta dall’Epistemic Envelope.
+- **book_dir**: directory canonica del Knowledge Book (markdown normalizzati) prodotta dall'Epistemic Envelope.
 
 ## 1) Single Source of Truth (SSoT)
 - `WorkspaceLayout.from_context(context)` MUST essere l'unica fonte di verità per i path canonici.
