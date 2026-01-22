@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -170,13 +171,26 @@ def _validate_against_template(found: Mapping[str, str]) -> None:
 
 
 def _optional_env(name: str) -> Optional[str]:
+    raw_env_value = os.environ.get(name)
+    if raw_env_value is not None and not str(raw_env_value).strip():
+        raise ConfigError(
+            f"Variabile ambiente vuota: {name}.",
+            code="assistant.env.empty",
+            component="vision_provision",
+            env=name,
+        )
     try:
         value = get_env_var(name)
     except KeyError:
         return None
-    except Exception:
-        return None
-    return cast(Optional[str], value)
+    except Exception as exc:
+        raise ConfigError(
+            f"Lettura variabile ambiente fallita: {name}.",
+            code="assistant.env.read_failed",
+            component="vision_provision",
+            env=name,
+        ) from exc
+    return cast(Optional[str], value.strip() if isinstance(value, str) else value)
 
 
 def _coerce_flag(value: Optional[bool], default: bool) -> bool:

@@ -81,11 +81,24 @@ def _as_mapping(source: Any) -> Mapping[str, Any]:
     if callable(as_dict):
         try:
             data = as_dict()
-            if isinstance(data, Mapping):
-                return data
-        except Exception:
-            pass
-    return {}
+        except Exception as exc:
+            raise ConfigError(
+                "Configurazione non convertibile: as_dict() fallita.",
+                code="config.read.failed",
+                component="vision_config",
+            ) from exc
+        if isinstance(data, Mapping):
+            return data
+        raise ConfigError(
+            "Configurazione non convertibile: as_dict() non restituisce un mapping.",
+            code="config.read.failed",
+            component="vision_config",
+        )
+    raise ConfigError(
+        "Configurazione non convertibile: atteso mapping.",
+        code="config.read.failed",
+        component="vision_config",
+    )
 
 
 def _extract_context_settings(ctx: Any) -> Tuple[Optional[Settings], AiCfgRoot]:
@@ -101,21 +114,23 @@ def _extract_context_settings(ctx: Any) -> Tuple[Optional[Settings], AiCfgRoot]:
 def _optional_env(name: str) -> Optional[str]:
     raw_env_value = os.environ.get(name)
     if raw_env_value is not None and not str(raw_env_value).strip():
-        LOGGER.warning(
-            "ai.vision_config.env_var_empty",
-            extra={"env": name},
+        raise ConfigError(
+            f"Variabile ambiente vuota: {name}.",
+            code="assistant.env.empty",
+            component="vision_config",
+            env=name,
         )
-        return None
     try:
         value = env_utils.get_env_var(name)
     except KeyError:
         return None
     except Exception as exc:
-        LOGGER.warning(
-            "ai.vision_config.env_var_read_failed",
-            extra={"env": name, "error": str(exc), "exc_type": type(exc).__name__},
-        )
-        return None
+        raise ConfigError(
+            f"Lettura variabile ambiente fallita: {name}.",
+            code="assistant.env.read_failed",
+            component="vision_config",
+            env=name,
+        ) from exc
     return value.strip() if isinstance(value, str) else None
 
 
@@ -301,35 +316,43 @@ def resolve_vision_config(ctx: Any, *, override_model: Optional[str] = None) -> 
 def resolve_vision_retention_days(ctx: Any) -> int:
     settings_obj, settings_payload = _extract_context_settings(ctx)
     slug = getattr(ctx, "slug", None)
-    fallback = 30
-
-    def _warn_and_default(reason: str, value: Any) -> int:
-        try:
-            LOGGER.warning(
-                "ai.vision_config.retention.warning",
-                extra={"slug": slug, "reason": reason, "value": value},
-            )
-        except Exception:
-            pass
-        return fallback
-
     value: Optional[int] = None
     if isinstance(settings_obj, Settings):
         try:
             value = int(settings_obj.vision_snapshot_retention_days)
-        except (TypeError, ValueError):
-            return _warn_and_default("invalid_type", getattr(settings_obj, "vision_snapshot_retention_days", None))
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(
+                "snapshot_retention_days non valido: atteso intero > 0.",
+                code="vision.retention.invalid",
+                component="vision_config",
+                slug=slug,
+            ) from exc
     else:
         vision_cfg = _vision_section(settings_payload)
         raw_value = vision_cfg.get("snapshot_retention_days")
         if raw_value is not None:
             try:
                 value = int(raw_value)
-            except (TypeError, ValueError):
-                return _warn_and_default("invalid_type", raw_value)
+            except (TypeError, ValueError) as exc:
+                raise ConfigError(
+                    "snapshot_retention_days non valido: atteso intero > 0.",
+                    code="vision.retention.invalid",
+                    component="vision_config",
+                    slug=slug,
+                ) from exc
 
     if value is None:
-        return fallback
+        raise ConfigError(
+            "snapshot_retention_days mancante: definire ai.vision.snapshot_retention_days.",
+            code="vision.retention.missing",
+            component="vision_config",
+            slug=slug,
+        )
     if value <= 0:
-        return _warn_and_default("non_positive", value)
+        raise ConfigError(
+            "snapshot_retention_days non valido: atteso intero > 0.",
+            code="vision.retention.invalid",
+            component="vision_config",
+            slug=slug,
+        )
     return value

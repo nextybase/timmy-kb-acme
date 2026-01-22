@@ -246,7 +246,7 @@ def _run_and_render(slug: str, cmd: list[str]) -> None:
 
 
 def main() -> None:
-    set_active_slug("dummy", persist=True, update_query=True)
+    set_active_slug("dummy", persist=False, update_query=True)
     render_chrome_then_require(
         allow_without_slug=True,
         title="Tools > Dummy KB",
@@ -258,6 +258,7 @@ def main() -> None:
     except Exception as exc:
         st.error(f"Slug non valido: {exc}")
         return
+    set_active_slug(slug, persist=True, update_query=False)
 
     script = (REPO_ROOT / "tools" / "gen_dummy_kb.py").resolve()
     if not script.exists():

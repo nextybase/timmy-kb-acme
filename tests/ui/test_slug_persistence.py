@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 import ui.utils.slug as slug_utils
+from pipeline.exceptions import ConfigError
 
 
 @pytest.fixture(autouse=True)
@@ -92,3 +93,18 @@ def test_save_persisted_logs_and_does_not_raise_on_failure(
         slug_utils._save_persisted("boom")
 
     assert any(rec.getMessage() == "ui.slug.persist_failed" for rec in caplog.records)
+
+
+def test_save_persisted_configerror_is_non_fatal(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def _raise_config() -> Path:
+        raise ConfigError("boom", code="clients_store.workspace_root.invalid")
+
+    monkeypatch.setattr(slug_utils, "get_ui_state_path", _raise_config, raising=False)
+
+    with caplog.at_level(logging.INFO):
+        slug_utils._save_persisted("dummy")
+
+    assert any(rec.getMessage() == "ui.slug.persist_unavailable" for rec in caplog.records)
+    assert not any(rec.getMessage() == "ui.slug.persist_failed" for rec in caplog.records)

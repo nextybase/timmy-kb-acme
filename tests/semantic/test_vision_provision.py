@@ -34,7 +34,7 @@ class _Ctx:
         self.base_dir = base_dir
         self.client_name = client_name
         # SSoT: il nome dell'env da cui ricavare l'assistant_id
-        self.settings = {"ai": {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID"}}}
+        self.settings = {"ai": {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID", "snapshot_retention_days": 30}}}
 
 
 def _fake_pdf_text() -> str:
@@ -243,7 +243,7 @@ def test_provision_ignores_engine_in_settings(tmp_path: Path, monkeypatch: pytes
     assert "engine" not in captured
 
 
-def test_provision_retention_fallback_on_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_provision_retention_zero_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "dummy-retention"
     ctx = _Ctx(tmp_path)
     ctx.settings["ai"]["vision"]["snapshot_retention_days"] = 0
@@ -255,28 +255,8 @@ def test_provision_retention_fallback_on_zero(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **_k: _ok_payload(slug))
 
-    captured: Dict[str, Any] = {}
-
-    def _fake_persist(prepared: Any, payload: Dict[str, Any], logger: Any, *, retention_days: int) -> Dict[str, Any]:
-        captured["retention_days"] = retention_days
-        return {
-            "mapping": str(prepared.paths.mapping_yaml),
-        }
-
-    monkeypatch.setattr(vp, "_persist_outputs", _fake_persist)
-
-    config = resolve_vision_config(ctx, override_model="test-model")
-    retention_days = resolve_vision_retention_days(ctx)
-    vp.provision_from_vision_with_config(
-        ctx=ctx,
-        logger=logging.getLogger("test"),
-        slug=slug,
-        pdf_path=pdf,
-        config=config,
-        retention_days=retention_days,
-    )
-
-    assert captured.get("retention_days") == 30
+    with pytest.raises(ConfigError):
+        resolve_vision_retention_days(ctx)
 
 
 def test_provision_halt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -645,6 +625,16 @@ def test_call_responses_json_errors_on_exception(monkeypatch: pytest.MonkeyPatch
             use_structured=True,
             response_format={"type": "json_object"},
         )
+
+
+def test_optional_env_reader_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_runtime(name: str) -> str:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(vp, "get_env_var", _raise_runtime)
+    with pytest.raises(ConfigError) as excinfo:
+        vp._optional_env("OPENAI_PROJECT")
+    assert excinfo.value.code == "assistant.env.read_failed"
 
 
 def test_call_responses_json_uses_model_not_assistant_id(monkeypatch: pytest.MonkeyPatch):

@@ -31,13 +31,26 @@ LOG = get_structured_logger("ui.clients_store")
 
 
 def _optional_env(name: str) -> Optional[str]:
+    raw_env_value = os.environ.get(name)
+    if raw_env_value is not None and not str(raw_env_value).strip():
+        raise ConfigError(
+            f"Variabile ambiente vuota: {name}.",
+            code="assistant.env.empty",
+            component="clients_store",
+            env=name,
+        )
     try:
-        value = cast(Optional[str], get_env_var(name, default=None))
-        return value
+        value = cast(Optional[str], get_env_var(name))
     except KeyError:
         return None
-    except Exception:
-        return None
+    except Exception as exc:
+        raise ConfigError(
+            f"Lettura variabile ambiente fallita: {name}.",
+            code="assistant.env.read_failed",
+            component="clients_store",
+            env=name,
+        ) from exc
+    return value.strip() if isinstance(value, str) else value
 
 
 def _is_client_workspace(path: Path) -> bool:
@@ -59,35 +72,54 @@ def _coerce_allow_client_db() -> bool:
 def _base_repo_root() -> Path:
     workspace_root = _optional_env(WORKSPACE_ROOT_ENV)
     if workspace_root:
+        raw = str(workspace_root)
+        uses_template = "<slug>" in raw
+        if uses_template:
+            try:
+                from ui.utils.slug import get_runtime_slug
+            except Exception:
+                slug = None
+            else:
+                slug = get_runtime_slug()
+            if not slug:
+                raise ConfigError(
+                    "Slug mancante: impossibile risolvere WORKSPACE_ROOT_DIR con template.",
+                    code="clients_store.slug.missing",
+                    component="clients_store",
+                )
+            raw = raw.replace("<slug>", slug)
         try:
-            raw = str(workspace_root)
-            resolved = Path(raw.replace("<slug>", "")).expanduser().resolve()
+            resolved = Path(raw).expanduser().resolve()
         except Exception as exc:
-            raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {workspace_root}") from exc
-        if "<slug>" in str(workspace_root) or _is_client_workspace(resolved):
-            LOG.info(
-                "ui.clients_store.workspace_root_ignored",
-                extra={"workspace_root_dir": str(workspace_root)},
+            raise ConfigError(
+                f"{WORKSPACE_ROOT_ENV} non valido: {workspace_root}",
+                code="clients_store.workspace_root.invalid",
+                component="clients_store",
+            ) from exc
+        if not uses_template and _is_client_workspace(resolved) and not _coerce_allow_client_db():
+            raise ConfigError(
+                f"{WORKSPACE_ROOT_ENV} non ammesso in workspace cliente.",
+                code="clients_store.workspace_root.invalid",
+                component="clients_store",
             )
-        else:
-            return resolved
+        return resolved
 
     override = os.environ.get(REPO_ROOT_ENV)
     if override:
         try:
             resolved = Path(override).expanduser().resolve()
-        except Exception:
-            return REPO_ROOT
+        except Exception as exc:
+            raise ConfigError(
+                f"{REPO_ROOT_ENV} non valido: {override}",
+                code="clients_store.repo_root.invalid",
+                component="clients_store",
+            ) from exc
         if _is_client_workspace(resolved) and not _coerce_allow_client_db():
-            LOG.info(
-                "ui.clients_store.repo_root_in_client",
-                extra={
-                    "repo_root_dir": str(resolved),
-                    "action": "fallback_repo_root",
-                    "hint": f"Usa {WORKSPACE_ROOT_ENV} o abilita {ALLOW_CLIENT_DB_ENV}=1 per test/dummy.",
-                },
+            raise ConfigError(
+                f"{REPO_ROOT_ENV} non ammesso in workspace cliente.",
+                code="clients_store.repo_root.invalid",
+                component="clients_store",
             )
-            return REPO_ROOT
         return resolved
     return REPO_ROOT
 
@@ -185,29 +217,63 @@ def ensure_db() -> None:
 
 def _parse_entries(text: str) -> list[ClientEntry]:
     try:
-        data = yaml.safe_load(text) or []
-    except Exception:
-        data = []
+        data = yaml.safe_load(text)
+    except Exception as exc:
+        raise ConfigError(
+            "clients.yaml non valido: YAML non parsabile.",
+            code="clients_store.yaml.invalid",
+            component="clients_store",
+        ) from exc
+    if data is None:
+        raise ConfigError(
+            "clients.yaml non valido: contenuto vuoto.",
+            code="clients_store.yaml.invalid",
+            component="clients_store",
+        )
+    if not isinstance(data, list):
+        raise ConfigError(
+            "clients.yaml non valido: attesa lista di entry.",
+            code="clients_store.yaml.invalid",
+            component="clients_store",
+        )
     entries: list[ClientEntry] = []
-    if isinstance(data, list):
-        for item in data:
-            if not isinstance(item, dict):
-                continue
-            slug = str(item.get("slug", "")).strip()
-            nome = str(item.get("nome", "")).strip()
-            stato = str(item.get("stato", "")).strip()
-            created_at = item.get("created_at")
-            dummy_flag = item.get("dummy")
-            if slug:
-                entries.append(
-                    ClientEntry(
-                        slug=slug,
-                        nome=nome,
-                        stato=stato,
-                        created_at=str(created_at).strip() if created_at else None,
-                        dummy=bool(dummy_flag) if isinstance(dummy_flag, bool) else None,
-                    )
-                )
+    for idx, item in enumerate(data):
+        if not isinstance(item, dict):
+            raise ConfigError(
+                "clients.yaml non valido: entry non mappabile.",
+                code="clients_store.yaml.invalid",
+                component="clients_store",
+                index=idx,
+            )
+        slug_raw = item.get("slug")
+        if slug_raw is None:
+            raise ConfigError(
+                "clients.yaml non valido: entry senza slug.",
+                code="clients_store.yaml.invalid",
+                component="clients_store",
+                index=idx,
+            )
+        slug = str(slug_raw).strip()
+        if not slug:
+            raise ConfigError(
+                "clients.yaml non valido: entry con slug vuoto.",
+                code="clients_store.yaml.invalid",
+                component="clients_store",
+                index=idx,
+            )
+        nome = str(item.get("nome", "")).strip()
+        stato = str(item.get("stato", "")).strip()
+        created_at = item.get("created_at")
+        dummy_flag = item.get("dummy")
+        entries.append(
+            ClientEntry(
+                slug=slug,
+                nome=nome,
+                stato=stato,
+                created_at=str(created_at).strip() if created_at else None,
+                dummy=bool(dummy_flag) if isinstance(dummy_flag, bool) else None,
+            )
+        )
     return entries
 
 
@@ -215,8 +281,12 @@ def _parse_entries(text: str) -> list[ClientEntry]:
 def _cached_clients(db_dir: str, db_file: str, mtime: float) -> tuple[ClientEntry, ...]:
     try:
         text = read_text_safe(Path(db_dir), Path(db_file), encoding="utf-8")
-    except Exception:
-        return ()
+    except Exception as exc:
+        raise ConfigError(
+            "clients.yaml non leggibile.",
+            code="clients_store.read.failed",
+            component="clients_store",
+        ) from exc
     return tuple(_parse_entries(text))
 
 

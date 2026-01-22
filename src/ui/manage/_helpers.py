@@ -5,6 +5,7 @@ import inspect
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, cast
 
+from pipeline.exceptions import ConfigError
 from pipeline.workspace_layout import WorkspaceLayout
 from ui.clients_store import get_all as get_clients
 from ui.utils.workspace import resolve_raw_dir
@@ -42,6 +43,12 @@ def load_clients(logger: Any, manage_file: Path) -> list[dict[str, Any]]:
     """Carica l'elenco clienti delegando allo store centrale."""
     try:
         return [entry.to_dict() for entry in get_clients()]
+    except ConfigError as exc:
+        logger.info(
+            "ui.manage.clients.unavailable",
+            extra={"code": getattr(exc, "code", None), "path": str(clients_db_path(manage_file))},
+        )
+        return []
     except Exception as exc:  # pragma: no cover - logging degradato
         logger.warning(
             "ui.manage.clients.load_error",

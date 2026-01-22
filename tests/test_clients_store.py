@@ -14,6 +14,7 @@ def _reset_store(tmp_path):
     module.REPO_ROOT = tmp_path
     module.DB_DIR = Path("clients_db")
     module.DB_FILE = Path("clients.yaml")
+    os.environ[module.WORKSPACE_ROOT_ENV] = str(tmp_path)
     os.environ["CLIENTS_DB_DIR"] = "clients_db"
     os.environ["CLIENTS_DB_FILE"] = "clients.yaml"
     return module
@@ -119,3 +120,66 @@ def test_set_state_rejects_invalid_slug(store):
         store.set_state("UPPER", "arricchito")
     entries = store.load_clients()
     assert [e.slug for e in entries] == ["delta"]
+
+
+def test_optional_env_empty_raises(store, monkeypatch):
+    monkeypatch.setenv("CLIENTS_DB_DIR", "  ")
+    with pytest.raises(ConfigError) as excinfo:
+        store._optional_env("CLIENTS_DB_DIR")
+    assert excinfo.value.code == "assistant.env.empty"
+
+
+def test_optional_env_reader_error_raises(store, monkeypatch):
+    def _raise_runtime(name: str) -> str:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("ui.clients_store.get_env_var", _raise_runtime)
+    with pytest.raises(ConfigError) as excinfo:
+        store._optional_env("CLIENTS_DB_DIR")
+    assert excinfo.value.code == "assistant.env.read_failed"
+
+
+def test_parse_entries_invalid_yaml_raises(store):
+    with pytest.raises(ConfigError) as excinfo:
+        store._parse_entries("::::")
+    assert excinfo.value.code == "clients_store.yaml.invalid"
+
+
+def test_parse_entries_rejects_non_mapping_item(store):
+    with pytest.raises(ConfigError) as excinfo:
+        store._parse_entries("- foo\n")
+    assert excinfo.value.code == "clients_store.yaml.invalid"
+
+
+def test_parse_entries_rejects_missing_slug(store):
+    with pytest.raises(ConfigError) as excinfo:
+        store._parse_entries("- nome: Foo\n")
+    assert excinfo.value.code == "clients_store.yaml.invalid"
+
+
+def test_base_repo_root_template_resolves_with_slug(store, monkeypatch, tmp_path):
+    root_template = tmp_path / "output" / "timmy-kb-<slug>"
+    monkeypatch.setenv(store.WORKSPACE_ROOT_ENV, root_template.as_posix())
+    monkeypatch.setattr("ui.utils.slug.get_runtime_slug", lambda: "dummy")
+    resolved = store._base_repo_root()
+    assert resolved.name == "timmy-kb-dummy"
+
+
+def test_base_repo_root_template_raises_without_slug(store, monkeypatch, tmp_path):
+    root_template = tmp_path / "output" / "timmy-kb-<slug>"
+    monkeypatch.setenv(store.WORKSPACE_ROOT_ENV, root_template.as_posix())
+    monkeypatch.setattr("ui.utils.slug.get_runtime_slug", lambda: None)
+    with pytest.raises(ConfigError) as excinfo:
+        store._base_repo_root()
+    assert excinfo.value.code == "clients_store.slug.missing"
+
+
+def test_base_repo_root_rejects_repo_root_in_client(store, monkeypatch, tmp_path):
+    client_root = tmp_path / "output" / "timmy-kb-demo"
+    client_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.delenv(store.WORKSPACE_ROOT_ENV, raising=False)
+    monkeypatch.setenv(store.REPO_ROOT_ENV, client_root.as_posix())
+    monkeypatch.delenv("ALLOW_CLIENTS_DB_IN_CLIENT", raising=False)
+    with pytest.raises(ConfigError) as excinfo:
+        store._base_repo_root()
+    assert excinfo.value.code == "clients_store.repo_root.invalid"

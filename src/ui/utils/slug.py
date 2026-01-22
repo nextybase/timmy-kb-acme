@@ -20,6 +20,7 @@ from .query_params import get_slug as _qp_get
 from .query_params import set_slug as _qp_set
 
 LOGGER = get_structured_logger("ui.slug")
+_RUNTIME_SLUG_RESOLVE_GUARD = False
 
 
 def _has_streamlit_context() -> bool:
@@ -104,6 +105,10 @@ def _set_session_slug(value: Optional[str]) -> None:
 def _load_persisted() -> Optional[str]:
     try:
         path = get_ui_state_path()
+    except ConfigError as exc:
+        LOGGER.info("ui.slug.persist_unavailable", extra={"code": getattr(exc, "code", None)})
+        return None
+    try:
         raw_text = read_text_safe(path.parent, path)
         raw: Any = json.loads(raw_text)
         if not isinstance(raw, dict):
@@ -115,14 +120,41 @@ def _load_persisted() -> Optional[str]:
             return None
         return slug
     except Exception as exc:
-        path_str = str(path) if "path" in locals() else None
-        LOGGER.warning("ui.slug.persist_load_failed", extra={"path": path_str}, exc_info=exc)
+        LOGGER.warning("ui.slug.persist_load_failed", extra={"path": str(path)}, exc_info=exc)
         return None
+
+
+def get_runtime_slug() -> Optional[str]:
+    """
+    Risolve lo slug runtime in modo deterministico (senza side-effect).
+    Ordine: query params, session_state, persisted state.
+    """
+    try:
+        slug = _sanitize_slug(_qp_get())
+    except Exception:
+        slug = None
+    if slug:
+        return slug
+    slug = _current_session_slug()
+    if slug:
+        return slug
+    global _RUNTIME_SLUG_RESOLVE_GUARD
+    if _RUNTIME_SLUG_RESOLVE_GUARD:
+        return None
+    try:
+        _RUNTIME_SLUG_RESOLVE_GUARD = True
+        return _load_persisted()
+    finally:
+        _RUNTIME_SLUG_RESOLVE_GUARD = False
 
 
 def _save_persisted(slug: Optional[str]) -> None:
     try:
         path = get_ui_state_path()
+    except ConfigError as exc:
+        LOGGER.info("ui.slug.persist_unavailable", extra={"code": getattr(exc, "code", None)})
+        return
+    try:
         base_dir = path.parent
         base_dir.mkdir(parents=True, exist_ok=True)
         try:
@@ -141,8 +173,7 @@ def _save_persisted(slug: Optional[str]) -> None:
         LOGGER.info("ui.slug.persisted", extra={"path": str(path)})
     except Exception as exc:
         # la UI non deve rompersi per errori di persistenza
-        path_str = str(path) if "path" in locals() else None
-        LOGGER.error("ui.slug.persist_failed", extra={"path": path_str, "slug": slug}, exc_info=exc)
+        LOGGER.error("ui.slug.persist_failed", extra={"path": str(path), "slug": slug}, exc_info=exc)
 
 
 def get_active_slug() -> Optional[str]:

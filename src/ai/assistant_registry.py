@@ -17,21 +17,23 @@ LOGGER = get_structured_logger("ai.assistant_registry")
 def _optional_env(name: str) -> Optional[str]:
     raw_env_value = os.environ.get(name)
     if raw_env_value is not None and not str(raw_env_value).strip():
-        LOGGER.warning(
-            "ai.assistant_registry.env_var_empty",
-            extra={"env": name, "primary_env": name},
+        raise ConfigError(
+            f"Variabile ambiente vuota: {name}.",
+            code="assistant.env.empty",
+            component="assistant_registry",
+            env=name,
         )
-        return None
     try:
         value = env_utils.get_env_var(name)
     except KeyError:
         return None
     except Exception as exc:
-        LOGGER.warning(
-            "ai.assistant_registry.env_var_read_failed",
-            extra={"env": name, "error": str(exc), "exc_type": type(exc).__name__},
-        )
-        return None
+        raise ConfigError(
+            f"Lettura variabile ambiente fallita: {name}.",
+            code="assistant.env.read_failed",
+            component="assistant_registry",
+            env=name,
+        ) from exc
     return value.strip() if isinstance(value, str) else None
 
 
@@ -40,20 +42,42 @@ def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
     if hasattr(settings, "get"):
         try:
             value = settings.get(path)
-            if value is not None:
-                return value
-        except Exception:
-            pass
+        except Exception as exc:
+            raise ConfigError(
+                f"Errore lettura config per '{path}'.",
+                code="config.read.failed",
+                component="assistant_registry",
+                path=path,
+            ) from exc
+        if value is not None:
+            return value
     mapping: Any = None
     if hasattr(settings, "as_dict"):
         try:
             mapping = settings.as_dict()
-        except Exception:
-            mapping = None
+        except Exception as exc:
+            raise ConfigError(
+                f"Errore lettura config per '{path}'.",
+                code="config.read.failed",
+                component="assistant_registry",
+                path=path,
+            ) from exc
     if mapping is None and isinstance(settings, Mapping):
         mapping = settings
+    if mapping is None:
+        raise ConfigError(
+            f"Configurazione non valida per '{path}': atteso mapping.",
+            code="config.read.failed",
+            component="assistant_registry",
+            path=path,
+        )
     if not isinstance(mapping, Mapping):
-        return default
+        raise ConfigError(
+            f"Configurazione non valida per '{path}': atteso mapping.",
+            code="config.read.failed",
+            component="assistant_registry",
+            path=path,
+        )
     current: Any = mapping
     for part in parts:
         if isinstance(current, Mapping) and part in current:

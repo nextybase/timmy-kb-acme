@@ -115,7 +115,7 @@ def test_ai_section_assistant_env_payload_precedence():
             "OCP_EXECUTOR_ASSISTANT_ID",
             lambda ctx: resolve_ocp_executor_config(ctx.settings),
         ),
-        (resolve_kgraph_config, "KGRAPH_ASSISTANT_ID", lambda ctx: resolve_kgraph_config(ctx)),
+        (resolve_kgraph_config, "KGRAPH_ASSISTANT_ID", lambda ctx: resolve_kgraph_config(ctx.settings)),
         (
             resolve_audit_assistant_config,
             "AUDIT_ASSISTANT_ID",
@@ -196,3 +196,63 @@ def test_legacy_root_vision_rejected(caplog):
     with pytest.raises(ConfigError, match="ai\\.vision"):
         config.resolve_vision_config(ctx)
     assert any(rec.message == "ai.vision_config.legacy_root_vision" for rec in caplog.records)
+
+
+def test_as_mapping_raises_on_as_dict_error() -> None:
+    class _BadSettings:
+        def as_dict(self) -> dict[str, object]:
+            raise RuntimeError("boom")
+
+    with pytest.raises(ConfigError) as excinfo:
+        config._as_mapping(_BadSettings())
+    assert excinfo.value.code == "config.read.failed"
+
+
+def test_optional_env_missing_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("VISION_MISSING_ENV", raising=False)
+
+    def _missing(name: str) -> str:
+        raise KeyError(name)
+
+    monkeypatch.setattr("ai.vision_config.env_utils.get_env_var", _missing)
+    assert config._optional_env("VISION_MISSING_ENV") is None
+
+
+def test_optional_env_empty_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VISION_EMPTY_ENV", "  ")
+    with pytest.raises(ConfigError) as excinfo:
+        config._optional_env("VISION_EMPTY_ENV")
+    assert excinfo.value.code == "assistant.env.empty"
+
+
+def test_optional_env_read_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VISION_BROKEN_ENV", "ok")
+
+    def _raise_runtime(name: str) -> str:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("ai.vision_config.env_utils.get_env_var", _raise_runtime)
+    with pytest.raises(ConfigError) as excinfo:
+        config._optional_env("VISION_BROKEN_ENV")
+    assert excinfo.value.code == "assistant.env.read_failed"
+
+
+def test_resolve_vision_retention_days_invalid_type() -> None:
+    ctx = _DummyCtx(settings={"ai": {"vision": {"snapshot_retention_days": "bad"}}})
+    with pytest.raises(ConfigError) as excinfo:
+        config.resolve_vision_retention_days(ctx)
+    assert excinfo.value.code == "vision.retention.invalid"
+
+
+def test_resolve_vision_retention_days_non_positive() -> None:
+    ctx = _DummyCtx(settings={"ai": {"vision": {"snapshot_retention_days": 0}}})
+    with pytest.raises(ConfigError) as excinfo:
+        config.resolve_vision_retention_days(ctx)
+    assert excinfo.value.code == "vision.retention.invalid"
+
+
+def test_resolve_vision_retention_days_missing() -> None:
+    ctx = _DummyCtx(settings={"ai": {"vision": {}}})
+    with pytest.raises(ConfigError) as excinfo:
+        config.resolve_vision_retention_days(ctx)
+    assert excinfo.value.code == "vision.retention.missing"

@@ -208,6 +208,22 @@ Defines:
 This module does not perform path validation by design;
 path safety must be enforced before invoking it.
 
+## Configuration Boundary - Strict Guard Policy
+
+Runtime configuration boundaries must be strict and deterministic.
+They must not absorb exceptions, normalize failures into defaults,
+or silently downgrade invalid inputs.
+If a value is missing, the boundary may return an explicit default only
+when the configuration mapping is valid and the path is absent.
+Any read or conversion error must raise a typed error (usually `ConfigError`)
+and preserve the original cause.
+
+Runtime boundary modules (strict guard):
+- `src/ai/assistant_registry.py`
+- `src/ai/vision_config.py`
+- `src/semantic/vision_provision.py`
+- `src/ui/clients_store.py`
+
 ## Forbidden Patterns (Beta 1.0)
 
 The following patterns are explicitly forbidden in the production runtime.

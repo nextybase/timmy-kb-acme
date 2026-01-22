@@ -19,14 +19,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 OBSERVABILITY_COMPOSE = REPO_ROOT / "observability" / "docker-compose.yaml"
 DOCKER_BIN = shutil.which("docker")
 SRC_ROOT = REPO_ROOT / "src"
-
 import sqlite3
+
+from pipeline.env_constants import WORKSPACE_ROOT_ENV
 
 try:
     import pipeline  # type: ignore # noqa: F401
 except Exception as exc:  # pragma: no cover - fail fast on misconfigured env
     raise RuntimeError("Esegui pytest con PYTHONPATH=src per importare pipeline/*") from exc
-
 from semantic import api as _semantic_api
 from semantic import convert_service as _convert_service
 from semantic import frontmatter_service as _frontmatter_service
@@ -186,6 +186,7 @@ def _isolate_clients_db(tmp_path_factory: pytest.TempPathFactory) -> None:
         os.environ["CLIENTS_DB_DIR"] = Path("clients_db/.pytest_clients_db").as_posix()
     if "CLIENTS_DB_FILE" not in os.environ:
         os.environ["CLIENTS_DB_FILE"] = "clients.yaml"
+    os.environ[WORKSPACE_ROOT_ENV] = str(base_root)
 
 
 # Helpers per avviare lo stack osservabilità (docker compose ...)

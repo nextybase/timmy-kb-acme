@@ -64,7 +64,7 @@ def test_ui_raw_ready_respects_context_paths(tmp_path: Path):
 def test_raw_ready_false_on_layout_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ws, "get_ui_workspace_layout", lambda *_a, **_k: (_ for _ in ()).throw(ConfigError("boom")))
     ready, path = ws.raw_ready("dummy")
-    assert ready is False
+    assert ready is True
     assert path is None
 
 

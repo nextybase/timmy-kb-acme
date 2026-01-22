@@ -46,7 +46,6 @@ def test_prototimmy_config_missing_env_raises(monkeypatch: pytest.MonkeyPatch) -
 
 def test_assistant_id_empty_env_logs(monkeypatch, caplog):
     monkeypatch.setenv("MY_ASST", "")
-    caplog.set_level("WARNING", logger="ai.assistant_registry")
-    with pytest.raises(ConfigError):
+    with pytest.raises(ConfigError) as excinfo:
         assistant_registry._resolve_assistant_id("MY_ASST", primary_env_name="MY_ASST")
-    assert any("env_var_empty" in rec.getMessage() for rec in caplog.records)
+    assert excinfo.value.code == "assistant.env.empty"
