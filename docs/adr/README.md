@@ -1,6 +1,18 @@
 # Registro delle Decisioni (ADR)
 
-Questo directory raccoglie le **Architecture / Technical Decision Records** del progetto. Ogni ADR documenta il contesto, la decisione presa, le alternative considerate e quando rivederla.
+Questa directory raccoglie le **Architecture / Technical Decision Records** del progetto.
+Ogni ADR documenta il contesto, la decisione presa, le alternative considerate e quando rivederla.
+
+Gli ADR sono **documenti descrittivi**, non normativi.
+Non introducono nuove regole di sistema e non sovrascrivono:
+- `MANIFEST.md`
+- `instructions/*`
+
+Le decisioni archiviate qui devono essere lette alla luce
+dei due domini epistemici canonici del sistema:
+
+- **Epistemic Envelope** (fondazione, pipeline, artefatti, tracciabilità)
+- **Agency Engine** (prompt chain, agenti, gate, deliberazione)
 
 ## Convenzioni
 

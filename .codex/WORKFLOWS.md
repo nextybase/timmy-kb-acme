@@ -1,5 +1,15 @@
 # Operational Workflows (UI/CLI)
 
+## Terminology (canonical)
+All workflows in this folder execute within the **Agency Engine**.
+They must not modify or bypass the **Epistemic Envelope**.
+
+Canonical definitions and disambiguations are in:
+- `.codex/CONSTITUTION.md` (normative entrypoint for `.codex/`)
+
+Note: “Work Order Envelope” (used in prompt contracts) is an agent-level execution contract,
+and is **not** the system-level Epistemic Envelope.
+
 ## Overview
 - A dual approach offering both CLI orchestrators and the Streamlit UI (`onboarding_ui.py`).
 - Goal: turn PDFs into AI-ready KB Markdown with coherent front matter, a synchronized README/SUMMARY, an HonKit Docker preview, .

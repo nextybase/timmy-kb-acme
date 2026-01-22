@@ -1,5 +1,16 @@
 # Prompt Chain Operational API
 
+## Terminology (canonical)
+This document is an operational contract for the Prompt Chain inside the **Agency Engine**.
+Canonical definitions are in `.codex/CONSTITUTION.md`.
+
+- **Epistemic Envelope**: system-level epistemic boundary (ingestion, artifacts, knowledge graph, lineage).
+- **Agency Engine**: deliberative domain (Prompt Chain, gates, work orders, supervised execution).
+
+Important disambiguation:
+“Work Order Envelope” below is an agent-level execution contract and is **not**
+the system-level Epistemic Envelope.
+
 ## Turn-Based Protocol & Single-Turn Execution
 - Planner → OCP → Codex → OCP → Planner is the only valid sequence; each prompt must contain exactly one action and never bundles multiple turns.
 - OCP issues prompt numbers in order; after Codex replies, the cycle pauses until the next OCP instruction (no autopilot beyond the current prompt).
