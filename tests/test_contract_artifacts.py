@@ -71,11 +71,11 @@ def test_book_artifacts_are_generated(tmp_path: Path, monkeypatch: pytest.Monkey
 
     def _summary_with_repo_root(paths):  # type: ignore[no-untyped-def]
         ctx = SimpleNamespace(repo_root_dir=paths.repo_root_dir, slug=paths.slug)
-        return generate_summary_markdown(ctx, md_dir=paths.md_dir)
+        return generate_summary_markdown(ctx, book_dir=paths.book_dir)
 
     def _readme_with_repo_root(paths):  # type: ignore[no-untyped-def]
         ctx = SimpleNamespace(repo_root_dir=paths.repo_root_dir, slug=paths.slug)
-        return generate_readme_markdown(ctx, md_dir=paths.md_dir)
+        return generate_readme_markdown(ctx, book_dir=paths.book_dir)
 
     monkeypatch.setattr("semantic.frontmatter_service._gen_summary", _summary_with_repo_root)
     monkeypatch.setattr("semantic.frontmatter_service._gen_readme", _readme_with_repo_root)

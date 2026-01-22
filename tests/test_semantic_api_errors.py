@@ -19,7 +19,7 @@ def test_call_convert_md_wraps_typeerror_with_context(tmp_path: Path):
     book.mkdir(parents=True, exist_ok=True)
     raw.mkdir(parents=True, exist_ok=True)
 
-    ctx = ContextPaths(repo_root_dir=base, raw_dir=raw, md_dir=book, slug="zzz")
+    ctx = ContextPaths(repo_root_dir=base, raw_dir=raw, book_dir=book, slug="zzz")
 
     with pytest.raises(ConversionError) as ei:
         _call_convert_md(bad_converter, ctx, book)

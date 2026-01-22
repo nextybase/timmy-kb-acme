@@ -14,7 +14,7 @@ from timmy_kb.cli import semantic_onboarding as mod
 
 class _DummyCtx(SimpleNamespace):
     base_dir: Path
-    md_dir: Path
+    book_dir: Path
     repo_root_dir: Path
     slug: str
 
@@ -27,7 +27,7 @@ def _make_ctx(tmp_path: Path, slug: str = "dummy") -> _DummyCtx:
     book.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
-    return _DummyCtx(base_dir=base, md_dir=book, repo_root_dir=base, slug=slug)
+    return _DummyCtx(base_dir=base, book_dir=book, repo_root_dir=base, slug=slug)
 
 
 def _set_argv(slug: str = "dummy") -> None:
@@ -73,7 +73,7 @@ def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -
     # get_paths compatto
     def _fake_get_paths(slug: str) -> dict[str, Path]:
         ctx = _make_ctx(tmp_path, slug)
-        return {"base": ctx.base_dir, "book": ctx.md_dir}
+        return {"base": ctx.base_dir, "book": ctx.book_dir}
 
     monkeypatch.setattr(mod, "get_paths", _fake_get_paths, raising=True)
 
@@ -108,7 +108,7 @@ def test_cli_missing_vocab_db_returns_config_error(tmp_path: Path, monkeypatch: 
     monkeypatch.setattr(mod, "convert_markdown", lambda *_a, **_k: None, raising=True)
 
     def _fake_get_paths(slug: str) -> dict[str, Path]:
-        return {"base": ctx.base_dir, "book": ctx.md_dir}
+        return {"base": ctx.base_dir, "book": ctx.book_dir}
 
     monkeypatch.setattr(mod, "get_paths", _fake_get_paths, raising=True)
 
@@ -134,16 +134,16 @@ def test_cli_summary_log_excludes_readme_summary(tmp_path: Path, monkeypatch: An
     )
 
     def _fake_convert(ctx_, logger, slug):
-        (ctx_.md_dir / "README.md").write_text("# r\n", encoding="utf-8")
-        (ctx_.md_dir / "SUMMARY.md").write_text("# s\n", encoding="utf-8")
-        (ctx_.md_dir / "cat.md").write_text("# c\n", encoding="utf-8")
-        return [ctx_.md_dir / "cat.md"]
+        (ctx_.book_dir / "README.md").write_text("# r\n", encoding="utf-8")
+        (ctx_.book_dir / "SUMMARY.md").write_text("# s\n", encoding="utf-8")
+        (ctx_.book_dir / "cat.md").write_text("# c\n", encoding="utf-8")
+        return [ctx_.book_dir / "cat.md"]
 
     monkeypatch.setattr(mod, "convert_markdown", _fake_convert, raising=True)
     monkeypatch.setattr(sapi, "convert_markdown", _fake_convert, raising=True)
 
     def _fake_get_paths(slug: str) -> dict[str, Path]:
-        return {"base": ctx.base_dir, "book": ctx.md_dir}
+        return {"base": ctx.base_dir, "book": ctx.book_dir}
 
     monkeypatch.setattr(mod, "get_paths", _fake_get_paths, raising=True)
     monkeypatch.setattr(mod, "require_reviewed_vocab", lambda _b, _l, **_k: {}, raising=True)

@@ -124,18 +124,18 @@ def _layout_note_text(top_levels: list[str]) -> str:
     )
 
 
-def _append_layout_note_to_readme(base_dir: Path, md_dir: Path, logger: logging.Logger, *, slug: str) -> None:
+def _append_layout_note_to_readme(base_dir: Path, book_dir: Path, logger: logging.Logger, *, slug: str) -> None:
     layout_path = base_dir / "semantic" / "layout_proposal.yaml"
     top_levels = _read_layout_top_levels(layout_path)
     if not top_levels:
         return
     ensure_within(base_dir, layout_path)
-    readme_path = md_dir / "README.md"
+    readme_path = book_dir / "README.md"
     ensure_within(base_dir, readme_path)
     if not readme_path.exists():
         return
     try:
-        content = read_text_safe(md_dir, readme_path, encoding="utf-8")
+        content = read_text_safe(book_dir, readme_path, encoding="utf-8")
     except Exception:
         return
     note = _layout_note_text(top_levels)
@@ -159,12 +159,12 @@ def _layout_summary_text(top_levels: list[str]) -> str:
     )
 
 
-def _write_layout_summary(base_dir: Path, md_dir: Path, logger: logging.Logger, *, slug: str) -> None:
+def _write_layout_summary(base_dir: Path, book_dir: Path, logger: logging.Logger, *, slug: str) -> None:
     layout_path = base_dir / "semantic" / "layout_proposal.yaml"
     top_levels = _read_layout_top_levels(layout_path)
     if not top_levels:
         return
-    summary_path = md_dir / "layout_summary.md"
+    summary_path = book_dir / "layout_summary.md"
     try:
         ensure_within(base_dir, summary_path)
     except Exception:
@@ -177,12 +177,12 @@ def _write_layout_summary(base_dir: Path, md_dir: Path, logger: logging.Logger, 
     )
 
 
-def _layout_section_from_md(md: Path, md_dir: Path, layout_keys: list[str]) -> str | None:
+def _layout_section_from_md(md: Path, book_dir: Path, layout_keys: list[str]) -> str | None:
     """Determina la sezione di layout (top level) in base al path relativo."""
     if not layout_keys:
         return None
     try:
-        relative = md.relative_to(md_dir)
+        relative = md.relative_to(book_dir)
     except Exception:
         return None
     parts = [part.strip().lower() for part in relative.parts if part.strip()]
@@ -293,8 +293,8 @@ def enrich_frontmatter(
         )
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
-    repo_root_dir, md_dir = paths.repo_root_dir, paths.md_dir
-    ensure_within(repo_root_dir, md_dir)
+    repo_root_dir, book_dir = paths.repo_root_dir, paths.book_dir
+    ensure_within(repo_root_dir, book_dir)
     layout_keys = _read_layout_top_levels(repo_root_dir / "semantic" / "layout_proposal.yaml")
     mapping_all: Dict[str, Any] = {}
     try:
@@ -320,7 +320,7 @@ def enrich_frontmatter(
             extra={"slug": slug, "reason": "empty_vocab_allowed", "file_path": str(tags_db)},
         )
 
-    mds = list_content_markdown(md_dir)
+    mds = list_content_markdown(book_dir)
     touched: List[Path] = []
     inv = _build_inverse_index(vocab)
 
@@ -329,7 +329,7 @@ def enrich_frontmatter(
             name = md.name
             title = re.sub(r"[_\/\-\s]+", " ", Path(name).stem).strip().replace("  ", " ") or "Documento"
             try:
-                meta, body = _read_fm(md_dir, md, encoding="utf-8", use_cache=True)
+                meta, body = _read_fm(book_dir, md, encoding="utf-8", use_cache=True)
             except OSError as exc:
                 logger.warning(
                     "semantic.frontmatter.read_failed",
@@ -341,7 +341,7 @@ def enrich_frontmatter(
             canonical_from_raw = _canonicalize_tags(raw_list, inv)
             tags = canonical_from_raw or _guess_tags_for_name(name, vocab, inv=inv)
             new_meta = _merge_frontmatter(meta, title=title, tags=tags)
-            section = _layout_section_from_md(md, md_dir, layout_keys)
+            section = _layout_section_from_md(md, book_dir, layout_keys)
             if section and not new_meta.get("layout_section"):
                 new_meta["layout_section"] = section
             # Enrichment ER-driven: entity/area/relation_hints
@@ -392,7 +392,7 @@ def enrich_frontmatter(
 
             fm = _dump_frontmatter(new_meta)
             try:
-                ensure_within(md_dir, md)
+                ensure_within(book_dir, md)
                 safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
                 touched.append(md)
                 logger.info(
@@ -428,7 +428,7 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
     repo_root_dir = paths.repo_root_dir
-    md_dir = paths.md_dir
+    book_dir = paths.book_dir
     summary_func = _gen_summary
     readme_func = _gen_readme
     validate_func = _validate_md
@@ -439,10 +439,10 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
             summary_func(paths)
             logger.info(
                 "semantic.summary.written",
-                extra={"slug": slug, "file_path": str(md_dir / "SUMMARY.md")},
+                extra={"slug": slug, "file_path": str(book_dir / "SUMMARY.md")},
             )
         except Exception as exc:  # pragma: no cover
-            summary_path = md_dir / "SUMMARY.md"
+            summary_path = book_dir / "SUMMARY.md"
             logger.exception(
                 "semantic.summary.failed",
                 extra={"slug": slug, "file_path": str(summary_path), "error": str(exc)},
@@ -453,12 +453,12 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
             readme_func(paths)
             logger.info(
                 "semantic.readme.written",
-                extra={"slug": slug, "file_path": str(md_dir / "README.md")},
+                extra={"slug": slug, "file_path": str(book_dir / "README.md")},
             )
-            _append_layout_note_to_readme(repo_root_dir, md_dir, logger, slug=slug)
-            _write_layout_summary(repo_root_dir, md_dir, logger, slug=slug)
+            _append_layout_note_to_readme(repo_root_dir, book_dir, logger, slug=slug)
+            _write_layout_summary(repo_root_dir, book_dir, logger, slug=slug)
         except Exception as exc:  # pragma: no cover
-            readme_path = md_dir / "README.md"
+            readme_path = book_dir / "README.md"
             logger.error(
                 "frontmatter.readme_generation_failed",
                 extra={"slug": slug, "file_path": str(readme_path)},
@@ -470,10 +470,10 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
             errors.append(f"readme: {exc}")
 
         if errors:
-            raise ConversionError("; ".join(errors), slug=slug, file_path=md_dir)
+            raise ConversionError("; ".join(errors), slug=slug, file_path=book_dir)
 
         validate_func(paths)
-        logger.info("semantic.book.validated", extra={"slug": slug, "book_dir": str(md_dir)})
+        logger.info("semantic.book.validated", extra={"slug": slug, "book_dir": str(book_dir)})
         _persist_layout_proposal(layout, logger, slug=slug)
         scope.set_artifacts(2)
 

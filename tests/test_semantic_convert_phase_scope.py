@@ -11,7 +11,7 @@ from semantic import convert_service
 from tests.support.contexts import TestClientCtx
 
 
-def _make_ctx(base_dir: Path, raw_dir: Path, md_dir: Path) -> TestClientCtx:
+def _make_ctx(base_dir: Path, raw_dir: Path, book_dir: Path) -> TestClientCtx:
     return TestClientCtx(
         slug="dummy",
         repo_root_dir=base_dir,
@@ -41,8 +41,8 @@ def test_convert_markdown_logs_done_once_on_success(tmp_path: Path, caplog, monk
     (raw / "a.pdf").write_bytes(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
 
     # Falsa conversione: scrive un file di contenuto in book/
-    def _fake_convert(ctx, *, md_dir=None, safe_pdfs=None):  # noqa: ANN001
-        target_dir = Path(md_dir or (ctx.repo_root_dir / "book"))
+    def _fake_convert(ctx, *, book_dir=None, safe_pdfs=None):  # noqa: ANN001
+        target_dir = Path(book_dir or (ctx.repo_root_dir / "book"))
         target_dir.mkdir(parents=True, exist_ok=True)
         (target_dir / "alpha.md").write_text("# Alpha\n", encoding="utf-8")
 
@@ -70,7 +70,7 @@ def test_convert_markdown_phase_failed_on_no_output(tmp_path: Path, caplog, monk
     # Un PDF sicuro ma la conversione non produce contenuti
     (raw / "b.pdf").write_bytes(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
 
-    def _noop_convert(ctx, *, md_dir=None, safe_pdfs=None):  # noqa: ANN001
+    def _noop_convert(ctx, *, book_dir=None, safe_pdfs=None):  # noqa: ANN001
         return None
 
     monkeypatch.setattr(convert_service, "_convert_md", _noop_convert, raising=True)

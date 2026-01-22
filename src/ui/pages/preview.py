@@ -240,10 +240,7 @@ else:
     raw_ok = False
     tagging_ok = False
     try:
-        candidate_dir = getattr(ctx, "md_dir", None)
-        if candidate_dir is None:
-            candidate_dir = get_paths(slug)["book"]
-        book_dir = candidate_dir
+        book_dir = get_paths(slug)["book"]
         if isinstance(book_dir, Path):
             book_ready = is_book_ready(book_dir)
     except Exception:

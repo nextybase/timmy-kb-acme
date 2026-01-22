@@ -15,7 +15,7 @@ class _Ctx:
         self.base_dir = base
         self.repo_root_dir = base
         self.raw_dir = raw
-        self.md_dir = md
+        self.book_dir = md
         self.slug = slug
 
 
@@ -54,9 +54,9 @@ def test_convert_markdown_ignores_ctx_overrides(tmp_path: Path, monkeypatch):
     # 👇 RAW deve contenere almeno un PDF affinché il converter venga invocato
     (base / "raw" / "dummy.pdf").write_bytes(b"%PDF-1.4\n%dummy\n")
 
-    # Fake converter: deve scrivere in md_dir
-    def _fake_convert_md(ctxlike, md_dir: Path):
-        (md_dir / "A.md").write_text("# A\n", encoding="utf-8")
+    # Fake converter: deve scrivere in book_dir
+    def _fake_convert_md(ctxlike, book_dir: Path):
+        (book_dir / "A.md").write_text("# A\n", encoding="utf-8")
 
     monkeypatch.setattr(convert_service, "_convert_md", _fake_convert_md, raising=True)
 
@@ -87,8 +87,8 @@ def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, mon
 
     # README/SUMMARY
     def _fake_write_summary(context, logger, *, slug):  # noqa: ANN001
-        summary = context.md_dir / "SUMMARY.md"
-        readme = context.md_dir / "README.md"
+        summary = context.book_dir / "SUMMARY.md"
+        readme = context.book_dir / "README.md"
         summary.write_text("* [B](B.md)", encoding="utf-8")
         readme.write_text("# Book", encoding="utf-8")
         return summary, readme

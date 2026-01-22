@@ -17,13 +17,13 @@ def parse_layout_summary_entries(text: str) -> list[str]:
     return entries
 
 
-def read_layout_summary_entries(md_dir: Path) -> list[str]:
+def read_layout_summary_entries(book_dir: Path) -> list[str]:
     """Legge `layout_summary.md` e restituisce i top level previsti."""
-    summary = md_dir / "layout_summary.md"
+    summary = book_dir / "layout_summary.md"
     if not summary.exists():
         return []
     try:
-        safe = ensure_within_and_resolve(md_dir, summary)
+        safe = ensure_within_and_resolve(book_dir, summary)
         text = read_text_safe(safe.parent, safe, encoding="utf-8")
     except Exception:
         return []

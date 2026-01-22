@@ -11,7 +11,7 @@ class _Ctx:
         self.repo_root_dir = base
         self.base_dir = base
         self.raw_dir = base / "raw"
-        self.md_dir = base / "book"
+        self.book_dir = base / "book"
         self.slug = slug
 
 
@@ -57,14 +57,14 @@ def test_convert_markdown_rerun_processes_new_pdfs(monkeypatch, tmp_path: Path):
     # Primo run: un PDF in raw/foo -> deve produrre book/foo/a.md
     _touch(ctx.raw_dir / "foo" / "a.pdf")
     mds_first = convert_markdown(ctx, logger=logger, slug="dummy")
-    assert (ctx.md_dir / "foo" / "a.md").exists()
-    assert any(p.relative_to(ctx.md_dir).as_posix() == "foo/a.md" for p in mds_first)
+    assert (ctx.book_dir / "foo" / "a.md").exists()
+    assert any(p.relative_to(ctx.book_dir).as_posix() == "foo/a.md" for p in mds_first)
 
     # Secondo run: aggiungo un nuovo PDF in raw/bar -> deve produrre anche book/bar/b.md
     _touch(ctx.raw_dir / "bar" / "b.pdf")
     mds_second = convert_markdown(ctx, logger=logger, slug="dummy")
-    assert (ctx.md_dir / "bar" / "b.md").exists()
+    assert (ctx.book_dir / "bar" / "b.md").exists()
 
     # I Markdown di contenuto devono includere entrambi (README/SUMMARY esclusi)
-    names = {p.relative_to(ctx.md_dir).as_posix() for p in mds_second}
+    names = {p.relative_to(ctx.book_dir).as_posix() for p in mds_second}
     assert {"foo/a.md", "bar/b.md"}.issubset(names)

@@ -11,14 +11,14 @@ from semantic.core import extract_semantic_concepts
 class Ctx:
     # Annotazioni allineate al Protocol _Ctx
     base_dir: Path
-    md_dir: Path
+    book_dir: Path
     slug: Optional[str]
     config_dir: Optional[Path]
     repo_root_dir: Optional[Path]
 
     def __init__(self, base: Path, md: Path) -> None:
         self.base_dir = base
-        self.md_dir = md
+        self.book_dir = md
         self.slug = "x"  # Optional[str] → ok anche se assegniamo una str
         self.config_dir = base / "config"
         self.repo_root_dir = base  # Optional[Path] → ok

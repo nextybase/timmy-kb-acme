@@ -56,7 +56,7 @@ def clean_legacy_artifacts(
     """Rimuove in modo *idempotente* e *sicuro* eventuali derivatives locali legacy.
 
     Attualmente:
-    - elimina `.git` eventualmente presente sotto `context.md_dir` (book/),
+    - elimina `.git` eventualmente presente sotto `context.book_dir` (book/),
       tipico di run legacy che inizializzavano un repo lì.
 
     Non elimina `book/` né altri file `.md` generati dalla pipeline.
@@ -68,7 +68,7 @@ def clean_legacy_artifacts(
 
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
-    book_dir: Path = paths.md_dir
+    book_dir: Path = paths.book_dir
     repo_root_dir: Path = paths.repo_root_dir
 
     # Guard-rail STRONG: non operare fuori dalla root cliente

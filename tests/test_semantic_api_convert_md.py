@@ -16,7 +16,7 @@ def _ctx(
     raw: Path = Path("."),
     md: Path = Path("book"),
 ) -> ContextPaths:
-    return ContextPaths(repo_root_dir=base, raw_dir=raw, md_dir=md, slug="x")
+    return ContextPaths(repo_root_dir=base, raw_dir=raw, book_dir=md, slug="x")
 
 
 def test_call_convert_md_raises_on_non_callable() -> None:
@@ -25,7 +25,7 @@ def test_call_convert_md_raises_on_non_callable() -> None:
         _call_convert_md(object(), _ctx(), Path("book"))
 
 
-def test_call_convert_md_calls_without_md_dir() -> None:
+def test_call_convert_md_calls_without_book_dir() -> None:
     called = {"ok": False}
 
     def f(ctx):
@@ -36,13 +36,13 @@ def test_call_convert_md_calls_without_md_dir() -> None:
     assert called["ok"] is True
 
 
-def test_call_convert_md_calls_with_md_dir_kw() -> None:
+def test_call_convert_md_calls_with_book_dir_kw() -> None:
     called = {"ok": False, "md": None}
 
-    def f(ctx, *, md_dir: Path):
+    def f(ctx, *, book_dir: Path):
         assert isinstance(ctx, ContextPaths)
         called["ok"] = True
-        called["md"] = md_dir
+        called["md"] = book_dir
 
     _call_convert_md(f, _ctx(md=Path("book")), Path("book"))
     assert called["ok"] is True

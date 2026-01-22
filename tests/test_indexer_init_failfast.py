@@ -16,7 +16,7 @@ class _Ctx:
         self.repo_root_dir = base
         self.base_dir = base
         self.raw_dir = base / "raw"
-        self.md_dir = base / "book"
+        self.book_dir = base / "book"
         self.slug = slug
 
 

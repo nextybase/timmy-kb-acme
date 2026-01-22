@@ -13,7 +13,7 @@ class DummyCtx:
     def __init__(self, base: Path, md: Path, raw: Path):
         self.base_dir = base
         self.repo_root_dir = base
-        self.md_dir = md
+        self.book_dir = md
         self.raw_dir = raw
         self.slug = "ctx-test"
 
@@ -29,7 +29,7 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
 
 
-def test_enrich_frontmatter_ignores_md_dir_override(tmp_path: Path):
+def test_enrich_frontmatter_ignores_book_dir_override(tmp_path: Path):
     base = tmp_path / "kb"
     raw = base / "raw"
     md_custom = base / "custom_book"  # sottocartella di base (safe)
@@ -52,10 +52,10 @@ def test_enrich_frontmatter_ignores_md_dir_override(tmp_path: Path):
     assert "ai" in text or "tags:" in text
 
 
-def test_enrich_frontmatter_does_not_touch_md_dir_outside_base(tmp_path: Path):
+def test_enrich_frontmatter_does_not_touch_book_dir_outside_base(tmp_path: Path):
     base = tmp_path / "kb"
     raw = base / "raw"
-    # md_dir fratello della sandbox → deve fallire per path-safety
+    # book_dir fratello della sandbox → deve fallire per path-safety
     md_outside = tmp_path / "custom_book"
     base.mkdir()
     raw.mkdir()

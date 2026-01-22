@@ -556,9 +556,9 @@ def _cleanup_orphan_markdown(
 # -----------------------------
 
 
-def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
+def validate_markdown_dir(ctx: _ClientCtx, book_dir: Path | None = None) -> Path:
     """Verifica che la cartella markdown esista, sia una directory e sia 'safe' rispetto a ctx.repo_root_dir."""
-    target_input: Path = md_dir if md_dir is not None else ctx.md_dir
+    target_input: Path = book_dir if book_dir is not None else ctx.book_dir
     target = _ensure_safe(ctx.repo_root_dir, target_input, slug=getattr(ctx, "slug", None))
 
     if not target.exists():
@@ -576,13 +576,13 @@ def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
     return target
 
 
-def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Path:
+def generate_readme_markdown(ctx: _ReadmeCtx, book_dir: Path | None = None) -> Path:
     """Crea (o sovrascrive) README.md nella cartella markdown target."""
     layout = WorkspaceLayout.from_context(ctx)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
     repo_root_dir = paths.repo_root_dir
-    default_md_dir = paths.md_dir
-    target_input: Path = md_dir if md_dir is not None else default_md_dir
+    default_book_dir = paths.book_dir
+    target_input: Path = book_dir if book_dir is not None else default_book_dir
     target = _ensure_safe(repo_root_dir, target_input, slug=getattr(ctx, "slug", None))
     target.mkdir(parents=True, exist_ok=True)
 
@@ -659,13 +659,13 @@ def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Pat
     return readme
 
 
-def generate_summary_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Path:
+def generate_summary_markdown(ctx: _ReadmeCtx, book_dir: Path | None = None) -> Path:
     """Genera SUMMARY.md elencando i .md nella cartella target (escludendo README.md e SUMMARY.md)."""
     layout = WorkspaceLayout.from_context(ctx)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
     repo_root_dir = paths.repo_root_dir
-    default_md_dir = paths.md_dir
-    target_input: Path = md_dir if md_dir is not None else default_md_dir
+    default_book_dir = paths.book_dir
+    target_input: Path = book_dir if book_dir is not None else default_book_dir
     target = _ensure_safe(repo_root_dir, target_input, slug=getattr(ctx, "slug", None))
     target.mkdir(parents=True, exist_ok=True)
 
@@ -699,18 +699,18 @@ def generate_summary_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Pa
 
 def convert_files_to_structured_markdown(
     ctx: _ClientCtx,
-    md_dir: Path | None = None,
+    book_dir: Path | None = None,
     *,
     safe_pdfs: list[Path] | None = None,
 ) -> None:
-    """Converte i PDF in RAW in un set di .md strutturati nella cartella `md_dir`.
+    """Converte i PDF in RAW in un set di .md strutturati nella cartella `book_dir`.
 
     Se `safe_pdfs` è fornito, **non** esegue alcuna discovery su disco e assume
     che la lista sia già validata e risolta all'interno di `ctx.raw_dir`.
     """
     base = ctx.repo_root_dir
     raw_root = ctx.raw_dir
-    target_input: Path = md_dir if md_dir is not None else ctx.md_dir
+    target_input: Path = book_dir if book_dir is not None else ctx.book_dir
 
     # sicurezza percorso per target e raw_root
     target = _ensure_safe(base, target_input, slug=getattr(ctx, "slug", None))

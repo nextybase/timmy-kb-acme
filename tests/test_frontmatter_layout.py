@@ -84,7 +84,7 @@ def test_enrich_frontmatter_sets_layout_section(tmp_path: Path) -> None:
             self.base_dir = base
             self.repo_root_dir = base
             self.raw_dir = base / "raw"
-            self.md_dir = base / "book"
+            self.book_dir = base / "book"
             self.slug = "dummy"
 
     base_dir = tmp_path
@@ -120,13 +120,13 @@ def test_write_layout_summary_creates_file(tmp_path: Path) -> None:
     base_dir = tmp_path
     book_dir = base_dir / "book"
     book_dir.mkdir()
-    md_dir = book_dir
+    book_dir = book_dir
     semantic_dir = base_dir / "semantic"
     semantic_dir.mkdir()
     layout = semantic_dir / "layout_proposal.yaml"
     layout.write_text("strategy:\n  overview: {}\n", encoding="utf-8")
 
-    front._write_layout_summary(base_dir, md_dir, logging.getLogger("test"), slug="dummy")
+    front._write_layout_summary(base_dir, book_dir, logging.getLogger("test"), slug="dummy")
 
     summary = book_dir / "layout_summary.md"
     assert summary.exists()

@@ -23,7 +23,7 @@ class C:
     base_dir: Path
     repo_root_dir: Path
     raw_dir: Path
-    md_dir: Path
+    book_dir: Path
     slug: str
 
 
@@ -32,7 +32,7 @@ def _ctx(base_dir: Path) -> C:
         base_dir=base_dir,
         repo_root_dir=base_dir,
         raw_dir=base_dir / "raw",
-        md_dir=base_dir / "book",
+        book_dir=base_dir / "book",
         slug="dummy",
     )
 

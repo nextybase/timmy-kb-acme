@@ -15,7 +15,7 @@ class _Ctx:
         self.repo_root_dir = base
         self.base_dir = base
         self.raw_dir = base / "raw"
-        self.md_dir = base / "book"
+        self.book_dir = base / "book"
         self.slug = slug
 
 
@@ -44,10 +44,10 @@ def test_only_unsafe_pdfs_raise_explicit_message(tmp_path: Path, monkeypatch: py
 
     _write_minimal_layout(base)
     ctx.raw_dir.mkdir(parents=True, exist_ok=True)
-    ctx.md_dir.mkdir(parents=True, exist_ok=True)
+    ctx.book_dir.mkdir(parents=True, exist_ok=True)
 
     # Legacy markdown già presente nel book
-    (ctx.md_dir / "legacy.md").write_text("# Legacy\n", encoding="utf-8")
+    (ctx.book_dir / "legacy.md").write_text("# Legacy\n", encoding="utf-8")
 
     # Crea PDF finti
     (ctx.raw_dir / "a.pdf").write_bytes(b"%PDF-1.4\n%\n")
@@ -76,7 +76,7 @@ def test_mixed_unsafe_and_valid_pdfs_processes_valid_ones(tmp_path: Path, monkey
 
     _write_minimal_layout(base)
     ctx.raw_dir.mkdir(parents=True, exist_ok=True)
-    ctx.md_dir.mkdir(parents=True, exist_ok=True)
+    ctx.book_dir.mkdir(parents=True, exist_ok=True)
 
     pdf_good = ctx.raw_dir / "good.pdf"
     pdf_bad = ctx.raw_dir / "bad.pdf"
@@ -96,7 +96,7 @@ def test_mixed_unsafe_and_valid_pdfs_processes_valid_ones(tmp_path: Path, monkey
     monkeypatch.setattr(ppath, "ensure_within_and_resolve", _guard, raising=True)
 
     # Evita conversione reale; prepara un MD finto per simulare l'output
-    (ctx.md_dir / "doc.md").write_text("# Doc\n", encoding="utf-8")
+    (ctx.book_dir / "doc.md").write_text("# Doc\n", encoding="utf-8")
     monkeypatch.setattr(convert_service, "_call_convert_md", lambda *a, **k: None, raising=True)
 
     mds = convert_service.convert_markdown(ctx, logger=logger, slug=ctx.slug)

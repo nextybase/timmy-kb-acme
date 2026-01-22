@@ -38,18 +38,17 @@ def ensure_book_purity(context: Any, logger: logging.Logger) -> None:
 
     Solleva PipelineError con elenco delle violazioni.
     """
-    md_dir = _as_path(getattr(context, "md_dir", None))
+    book_dir = _as_path(getattr(context, "book_dir", None))
     repo_root = _as_path(getattr(context, "repo_root_dir", None))
 
-    if md_dir is not None:
-        book_dir = md_dir
+    if book_dir is not None:
         if repo_root is not None:
             ensure_within(repo_root, book_dir)
     elif repo_root is not None:
         book_dir = repo_root / "book"
         ensure_within(repo_root, book_dir)
     else:
-        raise ConfigError("Contesto privo di percorsi utili: servono md_dir o repo_root_dir.")
+        raise ConfigError("Contesto privo di percorsi utili: servono book_dir o repo_root_dir.")
 
     if not book_dir.exists() or not book_dir.is_dir():
         raise ConfigError(f"Cartella book/ non trovata: {book_dir}")

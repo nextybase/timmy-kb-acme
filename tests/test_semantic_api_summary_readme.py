@@ -18,7 +18,7 @@ class DummyCtx:
     repo_root_dir: Path
     base_dir: Path
     raw_dir: Path
-    md_dir: Path
+    book_dir: Path
     slug: str = "e2e"
 
 
@@ -46,10 +46,10 @@ def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> Non
 
     # Fake generators: scrivono i file attesi
     def _fake_summary(ctx) -> None:
-        (ctx.md_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+        (ctx.book_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
 
     def _fake_readme(ctx) -> None:
-        (ctx.md_dir / "README.md").write_text("# Readme\n", encoding="utf-8")
+        (ctx.book_dir / "README.md").write_text("# Readme\n", encoding="utf-8")
 
     monkeypatch.setattr(front, "_gen_summary", _fake_summary, raising=True)
     monkeypatch.setattr(front, "_gen_readme", _fake_readme, raising=True)
@@ -57,7 +57,7 @@ def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> Non
     monkeypatch.setattr(front, "_validate_md", lambda ctx: None, raising=True)
 
     front.write_summary_and_readme(
-        cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, md_dir=book)),  # duck typing nei test
+        cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, book_dir=book)),  # duck typing nei test
         logging.getLogger("test"),
         slug="e2e",
     )
@@ -86,7 +86,7 @@ def test_write_summary_and_readme_generators_fail_raise(monkeypatch, tmp_path: P
     logger = logging.getLogger("test")
     with pytest.raises(ConversionError) as exc:
         front.write_summary_and_readme(
-            cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, md_dir=book)),  # idem sopra
+            cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, book_dir=book)),  # idem sopra
             logger,
             slug="e2e",
         )
@@ -108,7 +108,7 @@ def test_write_summary_and_readme_logs_errors_with_context(
         raise RuntimeError("boom")
 
     def _ok_readme(ctx) -> None:
-        (ctx.md_dir / "README.md").write_text("# Readme\n", encoding="utf-8")
+        (ctx.book_dir / "README.md").write_text("# Readme\n", encoding="utf-8")
 
     monkeypatch.setattr(front, "_gen_summary", _boom_summary, raising=True)
     monkeypatch.setattr(front, "_gen_readme", _ok_readme, raising=True)
@@ -118,7 +118,7 @@ def test_write_summary_and_readme_logs_errors_with_context(
     with caplog.at_level(logging.ERROR):
         with pytest.raises(ConversionError):
             front.write_summary_and_readme(
-                cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, md_dir=book)),
+                cast(Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=raw, book_dir=book)),
                 logger,
                 slug="e2e",
             )

@@ -16,7 +16,7 @@ class _Ctx:
         self.base_dir = base
         self.repo_root_dir = base
         self.raw_dir = raw
-        self.md_dir = md
+        self.book_dir = md
         self.slug = slug
 
 
@@ -54,9 +54,9 @@ def test_convert_markdown_raises_when_only_readme_summary_and_pdfs_present(tmp_p
     ctx = _Ctx(base, raw, book)
 
     # Converter che scrive solo README/SUMMARY (nessun contenuto)
-    def _fake_convert_md(ctxlike, md_dir: Path):
-        (md_dir / "README.md").write_text("# R\n", encoding="utf-8")
-        (md_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
+    def _fake_convert_md(ctxlike, book_dir: Path):
+        (book_dir / "README.md").write_text("# R\n", encoding="utf-8")
+        (book_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
 
     monkeypatch.setattr(convert_service, "_convert_md", _fake_convert_md, raising=True)
 
@@ -73,9 +73,9 @@ def test_convert_markdown_raises_configerror_when_no_pdfs_and_only_readme_summar
     _write_minimal_layout(base)
     ctx = _Ctx(base, raw, book)
 
-    def _fake_convert_md(ctxlike, md_dir: Path):
-        (md_dir / "README.md").write_text("# R\n", encoding="utf-8")
-        (md_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
+    def _fake_convert_md(ctxlike, book_dir: Path):
+        (book_dir / "README.md").write_text("# R\n", encoding="utf-8")
+        (book_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
 
     monkeypatch.setattr(convert_service, "_convert_md", _fake_convert_md, raising=True)
 

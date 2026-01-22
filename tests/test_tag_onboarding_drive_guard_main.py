@@ -44,7 +44,7 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
     fake_ctx = SimpleNamespace(
         slug="dummy",
         raw_dir=client_root / "raw",
-        md_dir=client_root / "book",
+        book_dir=client_root / "book",
         config_path=client_root / "config" / "config.yaml",
         repo_root_dir=client_root,
         env={},
@@ -53,7 +53,7 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
         service_account_file=client_root / "dummy.json",
     )
     fake_ctx.raw_dir.mkdir(parents=True, exist_ok=True)
-    fake_ctx.md_dir.mkdir(parents=True, exist_ok=True)
+    fake_ctx.book_dir.mkdir(parents=True, exist_ok=True)
     fake_resources = tag.ContextResources(
         context=fake_ctx,
         repo_root_dir=client_root,

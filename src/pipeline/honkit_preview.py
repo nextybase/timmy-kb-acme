@@ -133,12 +133,12 @@ def _resolve_ports(context: Any, explicit_host_port: Optional[int]) -> Tuple[int
 # ----------------------------
 # Helpers idempotenti di setup
 # ----------------------------
-def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
+def ensure_book_json(book_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
     """Crea un book.json minimo se mancante (idempotente)."""
-    book_json_path = Path(md_dir) / BOOK_JSON_NAME
+    book_json_path = Path(book_dir) / BOOK_JSON_NAME
     try:
         # STRONG guard: validare sia la dir sia il file target prima di scrivere
-        ensure_within(md_dir, book_json_path)
+        ensure_within(book_dir, book_json_path)
     except Exception as e:
         raise PreviewError(
             f"Percorso book.json non sicuro: {book_json_path} ({e})",
@@ -168,12 +168,12 @@ def ensure_book_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: b
         )
 
 
-def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
+def ensure_package_json(book_dir: Path, *, slug: Optional[str] = None, redact_logs: bool = False) -> None:
     """Crea un package.json minimo se mancante (idempotente)."""
-    package_json_path = Path(md_dir) / PACKAGE_JSON_NAME
+    package_json_path = Path(book_dir) / PACKAGE_JSON_NAME
     try:
         # STRONG guard: validare sia la dir sia il file target prima di scrivere
-        ensure_within(md_dir, package_json_path)
+        ensure_within(book_dir, package_json_path)
     except Exception as e:
         raise PreviewError(
             f"Percorso package.json non sicuro: {package_json_path} ({e})",
@@ -213,15 +213,15 @@ def ensure_package_json(md_dir: Path, *, slug: Optional[str] = None, redact_logs
 # ----------------------------
 #  Fasi operative (refactor)
 # ----------------------------
-def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -> None:
+def build_static_site(book_dir: Path, *, slug: Optional[str], redact_logs: bool) -> None:
     """Esegue `honkit build` dentro il container ufficiale (idempotente lato output)."""
     # STRONG guard sulla directory di lavoro
     try:
-        ensure_within(md_dir, md_dir / "README.md")  # validazione che vincola a md_dir
+        ensure_within(book_dir, book_dir / "README.md")  # validazione che vincola a book_dir
     except Exception as e:
-        raise PreviewError(f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir)
+        raise PreviewError(f"Percorso book_dir non sicuro: {book_dir} ({e})", slug=slug, file_path=book_dir)
 
-    md_output_path = Path(md_dir).resolve()
+    md_output_path = Path(book_dir).resolve()
     cmd = [
         "docker",
         "run",
@@ -242,9 +242,9 @@ def build_static_site(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -
         raise PreviewError(f"Errore 'honkit build': {e}", slug=slug)
 
 
-def _log_layout_summary(md_dir: Path, *, slug: Optional[str], redact_logs: bool) -> None:
-    entries = read_layout_summary_entries(Path(md_dir))
-    summary_path = Path(md_dir) / "layout_summary.md"
+def _log_layout_summary(book_dir: Path, *, slug: Optional[str], redact_logs: bool) -> None:
+    entries = read_layout_summary_entries(Path(book_dir))
+    summary_path = Path(book_dir) / "layout_summary.md"
     if not summary_path.exists():
         logger.info(
             _maybe_redact("layout_summary.md non è presente per la preview", redact_logs),
@@ -263,7 +263,7 @@ def _log_layout_summary(md_dir: Path, *, slug: Optional[str], redact_logs: bool)
 
 
 def run_container_detached(
-    md_dir: Path,
+    book_dir: Path,
     *,
     slug: Optional[str],
     container_name: str,
@@ -274,11 +274,11 @@ def run_container_detached(
     """Avvia `honkit serve` in modalità detached e ritorna l'ID del container."""
     # STRONG guard sulla directory di lavoro
     try:
-        ensure_within(md_dir, md_dir / "README.md")
+        ensure_within(book_dir, book_dir / "README.md")
     except Exception as e:
-        raise PreviewError(f"Percorso md_dir non sicuro: {md_dir} ({e})", slug=slug, file_path=md_dir)
+        raise PreviewError(f"Percorso book_dir non sicuro: {book_dir} ({e})", slug=slug, file_path=book_dir)
 
-    md_output_path = Path(md_dir).resolve()
+    md_output_path = Path(book_dir).resolve()
     cmd = [
         "docker",
         "run",
@@ -383,7 +383,7 @@ def run_gitbook_docker_preview(
       - Nessun prompt: interazione/decisione è responsabilità degli orchestratori.
 
     Args:
-        context: Contesto con `slug`, `md_dir`, `repo_root_dir` e opzionalmente `config`.
+        context: Contesto con `slug`, `book_dir`, `repo_root_dir` e opzionalmente `config`.
         port: Porta locale da esporre (se None, viene risolta come da precedenza sopra).
         container_name: Nome del container Docker.
         wait_on_exit: Se True, esegue `serve` in foreground (senza -d).
@@ -398,21 +398,21 @@ def run_gitbook_docker_preview(
 
     layout = WorkspaceLayout.from_context(context)
     repo_root_dir = layout.repo_root_dir
-    md_dir = layout.book_dir
+    book_dir = layout.book_dir
 
-    # Path-safety STRONG: md_dir deve essere sotto repo_root_dir
+    # Path-safety STRONG: book_dir deve essere sotto repo_root_dir
     try:
-        ensure_within(repo_root_dir, md_dir)
+        ensure_within(repo_root_dir, book_dir)
     except Exception as e:
         raise PreviewError(
-            f"Percorso markdown non sicuro: {md_dir} ({e})",
+            f"Percorso markdown non sicuro: {book_dir} ({e})",
             slug=context.slug,
-            file_path=md_dir,
+            file_path=book_dir,
         )
 
     host_port, container_port = _resolve_ports(context, port)
 
-    md_output_path = Path(md_dir).resolve()
+    md_output_path = Path(book_dir).resolve()
     logger.info(
         _maybe_redact("Directory per anteprima", redact_logs),
         extra={

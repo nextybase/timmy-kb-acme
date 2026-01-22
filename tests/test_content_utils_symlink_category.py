@@ -12,7 +12,7 @@ class _Ctx:
         self.repo_root_dir = base
         self.base_dir = base
         self.raw_dir = base / "raw"
-        self.md_dir = base / "book"
+        self.book_dir = base / "book"
         self.slug = slug
 
 
@@ -41,5 +41,5 @@ def test_convert_structured_markdown_handles_symlink_category(tmp_path: Path) ->
     # Non deve alzare eccezioni e deve produrre markdown per il PDF reale
     convert_files_to_structured_markdown(ctx)
 
-    real_md = ctx.md_dir / "real" / "sub" / "doc.md"
+    real_md = ctx.book_dir / "real" / "sub" / "doc.md"
     assert real_md.exists()

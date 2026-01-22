@@ -15,7 +15,7 @@ class DummyCtx:
     repo_root_dir: Path
     base_dir: Path
     raw_dir: Path
-    md_dir: Path
+    book_dir: Path
     slug: str = "e2e"
 
 
@@ -61,7 +61,7 @@ def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:
 
     touched = front.enrich_frontmatter(
         cast(
-            Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=base / "raw", md_dir=book)
+            Any, DummyCtx(repo_root_dir=base, base_dir=base, raw_dir=base / "raw", book_dir=book)
         ),  # duck typing nei test
         logging.getLogger("test"),
         vocab,

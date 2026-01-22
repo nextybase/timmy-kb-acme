@@ -420,7 +420,7 @@ def _preview_ready_timeout() -> float:
 
 
 def run_docker_preview(
-    md_dir: Path | str,
+    book_dir: Path | str,
     *,
     port: int = 4000,
     container_name: str = "honkit_preview",
@@ -431,18 +431,18 @@ def run_docker_preview(
     """Build + serve HonKit in container Docker in modalità detached, con retry e readiness check.
 
     - Usa l'immagine `honkit/honkit`.
-    - Monta `md_dir` in /app.
+    - Monta `book_dir` in /app.
     - Espone :4000 dalla container su `port` host.
     - Attende che la porta sia pronta (localhost:port) entro PREVIEW_READY_TIMEOUT.
 
     Raises:
         CmdError: in caso di fallimento non recuperabile.
     """
-    md_path = Path(md_dir).resolve()
+    md_path = Path(book_dir).resolve()
     if logger:
         logger.info(
             "preview.start",
-            extra={"md_dir": str(md_path), "container": container_name, "port": port},
+            extra={"book_dir": str(md_path), "container": container_name, "port": port},
         )
 
     if not docker_available(logger=logger):

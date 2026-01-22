@@ -18,7 +18,7 @@ class _Ctx:
     base_dir: Path
     repo_root_dir: Path
     raw_dir: Path
-    md_dir: Path
+    book_dir: Path
     slug: str
 
 
@@ -48,7 +48,7 @@ def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
     (book / "B.md").write_text("# B\ndue", encoding="utf-8")
-    ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=base / "raw", md_dir=book, slug="dummy")
+    ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=base / "raw", book_dir=book, slug="dummy")
     logger = _logger("test.obs.index")
 
     # Stub embeddings e inserimento DB
@@ -92,17 +92,17 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
     # RAW deve contenere almeno un PDF affinché il converter venga invocato
     (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n%dummy\n")
 
-    def _fake_convert(ctx, md_dir: Path | None = None) -> None:  # type: ignore[no-untyped-def]
-        target = md_dir or ctx.md_dir
+    def _fake_convert(ctx, book_dir: Path | None = None) -> None:  # type: ignore[no-untyped-def]
+        target = book_dir or ctx.book_dir
         (target / "A.md").write_text("---\ntitle: A\n---\nA", encoding="utf-8")
         (target / "B.md").write_text("---\ntitle: B\n---\nB", encoding="utf-8")
 
     monkeypatch.setattr(conv, "_convert_md", _fake_convert)
     monkeypatch.setattr(
-        front, "_gen_summary", lambda ctx: (ctx.md_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
+        front, "_gen_summary", lambda ctx: (ctx.book_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
     )
     monkeypatch.setattr(
-        front, "_gen_readme", lambda ctx: (ctx.md_dir / "README.md").write_text("# R\n", encoding="utf-8")
+        front, "_gen_readme", lambda ctx: (ctx.book_dir / "README.md").write_text("# R\n", encoding="utf-8")
     )
     monkeypatch.setattr(
         sapi,
@@ -111,7 +111,7 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
         raising=True,
     )
 
-    ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=raw, md_dir=book, slug="dummy")
+    ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=raw, book_dir=book, slug="dummy")
     logger = _logger("test.obs.build")
 
     caplog.set_level(logging.INFO)
@@ -135,7 +135,7 @@ def test_observability_indexing_failure_emits_error(monkeypatch, tmp_path, caplo
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
-    ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=base / "raw", md_dir=book, slug="dummy")
+    ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=base / "raw", book_dir=book, slug="dummy")
     logger = _logger("test.obs.index.fail")
 
     class Emb:

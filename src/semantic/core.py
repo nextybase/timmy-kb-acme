@@ -45,37 +45,40 @@ def compile_pdf_to_yaml(pdf_path: Path, yaml_path: Path) -> None:
 
 
 class _CtxProto:
-    md_dir: Path
+    book_dir: Path
     repo_root_dir: Path
     slug: Optional[str]
 
 
 def _list_markdown_files(context: _CtxProto, logger: logging.Logger) -> List[Path]:
-    if not getattr(context, "md_dir", None) or not getattr(context, "repo_root_dir", None):
-        raise PipelineError("Contesto incompleto: md_dir/repo_root_dir mancanti", slug=getattr(context, "slug", None))
+    if not getattr(context, "book_dir", None) or not getattr(context, "repo_root_dir", None):
+        raise PipelineError(
+            "Contesto incompleto: book_dir/repo_root_dir mancanti",
+            slug=getattr(context, "slug", None),
+        )
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(context)
     repo_root_dir = layout.repo_root_dir
     try:
-        safe_md_dir = ensure_within_and_resolve(repo_root_dir, context.md_dir)
+        safe_book_dir = ensure_within_and_resolve(repo_root_dir, context.book_dir)
     except Exception as exc:
-        raise PipelineError("Path non sicuro", slug=context.slug, file_path=context.md_dir) from exc
-    if not safe_md_dir.exists() or not safe_md_dir.is_dir():
-        raise InputDirectoryMissing(f"Directory markdown non valida: {safe_md_dir}", slug=context.slug)
+        raise PipelineError("Path non sicuro", slug=context.slug, file_path=context.book_dir) from exc
+    if not safe_book_dir.exists() or not safe_book_dir.is_dir():
+        raise InputDirectoryMissing(f"Directory markdown non valida: {safe_book_dir}", slug=context.slug)
     files = sorted(
         iter_safe_paths(
-            safe_md_dir,
+            safe_book_dir,
             include_dirs=False,
             include_files=True,
             suffixes=(".md",),
         ),
-        key=lambda p: p.relative_to(safe_md_dir).as_posix().lower(),
+        key=lambda p: p.relative_to(safe_book_dir).as_posix().lower(),
     )
     logger.info(
         "semantic.files.found",
         extra={
             "slug": context.slug,
-            "file_path": str(safe_md_dir),
+            "file_path": str(safe_book_dir),
             "count": len(files),
         },
     )
@@ -161,7 +164,7 @@ def extract_semantic_concepts(
             )
             continue
         try:
-            content = read_text_safe(context.md_dir, file, encoding="utf-8")
+            content = read_text_safe(context.book_dir, file, encoding="utf-8")
         except Exception as exc:
             # hard-fail: input incompleto => output non attestabile
             raise PipelineError(
@@ -219,7 +222,7 @@ def enrich_markdown_folder(context: _CtxProto, logger: Optional[logging.Logger] 
         "semantic.enrich.start",
         extra={
             "slug": context.slug,
-            "file_path": str(context.md_dir),
+            "file_path": str(context.book_dir),
             "count": len(files),
         },
     )
@@ -237,7 +240,7 @@ def enrich_markdown_folder(context: _CtxProto, logger: Optional[logging.Logger] 
         raise EnrichmentError(
             f"Arricchimento fallito su {len(failures)} file markdown (run non attestabile).",
             slug=getattr(context, "slug", None),
-            file_path=str(getattr(context, "md_dir", "")),
+            file_path=str(getattr(context, "book_dir", "")),
         )
     logger.info("semantic.enrich.completed", extra={"slug": context.slug})
 

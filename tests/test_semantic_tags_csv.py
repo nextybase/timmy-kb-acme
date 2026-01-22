@@ -15,14 +15,14 @@ def _ctx(base_dir: Path):
         base_dir: Path
         repo_root_dir: Path
         raw_dir: Path
-        md_dir: Path
+        book_dir: Path
         slug: str
 
     c = C()
     c.base_dir = base_dir
     c.repo_root_dir = base_dir
     c.raw_dir = base_dir / "raw"
-    c.md_dir = base_dir / "book"
+    c.book_dir = base_dir / "book"
     c.slug = "dummy"
     return c
 

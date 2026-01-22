@@ -13,7 +13,7 @@ class _Ctx:
         self.repo_root_dir = base
         self.base_dir = base
         self.raw_dir = base / "raw"
-        self.md_dir = base / "book"
+        self.book_dir = base / "book"
         self.slug = slug
 
 
@@ -85,7 +85,7 @@ def test_convert_markdown_without_pdfs_returns_existing_book_md(tmp_path: Path, 
     ctx.raw_dir.mkdir(parents=True, exist_ok=True)
 
     # BOOK con un contenuto preesistente
-    (ctx.md_dir / "foo.md").write_text("# Foo\n\n", encoding="utf-8")
+    (ctx.book_dir / "foo.md").write_text("# Foo\n\n", encoding="utf-8")
 
     # Il converter NON deve essere chiamato quando non ci sono PDF in RAW
     monkeypatch.setattr(

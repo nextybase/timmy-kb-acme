@@ -31,7 +31,7 @@ def test_from_context_ignores_context_dir_overrides(tmp_path: Path) -> None:
         repo_root_dir=workspace_root,
         base_dir=workspace_root,
         raw_dir=outside / "raw",
-        md_dir=outside / "book",
+        book_dir=outside / "book",
         semantic_dir=outside / "semantic",
         logs_dir=outside / "logs",
         config_path=outside / "config" / "config.yaml",

@@ -22,16 +22,16 @@ __all__ = ["ContextPaths", "resolve_context_paths"]
 class ContextPaths:
     repo_root_dir: Path
     raw_dir: Path
-    md_dir: Path
+    book_dir: Path
     slug: str
 
 
 def resolve_context_paths(layout: WorkspaceLayout) -> ContextPaths:
-    """Risoluzione canonica (layout-first) di base/raw/md."""
+    """Risoluzione canonica (layout-first) di repo_root/raw/book."""
     return ContextPaths(
         repo_root_dir=layout.repo_root_dir,
         raw_dir=layout.raw_dir,
-        md_dir=layout.book_dir,
+        book_dir=layout.book_dir,
         slug=layout.slug,
     )
 

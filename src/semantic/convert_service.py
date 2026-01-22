@@ -39,11 +39,11 @@ def convert_markdown(
     start_ts = time.perf_counter()
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
-    repo_root_dir, raw_dir, md_dir = paths.repo_root_dir, paths.raw_dir, paths.md_dir
+    repo_root_dir, raw_dir, book_dir = paths.repo_root_dir, paths.raw_dir, paths.book_dir
     ensure_within(repo_root_dir, raw_dir)
-    ensure_within(repo_root_dir, md_dir)
+    ensure_within(repo_root_dir, book_dir)
 
-    md_dir.mkdir(parents=True, exist_ok=True)
+    book_dir.mkdir(parents=True, exist_ok=True)
 
     discovery = discover_raw_inputs(raw_dir, logger, slug)
     safe_pdfs = list(discovery.safe_pdfs)
@@ -64,7 +64,7 @@ def convert_markdown(
 
     result = _run_markdown_conversion(
         paths,
-        md_dir,
+        book_dir,
         logger,
         safe_pdfs=safe_pdfs,
         discarded_unsafe=discarded_unsafe,
@@ -100,7 +100,7 @@ class _CallConvert(Protocol):
         self,
         func: Any,
         ctx: ContextPaths,
-        md_dir: Path,
+        book_dir: Path,
         *,
         safe_pdfs: Optional[List[Path]] = None,
     ) -> None: ...
@@ -126,13 +126,13 @@ def _converter_supports_safe_pdfs(func: Any) -> bool:
 def _call_convert_md(
     func: Any,
     ctx: ContextPaths,
-    md_dir: Path,
+    book_dir: Path,
     *,
     safe_pdfs: Optional[List[Path]] = None,
 ) -> None:
     """Invoca il converter garantendo un fail-fast coerente se la firma non combacia."""
     if not callable(func):
-        raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=md_dir)
+        raise ConversionError("convert_md target is not callable", slug=ctx.slug, file_path=book_dir)
 
     kwargs: dict[str, Any] = {}
 
@@ -141,8 +141,8 @@ def _call_convert_md(
     except Exception:
         sig = None
 
-    if sig and "md_dir" in sig.parameters:
-        kwargs["md_dir"] = md_dir
+    if sig and "book_dir" in sig.parameters:
+        kwargs["book_dir"] = book_dir
 
     if safe_pdfs is not None:
         if sig is not None:
@@ -159,7 +159,7 @@ def _call_convert_md(
     try:
         func(ctx, **kwargs)
     except TypeError as exc:
-        raise ConversionError(f"convert_md call failed: {exc}", slug=ctx.slug, file_path=md_dir) from exc
+        raise ConversionError(f"convert_md call failed: {exc}", slug=ctx.slug, file_path=book_dir) from exc
 
 
 def _collect_safe_pdfs(raw_dir: Path, logger: logging.Logger, slug: str) -> Tuple[List[Path], int]:
@@ -224,7 +224,7 @@ def _log_conversion_success(
 
 def _run_markdown_conversion(
     paths: ContextPaths,
-    md_dir: Path,
+    book_dir: Path,
     logger: logging.Logger,
     *,
     safe_pdfs: Sequence[Path],
@@ -238,10 +238,10 @@ def _run_markdown_conversion(
     else:
         safe_list = []
 
-    if not safe_list and not any(md_dir.glob("*.md")):
+    if not safe_list and not any(book_dir.glob("*.md")):
         logger.info(
             "semantic.convert.no_files",
-            extra={"slug": slug, "raw_dir": str(paths.raw_dir), "book_dir": str(md_dir)},
+            extra={"slug": slug, "raw_dir": str(paths.raw_dir), "book_dir": str(book_dir)},
         )
         raise ConfigError(
             "Nessun PDF valido trovato in raw/ e nessun contenuto markdown preesistente.",
@@ -253,15 +253,15 @@ def _run_markdown_conversion(
         call_convert = _call_convert_md
 
         if safe_list:
-            call_convert(_convert_md, paths, md_dir, safe_pdfs=safe_list)
-            content_mds = cast(List[Path], list_content_markdown(md_dir))
+            call_convert(_convert_md, paths, book_dir, safe_pdfs=safe_list)
+            content_mds = cast(List[Path], list_content_markdown(book_dir))
         else:
-            content_mds = cast(List[Path], list_content_markdown(md_dir))
+            content_mds = cast(List[Path], list_content_markdown(book_dir))
             user_content = [p for p in content_mds if p.name not in {"README.md", "SUMMARY.md"}]
             if not user_content:
                 logger.info(
                     "semantic.convert.no_files",
-                    extra={"slug": slug, "raw_dir": str(paths.raw_dir), "book_dir": str(md_dir)},
+                    extra={"slug": slug, "raw_dir": str(paths.raw_dir), "book_dir": str(book_dir)},
                 )
                 raise ConfigError(
                     "Nessun PDF valido trovato in raw/ e nessun contenuto markdown preesistente.",
@@ -288,7 +288,7 @@ def _run_markdown_conversion(
             raise ConversionError(
                 "La conversione non ha prodotto Markdown di contenuto (solo README/SUMMARY).",
                 slug=slug,
-                file_path=md_dir,
+                file_path=book_dir,
             )
 
         if discarded_unsafe > 0:

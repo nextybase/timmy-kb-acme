@@ -17,15 +17,15 @@ class _Ctx:
         self.repo_root_dir = base
         self.base_dir = base
         self.raw_dir = base / "raw"
-        self.md_dir = base / "book"
+        self.book_dir = base / "book"
         self.slug = slug
 
 
 def test_validate_markdown_dir_missing_has_slug_and_file_path(tmp_path: Path):
     ctx = _Ctx(tmp_path, slug="dummy")
-    # md_dir mancante
+    # book_dir mancante
     with pytest.raises(PipelineError) as ei:
-        cu.validate_markdown_dir(ctx, md_dir=tmp_path / "book-missing")
+        cu.validate_markdown_dir(ctx, book_dir=tmp_path / "book-missing")
     err = ei.value
     assert getattr(err, "slug", None) == "dummy"
     assert Path(getattr(err, "file_path", "")) == (tmp_path / "book-missing")
@@ -36,7 +36,7 @@ def test_validate_markdown_dir_not_directory_has_slug_and_file_path(tmp_path: Pa
     file_path = tmp_path / "book-file"
     file_path.write_text("x", encoding="utf-8")
     with pytest.raises(PipelineError) as ei:
-        cu.validate_markdown_dir(ctx, md_dir=file_path)
+        cu.validate_markdown_dir(ctx, book_dir=file_path)
     err = ei.value
     assert getattr(err, "slug", None) == "dummy"
     assert Path(getattr(err, "file_path", "")) == file_path
@@ -50,7 +50,7 @@ def test_validate_markdown_dir_traversal_includes_slug_in_message(tmp_path: Path
 
     ctx = _Ctx(base, slug="dummy")
     with pytest.raises(PipelineError) as ei:
-        cu.validate_markdown_dir(ctx, md_dir=outside)
+        cu.validate_markdown_dir(ctx, book_dir=outside)
 
     err = ei.value
     assert getattr(err, "slug", None) == "dummy"

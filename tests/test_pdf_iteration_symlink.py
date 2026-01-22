@@ -17,7 +17,7 @@ class _Ctx:
         self.base_dir = base
         self.repo_root_dir = base
         self.raw_dir = base / "raw"
-        self.md_dir = base / "book"
+        self.book_dir = base / "book"
         self.slug = slug
 
 
@@ -72,7 +72,7 @@ def test_convert_markdown_treats_only_symlinks_as_no_pdfs(tmp_path: Path):
     logger = _NoopLogger()
 
     raw = ctx.raw_dir
-    book = ctx.md_dir
+    book = ctx.book_dir
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
 
@@ -99,9 +99,9 @@ def test_convert_markdown_raises_when_only_readme_summary_with_pdfs(tmp_path: Pa
     ctx.raw_dir.mkdir(parents=True, exist_ok=True)
     (ctx.raw_dir / "doc.pdf").write_bytes(b"%PDF-1.4\n%\n")
     # BOOK con soli README/SUMMARY
-    ctx.md_dir.mkdir(parents=True, exist_ok=True)
-    (ctx.md_dir / "README.md").write_text("# R\n", encoding="utf-8")
-    (ctx.md_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
+    ctx.book_dir.mkdir(parents=True, exist_ok=True)
+    (ctx.book_dir / "README.md").write_text("# R\n", encoding="utf-8")
+    (ctx.book_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
 
     # Falsifica converter a no-op
     monkeypatch.setattr(convert_service, "_call_convert_md", lambda *a, **k: None)

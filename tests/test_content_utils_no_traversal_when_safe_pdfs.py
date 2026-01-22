@@ -25,7 +25,7 @@ class _LayoutCtx:
         return self._layout.raw_dir
 
     @property
-    def md_dir(self) -> Path:
+    def book_dir(self) -> Path:
         return self._layout.book_dir
 
 
@@ -86,7 +86,7 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
 
     # Esegue la conversione passando safe_pdfs (niente traversal legacy)
     ctx = _ctx(base)
-    cu.convert_files_to_structured_markdown(ctx, md_dir=book, safe_pdfs=safe_pdfs)
+    cu.convert_files_to_structured_markdown(ctx, book_dir=book, safe_pdfs=safe_pdfs)
 
     # File attesi: un markdown per ogni PDF (stessa struttura delle cartelle raw/)
     expected = {
@@ -112,6 +112,6 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
     assert "deep.pdf" in deep_txt
 
     # Idempotenza: seconda esecuzione non cambia i file generati e non esplora legacy
-    cu.convert_files_to_structured_markdown(ctx, md_dir=book, safe_pdfs=safe_pdfs)
+    cu.convert_files_to_structured_markdown(ctx, book_dir=book, safe_pdfs=safe_pdfs)
     produced2 = set(book.rglob("*.md")) - {book / "README.md", book / "SUMMARY.md"}
     assert produced2 == produced

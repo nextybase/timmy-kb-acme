@@ -35,7 +35,7 @@ def test_convert_markdown_passes_safe_pdfs_when_supported(tmp_path, monkeypatch,
     called = {"ok": False, "safe_pdfs_len": -1}
 
     # Converter *compatibile* con safe_pdfs
-    def _convert_md_stub(_ctx, *, md_dir=None, safe_pdfs=None):
+    def _convert_md_stub(_ctx, *, book_dir=None, safe_pdfs=None):
         called["ok"] = True
         called["safe_pdfs_len"] = len(safe_pdfs or [])
         # non scriviamo su disco: simuliamo contenuti disponibili

@@ -90,7 +90,7 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
     ctx = type(
         "C",
         (),
-        {"base_dir": base, "repo_root_dir": base, "raw_dir": raw, "md_dir": book, "slug": "dummy"},
+        {"base_dir": base, "repo_root_dir": base, "raw_dir": raw, "book_dir": book, "slug": "dummy"},
     )()
     caplog.set_level(logging.WARNING)
     convert_files_to_structured_markdown(ctx)
