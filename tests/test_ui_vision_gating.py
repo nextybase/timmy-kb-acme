@@ -42,6 +42,7 @@ def test_ui_gating_hash_file_and_block_then_force(
     slug = dummy_workspace["slug"]
     mapping_path = dummy_workspace["semantic_mapping"]
     ctx = dummy_ctx
+    ctx.repo_root_dir = base
     logger = dummy_logger
 
     mem = _Mem()

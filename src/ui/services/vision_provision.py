@@ -223,29 +223,15 @@ def provision_from_vision_with_config(
         }
     """
     repo_root_dir = getattr(ctx, "repo_root_dir", None)
-    pdf_path = Path(pdf_path)
-
-    # In UI (specie in local/dev), il ClientContext puo' essere valido ma senza repo_root_dir.
-    # In quel caso inferiamo repo_root_dir dal path del PDF (tipicamente <base>/config/<file>.pdf)
-    # e passiamo un proxy a run_vision_with_gating senza mutare ctx (spesso frozen).
-    ctx_for_run: Any = ctx
     if not repo_root_dir:
-        inferred_base = pdf_path.parent
-        if inferred_base.name == "config":
-            inferred_base = inferred_base.parent
-
-        class _CtxProxy:
-            def __init__(self, inner: Any, repo_root_dir: Path) -> None:
-                self._inner = inner
-                self.repo_root_dir = repo_root_dir
-
-            def __getattr__(self, name: str) -> Any:
-                return getattr(self._inner, name)
-
-        ctx_for_run = _CtxProxy(ctx, inferred_base)
-
+        raise ConfigError(
+            "Beta strict richiede ctx.repo_root_dir; vietata inferenza da input path. "
+            "Fornire workspace root/slug/cx canonico.",
+            slug=slug,
+        )
+    pdf_path = Path(pdf_path)
     return run_vision_with_gating(
-        ctx_for_run,
+        ctx,
         logger,
         slug=slug,
         pdf_path=pdf_path,
@@ -274,13 +260,14 @@ def run_vision(
     eff_logger = logger or get_structured_logger("ui.vision.service")
     pdf_path = Path(pdf_path)
     repo_root_dir = getattr(ctx, "repo_root_dir", None)
-    safe_pdf: Path = pdf_path
-    safe_yaml: Optional[Path] = None
-    if repo_root_dir is not None:
-        safe_pdf = cast(Path, ensure_within_and_resolve(repo_root_dir, pdf_path))
-        safe_yaml = _vision_yaml_path(repo_root_dir, pdf_path=safe_pdf)
-    else:
-        safe_yaml = safe_pdf.parent / "visionstatement.yaml"
+    if not repo_root_dir:
+        raise ConfigError(
+            "Beta strict richiede ctx.repo_root_dir; vietata inferenza da input path. "
+            "Fornire workspace root/slug/cx canonico.",
+            slug=slug,
+        )
+    safe_pdf = cast(Path, ensure_within_and_resolve(repo_root_dir, pdf_path))
+    safe_yaml = ensure_within_and_resolve(repo_root_dir, _vision_yaml_path(repo_root_dir, pdf_path=safe_pdf))
     if safe_yaml is not None and not safe_yaml.exists():
         raise ConfigError(
             "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
