@@ -161,7 +161,7 @@ Checklist minima per una pagina nuova:
 2. Usa i campi `layout.raw_dir`, `layout.semantic_dir`, `layout.tags_db` e `layout.vision_pdf` per qualsiasi accesso ai file.
 3. Valida tramite `pipeline.path_utils.ensure_within_and_resolve` e scrivi con helper atomici (`safe_write_text`, `safe_write_bytes`, ecc.).
 
-> Gli helper legacy `resolve_raw_dir` e `workspace_root` seguono ancora la firma compatibile, ma non devono essere usati nei nuovi modules che già hanno il layout; preferisci sempre `layout.raw_dir`/`layout.base_dir`.
+> Gli helper legacy `resolve_raw_dir` e `workspace_root` seguono ancora la firma compatibile, ma non devono essere usati nei nuovi modules che già hanno il layout; preferisci sempre `layout.raw_dir`/`layout.repo_root_dir` (root canonica).
 
 ### Workspace root (REPO_ROOT_DIR / WORKSPACE_ROOT_DIR)
 

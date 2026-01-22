@@ -43,7 +43,7 @@ def _load_spacy(model_name: str) -> Any:
 
 def run_doc_entities_pipeline(
     *,
-    base_dir: Path,
+    repo_root_dir: Path,
     raw_dir: Path,
     semantic_dir: Path,
     db_path: Path,
@@ -55,7 +55,7 @@ def run_doc_entities_pipeline(
     log = logger or LOG
     backend_env = (os.getenv("TAGS_NLP_BACKEND") or "").strip().lower()
     strict_spacy = backend_env == "spacy"
-    workspace_root = base_dir
+    workspace_root = repo_root_dir
     try:
         cfg = load_semantic_config(workspace_root)
     except Exception as exc:  # pragma: no cover
@@ -87,16 +87,17 @@ def run_doc_entities_pipeline(
         log.warning("semantic.entities.spacy_unavailable", extra={"error": str(exc)})
         return {"entities_written": 0}
 
-    raw_dir = ensure_within_and_resolve(base_dir, raw_dir)
-    db_path = ensure_within_and_resolve(base_dir, db_path)
-    semantic_dir = ensure_within_and_resolve(base_dir, semantic_dir)
-    ensure_within(base_dir, raw_dir)
-    ensure_within(base_dir, semantic_dir)
-    ensure_within(base_dir, db_path)
+    perimeter_root = repo_root_dir
+    raw_dir = ensure_within_and_resolve(perimeter_root, raw_dir)
+    db_path = ensure_within_and_resolve(perimeter_root, db_path)
+    semantic_dir = ensure_within_and_resolve(perimeter_root, semantic_dir)
+    ensure_within(perimeter_root, raw_dir)
+    ensure_within(perimeter_root, semantic_dir)
+    ensure_within(perimeter_root, db_path)
 
     hits_to_save: list[DocEntityHit] = []
     for pdf_path in iter_safe_pdfs(raw_dir):
-        rel_uid = pdf_path.relative_to(base_dir).as_posix()
+        rel_uid = pdf_path.relative_to(repo_root_dir).as_posix()
         try:
             text = _read_document_text(pdf_path)
         except Exception as exc:

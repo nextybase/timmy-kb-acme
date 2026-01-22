@@ -236,7 +236,7 @@ def main() -> int:
         root = Path(OUTPUT_DIR_NAME)
         candidate = root / f"{REPO_NAME_PREFIX}{slug}"
         workspace = ensure_within_and_resolve(root, candidate)
-    store = KbStore.for_slug(slug=slug, base_dir=workspace)
+    store = KbStore.for_slug(slug=slug, repo_root_dir=workspace)
     scope = str(args.scope or DEF_SCOPE).strip() or DEF_SCOPE
     base_dir = Path(".").resolve()
 

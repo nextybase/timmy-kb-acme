@@ -126,7 +126,7 @@ def _bench_semantic_index() -> Tuple[
 
     @dataclass
     class Ctx:
-        base_dir: "Path"
+        repo_root_dir: "Path"
         raw_dir: "Path"
         book_dir: "Path"
         slug: str
@@ -161,7 +161,7 @@ def _bench_semantic_index() -> Tuple[
         _prepare_md(book, n)
         _prepare_raw_pdfs(raw_dir, n)
         clear_iter_safe_pdfs_cache(root=raw_dir)
-        ctx = Ctx(base_dir=base, raw_dir=base / "raw", book_dir=book, slug=slug)
+        ctx = Ctx(repo_root_dir=base, raw_dir=base / "raw", book_dir=book, slug=slug)
         logger = logging.getLogger(f"bench.semantic.{label}")
 
         def _run(client: Any) -> int:

@@ -268,15 +268,16 @@ def scan_raw_to_db(
     raw_dir: str | Path,
     db_path: str | Path,
     *,
-    base_dir: Path | None = None,
+    repo_root_dir: Path | None = None,
 ) -> dict[str, int]:
     """Indicizza cartelle e PDF di `raw/` dentro il DB (schema v2)."""
 
-    base_dir_path = Path(base_dir).resolve() if base_dir is not None else Path(raw_dir).resolve().parent
+    repo_root_dir_path = Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(raw_dir).resolve().parent
+    perimeter_root = repo_root_dir_path
 
-    raw_dir_path = ensure_within_and_resolve(base_dir_path, raw_dir)
+    raw_dir_path = ensure_within_and_resolve(perimeter_root, raw_dir)
 
-    db_path_path = ensure_within_and_resolve(base_dir_path, db_path)
+    db_path_path = ensure_within_and_resolve(perimeter_root, db_path)
 
     ensure_schema_v2(str(db_path_path))
 
@@ -347,7 +348,7 @@ def run_nlp_to_db(
     raw_dir: Path | str,
     db_path: str | Path,
     *,
-    base_dir: Path | None = None,
+    repo_root_dir: Path | None = None,
     lang: str = "it",
     topn_doc: int = 20,
     topk_folder: int = 30,
@@ -361,11 +362,12 @@ def run_nlp_to_db(
 ) -> dict[str, Any]:
     """Esegue estrazione keyword, clustering e aggregazione per cartella."""
 
-    base_dir_path = Path(base_dir).resolve() if base_dir is not None else Path(raw_dir).resolve().parent
+    repo_root_dir_path = Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(raw_dir).resolve().parent
+    perimeter_root = repo_root_dir_path
 
-    raw_dir_path = ensure_within_and_resolve(base_dir_path, raw_dir)
+    raw_dir_path = ensure_within_and_resolve(perimeter_root, raw_dir)
 
-    db_path_path = ensure_within_and_resolve(base_dir_path, db_path)
+    db_path_path = ensure_within_and_resolve(perimeter_root, db_path)
 
     ensure_schema_v2(str(db_path_path))
 
@@ -412,9 +414,9 @@ def run_nlp_to_db(
             from semantic.entities_runner import run_doc_entities_pipeline
 
             ent_stats = run_doc_entities_pipeline(
-                base_dir=base_dir_path,
+                repo_root_dir=repo_root_dir_path,
                 raw_dir=raw_dir_path,
-                semantic_dir=base_dir_path / "semantic",
+                semantic_dir=repo_root_dir_path / "semantic",
                 db_path=db_path_path,
                 logger=log,
             )
@@ -782,12 +784,13 @@ def _resolve_cli_paths(
 
     layout = _require_layout(context)
     repo_root_dir = layout.repo_root_dir
+    perimeter_root = repo_root_dir
     raw_candidate = Path(raw_override) if raw_override else layout.raw_dir
-    raw_dir = ensure_within_and_resolve(repo_root_dir, raw_candidate)
-    semantic_dir = ensure_within_and_resolve(repo_root_dir, layout.semantic_dir)
+    raw_dir = ensure_within_and_resolve(perimeter_root, raw_candidate)
+    semantic_dir = ensure_within_and_resolve(perimeter_root, layout.semantic_dir)
 
     db_candidate = Path(db_override) if db_override else (semantic_dir / "tags.db")
-    db_path = ensure_within_and_resolve(repo_root_dir, db_candidate)
+    db_path = ensure_within_and_resolve(perimeter_root, db_candidate)
 
     return repo_root_dir, raw_dir, db_path, semantic_dir
 
@@ -974,12 +977,12 @@ def main(args: argparse.Namespace) -> int | None:
                 stage="scan_raw",
                 bootstrap_config=False,
             )
-            base_dir, raw_dir, db_path, _ = _resolve_cli_paths(
+            repo_root_dir, raw_dir, db_path, _ = _resolve_cli_paths(
                 ctx,
                 raw_override=args.raw_dir,
                 db_override=args.db,
             )
-            stats = scan_raw_to_db(raw_dir, db_path, base_dir=base_dir)
+            stats = scan_raw_to_db(raw_dir, db_path, repo_root_dir=repo_root_dir)
             log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
             log.info("cli.tag_onboarding.scan_completed", extra=stats)
             return 0
@@ -992,7 +995,7 @@ def main(args: argparse.Namespace) -> int | None:
                 stage="nlp",
                 bootstrap_config=False,
             )
-            base_dir, raw_dir, db_path, _ = _resolve_cli_paths(
+            repo_root_dir, raw_dir, db_path, _ = _resolve_cli_paths(
                 ctx,
                 raw_override=args.raw_dir,
                 db_override=args.db,
@@ -1003,7 +1006,7 @@ def main(args: argparse.Namespace) -> int | None:
                 slug,
                 raw_dir,
                 db_path,
-                base_dir=base_dir,
+                repo_root_dir=repo_root_dir,
                 lang=lang,
                 topn_doc=int(args.topn_doc),
                 topk_folder=int(args.topk_folder),

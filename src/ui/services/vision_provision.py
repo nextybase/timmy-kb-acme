@@ -81,9 +81,9 @@ def resolve_vision_retention_days(ctx: Any) -> int:
 # -----------------------------
 # Utilità hash e idempotenza
 # -----------------------------
-def _sha256_of_file(base_dir: Path, path: Path, chunk_size: int = 8192) -> str:
+def _sha256_of_file(perimeter_root: Path, path: Path, chunk_size: int = 8192) -> str:
     """Calcola l'hash del PDF con path-safety garantita."""
-    safe_path = ensure_within_and_resolve(base_dir, path)
+    safe_path = ensure_within_and_resolve(perimeter_root, path)
     h = hashlib.sha256()
     with safe_path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(chunk_size), b""):
@@ -91,49 +91,52 @@ def _sha256_of_file(base_dir: Path, path: Path, chunk_size: int = 8192) -> str:
     return h.hexdigest()
 
 
-def _semantic_dir(base_dir: Path) -> Path:
-    sdir = ensure_within_and_resolve(base_dir, base_dir / "semantic")
+def _semantic_dir(repo_root_dir: Path) -> Path:
+    perimeter_root = repo_root_dir
+    sdir = ensure_within_and_resolve(perimeter_root, repo_root_dir / "semantic")
     return cast(Path, sdir)
 
 
-def _hash_sentinel(base_dir: Path) -> Path:
+def _hash_sentinel(repo_root_dir: Path) -> Path:
     # Sentinel contrattuale dei test: .vision_hash (formato JSON)
-    path = ensure_within_and_resolve(_semantic_dir(base_dir), _semantic_dir(base_dir) / ".vision_hash")
+    semantic_dir = _semantic_dir(repo_root_dir)
+    path = ensure_within_and_resolve(semantic_dir, semantic_dir / ".vision_hash")
     return cast(Path, path)
 
 
-def _artifacts_paths(base_dir: Path) -> VisionArtifacts:
-    sdir = _semantic_dir(base_dir)
+def _artifacts_paths(repo_root_dir: Path) -> VisionArtifacts:
+    sdir = _semantic_dir(repo_root_dir)
     mapping = ensure_within_and_resolve(sdir, sdir / "semantic_mapping.yaml")
     return VisionArtifacts(mapping_yaml=cast(Path, mapping))
 
 
-def _vision_yaml_path(base_dir: Path, *, pdf_path: Optional[Path] = None) -> Path:
-    base = Path(base_dir)
+def _vision_yaml_path(repo_root_dir: Path, *, pdf_path: Optional[Path] = None) -> Path:
+    perimeter_root = repo_root_dir
+    base = Path(repo_root_dir)
     candidate = (
         (pdf_path.parent / "visionstatement.yaml")
         if pdf_path is not None
         else (base / "config" / "visionstatement.yaml")
     )
-    resolved = ensure_within_and_resolve(base, candidate)
+    resolved = ensure_within_and_resolve(perimeter_root, candidate)
     return cast(Path, resolved)
 
 
-def _artifacts_exist(base_dir: Path) -> bool:
-    art = _artifacts_paths(base_dir)
+def _artifacts_exist(repo_root_dir: Path) -> bool:
+    art = _artifacts_paths(repo_root_dir)
     return art.mapping_yaml.exists()
 
 
-def _load_last_hash(base_dir: Path) -> Optional[Dict[str, Any]]:
+def _load_last_hash(repo_root_dir: Path) -> Optional[Dict[str, Any]]:
     """
     Legge il sentinel JSON se presente.
     Ritorna un dict con almeno {"hash": str, "model": str, "ts": str} oppure None.
     """
-    path = _hash_sentinel(base_dir)
+    path = _hash_sentinel(repo_root_dir)
     if not path.exists():
         return None
     try:
-        raw = cast(str, read_text_safe(base_dir, path, encoding="utf-8"))
+        raw = cast(str, read_text_safe(repo_root_dir, path, encoding="utf-8"))
         data = json.loads(raw)
         return data if isinstance(data, dict) else None
     except Exception as exc:
@@ -145,14 +148,14 @@ def _load_last_hash(base_dir: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _save_hash(base_dir: Path, *, digest: str, model: str) -> None:
+def _save_hash(repo_root_dir: Path, *, digest: str, model: str) -> None:
     from datetime import datetime, timezone
 
     payload = json.dumps(
         {"hash": digest, "model": model, "ts": datetime.now(timezone.utc).isoformat()},
         ensure_ascii=False,
     )
-    safe_write_text(_hash_sentinel(base_dir), payload + "\n")
+    safe_write_text(_hash_sentinel(repo_root_dir), payload + "\n")
 
 
 def _ensure_structured_output_and_prompt(ctx: Any, *, slug: str) -> None:

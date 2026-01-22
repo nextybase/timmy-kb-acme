@@ -39,7 +39,7 @@ def discover_candidates(
     list_folders: ListFoldersFn,
     list_pdfs: ListPdfsFn,
     ensure_dest: EnsureDestFn,
-    base_dir: Path,
+    perimeter_root: Path,
     local_root: Path,
     logger: Optional[Any] = None,
 ) -> list[DriveCandidate]:
@@ -74,7 +74,7 @@ def discover_candidates(
             name = f"{name}.pdf"
         remote_size = int(file_info.get("size") or 0)
         try:
-            dest = ensure_dest(base_dir, local_root, list(rel_parts), name)
+            dest = ensure_dest(perimeter_root, local_root, list(rel_parts), name)
         except Exception as exc:
             invalid.append(
                 {

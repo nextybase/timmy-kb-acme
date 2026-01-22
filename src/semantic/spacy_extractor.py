@@ -185,7 +185,7 @@ def extract_spacy_tags(
 
     Ritorna un dict: relative_path -> {tags, entities, keyphrases, score, sources}
     """
-    layout = WorkspaceLayout.from_workspace(cfg.base_dir)
+    layout = WorkspaceLayout.from_workspace(cfg.repo_root_dir)
     raw_dir = layout.raw_dir
     lexicon = build_lexicon(cfg.mapping)
     if not lexicon:

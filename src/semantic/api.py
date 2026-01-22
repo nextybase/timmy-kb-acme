@@ -31,7 +31,9 @@ class ConvertStage(Protocol):
 
 
 class VocabStage(Protocol):
-    def __call__(self, base_dir: Path, logger: logging.Logger, *, slug: str) -> Dict[str, Dict[str, Sequence[str]]]: ...
+    def __call__(
+        self, repo_root_dir: Path, logger: logging.Logger, *, slug: str
+    ) -> Dict[str, Dict[str, Sequence[str]]]: ...
 
 
 class EnrichStage(Protocol):
@@ -85,26 +87,28 @@ def get_paths(slug: str) -> Dict[str, Path]:
     }
 
 
-def load_reviewed_vocab(base_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Sequence[str]]]:
-    return cast(Dict[str, Dict[str, Sequence[str]]], _load_reviewed_vocab(base_dir, logger, strict=True))
+def load_reviewed_vocab(repo_root_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Sequence[str]]]:
+    return cast(Dict[str, Dict[str, Sequence[str]]], _load_reviewed_vocab(repo_root_dir, logger, strict=True))
 
 
-def require_reviewed_vocab(base_dir: Path, logger: logging.Logger, *, slug: str) -> Dict[str, Dict[str, Sequence[str]]]:
+def require_reviewed_vocab(
+    repo_root_dir: Path, logger: logging.Logger, *, slug: str
+) -> Dict[str, Dict[str, Sequence[str]]]:
     """Restituisce il vocabolario canonico e solleva ConfigError se mancante (fail-fast)."""
-    return _require_reviewed_vocab(base_dir, logger, slug=slug)
+    return _require_reviewed_vocab(repo_root_dir, logger, slug=slug)
 
 
 def _require_reviewed_vocab(
-    base_dir: Path,
+    repo_root_dir: Path,
     logger: logging.Logger,
     *,
     slug: str,
 ) -> Dict[str, Dict[str, Sequence[str]]]:
     """Restituisce il vocabolario canonico o solleva ConfigError se assente (fail-fast)."""
-    vocab = load_reviewed_vocab(base_dir, logger)
+    vocab = load_reviewed_vocab(repo_root_dir, logger)
     if vocab:
         return vocab
-    tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
+    tags_db = Path(_derive_tags_db_path(repo_root_dir / "semantic" / "tags_reviewed.yaml"))
     raise ConfigError(
         "Vocabolario canonico assente. Esegui l'estrazione tag per popolare semantic/tags.db.",
         slug=slug,
@@ -158,8 +162,9 @@ def export_tags_yaml_from_db(
             file_path=str(semantic_dir),
         )
 
-    base_root_path = layout.repo_root_dir
-    semantic_dir_path = ensure_within_and_resolve(base_root_path, Path(semantic_dir))
+    repo_root_dir = layout.repo_root_dir
+    perimeter_root = repo_root_dir
+    semantic_dir_path = ensure_within_and_resolve(perimeter_root, Path(semantic_dir))
     if semantic_dir_path != layout.semantic_dir:
         raise ConfigError(
             "semantic_dir non coerente con il workspace canonico.",
@@ -170,7 +175,7 @@ def export_tags_yaml_from_db(
         semantic_dir_path,
         Path(_derive_tags_db_path(yaml_path)),
     )
-    actual_db_path = ensure_within_and_resolve(base_root_path, Path(db_path))
+    actual_db_path = ensure_within_and_resolve(perimeter_root, Path(db_path))
     if actual_db_path != expected_db_path:
         raise ConfigError(
             "Percorso DB non coerente con la directory semantic specificata.",
@@ -347,7 +352,7 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
         logger = get_structured_logger("semantic.book", context={"slug": slug})
     start_ts = time.perf_counter()
     with phase_scope(logger, stage="build_markdown_book", customer=slug) as m:
-        _base_dir, mds, touched = _run_build_workflow(context, logger, slug=slug, stage_wrapper=None)
+        _repo_root_dir, mds, touched = _run_build_workflow(context, logger, slug=slug, stage_wrapper=None)
         try:
             # Artifacts = numero di MD di contenuto (coerente con convert_markdown)
             m.set_artifacts(len(mds))
@@ -387,12 +392,12 @@ def index_markdown_to_db(
         layout = WorkspaceLayout.from_context(cast(Any, context))
     repo_root_dir = layout.repo_root_dir
     book_dir = layout.book_dir
-    store = KbStore.for_slug(slug=slug, base_dir=repo_root_dir, db_path=db_path)
+    store = KbStore.for_slug(slug=slug, repo_root_dir=repo_root_dir, db_path=db_path)
     effective_db_path = store.effective_db_path()
     return cast(
         int,
         embedding_service.index_markdown_to_db(
-            base_dir=repo_root_dir,
+            repo_root_dir=repo_root_dir,
             book_dir=book_dir,
             slug=slug,
             logger=logger,

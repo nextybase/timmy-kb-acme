@@ -94,8 +94,8 @@ def get_db_path() -> Path:
 def connect_from_store(store: "KbStore") -> Iterator[sqlite3.Connection]:
     """Convenience wrapper: apre una connessione usando il path risolto da KbStore.
 
-    Se lo store e' legato a un workspace/slug, usa `base_dir/semantic/kb.sqlite`;
-    in assenza di base_dir o override, fallisce (nessun fallback globale).
+    Se lo store e' legato a un workspace/slug, usa `repo_root_dir/semantic/kb.sqlite`;
+    in assenza di repo_root_dir o override, fallisce (nessun fallback globale).
     """
     return connect(db_path=store.effective_db_path())
 

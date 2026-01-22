@@ -109,7 +109,7 @@ def main() -> None:
         root = Path(OUTPUT_DIR_NAME)
         workspace = ensure_within_and_resolve(root, root / f"{REPO_NAME_PREFIX}{args.slug}")
 
-    store = KbStore.for_slug(slug=args.slug, base_dir=workspace, db_path=args.db)
+    store = KbStore.for_slug(slug=args.slug, repo_root_dir=workspace, db_path=args.db)
     db_path = store.effective_db_path()
 
     rows: list[BenchRow] = []

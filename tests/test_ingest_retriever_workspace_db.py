@@ -31,7 +31,7 @@ def test_ingest_and_search_use_workspace_db(dummy_workspace: dict[str, Path], mo
     slug: str = dummy_workspace["slug"]
     ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
 
-    store = KbStore.for_slug(slug=slug, base_dir=base)
+    store = KbStore.for_slug(slug=slug, repo_root_dir=base)
     db_path = store.effective_db_path()
     assert base / "semantic" in db_path.parents or "semantic" in db_path.parts
 
@@ -52,7 +52,7 @@ def test_ingest_and_search_use_workspace_db(dummy_workspace: dict[str, Path], mo
         meta={"slug": slug},
         embeddings_client=dummy_embeddings,
         context=ctx,
-        base_dir=base,
+        repo_root_dir=base,
         db_path=db_path,
     )
     assert inserted > 0
@@ -78,7 +78,7 @@ def test_lineage_persisted_in_ingest_path(dummy_workspace: dict[str, Path], monk
     slug: str = dummy_workspace["slug"]
     ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
 
-    store = KbStore.for_slug(slug=slug, base_dir=base)
+    store = KbStore.for_slug(slug=slug, repo_root_dir=base)
     db_path = store.effective_db_path()
 
     content_path = base / "raw" / "lineage_ingest.md"
@@ -98,7 +98,7 @@ def test_lineage_persisted_in_ingest_path(dummy_workspace: dict[str, Path], monk
         meta={"slug": slug},
         embeddings_client=dummy_embeddings,
         context=ctx,
-        base_dir=base,
+        repo_root_dir=base,
         db_path=db_path,
     )
     assert inserted > 0

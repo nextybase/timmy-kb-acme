@@ -26,7 +26,7 @@ def test_render_tags_csv_happy_path(dummy_workspace):
     sem: Path = dummy_workspace["semantic_mapping"].parent
     csv_path = sem / "tags_raw.csv"
 
-    render_tags_csv(_candidates_min(), csv_path, base_dir=base)
+    render_tags_csv(_candidates_min(), csv_path, perimeter_root=base)
 
     assert csv_path.exists()
     text = csv_path.read_text(encoding="utf-8")
@@ -39,4 +39,4 @@ def test_render_tags_csv_blocks_outside_base(dummy_workspace):
     outside_csv = base.parent / "outside.csv"
 
     with pytest.raises(PathTraversalError):
-        render_tags_csv(_candidates_min(), outside_csv, base_dir=base)
+        render_tags_csv(_candidates_min(), outside_csv, perimeter_root=base)

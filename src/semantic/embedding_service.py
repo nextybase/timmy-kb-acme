@@ -411,7 +411,7 @@ def _persist_markdown_embeddings(
 
 def index_markdown_to_db(
     *,
-    base_dir: Path,
+    repo_root_dir: Path,
     book_dir: Path,
     slug: str,
     logger: logging.Logger,
@@ -421,7 +421,7 @@ def index_markdown_to_db(
     chunk_records: Sequence[ChunkRecord] | None = None,
 ) -> int:
     """Indicizza i Markdown presenti in `book_dir` nel DB con embeddings."""
-    ensure_within(base_dir, book_dir)
+    ensure_within(repo_root_dir, book_dir)
     book_dir.mkdir(parents=True, exist_ok=True)
 
     start_ts = time.perf_counter()

@@ -26,30 +26,30 @@ class KbStore:
 
     Design:
     - Supporta solo i DB per workspace/slug.
-    - La risoluzione del path è centralizzata qui: i call-site lavorano solo con slug/base_dir
+    - La risoluzione del path è centralizzata qui: i call-site lavorano solo con slug/repo_root_dir
       o override espliciti.
     """
 
     slug: Optional[str] = None
-    base_dir: Optional[Path] = None
+    repo_root_dir: Optional[Path] = None
     db_path_override: Optional[Path] = None
 
     @classmethod
     @classmethod
-    def for_slug(cls, slug: str, *, base_dir: Optional[Path] = None, db_path: Optional[Path] = None) -> "KbStore":
+    def for_slug(cls, slug: str, *, repo_root_dir: Optional[Path] = None, db_path: Optional[Path] = None) -> "KbStore":
         """
         Costruisce uno store per uno slug/workspace specifico.
 
         Comportamento:
         - Se `db_path` è valorizzato: verrà usato come override esplicito (tipico dei test).
-        - Se `db_path` è None ma `base_dir` è valorizzato: verrà usato `base_dir/semantic/kb.sqlite`
+        - Se `db_path` è None ma `repo_root_dir` è valorizzato: verrà usato `repo_root_dir/semantic/kb.sqlite`
           (validato con path-safety).
-        - Se `base_dir` è None: viene sollevato un errore (nessun fallback globale).
+        - Se `repo_root_dir` è None: viene sollevato un errore (nessun fallback globale).
         """
         normalized_slug = slug.strip()
         if not normalized_slug:
             raise ConfigError("KbStore.for_slug: lo slug non può essere vuoto nel flusso 1.0.")
-        return cls(slug=normalized_slug, base_dir=base_dir, db_path_override=db_path)
+        return cls(slug=normalized_slug, repo_root_dir=repo_root_dir, db_path_override=db_path)
 
     def effective_db_path(self) -> Path:
         """
@@ -58,25 +58,27 @@ class KbStore:
         Regole:
         - Se `db_path_override` è valorizzato:
             - se è assoluto: usalo tal quale;
-            - se è relativo e `base_dir` è valorizzato: ancoralo sotto `base_dir` con path-safety;
-            - se è relativo e `base_dir` è None: solleva un errore (nessun fallback globale).
-        - Se non c'è override ma `base_dir` è valorizzato: usa `base_dir/semantic/kb.sqlite`
+            - se è relativo e `repo_root_dir` è valorizzato: ancoralo sotto `repo_root_dir` con path-safety;
+            - se è relativo e `repo_root_dir` è None: solleva un errore (nessun fallback globale).
+        - Se non c'è override ma `repo_root_dir` è valorizzato: usa `repo_root_dir/semantic/kb.sqlite`
           validato con `ensure_within_and_resolve`.
-        - Se non c'è né override né base_dir: alleva un errore (il fallback globale è stato rimosso).
+        - Se non c'è né override né repo_root_dir: alleva un errore (il fallback globale è stato rimosso).
         """
         if self.db_path_override is not None:
             p = Path(self.db_path_override)
             if p.is_absolute():
                 return p.resolve()
-            if self.base_dir is not None:
-                base = Path(self.base_dir).resolve()
-                candidate = base / p
-                return ensure_within_and_resolve(base, candidate)
-            raise ConfigError("KbStore: db_path relativo senza base_dir non è supportato.")
+            if self.repo_root_dir is not None:
+                repo_root_dir = Path(self.repo_root_dir).resolve()
+                perimeter_root = repo_root_dir
+                candidate = repo_root_dir / p
+                return ensure_within_and_resolve(perimeter_root, candidate)
+            raise ConfigError("KbStore: db_path relativo senza repo_root_dir non è supportato.")
 
-        if self.base_dir is not None:
-            base = Path(self.base_dir).resolve()
-            candidate = base / "semantic" / "kb.sqlite"
-            return ensure_within_and_resolve(base, candidate)
+        if self.repo_root_dir is not None:
+            repo_root_dir = Path(self.repo_root_dir).resolve()
+            perimeter_root = repo_root_dir
+            candidate = repo_root_dir / "semantic" / "kb.sqlite"
+            return ensure_within_and_resolve(perimeter_root, candidate)
 
-        raise ConfigError("KbStore richiede slug/base_dir espliciti; il fallback globale è stato rimosso.")
+        raise ConfigError("KbStore richiede slug/repo_root_dir espliciti; il fallback globale è stato rimosso.")

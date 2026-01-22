@@ -144,18 +144,19 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         )
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(cast(Any, context))
-    workspace_root = layout.repo_root_dir
+    repo_root_dir = layout.repo_root_dir
+    perimeter_root = repo_root_dir
     raw_dir = layout.raw_dir
     semantic_dir = layout.semantic_dir
     csv_path = semantic_dir / "tags_raw.csv"
 
-    ensure_within(workspace_root, raw_dir)
-    ensure_within(workspace_root, semantic_dir)
+    ensure_within(perimeter_root, raw_dir)
+    ensure_within(perimeter_root, semantic_dir)
     ensure_within(semantic_dir, csv_path)
 
     with phase_scope(logger, stage="build_tags_csv", customer=slug) as m:
         semantic_dir.mkdir(parents=True, exist_ok=True)
-        cfg = _load_semantic_config(workspace_root)
+        cfg = _load_semantic_config(repo_root_dir)
         candidates = extract_semantic_candidates(raw_dir, cfg)
         candidates = _normalize_tags(candidates, cfg.mapping)
         doc_entities = _collect_doc_entities(candidates)
@@ -189,7 +190,7 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
                 file_path=tags_db_path,
             ) from exc
 
-        _render_tags_csv(candidates, csv_path, base_dir=workspace_root)
+        _render_tags_csv(candidates, csv_path, perimeter_root=perimeter_root)
         count = len(candidates)
         logger.info(
             "semantic.tags_csv.built",

@@ -100,11 +100,11 @@ from semantic.vocab_loader import load_reviewed_vocab
 slug = "acme"
 ctx = ClientContext.load(slug=slug, require_env=True, bootstrap_config=False)
 layout = WorkspaceLayout.from_context(ctx)
-base_dir = layout.base_dir
+repo_root_dir = layout.repo_root_dir
 log = get_structured_logger("docs.semantic", context={"slug": slug})
 
 convert_markdown(ctx, log, slug=slug)
-vocab = load_reviewed_vocab(base_dir, log)
+vocab = load_reviewed_vocab(repo_root_dir, log)
 enrich_frontmatter(ctx, log, vocab, slug=slug, allow_empty_vocab=True)
 write_summary_and_readme(ctx, log, slug=slug)
 PY

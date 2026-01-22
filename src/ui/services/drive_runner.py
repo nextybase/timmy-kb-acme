@@ -64,9 +64,9 @@ def _log_drive_failure(
     logger.error("ui.drive.failure", extra={"reason": reason, **(extra or {})})
 
 
-def _ui_ensure_dest(base_dir: Path, local_root: Path, rel_parts: Sequence[str], filename: str) -> Path:
+def _ui_ensure_dest(perimeter_root: Path, local_root: Path, rel_parts: Sequence[str], filename: str) -> Path:
     target = local_root.joinpath(*rel_parts, filename)
-    return cast(Path, ensure_within_and_resolve(base_dir, target))
+    return cast(Path, ensure_within_and_resolve(perimeter_root, target))
 
 
 def _require_layout_from_context(context: ClientContext) -> WorkspaceLayout:
@@ -327,7 +327,7 @@ def plan_raw_download(
     if not raw_id:
         raise RuntimeError("Cartella 'raw' non trovata sotto la cartella cliente su Drive")
 
-    workspace_dir = layout.repo_root_dir
+    repo_root_dir = layout.repo_root_dir
     local_root_path = layout.raw_dir
     _assert_directory_exists(local_root_path, layout.slug, "raw directory")
 
@@ -349,7 +349,7 @@ def plan_raw_download(
         list_folders=_drive_list_folders,
         list_pdfs=_plan_safe_list_pdfs,
         ensure_dest=_ui_ensure_dest,
-        base_dir=workspace_dir,
+        perimeter_root=repo_root_dir,
         local_root=local_root_path,
         logger=log,
     )
@@ -627,7 +627,7 @@ def download_raw_from_drive_with_progress(
         raise RuntimeError("Cartella 'raw' non trovata sotto la cartella cliente su Drive")
 
     # Local root (raw/)
-    workspace_dir = layout.repo_root_dir
+    repo_root_dir = layout.repo_root_dir
     local_root_dir = layout.raw_dir
     _assert_directory_exists(local_root_dir, layout.slug, "raw directory")
     local_root_path = local_root_dir
@@ -640,7 +640,7 @@ def download_raw_from_drive_with_progress(
         list_folders=_drive_list_folders,
         list_pdfs=_drive_list_pdfs,
         ensure_dest=_ui_ensure_dest,
-        base_dir=workspace_dir,
+        perimeter_root=repo_root_dir,
         local_root=local_root_path,
         logger=log,
     )

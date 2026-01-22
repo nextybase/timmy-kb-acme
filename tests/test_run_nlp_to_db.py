@@ -122,7 +122,7 @@ def test_run_nlp_to_db_rejects_paths_outside_base(tmp_path):
     db_outside = tmp_path.parent / "outside" / "tags.db"
 
     with pytest.raises(PathTraversalError):
-        run_nlp_to_db("dummy", raw_dir, db_outside, base_dir=base_dir)
+        run_nlp_to_db("dummy", raw_dir, db_outside, repo_root_dir=base_dir)
 
 
 def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):

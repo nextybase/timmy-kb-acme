@@ -442,7 +442,7 @@ def handle_tags_raw_enable(
 
 def open_tags_editor_modal(
     slug: str,
-    base_dir: Path,
+    repo_root_dir: Path,
     *,
     st: Any,
     logger: Any,
@@ -454,7 +454,8 @@ def open_tags_editor_modal(
     write_fn: Optional[Callable[..., None]] = None,
     import_yaml_fn: Optional[Callable[..., Any]] = None,
 ) -> None:
-    yaml_path = Path(path_resolver(base_dir, base_dir / "semantic" / "tags_reviewed.yaml"))
+    perimeter_root = repo_root_dir
+    yaml_path = Path(path_resolver(perimeter_root, repo_root_dir / "semantic" / "tags_reviewed.yaml"))
     yaml_parent = yaml_path.parent
     reader = read_fn or read_text_safe
     writer = write_fn or safe_write_text
@@ -554,7 +555,7 @@ def open_tags_editor_modal(
 
 def open_tags_raw_modal(
     slug: str,
-    base_dir: Path,
+    repo_root_dir: Path,
     *,
     st: Any,
     logger: Any,
@@ -568,7 +569,8 @@ def open_tags_raw_modal(
     write_fn: Optional[Callable[..., None]] = None,
     import_yaml_fn: Optional[Callable[..., Any]] = None,
 ) -> None:
-    semantic_dir = Path(path_resolver(base_dir, base_dir / "semantic"))
+    perimeter_root = repo_root_dir
+    semantic_dir = Path(path_resolver(perimeter_root, repo_root_dir / "semantic"))
     csv_path = Path(path_resolver(semantic_dir, semantic_dir / "tags_raw.csv"))
     yaml_path = Path(path_resolver(semantic_dir, semantic_dir / "tags_reviewed.yaml"))
     reader = read_fn or read_text_safe

@@ -119,15 +119,15 @@ def _walk_drive_tree(service: Any, root_id: str) -> Iterable[Tuple[List[str], Di
                 yield (parts, it)
 
 
-def _ensure_dest(base_dir: Path, local_root_dir: Path, rel_parts: List[str], filename: str) -> Path:
+def _ensure_dest(perimeter_root: Path, local_root_dir: Path, rel_parts: List[str], filename: str) -> Path:
     """Prepara il path di destinazione garantendo path-safety STRONG e creazione directory."""
     # Cartella destinazione = local_root_dir / rel_parts...
     dest_dir = (local_root_dir.joinpath(*rel_parts)).resolve()
-    ensure_within(base_dir, dest_dir)
+    ensure_within(perimeter_root, dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     dest_path = (dest_dir / filename).resolve()
-    ensure_within(base_dir, dest_path)
+    ensure_within(perimeter_root, dest_path)
     return dest_path
 
 
@@ -266,7 +266,7 @@ def download_drive_pdfs_to_local(
         list_folders=_list_drive_folders,
         list_pdfs=_list_drive_pdfs,
         ensure_dest=_ensure_dest,
-        base_dir=repo_root_dir,
+        perimeter_root=repo_root_dir,
         local_root=local_root_dir,
         logger=logger,
     )

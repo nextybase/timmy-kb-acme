@@ -102,7 +102,7 @@ def test_write_markdown_for_pdf_preserves_created_at(tmp_path: Path, monkeypatch
 
     target_root = tmp_path / "book"
     cfg = SemanticConfig(
-        base_dir=tmp_path,
+        repo_root_dir=tmp_path,
         semantic_dir=tmp_path / "semantic",
         raw_dir=raw_root,
     )
@@ -137,7 +137,7 @@ def test_write_markdown_for_pdf_uses_cache_when_unchanged(tmp_path: Path, monkey
 
     target_root = tmp_path / "book"
     cfg = SemanticConfig(
-        base_dir=tmp_path,
+        repo_root_dir=tmp_path,
         semantic_dir=tmp_path / "semantic",
         raw_dir=raw_root,
     )
@@ -183,7 +183,7 @@ def test_write_markdown_for_pdf_adds_excerpt_when_available(tmp_path: Path, monk
 
     target_root = tmp_path / "book"
     cfg = SemanticConfig(
-        base_dir=tmp_path,
+        repo_root_dir=tmp_path,
         semantic_dir=tmp_path / "semantic",
         raw_dir=raw_root,
     )
@@ -216,7 +216,7 @@ def test_write_markdown_for_pdf_inserts_chunk_sections(tmp_path: Path, monkeypat
 
     target_root = tmp_path / "book"
     cfg = SemanticConfig(
-        base_dir=tmp_path,
+        repo_root_dir=tmp_path,
         semantic_dir=tmp_path / "semantic",
         raw_dir=raw_root,
     )

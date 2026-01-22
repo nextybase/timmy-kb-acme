@@ -12,7 +12,6 @@ from pipeline.types import ChunkRecord
 class _Ctx:
     def __init__(self, base: Path, slug: str = "proj"):
         self.repo_root_dir = base
-        self.base_dir = base
         self.book_dir = base / "book"
         self.slug = slug
 
@@ -74,7 +73,7 @@ def test_indexer_accepts_chunk_records(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(embedding_service, "_init_kb_db", lambda db_path: None)
 
     inserted = embedding_service.index_markdown_to_db(
-        base_dir=base,
+        repo_root_dir=base,
         book_dir=book,
         slug=ctx.slug,
         logger=logger,
@@ -110,7 +109,7 @@ def test_indexer_chunking_heading(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(embedding_service, "_init_kb_db", lambda db_path: None)
 
     inserted = embedding_service.index_markdown_to_db(
-        base_dir=base,
+        repo_root_dir=base,
         book_dir=book,
         slug=ctx.slug,
         logger=logger,
@@ -148,7 +147,7 @@ def test_indexer_skipped_paths_only_missing_files_logged(
     monkeypatch.setattr(embedding_service, "_init_kb_db", lambda db_path: None)
 
     inserted = embedding_service.index_markdown_to_db(
-        base_dir=base,
+        repo_root_dir=base,
         book_dir=book,
         slug=ctx.slug,
         logger=logger,

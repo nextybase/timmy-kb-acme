@@ -20,19 +20,17 @@ class _DummyEmbeddings:
 
 @dataclass
 class C:
-    base_dir: Path
     repo_root_dir: Path
     raw_dir: Path
     book_dir: Path
     slug: str
 
 
-def _ctx(base_dir: Path) -> C:
+def _ctx(repo_root_dir: Path) -> C:
     return C(
-        base_dir=base_dir,
-        repo_root_dir=base_dir,
-        raw_dir=base_dir / "raw",
-        book_dir=base_dir / "book",
+        repo_root_dir=repo_root_dir,
+        raw_dir=repo_root_dir / "raw",
+        book_dir=repo_root_dir / "book",
         slug="dummy",
     )
 

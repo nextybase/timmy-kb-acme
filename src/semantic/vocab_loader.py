@@ -267,12 +267,12 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
     return _to_vocab(raw)
 
 
-def _semantic_dir(base_dir: Path) -> Path:
-    return base_dir / "semantic"
+def _semantic_dir(repo_root_dir: Path) -> Path:
+    return repo_root_dir / "semantic"
 
 
-def _derive_slug(base_dir: Path) -> str | None:
-    name = Path(base_dir).name
+def _derive_slug(repo_root_dir: Path) -> str | None:
+    name = Path(repo_root_dir).name
     if not name:
         return None
     prefix = REPO_NAME_PREFIX
@@ -309,7 +309,7 @@ def _log_vocab_event(
 
 
 def load_reviewed_vocab(
-    base_dir: Path,
+    repo_root_dir: Path,
     logger: logging.Logger,
     *,
     strict: bool = False,
@@ -322,11 +322,12 @@ def load_reviewed_vocab(
     - Errori di path (traversal/symlink) o apertura DB: `ConfigError` con metadati utili.
     - Dati letti adattati a: {canonical: {"aliases": [str,...]}}.
     """
-    base_dir = Path(base_dir)
+    repo_root_dir = Path(repo_root_dir)
+    perimeter_root = repo_root_dir
     # Path-safety forte con risoluzione reale
-    sem_dir = ppath.ensure_within_and_resolve(base_dir, _semantic_dir(base_dir))
+    sem_dir = ppath.ensure_within_and_resolve(perimeter_root, _semantic_dir(repo_root_dir))
     db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
-    slug = _derive_slug(base_dir)
+    slug = _derive_slug(repo_root_dir)
 
     # DB assente: stop hard
     if not db_path.exists():

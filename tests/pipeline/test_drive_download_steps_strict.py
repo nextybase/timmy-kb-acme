@@ -38,7 +38,7 @@ def test_discover_candidates_missing_name_or_id_aborts(tmp_path: Path) -> None:
             list_folders=_list_folders,
             list_pdfs=_list_pdfs,
             ensure_dest=lambda *_a: tmp_path / "raw" / "missing.pdf",
-            base_dir=tmp_path,
+            perimeter_root=tmp_path,
             local_root=tmp_path / "raw",
             logger=logger,
         )
@@ -65,7 +65,7 @@ def test_discover_candidates_ensure_dest_failure_aborts(tmp_path: Path) -> None:
             list_folders=_list_folders,
             list_pdfs=_list_pdfs,
             ensure_dest=_ensure_dest,
-            base_dir=tmp_path,
+            perimeter_root=tmp_path,
             local_root=tmp_path / "raw",
             logger=logger,
         )

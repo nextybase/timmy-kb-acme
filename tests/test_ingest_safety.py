@@ -58,7 +58,7 @@ def test_ingest_rejects_outside_base(monkeypatch, tmp_path: Path) -> None:
         meta={},
         embeddings_client=FakeEmb(),
         context=ctx,
-        base_dir=base,
+        repo_root_dir=base,
     )
     assert n == 0
 
@@ -85,7 +85,7 @@ def test_ingest_within_base_succeeds(monkeypatch, tmp_path: Path) -> None:
         meta={"slug": "dummy"},
         embeddings_client=FakeEmb(),
         context=ctx,
-        base_dir=base,
+        repo_root_dir=base,
     )
     assert n > 0
 
@@ -103,11 +103,11 @@ def test_ingest_path_requires_context(monkeypatch, tmp_path: Path) -> None:
             version="v",
             meta={},
             embeddings_client=FakeEmb(),
-            base_dir=base,
+            repo_root_dir=base,
         )
 
 
-def test_ingest_folder_uses_layout_base_dir(monkeypatch, tmp_path: Path) -> None:
+def test_ingest_folder_uses_layout_repo_root_dir(monkeypatch, tmp_path: Path) -> None:
     base, ctx = _prepare_workspace(tmp_path, slug="slug")
     root = base / "book"
     f = root / "keep.txt"
@@ -115,8 +115,8 @@ def test_ingest_folder_uses_layout_base_dir(monkeypatch, tmp_path: Path) -> None
 
     captured: dict[str, Any] = {"base": None, "paths": []}
 
-    def _fake_ingest_path(*, path: str, base_dir: Path, **kwargs) -> int:
-        captured["base"] = Path(base_dir)
+    def _fake_ingest_path(*, path: str, repo_root_dir: Path, **kwargs) -> int:
+        captured["base"] = Path(repo_root_dir)
         captured["paths"].append(path)
         return 1
 
@@ -207,7 +207,7 @@ def test_ingest_within_base_calls_insert(monkeypatch, tmp_path: Path) -> None:
         meta={"slug": "dummy"},
         embeddings_client=FakeEmb(),
         context=ctx,
-        base_dir=base,
+        repo_root_dir=base,
     )
     assert n == len(called["chunks"]) and n > 0
 

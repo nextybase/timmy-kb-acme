@@ -147,18 +147,19 @@ def _extract_semantic_candidates_heuristic(
 ) -> dict[str, dict[str, Any]]:
     """Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename."""
     raw_dir = Path(raw_dir).resolve()
-    base_dir = Path(cfg.base_dir).resolve()
+    repo_root_dir = Path(cfg.repo_root_dir).resolve()
+    perimeter_root = repo_root_dir
 
     # STRONG guard: RAW deve essere sotto la sandbox del cliente
-    ensure_within(base_dir, raw_dir)
+    ensure_within(perimeter_root, raw_dir)
 
     candidates: dict[str, dict[str, Any]] = {}
 
     for pdf_path in pdfs or _iter_pdf_files(raw_dir):
         try:
-            rel_from_base = pdf_path.relative_to(base_dir)
+            rel_from_base = pdf_path.relative_to(repo_root_dir)
         except ValueError:
-            # se per qualche motivo non è sotto base_dir, fallback a path relativo da RAW
+            # se per qualche motivo non è sotto repo_root_dir, fallback a path relativo da RAW
             rel_from_base = pdf_path.relative_to(raw_dir)
 
         rel_str = rel_from_base.as_posix()
@@ -288,7 +289,7 @@ def render_tags_csv(
     candidates: Mapping[str, Mapping[str, Any]],
     csv_path: Path,
     *,
-    base_dir: Path,
+    perimeter_root: Path,
 ) -> None:
     """Scrive `tags_raw.csv` (esteso) con colonne: relative_path | suggested_tags | entities |
     keyphrases | score | sources.
@@ -299,7 +300,7 @@ def render_tags_csv(
     - JSON serializzati con `sort_keys=True` per stabilizzare il diff.
     """
     # Path-safety forte: risolvi entro il perimetro base e verifica parent
-    safe_csv_path = ensure_within_and_resolve(base_dir, csv_path)
+    safe_csv_path = ensure_within_and_resolve(perimeter_root, csv_path)
     safe_csv_path.parent.mkdir(parents=True, exist_ok=True)
     ensure_within(safe_csv_path.parent, safe_csv_path)
 

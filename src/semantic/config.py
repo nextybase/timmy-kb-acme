@@ -78,9 +78,9 @@ class SemanticConfig:
     spacy_model: str = "it_core_news_sm"
 
     # Riferimenti utili per l'orchestrazione
-    base_dir: Path = Path(".")  # workspace root (resolve in load)
-    semantic_dir: Path = Path("semantic")  # base_dir / "semantic" (resolve in load)
-    raw_dir: Path = Path("raw")  # base_dir / "raw" (resolve in load)
+    repo_root_dir: Path = Path(".")  # workspace root (resolve in load)
+    semantic_dir: Path = Path("semantic")  # repo_root_dir / "semantic" (resolve in load)
+    raw_dir: Path = Path("raw")  # repo_root_dir / "raw" (resolve in load)
 
     # Mapping completo (cliente-specifico) caricato da semantic_mapping.yaml
     mapping: dict[str, Any] = field(default_factory=dict)
@@ -283,7 +283,7 @@ def load_semantic_config(context_or_root: Path | Any, *, overrides: Optional[dic
         stop_tags=_coerce_stop_tags(acc.get("stop_tags")),
         nlp_backend=_coerce_str(acc.get("nlp_backend"), _DEFAULTS["nlp_backend"]),
         spacy_model=_coerce_str(acc.get("spacy_model"), _DEFAULTS["spacy_model"]),
-        base_dir=repo_root_dir,
+        repo_root_dir=repo_root_dir,
         semantic_dir=semantic_dir,
         raw_dir=raw_dir,
         mapping=mapping_all if isinstance(mapping_all, dict) else {},

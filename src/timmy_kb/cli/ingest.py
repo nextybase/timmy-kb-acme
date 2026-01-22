@@ -60,11 +60,11 @@ def _build_lineage(
     slug: str,
     scope: str,
     version: str,
-    base_dir: Path,
+    repo_root_dir: Path,
     safe_path: Path,
     chunks: Sequence[str],
 ) -> dict[str, Any]:
-    relative_path = _relative_to(base_dir, safe_path)
+    relative_path = _relative_to(repo_root_dir, safe_path)
     source_id = f"{slug}:{scope}:{version}:{relative_path}"
     lineage_chunks = []
     for idx, _chunk in enumerate(chunks):
@@ -81,7 +81,7 @@ def _build_lineage(
 
 def discover_files(
     folder_glob: str,
-    base_dir: Path,
+    perimeter_root: Path,
     *,
     slug: str,
     scope: str,
@@ -91,7 +91,7 @@ def discover_files(
     """Wrapper pubblico per `_iter_ingest_candidates`."""
     return _iter_ingest_candidates(
         folder_glob,
-        base_dir,
+        perimeter_root,
         customer=customer,
         scope=scope,
         slug=slug,
@@ -164,10 +164,10 @@ def _batched_iterable(items: Iterable[Path], batch_size: int | None) -> Iterable
         yield batch
 
 
-def _read_text_file(base_dir: Path, p: Path) -> str:
+def _read_text_file(perimeter_root: Path, p: Path) -> str:
     try:
         # Prova prima con UTF-8
-        return cast(str, read_text_safe(base_dir, p, encoding="utf-8"))
+        return cast(str, read_text_safe(perimeter_root, p, encoding="utf-8"))
     except UnicodeDecodeError as exc:
         LOGGER.error(
             "ingest.read.unsupported_encoding",
@@ -193,13 +193,13 @@ def _is_binary(path: Path) -> bool:
 def load_and_chunk(
     *,
     path: Path,
-    base_dir: Path,
+    perimeter_root: Path,
     slug: str,
     scope: str,
     customer: str | None,
 ) -> tuple[Optional[Path], list[str]]:
     """Applica path-safety, filtro binario e chunking. Restituisce (safe_path, chunks)."""
-    base = Path(base_dir).resolve()
+    base = Path(perimeter_root).resolve()
     candidate = Path(path)
     if not candidate.exists() or not candidate.is_file():
         LOGGER.error(
@@ -268,14 +268,14 @@ def embed_and_persist(
     safe_path: Path,
     chunks: list[str],
     meta: dict[str, Any],
-    base_dir: Path,
+    repo_root_dir: Path,
     embeddings_client: EmbeddingsClient | None,
     db_path: Path,
     customer: str | None,
 ) -> int:
     """Calcola le embedding e persiste i chunk nel DB, restituendo il totale inserito."""
     client: EmbeddingsClient = embeddings_client or cast(EmbeddingsClient, OpenAIEmbeddings())
-    safe_rel_path = _relative_to(base_dir, safe_path)
+    safe_rel_path = _relative_to(repo_root_dir, safe_path)
     meta_dict = dict(meta or {})
     lineage_meta = meta_dict.get("lineage")
     if not isinstance(lineage_meta, dict):
@@ -283,7 +283,7 @@ def embed_and_persist(
             slug=slug,
             scope=scope,
             version=version,
-            base_dir=base_dir,
+            repo_root_dir=repo_root_dir,
             safe_path=safe_path,
             chunks=chunks,
         )
@@ -437,7 +437,7 @@ def ingest_path(
     embeddings_client: Optional[EmbeddingsClient] = None,
     *,
     context: ClientContext | None = None,
-    base_dir: Optional[Path] = None,
+    repo_root_dir: Optional[Path] = None,
     db_path: Optional[Path] = None,
 ) -> int:
     """Ingest di un singolo file di testo: chunk, embedding, salvataggio. Restituisce il numero di chunk.
@@ -446,22 +446,24 @@ def ingest_path(
     Richiede un context valido per risolvere il layout canonico.
     """
     layout = _require_layout(context, slug)
-    base = layout.repo_root_dir
-    if base_dir is not None:
-        requested = Path(base_dir).resolve()
-        if requested != base:
-            raise ConfigError("base_dir non coerente con il layout canonico.", slug=slug)
+    layout_repo_root_dir = layout.repo_root_dir
+    if repo_root_dir is not None:
+        requested = Path(repo_root_dir).resolve()
+        if requested != layout_repo_root_dir:
+            raise ConfigError("repo_root_dir non coerente con il layout canonico.", slug=slug)
+    repo_root_dir = layout_repo_root_dir
+    perimeter_root = repo_root_dir
 
     effective_db_path = db_path
     if effective_db_path is None:
         # Riusabile stand-alone: se ingest_folder non ha già risolto il DB, calcola qui il workspace.
-        store = KbStore.for_slug(slug, base_dir=base)
+        store = KbStore.for_slug(slug, repo_root_dir=repo_root_dir)
         effective_db_path = store.effective_db_path()
     p = Path(path)
     customer = meta.get("slug") if isinstance(meta, dict) else None
     safe_path, chunks = load_and_chunk(
         path=p,
-        base_dir=base,
+        perimeter_root=perimeter_root,
         slug=slug,
         scope=scope,
         customer=customer,
@@ -475,7 +477,7 @@ def ingest_path(
         safe_path=safe_path,
         chunks=chunks,
         meta=meta,
-        base_dir=base,
+        repo_root_dir=repo_root_dir,
         embeddings_client=embeddings_client,
         db_path=effective_db_path,
         customer=customer,
@@ -491,7 +493,7 @@ def ingest_folder(
     embeddings_client: Optional[EmbeddingsClient] = None,
     *,
     context: ClientContext | None = None,
-    base_dir: Optional[Path] = None,
+    repo_root_dir: Optional[Path] = None,
     max_files: Optional[int] = None,
     batch_size: Optional[int] = None,
 ) -> dict[str, int]:
@@ -500,7 +502,7 @@ def ingest_folder(
     Args:
         slug/scope/version/meta: parametri dominio.
         embeddings_client: facoltativo, riuso di un client embedding.
-        base_dir: override del perimetro path-safety (deve coincidere con layout.repo_root_dir).
+        repo_root_dir: override del perimetro path-safety (deve coincidere con layout.repo_root_dir).
         max_files: limita il numero massimo di file elaborati (None -> tutti).
         batch_size: numero di file caricati per batch durante lo streaming (None -> 1).
 
@@ -508,19 +510,21 @@ def ingest_folder(
     """
     start_metrics_server_once()
     layout = _require_layout(context, slug)
-    base = layout.repo_root_dir
-    if base_dir is not None:
-        requested = Path(base_dir).resolve()
-        if requested != base:
-            raise ConfigError("base_dir non coerente con il layout canonico.", slug=slug)
+    layout_repo_root_dir = layout.repo_root_dir
+    if repo_root_dir is not None:
+        requested = Path(repo_root_dir).resolve()
+        if requested != layout_repo_root_dir:
+            raise ConfigError("repo_root_dir non coerente con il layout canonico.", slug=slug)
+    repo_root_dir = layout_repo_root_dir
+    perimeter_root = repo_root_dir
     glob_path = Path(folder_glob)
     if glob_path.is_absolute():
         try:
-            glob_path.resolve().relative_to(base)
+            glob_path.resolve().relative_to(repo_root_dir)
         except Exception as exc:
             raise ConfigError("folder_glob fuori dal workspace canonico.", slug=slug, file_path=str(glob_path)) from exc
     client: EmbeddingsClient | None = embeddings_client
-    store = KbStore.for_slug(slug, base_dir=base)
+    store = KbStore.for_slug(slug, repo_root_dir=repo_root_dir)
     db_path = store.effective_db_path()
     if slug:
         LOGGER.info("ingest.db_path", extra={"slug": slug, "db_path": str(db_path)})
@@ -551,7 +555,7 @@ def ingest_folder(
 
             candidate_iter = discover_files(
                 folder_glob,
-                base,
+                perimeter_root,
                 slug=slug,
                 scope=scope,
                 customer=customer,
@@ -574,7 +578,7 @@ def ingest_folder(
                                 meta=meta,
                                 embeddings_client=client,
                                 context=context,
-                                base_dir=base,
+                                repo_root_dir=repo_root_dir,
                                 db_path=db_path,
                             )
                             phase_file.set_artifacts(n)
