@@ -31,8 +31,8 @@ def _check_pypdf() -> CheckItem:
     )
 
 
-def _check_config(base_dir: Path) -> CheckItem:
-    cfg = base_dir / "config" / "config.yaml"
+def _check_config(repo_root_dir: Path) -> CheckItem:
+    cfg = repo_root_dir / "config" / "config.yaml"
     exists = cfg.is_file()
     return CheckItem(
         name="config",
@@ -41,8 +41,8 @@ def _check_config(base_dir: Path) -> CheckItem:
     )
 
 
-def _check_output_writable(base_dir: Path) -> CheckItem:
-    output_dir = base_dir / "output"
+def _check_output_writable(repo_root_dir: Path) -> CheckItem:
+    output_dir = repo_root_dir / "output"
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
         probe = output_dir / ".selfcheck_tmp"
@@ -60,10 +60,10 @@ def _check_output_writable(base_dir: Path) -> CheckItem:
         )
 
 
-def _check_semantic_ingest(base_dir: Path) -> List[CheckItem]:
+def _check_semantic_ingest(repo_root_dir: Path) -> List[CheckItem]:
     items: List[CheckItem] = []
-    doc_ingest = base_dir / "src" / "semantic" / "document_ingest.py"
-    semantic_core = base_dir / "src" / "semantic" / "core.py"
+    doc_ingest = repo_root_dir / "src" / "semantic" / "document_ingest.py"
+    semantic_core = repo_root_dir / "src" / "semantic" / "core.py"
     for path, name in ((doc_ingest, "document_ingest"), (semantic_core, "semantic_core")):
         exists = path.is_file()
         items.append(
@@ -76,11 +76,11 @@ def _check_semantic_ingest(base_dir: Path) -> List[CheckItem]:
     return items
 
 
-def run_system_self_check(base_dir: Path | None = None) -> SystemCheckReport:
+def run_system_self_check(repo_root_dir: Path | None = None) -> SystemCheckReport:
     """
     Esegue una serie di controlli sull'ambiente di esecuzione.
 
-    - Se base_dir è None, deduce la root del repo a partire da questo file.
+    - Se repo_root_dir è None, deduce la root del repo a partire da questo file.
     - Verifica:
       - dipendenza pypdf installata,
       - presenza di config/config.yaml,
@@ -89,15 +89,15 @@ def run_system_self_check(base_dir: Path | None = None) -> SystemCheckReport:
     Ritorna un SystemCheckReport con la lista dei CheckItem e ok=all(item.ok).
     """
 
-    if base_dir is None:
-        base_dir = Path(__file__).resolve().parents[2]
-    base_dir = base_dir.resolve()
+    if repo_root_dir is None:
+        repo_root_dir = Path(__file__).resolve().parents[2]
+    repo_root_dir = repo_root_dir.resolve()
 
     items: List[CheckItem] = []
     items.append(_check_pypdf())
-    items.append(_check_config(base_dir))
-    items.append(_check_output_writable(base_dir))
-    items.extend(_check_semantic_ingest(base_dir))
+    items.append(_check_config(repo_root_dir))
+    items.append(_check_output_writable(repo_root_dir))
+    items.extend(_check_semantic_ingest(repo_root_dir))
 
     overall_ok = all(item.ok for item in items)
     return SystemCheckReport(ok=overall_ok, items=items)

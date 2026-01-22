@@ -152,7 +152,7 @@ def _write_manifest_if_configured(
     }
     expected_path = Path(explain_base_dir) / f"{response_id}.json"
     try:
-        manifest_path = safe_write_manifest(manifest, base_dir=explain_base_dir, response_id=response_id)
+        manifest_path = safe_write_manifest(manifest, output_dir=explain_base_dir, response_id=response_id)
     except Exception as exc:
         try:
             LOGGER.error(

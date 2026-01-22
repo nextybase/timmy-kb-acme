@@ -9,8 +9,8 @@ from security.retention import purge_old_artifacts
 
 
 def test_purge_old_artifacts_removes_old_snapshot(tmp_path: Path) -> None:
-    base_dir = tmp_path / "output" / "timmy-kb-dummy"
-    target_dir = base_dir / "semantic"
+    perimeter_root = tmp_path / "output" / "timmy-kb-dummy"
+    target_dir = perimeter_root / "semantic"
     target_dir.mkdir(parents=True, exist_ok=True)
 
     old_file = target_dir / "vision.snapshot.txt"
@@ -21,7 +21,7 @@ def test_purge_old_artifacts_removes_old_snapshot(tmp_path: Path) -> None:
     old_timestamp = time.time() - (60 * 60 * 24 * 10)  # 10 giorni fa
     os.utime(old_file, (old_timestamp, old_timestamp))
 
-    removed = purge_old_artifacts(base_dir, days=7)
+    removed = purge_old_artifacts(perimeter_root, days=7)
 
     assert removed == 1
     assert not old_file.exists()

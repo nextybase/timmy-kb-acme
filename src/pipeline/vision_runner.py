@@ -51,24 +51,24 @@ def _resolve_vision_mode(ctx: Any) -> str:
     raise ConfigError(f"VISION_MODE non valido: {raw!r}. Usa 'SMOKE' o 'DEEP'.")
 
 
-def _semantic_dir(base_dir: Path) -> Path:
-    sdir = ensure_within_and_resolve(base_dir, base_dir / "semantic")
+def _semantic_dir(repo_root_dir: Path) -> Path:
+    sdir = ensure_within_and_resolve(repo_root_dir, repo_root_dir / "semantic")
     return cast(Path, sdir)
 
 
-def _hash_sentinel(base_dir: Path) -> Path:
-    path = ensure_within_and_resolve(_semantic_dir(base_dir), _semantic_dir(base_dir) / ".vision_hash")
+def _hash_sentinel(repo_root_dir: Path) -> Path:
+    path = ensure_within_and_resolve(_semantic_dir(repo_root_dir), _semantic_dir(repo_root_dir) / ".vision_hash")
     return cast(Path, path)
 
 
-def _artifacts_paths(base_dir: Path) -> Dict[str, Path]:
-    sdir = _semantic_dir(base_dir)
+def _artifacts_paths(repo_root_dir: Path) -> Dict[str, Path]:
+    sdir = _semantic_dir(repo_root_dir)
     mapping = ensure_within_and_resolve(sdir, sdir / "semantic_mapping.yaml")
     return {"mapping": cast(Path, mapping)}
 
 
-def _vision_yaml_path(base_dir: Path, *, pdf_path: Optional[Path] = None) -> Path:
-    base = Path(base_dir)
+def _vision_yaml_path(repo_root_dir: Path, *, pdf_path: Optional[Path] = None) -> Path:
+    base = Path(repo_root_dir)
     candidate = (
         (pdf_path.parent / "visionstatement.yaml")
         if pdf_path is not None
@@ -78,8 +78,8 @@ def _vision_yaml_path(base_dir: Path, *, pdf_path: Optional[Path] = None) -> Pat
     return cast(Path, resolved)
 
 
-def _sha256_of_file(base_dir: Path, path: Path, chunk_size: int = 8192) -> str:
-    safe_path = ensure_within_and_resolve(base_dir, path)
+def _sha256_of_file(repo_root_dir: Path, path: Path, chunk_size: int = 8192) -> str:
+    safe_path = ensure_within_and_resolve(repo_root_dir, path)
     h = hashlib.sha256()
     with Path(safe_path).open("rb") as fh:
         for chunk in iter(lambda: fh.read(chunk_size), b""):
@@ -87,8 +87,8 @@ def _sha256_of_file(base_dir: Path, path: Path, chunk_size: int = 8192) -> str:
     return h.hexdigest()
 
 
-def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, base_dir: Path, slug: str) -> None:
-    layout = WorkspaceLayout.from_workspace(Path(base_dir), slug=slug)
+def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_dir: Path, slug: str) -> None:
+    layout = WorkspaceLayout.from_workspace(Path(repo_root_dir), slug=slug)
     mapping_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "semantic_mapping.yaml")
     categories = raw_categories_from_semantic_mapping(
         semantic_dir=layout.semantic_dir,
@@ -112,16 +112,16 @@ def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, base_dir: Pa
     )
 
 
-def _load_last_hash(base_dir: Path) -> Optional[Dict[str, Any]]:
+def _load_last_hash(repo_root_dir: Path) -> Optional[Dict[str, Any]]:
     """
     Legge il sentinel JSON se presente.
     Ritorna dict con almeno {"hash": str, "model": str, "ts": str} oppure None.
     """
-    path = _hash_sentinel(base_dir)
+    path = _hash_sentinel(repo_root_dir)
     if not path.exists():
         return None
     try:
-        raw = cast(str, read_text_safe(base_dir, path, encoding="utf-8"))
+        raw = cast(str, read_text_safe(repo_root_dir, path, encoding="utf-8"))
         data = cast(Dict[str, Any], json.loads(raw))
         return data if isinstance(data, dict) else None
     except Exception as exc:
@@ -133,14 +133,14 @@ def _load_last_hash(base_dir: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _save_hash(base_dir: Path, *, digest: str, model: str) -> None:
+def _save_hash(repo_root_dir: Path, *, digest: str, model: str) -> None:
     from datetime import datetime, timezone
 
     payload = json.dumps(
         {"hash": digest, "model": model, "ts": datetime.now(timezone.utc).isoformat()},
         ensure_ascii=False,
     )
-    safe_write_text(_hash_sentinel(base_dir), payload + "\n")
+    safe_write_text(_hash_sentinel(repo_root_dir), payload + "\n")
 
 
 def run_vision_with_gating(
@@ -189,7 +189,7 @@ def run_vision_with_gating(
     gate_hit = (last_digest == digest) and art["mapping"].exists()
     logger.info("ui.vision.gate", extra={"slug": slug, "hit": gate_hit})
     if gate_hit and not force:
-        _materialize_raw_structure(ctx, logger, base_dir=Path(repo_root_dir), slug=slug)
+        _materialize_raw_structure(ctx, logger, repo_root_dir=Path(repo_root_dir), slug=slug)
         raise ConfigError(
             "Vision già eseguito per questo PDF. Usa la modalità 'Forza rigenerazione' per procedere.",
             slug=slug,
@@ -230,7 +230,7 @@ def run_vision_with_gating(
     except HaltError:
         raise
 
-    _materialize_raw_structure(ctx, logger, base_dir=Path(repo_root_dir), slug=slug)
+    _materialize_raw_structure(ctx, logger, repo_root_dir=Path(repo_root_dir), slug=slug)
 
     _save_hash(repo_root_dir, digest=digest, model=resolved_config.model)
     logger.info("ui.vision.update_hash", extra={"slug": slug, "file_path": str(_hash_sentinel(repo_root_dir))})

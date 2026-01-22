@@ -15,25 +15,25 @@ LOGGER = get_structured_logger("security.retention")
 _DEFAULT_PATTERNS: tuple[str, ...] = ("semantic/*.snapshot.txt",)
 
 
-def purge_old_artifacts(base_dir: Path, days: int, *, patterns: Iterable[str] | None = None) -> int:
+def purge_old_artifacts(perimeter_root: Path, days: int, *, patterns: Iterable[str] | None = None) -> int:
     """
-    Rimuove file temporanei più vecchi di `days` giorni all'interno di `base_dir`.
+    Rimuove file temporanei più vecchi di `days` giorni all'interno di `perimeter_root`.
 
     Args:
-        base_dir: radice del workspace cliente (es. output/timmy-kb-<slug>).
+        perimeter_root: radice del workspace cliente (es. output/timmy-kb-<slug>).
         days: soglia massima di retention in giorni (deve essere > 0).
-        patterns: glob relative a `base_dir` da scandire (default: snapshot Vision).
+        patterns: glob relative a `perimeter_root` da scandire (default: snapshot Vision).
 
     Returns:
         Numero di file rimossi con successo.
     """
     if days <= 0:
-        LOGGER.debug("retention.skip.invalid_days", extra={"base_dir": str(base_dir), "days": days})
+        LOGGER.debug("retention.skip.invalid_days", extra={"perimeter_root": str(perimeter_root), "days": days})
         return 0
 
-    base_path = Path(base_dir)
+    base_path = Path(perimeter_root)
     if not base_path.exists():
-        LOGGER.debug("retention.skip.missing_base", extra={"base_dir": str(base_path)})
+        LOGGER.debug("retention.skip.missing_base", extra={"perimeter_root": str(base_path)})
         return 0
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
@@ -47,7 +47,7 @@ def purge_old_artifacts(base_dir: Path, days: int, *, patterns: Iterable[str] | 
             except Exception:
                 LOGGER.warning(
                     "retention.skip.outside_base",
-                    extra={"base_dir": str(base_path), "candidate": str(candidate)},
+                    extra={"perimeter_root": str(base_path), "candidate": str(candidate)},
                 )
                 continue
 
@@ -72,12 +72,12 @@ def purge_old_artifacts(base_dir: Path, days: int, *, patterns: Iterable[str] | 
     if total_removed:
         LOGGER.info(
             "retention.remove.completed",
-            extra={"base_dir": str(base_path), "removed": total_removed, "days": days},
+            extra={"perimeter_root": str(base_path), "removed": total_removed, "days": days},
         )
     else:
         LOGGER.debug(
             "retention.remove.nothing",
-            extra={"base_dir": str(base_path), "days": days},
+            extra={"perimeter_root": str(base_path), "days": days},
         )
 
     return total_removed

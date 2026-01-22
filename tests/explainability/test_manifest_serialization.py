@@ -26,7 +26,7 @@ def _manifest() -> ResponseManifest:
 
 def test_safe_write_manifest_pathsafe(tmp_path: Path) -> None:
     manifest = _manifest()
-    out_path = safe_write_manifest(manifest, base_dir=tmp_path, response_id="resp-001")
+    out_path = safe_write_manifest(manifest, output_dir=tmp_path, response_id="resp-001")
 
     assert out_path.name == "resp-001.json"
     assert out_path.exists()
@@ -37,7 +37,7 @@ def test_safe_write_manifest_pathsafe(tmp_path: Path) -> None:
 
 def test_safe_write_manifest_atomic(tmp_path: Path) -> None:
     manifest = _manifest()
-    out_path = safe_write_manifest(manifest, base_dir=tmp_path, response_id="resp-atomic")
+    out_path = safe_write_manifest(manifest, output_dir=tmp_path, response_id="resp-atomic")
     temp_files = [p for p in tmp_path.iterdir() if p.name.startswith(".")]
     assert out_path.exists()
     assert not temp_files  # safe_write_text rimuove il tmp
@@ -45,7 +45,7 @@ def test_safe_write_manifest_atomic(tmp_path: Path) -> None:
 
 def test_manifest_saved_matches_input(tmp_path: Path) -> None:
     manifest = _manifest()
-    out_path = safe_write_manifest(manifest, base_dir=tmp_path, response_id="resp-compare")
+    out_path = safe_write_manifest(manifest, output_dir=tmp_path, response_id="resp-compare")
     loaded = json.loads(out_path.read_text(encoding="utf-8"))
     for key in ("response_id", "slug", "scope", "query", "retriever_params", "evidence"):
         assert loaded[key] == manifest[key]
