@@ -45,7 +45,6 @@ from types import TracebackType
 from typing import Any, ContextManager, Literal, Mapping, Optional, Type, Union
 
 from pipeline.metrics import observe_phase_duration, record_phase_failed
-from pipeline.tracing import ensure_tracer, infer_trace_kind, start_phase_span
 
 try:
     from opentelemetry import trace as _otel_trace
@@ -289,6 +288,26 @@ def _ensure_no_duplicate_handlers(lg: logging.Logger, key: str) -> None:
         lg.removeHandler(h)
 
 
+def _ancestor_has_handlers(lg: logging.Logger) -> bool:
+    """Ritorna True se un logger antenato ha handler (include root)."""
+    parent = lg.parent
+    while parent is not None:
+        if parent.handlers:
+            return True
+        parent = parent.parent
+    return False
+
+
+def _is_app_logger(name: str) -> bool:
+    if name == "ui" or name.startswith("ui."):
+        return True
+    if name == "pipeline" or name.startswith("pipeline."):
+        return True
+    if name == "semantic" or name.startswith("semantic."):
+        return True
+    return False
+
+
 def _set_logger_filter(lg: logging.Logger, flt: logging.Filter, key: str) -> None:
     """Sostituisce (se presente) un filtro identificato dal key e lo rimpiazza."""
     to_remove = [f for f in lg.filters if getattr(f, "_logging_utils_key", None) == key]
@@ -428,7 +447,8 @@ def get_structured_logger(
     # Nei test pytest intercettiamo i log via caplog (attaccato al root). Se la propagazione
     # resta disabilitata i test non vedono i messaggi. Optiamo quindi per riabilitarla in
     # questo scenario, lasciando invariato il comportamento runtime.
-    if not propagate and (os.getenv("PYTEST_CURRENT_TEST") or "pytest" in sys.modules):
+    pytest_active = bool(os.getenv("PYTEST_CURRENT_TEST") or "pytest" in sys.modules)
+    if not propagate and pytest_active:
         propagate = True
     lg.propagate = propagate
 
@@ -455,12 +475,14 @@ def get_structured_logger(
     # console handler (idempotente per chiave)
     key_console = f"{name}::console"
     _ensure_no_duplicate_handlers(lg, key_console)
-    ch = _make_console_handler(level, fmt)
-    ch._logging_utils_key = key_console  # type: ignore[attr-defined]
-    ch.addFilter(ctx_filter)
-    ch.addFilter(redact_filter)
-    ch.addFilter(event_filter)
-    lg.addHandler(ch)
+    ancestor_has_handlers = _ancestor_has_handlers(lg)
+    if not (propagate and ancestor_has_handlers and not pytest_active):
+        ch = _make_console_handler(level, fmt)
+        ch._logging_utils_key = key_console  # type: ignore[attr-defined]
+        ch.addFilter(ctx_filter)
+        ch.addFilter(redact_filter)
+        ch.addFilter(event_filter)
+        lg.addHandler(ch)
 
     # file handler opzionale
     if log_file:
@@ -502,7 +524,17 @@ def get_structured_logger(
         fh.addFilter(event_filter)
         lg.addHandler(fh)
 
-    ensure_tracer(context=context, enable_tracing=bool(effective_tracing))
+    if propagate and _is_app_logger(name) and lg.handlers:
+        if not (os.getenv("PYTEST_CURRENT_TEST") or "pytest" in sys.modules):
+            lg.propagate = False
+
+    try:
+        from pipeline import tracing as _tracing
+    except Exception:
+        _tracing = None
+    ensure_tracer = getattr(_tracing, "ensure_tracer", None) if _tracing is not None else None
+    if callable(ensure_tracer):
+        ensure_tracer(context=context, enable_tracing=bool(effective_tracing))
     return lg
 
 
@@ -532,6 +564,8 @@ class phase_scope:
         self._artifact_count: Optional[int] = None
         self._span: Any | None = None
         self._span_ctx: ContextManager[Any] | None = None
+        from pipeline.tracing import infer_trace_kind
+
         self._trace_kind = infer_trace_kind(self.stage)
         self._phase_filter_key = f"{getattr(logger, 'name', 'logger')}::phase::{self.stage}"
         self._phase_filter: logging.Filter | None = None
@@ -553,6 +587,8 @@ class phase_scope:
         except Exception:
             self._t0 = None
         try:
+            from pipeline.tracing import start_phase_span
+
             self._span_ctx = start_phase_span(
                 self.stage,
                 slug=self.customer,

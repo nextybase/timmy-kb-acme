@@ -159,7 +159,7 @@ def _log_persist_unavailable_once(exc: ConfigError) -> None:
         if _PERSIST_UNAVAILABLE_LOGGED:
             return
         _PERSIST_UNAVAILABLE_LOGGED = True
-    LOGGER.info("ui.slug.persist_unavailable", extra={"code": getattr(exc, "code", None)})
+    LOGGER.debug("ui.slug.persist_unavailable", extra={"code": getattr(exc, "code", None)})
 
 
 def _save_persisted(slug: Optional[str]) -> None:

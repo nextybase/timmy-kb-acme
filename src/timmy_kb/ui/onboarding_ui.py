@@ -38,7 +38,7 @@ def _init_ui_logging(repo_root: Path) -> None:
     get_structured_logger("ui", log_file=log_file, propagate=True)
     get_structured_logger("ai", log_file=log_file, propagate=True)
     get_structured_logger("ai.responses", log_file=log_file, propagate=True)
-    LOGGER.info("ui.logging.ai_wired")
+    LOGGER.debug("ui.logging.ai_wired")
 
 
 LOGGER: logging.Logger = get_structured_logger("ui.preflight")
@@ -307,7 +307,7 @@ def build_navigation(
     }
 
     try:
-        logger.info(
+        logger.debug(
             "ui.navigation.pages",
             extra={
                 "pages": {group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()}

@@ -25,6 +25,7 @@ def _stub_streamlit(monkeypatch: pytest.MonkeyPatch) -> None:
     stub.info = _info
     stub.stop = _stop
     monkeypatch.setattr(slug_utils, "st", stub, raising=False)
+    slug_utils.LOGGER.setLevel(logging.DEBUG)
     monkeypatch.setattr(slug_utils, "_qp_set", lambda *_a, **_k: None, raising=False)
     monkeypatch.setattr(slug_utils, "_qp_get", lambda *_a, **_k: None, raising=False)
 
@@ -103,7 +104,7 @@ def test_save_persisted_configerror_is_non_fatal(
 
     monkeypatch.setattr(slug_utils, "get_ui_state_path", _raise_config, raising=False)
 
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG):
         slug_utils._save_persisted("dummy")
 
     assert any(rec.getMessage() == "ui.slug.persist_unavailable" for rec in caplog.records)
@@ -117,7 +118,7 @@ def test_persist_unavailable_logged_once(monkeypatch: pytest.MonkeyPatch, caplog
     monkeypatch.setattr(slug_utils, "get_ui_state_path", _raise_config, raising=False)
     monkeypatch.setattr(slug_utils, "st", SimpleNamespace(session_state={}), raising=False)
 
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG):
         slug_utils._load_persisted()
         slug_utils._load_persisted()
         slug_utils._save_persisted("dummy")

@@ -303,7 +303,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     last_state = _LAST_RAW_READY.get(slug_key)
     if not raw_ready_flag and last_state is not False:
         try:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "ui.gating.sem_hidden",
                 extra={"slug": slug or "", "raw_ready": raw_ready_flag, "tagging_ready": tagging_ready_flag},
             )
@@ -348,7 +348,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     preview_visible = any(spec.path == PagePaths.PREVIEW for specs in groups.values() for spec in specs)
     if not preview_visible and last_preview is not False:
         try:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "ui.gating.preview_hidden",
                 extra={
                     "slug": slug or "",

@@ -4,25 +4,28 @@
 from __future__ import annotations
 
 import contextlib
-import logging
 import os
 import random
 from typing import Any, ContextManager, Iterator, Literal, Mapping
 
+from pipeline.logging_utils import get_structured_logger
 from pipeline.observability_config import get_tracing_state
 
-_log = logging.getLogger("pipeline.tracing")
+_log = get_structured_logger("pipeline.observability")
 _TRACING_DISABLED_EMITTED: set[str] = set()
+_TRACING_DISABLED_LOGGED = False
 
 
 def _log_tracing_disabled(reason: str, extra: Mapping[str, Any] | None = None) -> None:
-    if reason in _TRACING_DISABLED_EMITTED:
+    global _TRACING_DISABLED_LOGGED
+    if _TRACING_DISABLED_LOGGED:
         return
+    _TRACING_DISABLED_LOGGED = True
     _TRACING_DISABLED_EMITTED.add(reason)
     payload = {"reason": reason}
     if extra:
         payload.update(extra)
-    _log.warning("observability.tracing.disabled", extra=payload)
+    _log.info("observability.tracing.disabled", extra=payload)
 
 
 try:

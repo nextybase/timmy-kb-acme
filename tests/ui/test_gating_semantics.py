@@ -57,7 +57,7 @@ def test_semantics_hidden_logs_once(monkeypatch: pytest.MonkeyPatch) -> None:
         def __init__(self) -> None:
             self.records: list[tuple[str, dict[str, object]]] = []
 
-        def info(self, message: str, *, extra: dict[str, object]) -> None:
+        def debug(self, message: str, *, extra: dict[str, object]) -> None:
             self.records.append((message, extra))
 
     dummy_logger = DummyLogger()

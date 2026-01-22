@@ -418,7 +418,7 @@ class Settings:
             extra = {"file_path": str(cfg_path)}
             if slug:
                 extra["slug"] = slug
-            logger.info("settings.config.loaded", extra=extra)
+            logger.debug("settings.config.loaded", extra=extra)
         return instance
 
     # --------------------------- Dict-like behaviour ---------------------------

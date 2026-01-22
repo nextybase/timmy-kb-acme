@@ -9,7 +9,7 @@ import pytest
 from tests.ui.stub_helpers import install_streamlit_stub
 
 
-def test_sidebar_slugless_does_not_call_clients_store(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sidebar_slug_less_does_not_call_clients_store(monkeypatch: pytest.MonkeyPatch) -> None:
     install_streamlit_stub(monkeypatch)
     sys.modules.pop("ui.chrome", None)
     chrome = importlib.import_module("ui.chrome")

@@ -78,7 +78,7 @@ def get_repo_root(*, allow_env: bool = True) -> Path:
         env_root = os.getenv(REPO_ROOT_ENV)
         if env_root:
             resolved_env = _validate_repo_root_env(env_root)
-            LOGGER.info("paths.repo_root.env", extra={"repo_root": str(resolved_env)})
+            LOGGER.debug("paths.repo_root.env", extra={"repo_root": str(resolved_env)})
             return resolved_env
 
     this_file = Path(__file__).resolve()
