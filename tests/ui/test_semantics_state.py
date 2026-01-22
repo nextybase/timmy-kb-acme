@@ -677,9 +677,7 @@ def test_retry_logged_and_gates_checked(monkeypatch, tmp_path):
     )
 
     def _mk_ctx(slug: str):
-        layout = SimpleNamespace(
-            repo_root_dir=tmp_path, book_dir=tmp_path / "book", log_dir=tmp_path / "logs"
-        )
+        layout = SimpleNamespace(repo_root_dir=tmp_path, book_dir=tmp_path / "book", log_dir=tmp_path / "logs")
         return (
             SimpleNamespace(repo_root_dir=tmp_path, set_step_status=lambda *a, **k: None),
             SimpleNamespace(),

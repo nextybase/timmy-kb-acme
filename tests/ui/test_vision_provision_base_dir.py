@@ -9,9 +9,7 @@ import pytest
 from ui.services import vision_provision
 
 
-def test_provision_infers_repo_root_dir_from_pdf_path(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_provision_infers_repo_root_dir_from_pdf_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     base = tmp_path / "ws"
     cfg = base / "config"
     cfg.mkdir(parents=True, exist_ok=True)
