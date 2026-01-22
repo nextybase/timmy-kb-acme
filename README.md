@@ -3,8 +3,8 @@
 Timmy-KB è un ambiente per la creazione e il governo di Timmy, strutturato su due domini epistemici distinti:
 **Epistemic Envelope** e **Agency Engine**.
 
-- L’**Epistemic Envelope** realizza la fondazione: ingestione e trasformazione dei dati in artefatti osservabili e deterministici (derivatives), con tracciabilità e auditabilità.
-- L’**Agency Engine** realizza l’agency governata: Prompt Chain, gate, work orders e micro-agenti in modalità HiTL, con probabilismo confinato entro l’envelope.
+- L'**Epistemic Envelope** realizza la fondazione: ingestione e trasformazione dei dati in artefatti osservabili e deterministici (derivatives), con tracciabilità e auditabilità.
+- L'**Agency Engine** realizza l'agency governata: Prompt Chain, gate, work orders e micro-agenti in modalità HiTL, con probabilismo confinato entro l'envelope.
 
 [**Design premise:** il sistema è pensato per hardware dedicato e ambienti controllati, esegue processi automatizzati e usa regole/test rigorosi per garantire riproducibilità e auditabilità: qualsiasi rottura deve fallire rumorosamente.]
 
@@ -99,14 +99,14 @@ Usalo per interpretare il ledger in modo deterministico.
 - [LICENSE](LICENSE.md) - GPL-3.0.
 - [Code of Conduct](CODE_OF_CONDUCT.md) e [Security](SECURITY.md).
 
-L’**Epistemic Envelope** produce i derivatives necessari e costruisce il perimetro epistemico operativo.
-L’**Agency Engine** orchestra l’emergere controllato dell’agency (Prompt Chain, gate e micro-agenti) sotto supervisione umana (HiTL), entro i vincoli dell’envelope.
+L'**Epistemic Envelope** produce i derivatives necessari e costruisce il perimetro epistemico operativo.
+L'**Agency Engine** orchestra l'emergere controllato dell'agency (Prompt Chain, gate e micro-agenti) sotto supervisione umana (HiTL), entro i vincoli dell'envelope.
 
 ## From Epistemic Envelope to Agency Engine
-- L’**Epistemic Envelope** (foundation pipeline) è l’atto di nascita operativo di Timmy: quando i PDF del cliente vengono trasformati in markdown semanticamente arricchiti e il Knowledge Graph associato viene validato.
-- Solo a quel punto il passaggio concettuale ProtoTimmy → Timmy diventa operativo: ProtoTimmy governa la fondazione (Epistemic Envelope), Timmy assume agency globale nell’Agency Engine e dialoga con Domain Gatekeepers e micro-agent.
-- L’Epistemic Envelope **non decide né orchestra**: genera output (markdown + knowledge graph + lineage/ledger) richiesti dallo SSoT e abilita l’Agency Engine, ma la direzione resta affidata a Timmy e ai gatekeeper.
-- Tutti i riferimenti tecnici a `pipeline.*` descrivono strumenti dell’Epistemic Envelope; dopo la validazione la Prompt Chain documentata in `instructions/` prende il comando nell’Agency Engine.
+- L'**Epistemic Envelope** (foundation pipeline) è l'atto di nascita operativo di Timmy: quando i PDF del cliente vengono trasformati in markdown semanticamente arricchiti e il Knowledge Graph associato viene validato.
+- Solo a quel punto il passaggio concettuale ProtoTimmy → Timmy diventa operativo: ProtoTimmy governa la fondazione (Epistemic Envelope), Timmy assume agency globale nell'Agency Engine e dialoga con Domain Gatekeepers e micro-agent.
+- L'Epistemic Envelope **non decide né orchestra**: genera output (markdown + knowledge graph + lineage/ledger) richiesti dallo SSoT e abilita l'Agency Engine, ma la direzione resta affidata a Timmy e ai gatekeeper.
+- Tutti i riferimenti tecnici a `pipeline.*` descrivono strumenti dell'Epistemic Envelope; dopo la validazione la Prompt Chain documentata in `instructions/` prende il comando nell'Agency Engine.
 
 La sezione seguente descrive il passaggio dalla fondazione alla fase di agency governata, mantenendo sempre la supervisione umana.
 

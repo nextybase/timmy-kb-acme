@@ -181,12 +181,12 @@ def _run_convert(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
 
 
 def _get_canonical_vocab(
-    base_dir: Path,
+    repo_root_dir: Path,
     logger: logging.Logger,
     slug: str,
 ) -> dict[str, dict[str, Sequence[str]]]:
     """Restituisce il vocabolario canonico o solleva ConfigError."""
-    return cast(dict[str, dict[str, Sequence[str]]], require_reviewed_vocab(base_dir, logger, slug=slug))
+    return cast(dict[str, dict[str, Sequence[str]]], require_reviewed_vocab(repo_root_dir, logger, slug=slug))
 
 
 def _qa_evidence_path(layout: WorkspaceLayout) -> Path:
@@ -214,7 +214,7 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             return
         raise
     ctx, logger, layout = _make_ctx_and_logger(slug)
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     is_retry = _mark_retry(slug, "enrich")
     try:
         ctx.set_step_status("enrich", "retry" if is_retry else "start")
@@ -232,7 +232,7 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             extra={"slug": slug, "action_id": "enrich", "status": "start", "retry": bool(is_retry)},
         )
     try:
-        vocab = _get_canonical_vocab(base_dir, logger, slug=slug)
+        vocab = _get_canonical_vocab(repo_root_dir, logger, slug=slug)
     except ConfigError as exc:
         _log_semantics_failure(
             logger,

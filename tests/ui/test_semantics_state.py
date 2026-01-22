@@ -57,9 +57,9 @@ def _mk_semantics_ctx(monkeypatch, sem, *, tmp_path: Path, log_dir: Path) -> lis
         sem,
         "_make_ctx_and_logger",
         lambda slug: (
-            SimpleNamespace(base_dir=tmp_path),
+            SimpleNamespace(repo_root_dir=tmp_path),
             SimpleNamespace(set_step_status=lambda *a, **k: None),
-            SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=log_dir),
+            SimpleNamespace(repo_root_dir=tmp_path, book_dir=tmp_path / "book", log_dir=log_dir),
         ),
     )
     return events
@@ -137,8 +137,8 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
         return ["a.md"]
 
     monkeypatch.setattr(sem, "convert_markdown", _convert)
-    monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
-    monkeypatch.setattr(sem, "require_reviewed_vocab", lambda base_dir, logger, *, slug: {"tag": True})
+    monkeypatch.setattr(sem, "get_paths", lambda slug: {"repo_root_dir": tmp_path})
+    monkeypatch.setattr(sem, "require_reviewed_vocab", lambda repo_root_dir, logger, *, slug: {"tag": True})
 
     def _enrich(ctx, logger, vocab, slug=None, **kwargs):
         logger.info("enrich", extra={"slug": slug})
@@ -157,8 +157,8 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
 
     def _ctx_logger(_slug: str):
         logger = SimpleNamespace(info=_logger_info, warning=_logger_warning)
-        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
-        return SimpleNamespace(base_dir=tmp_path), logger, layout
+        layout = SimpleNamespace(repo_root_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
+        return SimpleNamespace(repo_root_dir=tmp_path), logger, layout
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _ctx_logger)
 
@@ -319,8 +319,8 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
 
     # ctx/logger minimi
     def _mk_ctx_and_logger(slug: str):
-        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book")
-        return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(name="test-logger"), layout
+        layout = SimpleNamespace(repo_root_dir=tmp_path, book_dir=tmp_path / "book")
+        return SimpleNamespace(repo_root_dir=tmp_path), SimpleNamespace(name="test-logger"), layout
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
 
@@ -328,7 +328,11 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
 
     # vocabolario e arricchimento simulati
-    monkeypatch.setattr(sem, "require_reviewed_vocab", lambda base_dir, logger, *, slug: {"ok": True})
+    monkeypatch.setattr(
+        sem,
+        "require_reviewed_vocab",
+        lambda repo_root_dir, logger, *, slug: {"ok": True},
+    )
     monkeypatch.setattr(
         sem,
         "enrich_frontmatter",
@@ -380,8 +384,8 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     logger = _Logger()
 
     def _mk_ctx_and_logger(slug: str):
-        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book")
-        return SimpleNamespace(base_dir=tmp_path), logger, layout
+        layout = SimpleNamespace(repo_root_dir=tmp_path, book_dir=tmp_path / "book")
+        return SimpleNamespace(repo_root_dir=tmp_path), logger, layout
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
@@ -391,7 +395,7 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(
         sem,
         "require_reviewed_vocab",
-        lambda base_dir, logger, *, slug: (_ for _ in ()).throw(
+        lambda repo_root_dir, logger, *, slug: (_ for _ in ()).throw(
             ConfigError("Vocabolario canonico assente.", slug=slug)
         ),
     )
@@ -423,8 +427,8 @@ def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
     _write_qa_evidence(qa_dir / sem.QA_EVIDENCE_FILENAME)
 
     def _mk_ctx_and_logger(slug: str):
-        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
-        return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(name="test-logger"), layout
+        layout = SimpleNamespace(repo_root_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
+        return SimpleNamespace(repo_root_dir=tmp_path), SimpleNamespace(name="test-logger"), layout
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
 
@@ -523,8 +527,12 @@ def test_run_summary_requires_qa_marker(monkeypatch, tmp_path):
     )
 
     def _mk_ctx(slug: str):
-        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
-        return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(set_step_status=lambda *a, **k: None), layout
+        layout = SimpleNamespace(repo_root_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
+        return (
+            SimpleNamespace(repo_root_dir=tmp_path),
+            SimpleNamespace(set_step_status=lambda *a, **k: None),
+            layout,
+        )
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx)
     monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
@@ -669,12 +677,22 @@ def test_retry_logged_and_gates_checked(monkeypatch, tmp_path):
     )
 
     def _mk_ctx(slug: str):
-        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=tmp_path / "logs")
-        return SimpleNamespace(base_dir=tmp_path, set_step_status=lambda *a, **k: None), SimpleNamespace(), layout
+        layout = SimpleNamespace(
+            repo_root_dir=tmp_path, book_dir=tmp_path / "book", log_dir=tmp_path / "logs"
+        )
+        return (
+            SimpleNamespace(repo_root_dir=tmp_path, set_step_status=lambda *a, **k: None),
+            SimpleNamespace(),
+            layout,
+        )
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx)
     monkeypatch.setattr(sem, "enrich_frontmatter", lambda ctx, logger, vocab, slug, **kwargs: [])
-    monkeypatch.setattr(sem, "require_reviewed_vocab", lambda base_dir, logger, *, slug: {"tag": True})
+    monkeypatch.setattr(
+        sem,
+        "require_reviewed_vocab",
+        lambda repo_root_dir, logger, *, slug: {"tag": True},
+    )
 
     sem._run_enrich("dummy")
     sem._run_enrich("dummy")
@@ -712,8 +730,12 @@ def test_gating_failure_reasons_are_deterministic(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
 
     def _mk_ctx(slug: str):
-        layout = SimpleNamespace(base_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
-        return SimpleNamespace(base_dir=tmp_path), SimpleNamespace(set_step_status=lambda *a, **k: None), layout
+        layout = SimpleNamespace(repo_root_dir=tmp_path, book_dir=tmp_path / "book", log_dir=qa_dir)
+        return (
+            SimpleNamespace(repo_root_dir=tmp_path),
+            SimpleNamespace(set_step_status=lambda *a, **k: None),
+            layout,
+        )
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx)
     monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)

@@ -212,7 +212,7 @@ def _load_client_settings(context_or_root: Path | Any) -> dict[str, Any]:
             raise ConfigError("Errore lettura config.yaml.", file_path=file_path) from exc
 
     try:
-        settings = PipelineSettings.load(layout.base_dir, config_path=layout.config_path)
+        settings = PipelineSettings.load(layout.repo_root_dir, config_path=layout.config_path)
         return cast(dict[str, Any], settings.as_dict())
     except ConfigError:
         raise
@@ -231,7 +231,7 @@ def load_semantic_config(context_or_root: Path | Any, *, overrides: Optional[dic
       - SemanticConfig con parametri finali e mapping completo (da semantic_mapping.yaml)
     """
     layout = _resolve_layout(context_or_root)
-    base_dir_path = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     semantic_dir = layout.semantic_dir
     raw_dir = layout.raw_dir
     config_path = layout.config_path
@@ -283,7 +283,7 @@ def load_semantic_config(context_or_root: Path | Any, *, overrides: Optional[dic
         stop_tags=_coerce_stop_tags(acc.get("stop_tags")),
         nlp_backend=_coerce_str(acc.get("nlp_backend"), _DEFAULTS["nlp_backend"]),
         spacy_model=_coerce_str(acc.get("spacy_model"), _DEFAULTS["spacy_model"]),
-        base_dir=base_dir_path,
+        base_dir=repo_root_dir,
         semantic_dir=semantic_dir,
         raw_dir=raw_dir,
         mapping=mapping_all if isinstance(mapping_all, dict) else {},

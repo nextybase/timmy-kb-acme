@@ -219,22 +219,22 @@ def provision_from_vision_with_config(
           "mapping": "<abs path>"
         }
     """
-    base_dir = getattr(ctx, "base_dir", None)
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
     pdf_path = Path(pdf_path)
 
-    # In UI (specie in local/dev), il ClientContext puo' essere valido ma senza base_dir.
-    # In quel caso inferiamo base_dir dal path del PDF (tipicamente <base>/config/<file>.pdf)
+    # In UI (specie in local/dev), il ClientContext puo' essere valido ma senza repo_root_dir.
+    # In quel caso inferiamo repo_root_dir dal path del PDF (tipicamente <base>/config/<file>.pdf)
     # e passiamo un proxy a run_vision_with_gating senza mutare ctx (spesso frozen).
     ctx_for_run: Any = ctx
-    if not base_dir:
+    if not repo_root_dir:
         inferred_base = pdf_path.parent
         if inferred_base.name == "config":
             inferred_base = inferred_base.parent
 
         class _CtxProxy:
-            def __init__(self, inner: Any, base_dir: Path) -> None:
+            def __init__(self, inner: Any, repo_root_dir: Path) -> None:
                 self._inner = inner
-                self.base_dir = base_dir
+                self.repo_root_dir = repo_root_dir
 
             def __getattr__(self, name: str) -> Any:
                 return getattr(self._inner, name)
@@ -270,12 +270,12 @@ def run_vision(
     _ensure_structured_output_and_prompt(ctx, slug=slug)
     eff_logger = logger or get_structured_logger("ui.vision.service")
     pdf_path = Path(pdf_path)
-    base_dir = getattr(ctx, "base_dir", None)
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
     safe_pdf: Path = pdf_path
     safe_yaml: Optional[Path] = None
-    if base_dir is not None:
-        safe_pdf = cast(Path, ensure_within_and_resolve(base_dir, pdf_path))
-        safe_yaml = _vision_yaml_path(base_dir, pdf_path=safe_pdf)
+    if repo_root_dir is not None:
+        safe_pdf = cast(Path, ensure_within_and_resolve(repo_root_dir, pdf_path))
+        safe_yaml = _vision_yaml_path(repo_root_dir, pdf_path=safe_pdf)
     else:
         safe_yaml = safe_pdf.parent / "visionstatement.yaml"
     if safe_yaml is not None and not safe_yaml.exists():

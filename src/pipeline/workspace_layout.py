@@ -54,7 +54,7 @@ class WorkspaceLayout:
 
     slug: str
     repo_root_dir: Path
-    base_dir: Path
+    base_dir: Path  # DEPRECATED: alias storico di repo_root_dir, non usare come root canonica.
     raw_dir: Path
     semantic_dir: Path
     book_dir: Path

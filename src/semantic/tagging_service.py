@@ -144,7 +144,7 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         )
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(cast(Any, context))
-    workspace_root = layout.base_dir
+    workspace_root = layout.repo_root_dir
     raw_dir = layout.raw_dir
     semantic_dir = layout.semantic_dir
     csv_path = semantic_dir / "tags_raw.csv"

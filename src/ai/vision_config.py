@@ -195,16 +195,16 @@ def _resolve_vision_use_kb(
 
 
 @lru_cache(maxsize=16)
-def _load_settings_cached(base_dir: Optional[str]) -> Optional[Settings]:
-    if not base_dir:
+def _load_settings_cached(repo_root_dir: Optional[str]) -> Optional[Settings]:
+    if not repo_root_dir:
         return None
     try:
-        return Settings.load(base_dir)
+        return Settings.load(repo_root_dir)
     except Exception as exc:
         LOGGER.warning(
             "ai.vision_config.settings_load_failed",
             extra={
-                "base_dir": base_dir,
+                "repo_root_dir": repo_root_dir,
                 "error": str(exc),
                 "exc_type": type(exc).__name__,
             },
@@ -215,7 +215,7 @@ def _load_settings_cached(base_dir: Optional[str]) -> Optional[Settings]:
 def _resolve_vision_strict_output(
     settings_obj: Optional[Settings],
     settings_payload: Mapping[str, Any],
-    base_dir: Optional[Any],
+    repo_root_dir: Optional[Any],
 ) -> bool:
     settings_flag: Optional[bool] = None
     if isinstance(settings_obj, Settings):
@@ -231,8 +231,8 @@ def _resolve_vision_strict_output(
         payload_flag = raw
 
     fallback_flag: Optional[bool] = None
-    if base_dir:
-        fallback_settings = _load_settings_cached(str(base_dir))
+    if repo_root_dir:
+        fallback_settings = _load_settings_cached(str(repo_root_dir))
         if fallback_settings is not None:
             fallback_flag = bool(fallback_settings.vision_settings.strict_output)
 
@@ -291,7 +291,7 @@ def resolve_vision_config(ctx: Any, *, override_model: Optional[str] = None) -> 
     - Usa KB: SÌ.
     """
     settings_obj, settings_payload = _extract_context_settings(ctx)
-    base_dir = getattr(ctx, "base_dir", None)
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
 
     assistant_env = _resolve_env_name_for_vision(settings_obj, settings_payload)
     primary_env_value = _optional_env(assistant_env)
@@ -302,7 +302,7 @@ def resolve_vision_config(ctx: Any, *, override_model: Optional[str] = None) -> 
 
     resolved_model = _resolve_model_for_vision(override_model, settings_obj, settings_payload, assistant_id)
     use_kb = _resolve_vision_use_kb(settings_obj, settings_payload)
-    strict_output = _resolve_vision_strict_output(settings_obj, settings_payload, base_dir)
+    strict_output = _resolve_vision_strict_output(settings_obj, settings_payload, repo_root_dir)
 
     return AssistantConfig(
         model=resolved_model,

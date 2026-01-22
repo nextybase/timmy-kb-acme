@@ -69,11 +69,11 @@ def clean_legacy_artifacts(
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
     book_dir: Path = paths.md_dir
-    base_dir: Path = paths.base_dir
+    repo_root_dir: Path = paths.repo_root_dir
 
-    # Guard-rail STRONG: non operare fuori dalla base cliente
+    # Guard-rail STRONG: non operare fuori dalla root cliente
     try:
-        ensure_within(base_dir, book_dir)
+        ensure_within(repo_root_dir, book_dir)
     except Exception as e:
         _logger.warning(
             "pipeline.cleanup.unsafe_book_path",

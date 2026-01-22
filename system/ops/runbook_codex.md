@@ -1,11 +1,11 @@
 # Runbook Codex - Timmy KB (v1.0 Beta)
 
 Questo runbook descrive il flusso operativo tra OCP e Codex
-all’interno dell’**Agency Engine**.
+all'interno dell'**Agency Engine**.
 
-L’Agency Engine è il dominio deliberativo del sistema
+L'Agency Engine è il dominio deliberativo del sistema
 e opera sempre entro i vincoli definiti
-dall’**Epistemic Envelope**.
+dall'**Epistemic Envelope**.
 
 ---
 

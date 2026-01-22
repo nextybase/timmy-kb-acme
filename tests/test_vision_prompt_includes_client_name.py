@@ -12,8 +12,8 @@ fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyM
 
 
 class DummyCtx:
-    def __init__(self, base_dir: Path, client_name: str | None = None):
-        self.base_dir = str(base_dir)
+    def __init__(self, repo_root_dir: Path, client_name: str | None = None):
+        self.repo_root_dir = str(repo_root_dir)
         self.client_name = client_name
         self.settings = {"ai": {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID", "snapshot_retention_days": 30}}}
 
@@ -49,7 +49,7 @@ def tmp_ws(tmp_path: Path) -> Path:
 
 def test_prompt_contains_client_name(monkeypatch, tmp_ws: Path):
     slug = "dummy"
-    ctx = DummyCtx(base_dir=tmp_ws, client_name="Dummy S.p.A.")
+    ctx = DummyCtx(repo_root_dir=tmp_ws, client_name="Dummy S.p.A.")
     seen = {"user_messages": None}
 
     # Finto assistant: payload conforme al contratto (≥3 aree + system_folders + metadata_policy)

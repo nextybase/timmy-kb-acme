@@ -30,7 +30,7 @@ by the Epistemic Envelope active at execution time.
 
 ## Terminology clarification
 
-The term **“Work Order Envelope”** used in Codex workflows
+The term **"Work Order Envelope"** used in Codex workflows
 refers to a *contractual execution boundary* between agents.
 
 It is **not equivalent** to the **Epistemic Envelope**.

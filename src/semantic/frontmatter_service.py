@@ -204,9 +204,9 @@ def _dump_layout_yaml(data: Dict[str, Any]) -> str | None:
 
 
 def _persist_layout_proposal(layout: WorkspaceLayout, logger: logging.Logger, *, slug: str) -> None:
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     try:
-        cfg = load_semantic_config(base_dir)
+        cfg = load_semantic_config(repo_root_dir)
     except Exception as exc:
         logger.debug(
             "semantic.layout_proposal.config_failed",
@@ -246,7 +246,7 @@ def _persist_layout_proposal(layout: WorkspaceLayout, logger: logging.Logger, *,
         if not base_yaml:
             return
         constraints = _build_layout_constraints(base_yaml)
-        vision_text = _load_vision_text(base_dir)
+        vision_text = _load_vision_text(repo_root_dir)
         try:
             proposal = suggest_layout(base_yaml, vision_text, constraints)
         except Exception as exc:
@@ -263,7 +263,7 @@ def _persist_layout_proposal(layout: WorkspaceLayout, logger: logging.Logger, *,
     if not layout_yaml:
         return
 
-    semantic_dir = base_dir / "semantic"
+    semantic_dir = repo_root_dir / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
     layout_path = semantic_dir / "layout_proposal.yaml"
     safe_write_text(layout_path, layout_yaml, encoding="utf-8", atomic=True)
@@ -293,13 +293,12 @@ def enrich_frontmatter(
         )
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
-    base_dir, md_dir = paths.base_dir, paths.md_dir
-    ensure_within(base_dir, md_dir)
-    layout_keys = _read_layout_top_levels(base_dir / "semantic" / "layout_proposal.yaml")
+    repo_root_dir, md_dir = paths.repo_root_dir, paths.md_dir
+    ensure_within(repo_root_dir, md_dir)
+    layout_keys = _read_layout_top_levels(repo_root_dir / "semantic" / "layout_proposal.yaml")
     mapping_all: Dict[str, Any] = {}
     try:
-        cfg_root = getattr(context, "repo_root_dir", None) or base_dir
-        cfg = load_semantic_config(cfg_root)
+        cfg = load_semantic_config(context.repo_root_dir)
         mapping_all = cfg.mapping if isinstance(cfg.mapping, dict) else {}
     except Exception:
         mapping_all = {}
@@ -315,7 +314,7 @@ def enrich_frontmatter(
     relations_all: list[Any] = relations_raw if isinstance(relations_raw, list) else []
 
     if not vocab:
-        tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
+        tags_db = Path(_derive_tags_db_path(repo_root_dir / "semantic" / "tags_reviewed.yaml"))
         logger.info(
             "semantic.frontmatter.skip_tags",
             extra={"slug": slug, "reason": "empty_vocab_allowed", "file_path": str(tags_db)},
@@ -371,7 +370,7 @@ def enrich_frontmatter(
                 if rel_hints:
                     new_meta["relation_hints"] = rel_hints
             # Arricchimento additivo da doc_entities (se presenti e approvate)
-            tags_db = Path(_derive_tags_db_path(base_dir / "semantic" / "tags_reviewed.yaml"))
+            tags_db = Path(_derive_tags_db_path(repo_root_dir / "semantic" / "tags_reviewed.yaml"))
             try:
                 if tags_db.exists():
                     with _get_tags_conn(str(tags_db)) as conn:
@@ -428,7 +427,7 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
     start_ts = time.perf_counter()
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
-    base_dir = paths.base_dir
+    repo_root_dir = paths.repo_root_dir
     md_dir = paths.md_dir
     summary_func = _gen_summary
     readme_func = _gen_readme
@@ -456,8 +455,8 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
                 "semantic.readme.written",
                 extra={"slug": slug, "file_path": str(md_dir / "README.md")},
             )
-            _append_layout_note_to_readme(base_dir, md_dir, logger, slug=slug)
-            _write_layout_summary(base_dir, md_dir, logger, slug=slug)
+            _append_layout_note_to_readme(repo_root_dir, md_dir, logger, slug=slug)
+            _write_layout_summary(repo_root_dir, md_dir, logger, slug=slug)
         except Exception as exc:  # pragma: no cover
             readme_path = md_dir / "README.md"
             logger.error(

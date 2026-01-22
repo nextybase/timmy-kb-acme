@@ -19,8 +19,8 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     mapping.write_text("context:\n  slug: x\n", encoding="utf-8")
 
     class _DummyCtx:
-        def __init__(self, base_dir: Path):
-            self.base_dir = base_dir
+        def __init__(self, repo_root_dir: Path):
+            self.repo_root_dir = repo_root_dir
 
     class _DummySt:
         def __init__(self):
@@ -109,7 +109,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(
         landing,
         "get_ui_workspace_layout",
-        lambda *_args, **_kwargs: SimpleNamespace(base_dir=base),
+        lambda *_args, **_kwargs: SimpleNamespace(repo_root_dir=base),
         raising=True,
     )
 

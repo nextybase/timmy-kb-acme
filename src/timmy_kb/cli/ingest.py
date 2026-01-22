@@ -446,7 +446,7 @@ def ingest_path(
     Richiede un context valido per risolvere il layout canonico.
     """
     layout = _require_layout(context, slug)
-    base = layout.base_dir
+    base = layout.repo_root_dir
     if base_dir is not None:
         requested = Path(base_dir).resolve()
         if requested != base:
@@ -500,7 +500,7 @@ def ingest_folder(
     Args:
         slug/scope/version/meta: parametri dominio.
         embeddings_client: facoltativo, riuso di un client embedding.
-        base_dir: override del perimetro path-safety (deve coincidere con layout.base_dir).
+        base_dir: override del perimetro path-safety (deve coincidere con layout.repo_root_dir).
         max_files: limita il numero massimo di file elaborati (None -> tutti).
         batch_size: numero di file caricati per batch durante lo streaming (None -> 1).
 
@@ -508,7 +508,7 @@ def ingest_folder(
     """
     start_metrics_server_once()
     layout = _require_layout(context, slug)
-    base = layout.base_dir
+    base = layout.repo_root_dir
     if base_dir is not None:
         requested = Path(base_dir).resolve()
         if requested != base:

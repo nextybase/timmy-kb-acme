@@ -114,7 +114,7 @@ def _build_ledger_evidence(
 ) -> str:
     payload = {
         "slug": layout.slug,
-        "workspace_root": str(layout.base_dir),
+        "workspace_root": str(layout.repo_root_dir),
         "config_path": str(layout.config_path),
         "dummy_mode": bool(dummy_mode),
         "requested_mode": requested_mode,
@@ -444,12 +444,12 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
         bootstrap_config=False,
     )
     layout = _require_layout(context)
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     semantic_candidate = layout.semantic_dir
     try:
-        semantic_dir = ensure_within_and_resolve(base_dir, semantic_candidate)
+        semantic_dir = ensure_within_and_resolve(repo_root_dir, semantic_candidate)
     except PathTraversalError:
-        logs_dir = ensure_within_and_resolve(base_dir, base_dir / "logs")
+        logs_dir = ensure_within_and_resolve(repo_root_dir, repo_root_dir / "logs")
         logs_dir.mkdir(parents=True, exist_ok=True)
         log_file = ensure_within_and_resolve(logs_dir, logs_dir / "tag_onboarding_validate.log")
         logger = get_structured_logger(
@@ -471,9 +471,9 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
     report_path = ensure_within_and_resolve(semantic_dir, report_candidate)
 
     db_candidate = Path(derive_db_path_from_yaml_path(yaml_path))
-    db_path = ensure_within_and_resolve(base_dir, db_candidate)
+    db_path = ensure_within_and_resolve(repo_root_dir, db_candidate)
 
-    logs_dir = ensure_within_and_resolve(base_dir, base_dir / "logs")
+    logs_dir = ensure_within_and_resolve(repo_root_dir, repo_root_dir / "logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
     log_file = ensure_within_and_resolve(logs_dir, logs_dir / "tag_onboarding_validate.log")
 
@@ -781,15 +781,15 @@ def _resolve_cli_paths(
     """Calcola i percorsi CLI garantendo path-safety rispetto al contesto cliente."""
 
     layout = _require_layout(context)
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     raw_candidate = Path(raw_override) if raw_override else layout.raw_dir
-    raw_dir = ensure_within_and_resolve(base_dir, raw_candidate)
-    semantic_dir = ensure_within_and_resolve(base_dir, layout.semantic_dir)
+    raw_dir = ensure_within_and_resolve(repo_root_dir, raw_candidate)
+    semantic_dir = ensure_within_and_resolve(repo_root_dir, layout.semantic_dir)
 
     db_candidate = Path(db_override) if db_override else (semantic_dir / "tags.db")
-    db_path = ensure_within_and_resolve(base_dir, db_candidate)
+    db_path = ensure_within_and_resolve(repo_root_dir, db_candidate)
 
-    return base_dir, raw_dir, db_path, semantic_dir
+    return repo_root_dir, raw_dir, db_path, semantic_dir
 
 
 def _parse_args() -> argparse.Namespace:

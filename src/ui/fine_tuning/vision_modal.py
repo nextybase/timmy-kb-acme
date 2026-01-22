@@ -59,10 +59,10 @@ def _is_gate_error(err: Exception) -> bool:
 
 
 def _ensure_workspace_pdf(ctx: ClientContext) -> Path:
-    base_dir = getattr(ctx, "base_dir", None)
-    if not base_dir:
-        raise ConfigError("Context privo di base_dir per Vision.")
-    base_path = Path(base_dir)
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+    if not repo_root_dir:
+        raise ConfigError("Context privo di repo_root_dir per Vision.")
+    base_path = Path(repo_root_dir)
     pdf_path = cast(
         Path,
         ensure_within_and_resolve(base_path, base_path / "config" / "VisionStatement.pdf"),

@@ -78,7 +78,7 @@ def _resolve_workspace(
     )
 
     layout = WorkspaceLayout.from_context(context)
-    workspace = layout.base_dir
+    workspace = layout.repo_root_dir
     workspace = ensure_within_and_resolve(REPO_ROOT, workspace)
     return workspace, layout, context, slug
 

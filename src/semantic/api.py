@@ -78,7 +78,7 @@ def get_paths(slug: str) -> Dict[str, Path]:
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
     return {
-        "base": layout.base_dir,
+        "base": layout.repo_root_dir,
         "raw": layout.raw_dir,
         "book": layout.book_dir,
         "semantic": layout.semantic_dir,
@@ -158,7 +158,7 @@ def export_tags_yaml_from_db(
             file_path=str(semantic_dir),
         )
 
-    base_root_path = layout.base_dir
+    base_root_path = layout.repo_root_dir
     semantic_dir_path = ensure_within_and_resolve(base_root_path, Path(semantic_dir))
     if semantic_dir_path != layout.semantic_dir:
         raise ConfigError(
@@ -204,7 +204,7 @@ def _run_build_workflow(
     enrich_fn: EnrichStage | None = None,
     summary_fn: SummaryStage | None = None,
 ) -> BuildWorkflowResult:
-    """Esegue convert -> enrich -> summary/readme restituendo base_dir, mds e arricchiti.
+    """Esegue convert -> enrich -> summary/readme restituendo repo_root_dir, mds e arricchiti.
 
     Durante il run usa la cache LRU del frontmatter (gestita da `pipeline.content_utils`) per
     velocizzare le riletture; al termine svuota sempre la cache con `clear_frontmatter_cache()`
@@ -218,7 +218,7 @@ def _run_build_workflow(
         )
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(cast(Any, context))
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
 
     def _wrap(stage_name: str, func: Callable[[], Any]) -> Any:
         if stage_wrapper is None:
@@ -238,7 +238,7 @@ def _run_build_workflow(
 
         vocab: Dict[str, Dict[str, Sequence[str]]] = cast(
             Dict[str, Dict[str, Sequence[str]]],
-            _wrap("require_reviewed_vocab", lambda: vocab_impl(base_dir, logger, slug=slug)),
+            _wrap("require_reviewed_vocab", lambda: vocab_impl(repo_root_dir, logger, slug=slug)),
         )
 
         touched: List[Path] = cast(
@@ -256,7 +256,7 @@ def _run_build_workflow(
                 extra={"slug": slug, "enriched": None, "error": str(exc)},
             )
         _wrap("write_summary_and_readme", lambda: summary_impl(context, logger, slug=slug))
-        return base_dir, mds, touched
+        return repo_root_dir, mds, touched
     finally:
         try:
             from pipeline.content_utils import clear_frontmatter_cache, log_frontmatter_cache_stats
@@ -385,14 +385,14 @@ def index_markdown_to_db(
         )
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(cast(Any, context))
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     book_dir = layout.book_dir
-    store = KbStore.for_slug(slug=slug, base_dir=base_dir, db_path=db_path)
+    store = KbStore.for_slug(slug=slug, base_dir=repo_root_dir, db_path=db_path)
     effective_db_path = store.effective_db_path()
     return cast(
         int,
         embedding_service.index_markdown_to_db(
-            base_dir=base_dir,
+            base_dir=repo_root_dir,
             book_dir=book_dir,
             slug=slug,
             logger=logger,

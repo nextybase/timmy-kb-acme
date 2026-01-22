@@ -557,9 +557,9 @@ def _cleanup_orphan_markdown(
 
 
 def validate_markdown_dir(ctx: _ClientCtx, md_dir: Path | None = None) -> Path:
-    """Verifica che la cartella markdown esista, sia una directory e sia 'safe' rispetto a ctx.base_dir."""
+    """Verifica che la cartella markdown esista, sia una directory e sia 'safe' rispetto a ctx.repo_root_dir."""
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
-    target = _ensure_safe(ctx.base_dir, target_input, slug=getattr(ctx, "slug", None))
+    target = _ensure_safe(ctx.repo_root_dir, target_input, slug=getattr(ctx, "slug", None))
 
     if not target.exists():
         raise PipelineError(
@@ -580,10 +580,10 @@ def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Pat
     """Crea (o sovrascrive) README.md nella cartella markdown target."""
     layout = WorkspaceLayout.from_context(ctx)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
-    base_dir = paths.base_dir
+    repo_root_dir = paths.repo_root_dir
     default_md_dir = paths.md_dir
     target_input: Path = md_dir if md_dir is not None else default_md_dir
-    target = _ensure_safe(base_dir, target_input, slug=getattr(ctx, "slug", None))
+    target = _ensure_safe(repo_root_dir, target_input, slug=getattr(ctx, "slug", None))
     target.mkdir(parents=True, exist_ok=True)
 
     title = getattr(ctx, "slug", None) or "Knowledge Base"
@@ -617,8 +617,7 @@ def generate_readme_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Pat
     )
     logger = get_structured_logger("pipeline.content_utils")
     try:
-        cfg_root = getattr(ctx, "repo_root_dir", None) or base_dir
-        cfg = load_semantic_config(cfg_root)
+        cfg = load_semantic_config(ctx.repo_root_dir)
         areas_data = cfg.mapping.get("areas") if isinstance(cfg.mapping, dict) else None
         iterable: Iterable[tuple[str, Any]]
         if isinstance(areas_data, dict):
@@ -664,10 +663,10 @@ def generate_summary_markdown(ctx: _ReadmeCtx, md_dir: Path | None = None) -> Pa
     """Genera SUMMARY.md elencando i .md nella cartella target (escludendo README.md e SUMMARY.md)."""
     layout = WorkspaceLayout.from_context(ctx)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
-    base_dir = paths.base_dir
+    repo_root_dir = paths.repo_root_dir
     default_md_dir = paths.md_dir
     target_input: Path = md_dir if md_dir is not None else default_md_dir
-    target = _ensure_safe(base_dir, target_input, slug=getattr(ctx, "slug", None))
+    target = _ensure_safe(repo_root_dir, target_input, slug=getattr(ctx, "slug", None))
     target.mkdir(parents=True, exist_ok=True)
 
     summary = target / "SUMMARY.md"
@@ -709,7 +708,7 @@ def convert_files_to_structured_markdown(
     Se `safe_pdfs` è fornito, **non** esegue alcuna discovery su disco e assume
     che la lista sia già validata e risolta all'interno di `ctx.raw_dir`.
     """
-    base = ctx.base_dir
+    base = ctx.repo_root_dir
     raw_root = ctx.raw_dir
     target_input: Path = md_dir if md_dir is not None else ctx.md_dir
 
@@ -732,8 +731,7 @@ def convert_files_to_structured_markdown(
             file_path=str(raw_root),
         )
 
-    cfg_root = getattr(ctx, "repo_root_dir", None) or base
-    cfg = load_semantic_config(cfg_root)
+    cfg = load_semantic_config(ctx.repo_root_dir)
     candidates = extract_semantic_candidates(raw_root, cfg)
 
     written: set[Path] = set()

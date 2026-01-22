@@ -2,7 +2,7 @@
 """Utility condivise per risolvere i percorsi del contesto semantico.
 
 Contratto 1.0 Beta (layout-first):
-- I path canonici (base/raw/book) devono derivare esclusivamente da WorkspaceLayout.
+- I path canonici (repo_root/raw/book) devono derivare esclusivamente da WorkspaceLayout.
 - È vietato ricostruire i path con join manuali o leggere context.*_dir come override.
 """
 
@@ -20,7 +20,7 @@ __all__ = ["ContextPaths", "resolve_context_paths"]
 
 @dataclass(frozen=True)
 class ContextPaths:
-    base_dir: Path
+    repo_root_dir: Path
     raw_dir: Path
     md_dir: Path
     slug: str
@@ -29,7 +29,7 @@ class ContextPaths:
 def resolve_context_paths(layout: WorkspaceLayout) -> ContextPaths:
     """Risoluzione canonica (layout-first) di base/raw/md."""
     return ContextPaths(
-        base_dir=layout.base_dir,
+        repo_root_dir=layout.repo_root_dir,
         raw_dir=layout.raw_dir,
         md_dir=layout.book_dir,
         slug=layout.slug,

@@ -54,7 +54,7 @@ def build_markdown_headless(
     # 1) Conversione PDF -> Markdown
     converted: List[Path] = convert_markdown(ctx, log, slug=slug)
 
-    # 2) Caricamento vocabolario canonico: usa ctx.base_dir se presente, altrimenti get_paths(...)
+    # 2) Caricamento vocabolario canonico: usa ctx.repo_root_dir come root canonica.
     if getattr(ctx, "repo_root_dir", None) is None:
         raise ConfigError(
             "Contesto privo di repo_root_dir: impossibile risolvere il workspace in modo deterministico.",
@@ -62,7 +62,7 @@ def build_markdown_headless(
         )
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(cast(Any, ctx))
-    base = layout.base_dir
+    base = layout.repo_root_dir
     vocab = require_reviewed_vocab(base, log, slug=slug)
 
     # 3) Arricchimento frontmatter: esegui SEMPRE anche con vocab vuoto

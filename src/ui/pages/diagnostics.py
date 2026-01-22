@@ -31,15 +31,15 @@ def _warn_once(key: str, event: str, *, slug: str | None, message: str, level: s
         st.warning(message)
 
 
-def _render_counts(base_dir: Optional[Path], *, slug: str | None) -> None:
+def _render_counts(repo_root_dir: Optional[Path], *, slug: str | None) -> None:
     """Mostra un riepilogo minimale del workspace (raw/book/semantic)."""
     with st.expander("Workspace", expanded=False):
-        if not base_dir:
+        if not repo_root_dir:
             st.info("Seleziona un cliente per mostrare i dettagli.")
             return
 
         try:
-            summaries = diag.summarize_workspace_folders(base_dir)
+            summaries = diag.summarize_workspace_folders(repo_root_dir)
         except Exception as exc:
             _warn_once(
                 f"diag_counts_failed_{slug}",
@@ -63,16 +63,16 @@ def _render_counts(base_dir: Optional[Path], *, slug: str | None) -> None:
             st.info("Nessun dato disponibile.")
 
 
-def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
+def _render_logs(repo_root_dir: Optional[Path], slug: Optional[str]) -> None:
     """Mostra la coda del log più recente e offre il download dell'archivio."""
     with st.expander("Log", expanded=False):
-        if not base_dir:
+        if not repo_root_dir:
             st.info("Seleziona un cliente per mostrare i dettagli.")
             return
 
         # Elenco log
         try:
-            log_files = diag.collect_log_files(base_dir)
+            log_files = diag.collect_log_files(repo_root_dir)
         except Exception as exc:
             _warn_once(
                 f"diag_logs_list_failed_{slug}",
@@ -89,7 +89,7 @@ def _render_logs(base_dir: Optional[Path], slug: Optional[str]) -> None:
         latest = log_files[0]
         reader = diag.get_safe_reader()
 
-        summary = diag.build_workspace_summary(slug or "unknown", log_files, base_dir=base_dir)
+        summary = diag.build_workspace_summary(slug or "unknown", log_files, repo_root_dir=repo_root_dir)
         if summary:
             st.caption("Workspace summary")
             st.json(summary)
@@ -136,19 +136,19 @@ def main() -> None:
     st.subheader("Diagnostica")
 
     try:
-        base_dir = diag.resolve_base_dir(slug)
+        repo_root_dir = diag.resolve_repo_root_dir(slug)
     except Exception as exc:
         LOGGER.error(
-            "ui.diagnostics.base_dir_failed",
+            "ui.diagnostics.repo_root_dir_failed",
             extra={"page": "diagnostics", "slug": slug or "", "reason": str(exc), "decision": "STOP"},
         )
-        st.error(f"Impossibile risolvere la base dir: {exc}")
+        st.error(f"Impossibile risolvere la repo root: {exc}")
         st.stop()
 
-    st.write(f"Base dir: `{base_dir}`")
+    st.write(f"Repo root: `{repo_root_dir}`")
 
-    _render_counts(base_dir, slug=slug)
-    _render_logs(base_dir, slug)
+    _render_counts(repo_root_dir, slug=slug)
+    _render_logs(repo_root_dir, slug)
 
 
 # Esportiamo esplicitamente i simboli usati nei test

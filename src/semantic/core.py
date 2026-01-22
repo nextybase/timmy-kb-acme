@@ -45,7 +45,6 @@ def compile_pdf_to_yaml(pdf_path: Path, yaml_path: Path) -> None:
 
 
 class _CtxProto:
-    base_dir: Path
     md_dir: Path
     repo_root_dir: Path
     slug: Optional[str]
@@ -56,9 +55,9 @@ def _list_markdown_files(context: _CtxProto, logger: logging.Logger) -> List[Pat
         raise PipelineError("Contesto incompleto: md_dir/repo_root_dir mancanti", slug=getattr(context, "slug", None))
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(context)
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     try:
-        safe_md_dir = ensure_within_and_resolve(base_dir, context.md_dir)
+        safe_md_dir = ensure_within_and_resolve(repo_root_dir, context.md_dir)
     except Exception as exc:
         raise PipelineError("Path non sicuro", slug=context.slug, file_path=context.md_dir) from exc
     if not safe_md_dir.exists() or not safe_md_dir.is_dir():
@@ -120,9 +119,9 @@ def _sanitize_and_dedup_mapping(mapping: Dict[str, List[str]]) -> Dict[str, List
 
 def load_semantic_mapping(context: _CtxProto, logger: Optional[logging.Logger] = None) -> Dict[str, List[str]]:
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     log = logger or get_structured_logger("semantic.extraction", context=context)
-    vocab = load_reviewed_vocab(base_dir, log)
+    vocab = load_reviewed_vocab(repo_root_dir, log)
     if not vocab:
         raise PipelineError(
             "Vocabolario canonico assente: esegui l'estrazione tag",

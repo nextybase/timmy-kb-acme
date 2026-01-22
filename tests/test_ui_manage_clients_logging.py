@@ -36,7 +36,7 @@ def manage_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
     fake_workspace = types.ModuleType("ui.utils.workspace")
     fake_workspace.get_ui_workspace_layout = lambda *_a, **_k: SimpleNamespace(
-        base_dir=base_dir,
+        repo_root_dir=base_dir,
         raw_dir=raw_dir,
         semantic_dir=semantic_dir,
     )

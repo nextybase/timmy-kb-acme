@@ -28,9 +28,10 @@ pytestmark = pytest.mark.regression_light
 
 
 class _Ctx:
-    """Context minimale: base_dir, client_name e settings letti dal config loader in app."""
+    """Context minimale: repo_root_dir canonico, client_name e settings letti dal config loader in app."""
 
     def __init__(self, base_dir: Path, client_name: str = "Dummy Srl"):
+        self.repo_root_dir = base_dir
         self.base_dir = base_dir
         self.client_name = client_name
         # SSoT: il nome dell'env da cui ricavare l'assistant_id
@@ -536,7 +537,7 @@ def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     monkeypatch.setattr(vp, "_call_assistant_json", _fake_call)
 
-    paths = vp._Paths(base_dir=tmp_path, semantic_dir=tmp_path, mapping_yaml=tmp_path / "a")
+    paths = vp._Paths(repo_root_dir=tmp_path, semantic_dir=tmp_path, mapping_yaml=tmp_path / "a")
     prepared = vp._VisionPrepared(
         slug="s",
         display_name="d",

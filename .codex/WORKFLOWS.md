@@ -7,7 +7,7 @@ They must not modify or bypass the **Epistemic Envelope**.
 Canonical definitions and disambiguations are in:
 - `.codex/CONSTITUTION.md` (normative entrypoint for `.codex/`)
 
-Note: “Work Order Envelope” (used in prompt contracts) is an agent-level execution contract,
+Note: "Work Order Envelope" (used in prompt contracts) is an agent-level execution contract,
 and is **not** the system-level Epistemic Envelope.
 
 ## Overview

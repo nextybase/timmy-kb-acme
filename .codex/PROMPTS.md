@@ -8,7 +8,7 @@ Canonical definitions are in `.codex/CONSTITUTION.md`.
 - **Agency Engine**: deliberative domain (Prompt Chain, gates, work orders, supervised execution).
 
 Important disambiguation:
-“Work Order Envelope” below is an agent-level execution contract and is **not**
+"Work Order Envelope" below is an agent-level execution contract and is **not**
 the system-level Epistemic Envelope.
 
 ## Turn-Based Protocol & Single-Turn Execution

@@ -262,10 +262,10 @@ def _handle_tags_raw_enable(
 # Modal editor per semantic/tags_reviewed.yaml
 # -----------------------------------------------------------
 def _open_tags_editor_modal(slug: str, layout: WorkspaceLayout) -> None:
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     tags_component.open_tags_editor_modal(
         slug,
-        base_dir,
+        repo_root_dir,
         st=st,
         logger=LOGGER,
         column_button=_column_button,
@@ -279,11 +279,11 @@ def _open_tags_editor_modal(slug: str, layout: WorkspaceLayout) -> None:
 
 
 def _open_tags_raw_modal(slug: str, layout: WorkspaceLayout) -> None:
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     tags_cfg = get_tags_env_config()
     tags_component.open_tags_raw_modal(
         slug,
-        base_dir,
+        repo_root_dir,
         st=st,
         logger=LOGGER,
         column_button=_column_button,
@@ -388,7 +388,7 @@ if slug:
     client_state = (get_client_state(slug) or "").strip().lower()
     emit_btn_type = "primary" if client_state == "nuovo" else "secondary"
 
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     raw_dir = layout.raw_dir
     semantic_dir = layout.semantic_dir
 

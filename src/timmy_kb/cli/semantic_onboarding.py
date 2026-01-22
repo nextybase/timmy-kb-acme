@@ -44,7 +44,7 @@ from timmy_kb.versioning import build_env_fingerprint
 
 def get_paths(slug: str) -> dict[str, Path]:
     layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
-    return {"base": layout.base_dir, "book": layout.book_dir}
+    return {"base": layout.repo_root_dir, "book": layout.book_dir}
 
 
 def _default_parse_args() -> argparse.Namespace:
@@ -92,7 +92,7 @@ def _build_evidence_json(
 
     payload: dict[str, object] = {
         "slug": layout.slug,
-        "workspace_root": str(layout.base_dir),
+        "workspace_root": str(layout.repo_root_dir),
         "config_path": str(layout.config_path),
         "semantic_dir": str(layout.semantic_dir),
         "requested": requested,
@@ -185,7 +185,7 @@ def main() -> int:
             try:
                 tag_kg_effective: str | None = None
 
-                base_dir, _mds, touched = run_semantic_pipeline(
+                repo_root_dir, _mds, touched = run_semantic_pipeline(
                     ctx,
                     logger,
                     slug=slug,
@@ -236,7 +236,7 @@ def main() -> int:
                 tags_raw_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.json")
                 if tags_raw_path.exists():
                     with phase_scope(logger, stage="cli.tag_kg_builder", customer=slug):
-                        build_kg_for_workspace(base_dir, namespace=slug)
+                        build_kg_for_workspace(repo_root_dir, namespace=slug)
                     tag_kg_effective = "built"
                 else:
                     logger.info(
@@ -374,7 +374,7 @@ def main() -> int:
             content_mds = list_content_markdown(book_dir)
             summary_extra = {
                 "book_dir": str(book_dir),
-                "base_dir": str(layout.base_dir),
+                "repo_root_dir": str(layout.repo_root_dir),
                 "markdown": len(content_mds),
                 "frontmatter": len(touched),
                 "summary_exists": summary_path.exists(),

@@ -383,7 +383,7 @@ def run_gitbook_docker_preview(
       - Nessun prompt: interazione/decisione è responsabilità degli orchestratori.
 
     Args:
-        context: Contesto con `slug`, `md_dir`, `base_dir` e opzionalmente `config`.
+        context: Contesto con `slug`, `md_dir`, `repo_root_dir` e opzionalmente `config`.
         port: Porta locale da esporre (se None, viene risolta come da precedenza sopra).
         container_name: Nome del container Docker.
         wait_on_exit: Se True, esegue `serve` in foreground (senza -d).
@@ -397,12 +397,12 @@ def run_gitbook_docker_preview(
         raise PipelineError("Slug cliente mancante nel contesto per preview", slug=None)
 
     layout = WorkspaceLayout.from_context(context)
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     md_dir = layout.book_dir
 
-    # Path-safety STRONG: md_dir deve essere sotto base_dir
+    # Path-safety STRONG: md_dir deve essere sotto repo_root_dir
     try:
-        ensure_within(base_dir, md_dir)
+        ensure_within(repo_root_dir, md_dir)
     except Exception as e:
         raise PreviewError(
             f"Percorso markdown non sicuro: {md_dir} ({e})",

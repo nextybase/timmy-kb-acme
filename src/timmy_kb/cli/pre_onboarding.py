@@ -199,7 +199,7 @@ def _summarize_error(exc: BaseException) -> str:
 def _build_ledger_evidence(layout: WorkspaceLayout) -> str:
     payload = {
         "slug": layout.slug,
-        "workspace_root": str(layout.base_dir),
+        "workspace_root": str(layout.repo_root_dir),
         "config_path": str(layout.config_path),
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -210,7 +210,7 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     bootstrap_client_workspace(context)
     layout = WorkspaceLayout.from_context(context)
     cfg_path = layout.config_path
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
 
     cfg: Dict[str, Any] = {}
     try:
@@ -222,9 +222,9 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
 
     write_client_config_file(context, cfg)
 
-    ensure_within(base_dir, layout.raw_dir)
-    ensure_within(base_dir, layout.book_dir)
-    ensure_within(base_dir, cfg_path.parent)
+    ensure_within(repo_root_dir, layout.raw_dir)
+    ensure_within(repo_root_dir, layout.book_dir)
+    ensure_within(repo_root_dir, cfg_path.parent)
 
     cfg_dir = cfg_path.parent
     cfg_dir.mkdir(parents=True, exist_ok=True)
@@ -232,7 +232,7 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     with phase_scope(logger, stage="create_local_structure", customer=context.slug) as m:
         # telemetria: numero directory top-level nella base cliente
         try:
-            base = base_dir
+            base = repo_root_dir
             count = sum(1 for p in (base.iterdir() if base else []) if p.is_dir()) if base else None
             m.set_artifacts(count)
         except Exception:
@@ -287,18 +287,18 @@ def ensure_local_workspace_for_ui(
 
     # Salva VisionStatement.pdf se fornito
     if vision_statement_pdf:
-        base_dir = layout.base_dir
+        repo_root_dir = layout.repo_root_dir
         cfg_dir = layout.config_path.parent
         target = layout.vision_pdf
         cfg_dir.mkdir(parents=True, exist_ok=True)
-        ensure_within(base_dir, target)
+        ensure_within(repo_root_dir, target)
         safe_write_bytes(target, vision_statement_pdf, atomic=True)
         logger.info(
             "vision_statement_saved",
             extra={
                 "slug": context.slug,
                 "file_path": str(target),
-                "context_base_dir": str(base_dir),
+                "context_repo_root_dir": str(repo_root_dir),
                 "repo_root_dir": str(context.repo_root_dir or "<none>"),
             },
         )
@@ -345,7 +345,7 @@ def ensure_local_workspace_for_ui(
         if prompt_src.exists():
             prompt_dest = layout.config_path.parent / "assistant_vision_system_prompt.txt"
             prompt_dest.parent.mkdir(parents=True, exist_ok=True)
-            ensure_within(layout.base_dir, prompt_dest)
+            ensure_within(layout.repo_root_dir, prompt_dest)
             source_text = read_text_safe(prompt_src.parent, prompt_src, encoding="utf-8")
             safe_write_text(prompt_dest, source_text, encoding="utf-8", atomic=True)
     except Exception as exc:
@@ -358,7 +358,7 @@ def ensure_local_workspace_for_ui(
         "cli.pre_onboarding.workspace.created",
         extra={
             "slug": context.slug,
-            "base": str(layout.base_dir),
+            "base": str(layout.repo_root_dir),
             "config": str(config_path),
         },
     )

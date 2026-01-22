@@ -43,7 +43,6 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
     # Context di test minimale per evitare check env/drive
     fake_ctx = SimpleNamespace(
         slug="dummy",
-        base_dir=client_root,
         raw_dir=client_root / "raw",
         md_dir=client_root / "book",
         config_path=client_root / "config" / "config.yaml",
@@ -57,7 +56,7 @@ def test_tag_onboarding_main_raises_configerror_when_drive_utils_missing(tmp_pat
     fake_ctx.md_dir.mkdir(parents=True, exist_ok=True)
     fake_resources = tag.ContextResources(
         context=fake_ctx,
-        base_dir=client_root,
+        repo_root_dir=client_root,
         raw_dir=fake_ctx.raw_dir,
         semantic_dir=client_root / "semantic",
         logger=logging.getLogger("test.tag.drive"),

@@ -518,7 +518,7 @@ if current_phase == UI_PHASE_INIT:
                 cache_key = (s or "").strip().lower()
                 if cache_key:
                     _LAYOUT_CACHE[cache_key] = layout
-                cfg_dir = layout.config_path.parent if layout.config_path else layout.base_dir / "config"
+                cfg_dir = layout.config_path.parent if layout.config_path else layout.repo_root_dir / "config"
                 _semantic_dir_client(s, layout=layout).mkdir(parents=True, exist_ok=True)
                 try:
                     _mirror_repo_config_into_client(s, layout, pdf_bytes=pdf_bytes)
@@ -527,7 +527,7 @@ if current_phase == UI_PHASE_INIT:
                     st.stop()
                 if pdf_bytes:
                     vision_target = cast(
-                        Path, ensure_within_and_resolve(layout.base_dir, cfg_dir / "VisionStatement.pdf")
+                        Path, ensure_within_and_resolve(layout.repo_root_dir, cfg_dir / "VisionStatement.pdf")
                     )
                     safe_write_bytes(vision_target, pdf_bytes, atomic=True)
                     updates = {"vision_statement_pdf": "config/VisionStatement.pdf"}

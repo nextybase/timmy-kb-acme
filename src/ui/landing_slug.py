@@ -136,7 +136,7 @@ def _workspace_dir_for(slug: str, *, layout: WorkspaceLayout | None = None) -> P
             "di bootstrap in pipeline.workspace_bootstrap (bootstrap_client_workspace/migrate_or_repair_workspace).",
             slug=slug,
         )
-    return cast(Path, layout.base_dir)
+    return cast(Path, layout.repo_root_dir)
 
 
 def _request_shutdown(logger: Optional[logging.Logger]) -> None:
@@ -150,15 +150,15 @@ def _request_shutdown(logger: Optional[logging.Logger]) -> None:
         os._exit(0)
 
 
-def _base_dir_for(slug: str) -> Path:
+def _repo_root_dir_for(slug: str) -> Path:
     try:
         ctx = get_client_context(slug, require_env=False)
     except Exception as exc:
         raise RuntimeError(CLIENT_CONTEXT_ERROR_MSG) from exc
 
-    base = getattr(ctx, "base_dir", None)
-    if isinstance(base, Path):
-        return base
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+    if isinstance(repo_root_dir, Path):
+        return repo_root_dir
 
     raw_dir = getattr(ctx, "raw_dir", None)
     if isinstance(raw_dir, Path):
@@ -317,7 +317,7 @@ def handle_verify_workflow(
             "pdf_bytes": None,
             "pdf_filename": None,
             "workspace_created": False,
-            "base_dir": None,
+            "repo_root_dir": None,
             "yaml_paths": {},
             "mapping_yaml": "",
             "cartelle_yaml": "",
@@ -390,11 +390,14 @@ def render_workspace_summary(
             try:
                 ensure_local_workspace_for_ui(slug, client_name or slug, vision_statement_pdf=pdf_bytes)
                 ctx = get_client_context(slug, require_env=False)
-                if ctx.base_dir is None:
-                    raise ConfigError("Workspace creato ma base_dir non disponibile.")
-                base_dir = Path(ctx.base_dir)
-                vision_state["base_dir"] = str(base_dir)
-                pdf_path = ensure_within_and_resolve(base_dir, base_dir / "config" / "VisionStatement.pdf")
+                if ctx.repo_root_dir is None:
+                    raise ConfigError("Workspace creato ma repo_root_dir non disponibile.")
+                repo_root_dir = Path(ctx.repo_root_dir)
+                vision_state["repo_root_dir"] = str(repo_root_dir)
+                pdf_path = ensure_within_and_resolve(
+                    repo_root_dir,
+                    repo_root_dir / "config" / "VisionStatement.pdf",
+                )
                 result = vision_services.provision_from_vision_with_config(
                     ctx,
                     log or get_structured_logger("ui.vision_provision"),
@@ -410,8 +413,8 @@ def render_workspace_summary(
                 _state_set("client_name", client_name or slug)
                 st.success("Workspace creato e YAML generati.")
                 try:
-                    base_dir = Path(vision_state["base_dir"])
-                    mapping_abs = str(ensure_within_and_resolve(base_dir, Path(yaml_paths.get("mapping", ""))))
+                    repo_root_dir = Path(vision_state["repo_root_dir"])
+                    mapping_abs = str(ensure_within_and_resolve(repo_root_dir, Path(yaml_paths.get("mapping", ""))))
                     st.json({"mapping": mapping_abs}, expanded=False)
                 except Exception as exc:
                     # Non bloccare la UX, ma evita silent degradation: traccia l'errore.
@@ -433,16 +436,16 @@ def render_workspace_summary(
     if not vision_state.get("workspace_created"):
         return False, slug, client_name
 
-    base_dir_str = cast(Optional[str], vision_state.get("base_dir"))
+    repo_root_dir_str = cast(Optional[str], vision_state.get("repo_root_dir"))
     yaml_paths = cast(Dict[str, str], vision_state.get("yaml_paths") or {})
-    if not base_dir_str or "mapping" not in yaml_paths:
+    if not repo_root_dir_str or "mapping" not in yaml_paths:
         st.warning("Workspace creato ma non sono disponibili gli YAML generati.")
         return False, slug, client_name
 
-    base_dir_path = Path(base_dir_str)
+    repo_root_dir_path = Path(repo_root_dir_str)
     try:
-        mapping_path = ensure_within_and_resolve(base_dir_path, Path(yaml_paths["mapping"]))
-        mapping_content = read_text_safe(base_dir_path, mapping_path, encoding="utf-8")
+        mapping_path = ensure_within_and_resolve(repo_root_dir_path, Path(yaml_paths["mapping"]))
+        mapping_content = read_text_safe(repo_root_dir_path, mapping_path, encoding="utf-8")
     except Exception:
         st.warning("Non è stato possibile leggere le ultime configurazioni YAML generate.")
         return False, slug, client_name

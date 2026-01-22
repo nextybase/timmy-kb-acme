@@ -372,7 +372,7 @@ def build_kg_for_workspace(workspace_root: Path | str, namespace: str | None = N
         logger.info(
             "semantic.kg_builder.completed",
             extra={
-                "workspace": str(layout.base_dir),
+                "workspace": str(layout.repo_root_dir),
                 "namespace": namespace_resolved,
                 "kg_json": outputs["kg_json"],
                 "kg_md": outputs["kg_md"],

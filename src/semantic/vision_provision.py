@@ -375,13 +375,13 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
     return text
 
 
-def _load_vision_yaml_text(base_dir: Path, yaml_path: Path, *, slug: str) -> str:
+def _load_vision_yaml_text(repo_root_dir: Path, yaml_path: Path, *, slug: str) -> str:
     """
     Carica il testo Vision dal file YAML generato a monte (visionstatement.yaml).
     Richiede content.full_text presente e non vuoto (hard cut: niente fallback su pages[]).
     """
     try:
-        safe_yaml = ensure_within_and_resolve(base_dir, yaml_path)
+        safe_yaml = ensure_within_and_resolve(repo_root_dir, yaml_path)
     except ConfigError as exc:
         raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
 
@@ -393,7 +393,7 @@ def _load_vision_yaml_text(base_dir: Path, yaml_path: Path, *, slug: str) -> str
         )
 
     try:
-        raw = read_text_safe(base_dir, safe_yaml, encoding="utf-8")
+        raw = read_text_safe(repo_root_dir, safe_yaml, encoding="utf-8")
         data = yaml.safe_load(raw)
     except Exception as exc:
         raise ConfigError(
@@ -425,16 +425,16 @@ def _load_vision_yaml_text(base_dir: Path, yaml_path: Path, *, slug: str) -> str
     return full_text.strip()
 
 
-def _write_audit_line(base_dir: Path, record: Dict[str, Any]) -> None:
+def _write_audit_line(repo_root_dir: Path, record: Dict[str, Any]) -> None:
     """Scrive una riga di audit JSONL in modo atomico e sicuro."""
-    (base_dir / "logs").mkdir(parents=True, exist_ok=True)
+    (repo_root_dir / "logs").mkdir(parents=True, exist_ok=True)
     payload = json.dumps(record, ensure_ascii=False) + "\n"
-    safe_append_text(base_dir, base_dir / "logs" / LOG_FILE_NAME, payload)
+    safe_append_text(repo_root_dir, repo_root_dir / "logs" / LOG_FILE_NAME, payload)
 
 
 @dataclass(frozen=True)
 class _Paths:
-    base_dir: Path
+    repo_root_dir: Path
     semantic_dir: Path
     mapping_yaml: Path
 
@@ -455,11 +455,11 @@ class _VisionPrepared:
     retention_days: int
 
 
-def _resolve_paths(ctx_base_dir: str) -> _Paths:
-    base = Path(ctx_base_dir)
-    sem_dir = ensure_within_and_resolve(base, base / "semantic")
+def _resolve_paths(ctx_repo_root_dir: str) -> _Paths:
+    repo_root_dir = Path(ctx_repo_root_dir)
+    sem_dir = ensure_within_and_resolve(repo_root_dir, repo_root_dir / "semantic")
     mapping_yaml = ensure_within_and_resolve(sem_dir, sem_dir / "semantic_mapping.yaml")
-    return _Paths(base, sem_dir, mapping_yaml)
+    return _Paths(repo_root_dir, sem_dir, mapping_yaml)
 
 
 def _parse_required_sections(raw_text: str) -> Dict[str, str]:
@@ -651,11 +651,11 @@ def _lint_vision_payload(data: Dict[str, Any]) -> List[str]:
 # API principale
 # =========================
 def _ensure_vision_yaml_and_prompt_from_pdf(ctx: Any, slug: str, pdf_path: Path, logger: "logging.Logger") -> str:
-    base_dir = getattr(ctx, "base_dir", None)
-    if not base_dir:
-        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+    if not repo_root_dir:
+        raise ConfigError("Context privo di repo_root_dir per Vision onboarding.", slug=slug)
     try:
-        safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
+        safe_pdf = ensure_within_and_resolve(repo_root_dir, pdf_path)
     except ConfigError as exc:
         raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
     yaml_path = Path(safe_pdf).with_name("visionstatement.yaml")
@@ -674,7 +674,7 @@ def _ensure_vision_yaml_and_prompt_from_pdf(ctx: Any, slug: str, pdf_path: Path,
                 slug=slug,
                 file_path=str(yaml_path),
             ) from exc
-    snapshot = _load_vision_yaml_text(Path(base_dir), yaml_path, slug=slug)
+    snapshot = _load_vision_yaml_text(Path(repo_root_dir), yaml_path, slug=slug)
     return _build_prompt_from_snapshot(snapshot, slug=slug, ctx=ctx, logger=logger)
 
 
@@ -688,11 +688,11 @@ def _prepare_payload(
     logger: "logging.Logger",
     retention_days: int,
 ) -> _VisionPrepared:
-    base_dir = getattr(ctx, "base_dir", None)
-    if not base_dir:
-        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+    if not repo_root_dir:
+        raise ConfigError("Context privo di repo_root_dir per Vision onboarding.", slug=slug)
     try:
-        safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
+        safe_pdf = ensure_within_and_resolve(repo_root_dir, pdf_path)
     except ConfigError as exc:
         raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
     if not Path(safe_pdf).exists():
@@ -700,7 +700,7 @@ def _prepare_payload(
     if not Path(safe_pdf).exists():
         raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
 
-    paths = _resolve_paths(str(base_dir))
+    paths = _resolve_paths(str(repo_root_dir))
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
     client = make_openai_client()
@@ -747,10 +747,10 @@ def _build_prompt_from_yaml_path(
     yaml_path: Path,
     logger: "logging.Logger",
 ) -> str:
-    base_dir = getattr(ctx, "base_dir", None)
-    if not base_dir:
-        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
-    snapshot = _load_vision_yaml_text(Path(base_dir), yaml_path, slug=slug)
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+    if not repo_root_dir:
+        raise ConfigError("Context privo di repo_root_dir per Vision onboarding.", slug=slug)
+    snapshot = _load_vision_yaml_text(Path(repo_root_dir), yaml_path, slug=slug)
     return _build_prompt_from_snapshot(snapshot, slug=slug, ctx=ctx, logger=logger)
 
 
@@ -795,11 +795,11 @@ def _prepare_payload_from_yaml(
     logger: "logging.Logger",
     retention_days: int,
 ) -> _VisionPrepared:
-    base_dir = getattr(ctx, "base_dir", None)
-    if not base_dir:
-        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+    if not repo_root_dir:
+        raise ConfigError("Context privo di repo_root_dir per Vision onboarding.", slug=slug)
     try:
-        safe_yaml = ensure_within_and_resolve(base_dir, yaml_path)
+        safe_yaml = ensure_within_and_resolve(repo_root_dir, yaml_path)
     except ConfigError as exc:
         raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
     if not Path(safe_yaml).exists():
@@ -809,11 +809,11 @@ def _prepare_payload_from_yaml(
             file_path=str(safe_yaml),
         )
 
-    paths = _resolve_paths(str(base_dir))
+    paths = _resolve_paths(str(repo_root_dir))
     paths.semantic_dir.mkdir(parents=True, exist_ok=True)
 
     client = make_openai_client()
-    snapshot = _load_vision_yaml_text(Path(base_dir), Path(safe_yaml), slug=slug)
+    snapshot = _load_vision_yaml_text(Path(repo_root_dir), Path(safe_yaml), slug=slug)
 
     display_name = getattr(ctx, "client_name", None) or slug
     prompt_text = (
@@ -904,12 +904,12 @@ def _persist_outputs(
         "sections": list(REQUIRED_SECTIONS_CANONICAL),
         "lint_warnings": lint_warnings,
     }
-    _write_audit_line(prepared.paths.base_dir, record)
+    _write_audit_line(prepared.paths.repo_root_dir, record)
     logger.info(_evt("completed"), extra=record)
 
     if retention_days > 0:
         try:
-            purge_old_artifacts(prepared.paths.base_dir, retention_days)
+            purge_old_artifacts(prepared.paths.repo_root_dir, retention_days)
         except Exception as exc:  # pragma: no cover
             logger.warning(
                 _evt("retention.failed"),
@@ -936,11 +936,11 @@ def provision_from_vision_with_config(
     """
     ensure_dotenv_loaded()
 
-    base_dir = getattr(ctx, "base_dir", None)
-    if not base_dir:
-        raise ConfigError("Context privo di base_dir per Vision onboarding.", slug=slug)
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+    if not repo_root_dir:
+        raise ConfigError("Context privo di repo_root_dir per Vision onboarding.", slug=slug)
     try:
-        safe_pdf = ensure_within_and_resolve(base_dir, pdf_path)
+        safe_pdf = ensure_within_and_resolve(repo_root_dir, pdf_path)
     except ConfigError as exc:
         raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
 

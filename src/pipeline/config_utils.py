@@ -13,7 +13,7 @@ Centralizza le utilità di configurazione per la pipeline Timmy-KB:
   (backup `.bak` incluso).
 - `get_client_config(context) -> dict`: legge e deserializza `config.yaml` dal
   contesto (errore se assente/malformato).
-- `validate_preonboarding_environment(context, base_dir=None)`: verifica minima di
+- `validate_preonboarding_environment(context, repo_root_dir=None)`: verifica minima di
   ambiente (config valido e cartelle chiave come `logs/`).
 - `update_config_with_drive_ids(context, updates, logger=None)`: merge incrementale
   su `config.yaml` con backup `.bak` e scrittura atomica.
@@ -237,13 +237,13 @@ class ClientEnvSettings(_BaseSettings):
 def write_client_config_file(context: ClientContext, config: ClientConfigPayload) -> Path:
     """Scrive il file `config.yaml` nella cartella cliente in modo atomico (backup + SSoT)."""
     layout = WorkspaceLayout.from_context(context)
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     config_path = layout.config_path
     config_dir = config_path.parent
 
     config_dir.mkdir(parents=True, exist_ok=True)
-    ensure_within(base_dir, config_dir)
-    ensure_within(base_dir, config_path)
+    ensure_within(repo_root_dir, config_dir)
+    ensure_within(repo_root_dir, config_path)
 
     if config_path.exists():
         backup_path = config_path.with_suffix(config_path.suffix + BACKUP_SUFFIX)
@@ -283,14 +283,14 @@ def get_client_config(context: ClientContext) -> ClientConfigPayload:
 # ----------------------------------------------------------
 #  Validazione pre-onboarding (coerenza minima ambiente)
 # ----------------------------------------------------------
-def validate_preonboarding_environment(context: ClientContext, base_dir: Optional[Path] = None) -> None:
+def validate_preonboarding_environment(context: ClientContext, repo_root_dir: Optional[Path] = None) -> None:
     """Verifica la coerenza minima dell'ambiente prima del pre-onboarding."""
     layout = WorkspaceLayout.from_context(context)
-    resolved_base_dir = base_dir or layout.base_dir
+    resolved_repo_root_dir = repo_root_dir or layout.repo_root_dir
     config_path = layout.config_path
     if config_path is None:
         raise PipelineError(
-            "Contesto incompleto: base_dir/config_path mancanti",
+            "Contesto incompleto: repo_root_dir/config_path mancanti",
             slug=context.slug,
         )
 
@@ -325,7 +325,7 @@ def validate_preonboarding_environment(context: ClientContext, base_dir: Optiona
             raise PreOnboardingValidationError("Config YAML non valido o vuoto.")
 
     # Verifica/creazione directory richieste (logs)
-    logs_dir = ensure_within_and_resolve(resolved_base_dir, resolved_base_dir / "logs")
+    logs_dir = ensure_within_and_resolve(resolved_repo_root_dir, resolved_repo_root_dir / "logs")
     if not logs_dir.exists():
         logger.warning(
             "pipeline.config_utils.logs_dir_missing",
@@ -356,9 +356,9 @@ def merge_client_config_from_template(
     """Unisce il config cliente con il template mantenendo chiavi sensibili."""
     layout = WorkspaceLayout.from_context(context)
     config_path = layout.config_path
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     if config_path is None:
-        raise PipelineError("Contesto incompleto: config_path/base_dir mancanti", slug=context.slug)
+        raise PipelineError("Contesto incompleto: config_path/repo_root_dir mancanti", slug=context.slug)
 
     log = logger or globals().get("logger")
 
@@ -412,7 +412,7 @@ def merge_client_config_from_template(
 
     merged: dict[str, Any] = _merge_dict(template_data, existing_data)
 
-    ensure_within(base_dir, config_path)
+    ensure_within(repo_root_dir, config_path)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         serialized = yaml.safe_dump(merged, sort_keys=False, allow_unicode=True)
@@ -452,10 +452,10 @@ def update_config_with_drive_ids(
     """
     layout = WorkspaceLayout.from_context(context)
     config_path = layout.config_path
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     if config_path is None:
         raise PipelineError(
-            "Contesto incompleto: config_path/base_dir mancanti",
+            "Contesto incompleto: config_path/repo_root_dir mancanti",
             slug=context.slug,
         )
 
@@ -489,7 +489,7 @@ def update_config_with_drive_ids(
     config_data.update(updates or {})
 
     # Scrittura sicura (atomica) + path-safety
-    ensure_within(base_dir, config_path)
+    ensure_within(repo_root_dir, config_path)
     try:
         yaml_dump = yaml.safe_dump(config_data, sort_keys=False, allow_unicode=True)
         safe_write_text(config_path, yaml_dump, encoding="utf-8", atomic=True)

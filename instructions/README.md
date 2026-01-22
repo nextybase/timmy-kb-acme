@@ -69,16 +69,16 @@ Un documento **attivo** può essere raffinato, ma:
 
 ## Terminologia ufficiale
 
-Per evitare ambiguitÃ , il sistema utilizza una terminologia controllata.
-Si raccomanda di evitare lâ€™introduzione di nuovi termini concettuali.
+Per evitare ambiguitÃ , il sistema utilizza una terminologia controllata.
+Si raccomanda di evitare l'introduzione di nuovi termini concettuali.
 
 Domini epistemici canonici:
 - **Epistemic Envelope**
 - **Agency Engine**
 
 Terminologia implementativa (alias ammessi):
-- **Control Plane** â†’ implementazione dellâ€™Agency Engine
-- **Foundation Pipeline** â†’ implementazione dellâ€™Epistemic Envelope
+- **Control Plane** -> implementazione dell'Agency Engine
+- **Foundation Pipeline** -> implementazione dell'Epistemic Envelope
 
 Tutti i documenti in questa cartella assumono questa terminologia
 come riferimento normativo.

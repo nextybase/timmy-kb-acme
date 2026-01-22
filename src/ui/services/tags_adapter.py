@@ -35,22 +35,22 @@ def _require_streamlit() -> None:
 
 def _resolve_paths(ctx: ClientContext, slug: str) -> tuple[Path, Path, Path]:
     layout = get_ui_workspace_layout(slug, require_env=False)
-    base_dir = layout.base_dir
-    if base_dir is None:
+    repo_root_dir = layout.repo_root_dir
+    if repo_root_dir is None:
         raise ConfigError(
-            "Layout workspace invalido: non riuscito a determinare base_dir dal layout.",
+            "Layout workspace invalido: non riuscito a determinare repo_root_dir dal layout.",
             slug=slug,
         )
 
     raw_dir = layout.raw_dir
     semantic_dir = layout.semantic_dir
 
-    raw_path = ensure_within_and_resolve(base_dir, Path(raw_dir))
+    raw_path = ensure_within_and_resolve(repo_root_dir, Path(raw_dir))
     raw_path.mkdir(parents=True, exist_ok=True)
-    semantic_path = ensure_within_and_resolve(base_dir, Path(semantic_dir))
+    semantic_path = ensure_within_and_resolve(repo_root_dir, Path(semantic_dir))
     semantic_path.mkdir(parents=True, exist_ok=True)
 
-    return base_dir, raw_path, semantic_path
+    return repo_root_dir, raw_path, semantic_path
 
 
 def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
@@ -61,7 +61,7 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
     try:
         with st.spinner("Preparazione contesto..."):
             ctx = get_client_context(slug, require_env=False)
-            base_dir, raw_dir, semantic_dir = _resolve_paths(ctx, slug)
+            repo_root_dir, raw_dir, semantic_dir = _resolve_paths(ctx, slug)
 
         with st.spinner("Generazione tags_raw.csv (SpaCy/euristica)..."):
             csv_path = build_tags_csv(ctx, svc_logger, slug=slug)

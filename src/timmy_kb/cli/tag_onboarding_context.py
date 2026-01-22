@@ -19,7 +19,7 @@ class ContextResources:
     """Raccoglie gli artefatti principali necessari all'orchestratore."""
 
     context: ClientContext
-    base_dir: Path
+    repo_root_dir: Path
     raw_dir: Path
     semantic_dir: Path
     logger: logging.Logger
@@ -42,7 +42,7 @@ def prepare_context(
     )
 
     layout = WorkspaceLayout.from_context(context)
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     raw_dir = layout.raw_dir
     semantic_dir = layout.semantic_dir
     layout.logs_dir.mkdir(parents=True, exist_ok=True)
@@ -52,7 +52,7 @@ def prepare_context(
 
     return ContextResources(
         context=context,
-        base_dir=base_dir,
+        repo_root_dir=repo_root_dir,
         raw_dir=raw_dir,
         semantic_dir=semantic_dir,
         logger=logger,

@@ -1,8 +1,8 @@
 # Revisione pipeline di trasformazione dati (v1.0 Beta)
 
-Nel contesto di Timmy-KB come ambiente di creazione e governo, questa review descrive strumenti specifici della pipeline di fondazione mantenuti entro l’**Epistemic Envelope** e soggetti a Human-in-the-Loop.
+Nel contesto di Timmy-KB come ambiente di creazione e governo, questa review descrive strumenti specifici della pipeline di fondazione mantenuti entro l'**Epistemic Envelope** e soggetti a Human-in-the-Loop.
 
-L’Epistemic Envelope rappresenta il dominio
+L'Epistemic Envelope rappresenta il dominio
 di inferenza non-deliberativa del sistema:
 la pipeline può inferire strutture,
 ma non prendere decisioni.

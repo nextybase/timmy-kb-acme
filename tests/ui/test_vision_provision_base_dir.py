@@ -9,7 +9,9 @@ import pytest
 from ui.services import vision_provision
 
 
-def test_provision_infers_base_dir_from_pdf_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_provision_infers_repo_root_dir_from_pdf_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     base = tmp_path / "ws"
     cfg = base / "config"
     cfg.mkdir(parents=True, exist_ok=True)
@@ -18,12 +20,12 @@ def test_provision_infers_base_dir_from_pdf_path(monkeypatch: pytest.MonkeyPatch
 
     class _Ctx:
         def __init__(self) -> None:
-            self.base_dir = None
+            self.repo_root_dir = None
 
     seen: dict[str, Any] = {}
 
     def _fake_run_vision_with_gating(ctx: Any, logger: Any, **kwargs: Any) -> dict[str, Any]:
-        seen["base_dir"] = getattr(ctx, "base_dir", None)
+        seen["repo_root_dir"] = getattr(ctx, "repo_root_dir", None)
         return {"ok": True}
 
     monkeypatch.setattr(vision_provision, "run_vision_with_gating", _fake_run_vision_with_gating)
@@ -37,4 +39,4 @@ def test_provision_infers_base_dir_from_pdf_path(monkeypatch: pytest.MonkeyPatch
     )
 
     assert out["ok"] is True
-    assert Path(seen["base_dir"]) == base
+    assert Path(seen["repo_root_dir"]) == base

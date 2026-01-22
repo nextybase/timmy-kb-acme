@@ -6,7 +6,7 @@
 > [docs/developer/coding_rule.md](../docs/developer/coding_rule.md).
 
 This document describes the runtime architecture of Timmy-KB and its
-alignment with the system’s epistemic foundations.
+alignment with the system's epistemic foundations.
 
 Timmy-KB is architected around **two distinct and non-overlapping epistemic domains**:
 
@@ -100,7 +100,7 @@ but from their **strict separation and asymmetric cooperation**.
 - The Epistemic Envelope reduces structural uncertainty.
 - The Agency Engine exploits residual uncertainty for controlled exploration.
 
-Any attempt to merge or collapse these domains undermines the system’s
+Any attempt to merge or collapse these domains undermines the system's
 epistemic integrity.
 
 ## Repository Map (Root Level)

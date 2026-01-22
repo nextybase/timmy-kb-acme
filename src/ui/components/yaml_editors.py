@@ -74,7 +74,7 @@ def _read_yaml_text(slug: str, filename: str) -> str:
     if not path.exists():
         raise ConfigError(f"File `{path}` non trovato. Genera gli artefatti Vision e riprova.")
     layout = _require_layout(slug)
-    return cast(str, read_text_safe(layout.base_dir, path, encoding=DEFAULT_ENCODING))
+    return cast(str, read_text_safe(layout.repo_root_dir, path, encoding=DEFAULT_ENCODING))
 
 
 def _write_yaml_text(slug: str, filename: str, content: str) -> None:

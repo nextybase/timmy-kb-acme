@@ -1,15 +1,15 @@
 # NeXT ↔ Timmy-KB: Mapping concettuale
 
-Questo documento descrive l’allineamento concettuale tra Timmy-KB,
+Questo documento descrive l'allineamento concettuale tra Timmy-KB,
 il Manifesto e la documentazione di sistema.
 
-L’allineamento si fonda su due **domini epistemici distinti e non sovrapponibili**:
+L'allineamento si fonda su due **domini epistemici distinti e non sovrapponibili**:
 
 - **Epistemic Envelope**
 - **Agency Engine**
 
 Questi domini rappresentano il riferimento canonico
-per l’interpretazione dell’architettura, dei processi e delle policy.
+per l'interpretazione dell'architettura, dei processi e delle policy.
 
 ---
 

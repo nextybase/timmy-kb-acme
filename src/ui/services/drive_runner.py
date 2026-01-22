@@ -327,7 +327,7 @@ def plan_raw_download(
     if not raw_id:
         raise RuntimeError("Cartella 'raw' non trovata sotto la cartella cliente su Drive")
 
-    workspace_dir = layout.base_dir
+    workspace_dir = layout.repo_root_dir
     local_root_path = layout.raw_dir
     _assert_directory_exists(local_root_path, layout.slug, "raw directory")
 
@@ -627,7 +627,7 @@ def download_raw_from_drive_with_progress(
         raise RuntimeError("Cartella 'raw' non trovata sotto la cartella cliente su Drive")
 
     # Local root (raw/)
-    workspace_dir = layout.base_dir
+    workspace_dir = layout.repo_root_dir
     local_root_dir = layout.raw_dir
     _assert_directory_exists(local_root_dir, layout.slug, "raw directory")
     local_root_path = local_root_dir

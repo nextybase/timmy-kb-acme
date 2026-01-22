@@ -22,8 +22,8 @@ class _NoopLogger:
 
 
 class _Ctx:
-    def __init__(self, base_dir: Path):
-        self.base_dir = str(base_dir)
+    def __init__(self, repo_root_dir: Path):
+        self.repo_root_dir = str(repo_root_dir)
 
 
 def _make_symlink(src: Path, dst: Path) -> None:

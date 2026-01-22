@@ -37,8 +37,8 @@ def _write_pdf(path: Path, text: str | None) -> None:
 
 
 class DummyCtx:
-    def __init__(self, base_dir: Path):
-        self.base_dir = str(base_dir)
+    def __init__(self, repo_root_dir: Path):
+        self.repo_root_dir = str(repo_root_dir)
         self.settings = {"ai": {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID", "snapshot_retention_days": 30}}}
 
 
@@ -217,7 +217,7 @@ def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
     monkeypatch.setattr(S.ontology, "get_all_entities", lambda: sample_entities)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
 
-    ctx = DummyCtx(base_dir=tmp_workspace)
+    ctx = DummyCtx(repo_root_dir=tmp_workspace)
     pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
     config = _vision_config_for(ctx)
     retention_days = _vision_retention_for(ctx)
@@ -252,7 +252,7 @@ def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: bad_output)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
 
-    ctx = DummyCtx(base_dir=tmp_workspace)
+    ctx = DummyCtx(repo_root_dir=tmp_workspace)
     config = _vision_config_for(ctx)
     retention_days = _vision_retention_for(ctx)
     with pytest.raises(ConfigError):
@@ -307,7 +307,7 @@ def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
     }
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: mismatched)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
-    ctx = DummyCtx(base_dir=tmp_workspace)
+    ctx = DummyCtx(repo_root_dir=tmp_workspace)
     config = _vision_config_for(ctx)
     retention_days = _vision_retention_for(ctx)
     with pytest.raises(ConfigError):
@@ -359,7 +359,7 @@ def test_missing_system_folders_raises(monkeypatch, tmp_workspace: Path):
     }
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: out)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
-    ctx = DummyCtx(base_dir=tmp_workspace)
+    ctx = DummyCtx(repo_root_dir=tmp_workspace)
     config = _vision_config_for(ctx)
     retention_days = _vision_retention_for(ctx)
     with pytest.raises((ConfigError, ValueError)):

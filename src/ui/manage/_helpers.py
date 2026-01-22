@@ -30,11 +30,11 @@ def workspace_root(slug: str, *, layout: WorkspaceLayout | None = None) -> Path:
     """
     Compat helper legacy: restituisce la root workspace.
 
-    In contesti moderni dove il layout è disponibile, preferire `layout.base_dir` direttamente.
+    In contesti moderni dove il layout è disponibile, preferire `layout.repo_root_dir` direttamente.
     Questo wrapper rimane per non modificare le chiamate esistenti dalla pagina `manage`.
     """
     if layout is not None:
-        return cast(Path, layout.base_dir)
+        return cast(Path, layout.repo_root_dir)
     raw_dir = Path(resolve_raw_dir(slug))
     return raw_dir.parent
 

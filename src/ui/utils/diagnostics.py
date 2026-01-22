@@ -24,16 +24,16 @@ LOG_CHUNK_SIZE = 64 * 1024
 MAX_TOTAL_LOG_BYTES = 5 * 1024 * 1024  # ~5 MiB
 
 
-def resolve_base_dir(slug: str) -> Optional[Path]:
-    """Ritorna la base_dir del client se disponibile, None altrimenti."""
+def resolve_repo_root_dir(slug: str) -> Optional[Path]:
+    """Ritorna la repo_root_dir del client se disponibile, None altrimenti."""
     try:
         ctx = get_client_context(slug, require_env=False)
     except Exception:
         return None
-    base_dir = getattr(ctx, "base_dir", None)
-    if not base_dir:
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+    if not repo_root_dir:
         return None
-    return Path(base_dir)
+    return Path(repo_root_dir)
 
 
 def count_files_with_limit(root: Optional[Path], *, limit: int = MAX_DIAGNOSTIC_FILES) -> Tuple[int, bool]:
@@ -57,13 +57,13 @@ def count_files_with_limit(root: Optional[Path], *, limit: int = MAX_DIAGNOSTIC_
     return total, False
 
 
-def summarize_workspace_folders(base_dir: Optional[Path]) -> Optional[Dict[str, Tuple[int, bool]]]:
+def summarize_workspace_folders(repo_root_dir: Optional[Path]) -> Optional[Dict[str, Tuple[int, bool]]]:
     """Restituisce i conteggi file per cartelle chiave del workspace."""
-    if base_dir is None:
+    if repo_root_dir is None:
         return None
-    raw = base_dir / "raw"
-    book = base_dir / "book"
-    semantic = base_dir / "semantic"
+    raw = repo_root_dir / "raw"
+    book = repo_root_dir / "book"
+    semantic = repo_root_dir / "semantic"
     return {
         "raw": count_files_with_limit(raw),
         "book": count_files_with_limit(book),
@@ -75,10 +75,10 @@ def build_workspace_summary(
     slug: str,
     log_files: Sequence[Path],
     *,
-    base_dir: Optional[Path] = None,
+    repo_root_dir: Optional[Path] = None,
 ) -> Optional[Dict[str, object]]:
     """Costruisce un riepilogo JSON del workspace (counts + log selezionati)."""
-    resolved = base_dir or resolve_base_dir(slug)
+    resolved = repo_root_dir or resolve_repo_root_dir(slug)
     if resolved is None:
         return None
     try:
@@ -88,19 +88,19 @@ def build_workspace_summary(
     safe_names = [sanitize_filename(path.name) for path in log_files if path]
     return {
         "slug": slug,
-        "base_dir": str(resolved),
+        "repo_root_dir": str(resolved),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "counts": counts,
         "log_files": safe_names,
     }
 
 
-def collect_log_files(base_dir: Optional[Path]) -> List[Path]:
+def collect_log_files(repo_root_dir: Optional[Path]) -> List[Path]:
     """Restituisce i file log (ordinati per mtime desc) garantendo path-safety."""
-    if base_dir is None:
+    if repo_root_dir is None:
         return []
     try:
-        logs_dir = ensure_within_and_resolve(base_dir, base_dir / "logs")
+        logs_dir = ensure_within_and_resolve(repo_root_dir, repo_root_dir / "logs")
     except (ConfigError, PathTraversalError):
         return []
     if not logs_dir.exists() or not logs_dir.is_dir():
@@ -176,12 +176,12 @@ def build_logs_archive(
     written_total = 0
     buffer = io.BytesIO()
     logs_root: Optional[Path] = None
-    base_dir = resolve_base_dir(slug)
-    workspace_summary = build_workspace_summary(slug, selected, base_dir=base_dir)
+    repo_root_dir = resolve_repo_root_dir(slug)
+    workspace_summary = build_workspace_summary(slug, selected, repo_root_dir=repo_root_dir)
     included_logs: list[str] = []
-    if base_dir:
+    if repo_root_dir:
         try:
-            logs_root = ensure_within_and_resolve(base_dir, base_dir / "logs")
+            logs_root = ensure_within_and_resolve(repo_root_dir, repo_root_dir / "logs")
         except (ConfigError, PathTraversalError):
             logs_root = None
     if logs_root is None and selected:

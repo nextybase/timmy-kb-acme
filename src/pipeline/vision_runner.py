@@ -169,33 +169,31 @@ def run_vision_with_gating(
             "mode": "SMOKE",
         }
 
-    base_dir = getattr(ctx, "repo_root_dir", None) or getattr(ctx, "base_dir", None)
-    if not base_dir:
-        raise ConfigError("Context privo di repo_root_dir/base_dir per Vision onboarding.", slug=slug)
-    if hasattr(ctx, "repo_root_dir") and getattr(ctx, "repo_root_dir", None) is None:
+    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+    if not repo_root_dir:
         raise ConfigError("Context privo di repo_root_dir per Vision onboarding.", slug=slug)
     if hasattr(ctx, "slug") and getattr(ctx, "slug", None) is None:
         raise ConfigError("Context privo di slug per Vision onboarding.", slug=slug)
 
     pdf_path = Path(pdf_path)
-    safe_pdf = cast(Path, ensure_within_and_resolve(base_dir, pdf_path))
+    safe_pdf = cast(Path, ensure_within_and_resolve(repo_root_dir, pdf_path))
     if not safe_pdf.exists():
         raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
-    yaml_path = _vision_yaml_path(base_dir, pdf_path=safe_pdf)
+    yaml_path = _vision_yaml_path(repo_root_dir, pdf_path=safe_pdf)
 
-    digest = _sha256_of_file(base_dir, safe_pdf)
-    last = _load_last_hash(base_dir)
+    digest = _sha256_of_file(repo_root_dir, safe_pdf)
+    last = _load_last_hash(repo_root_dir)
     last_digest = (last or {}).get("hash")
 
-    art = _artifacts_paths(base_dir)
+    art = _artifacts_paths(repo_root_dir)
     gate_hit = (last_digest == digest) and art["mapping"].exists()
     logger.info("ui.vision.gate", extra={"slug": slug, "hit": gate_hit})
     if gate_hit and not force:
-        _materialize_raw_structure(ctx, logger, base_dir=Path(base_dir), slug=slug)
+        _materialize_raw_structure(ctx, logger, base_dir=Path(repo_root_dir), slug=slug)
         raise ConfigError(
             "Vision già eseguito per questo PDF. Usa la modalità 'Forza rigenerazione' per procedere.",
             slug=slug,
-            file_path=str(_hash_sentinel(base_dir)),
+            file_path=str(_hash_sentinel(repo_root_dir)),
         )
 
     resolved_config = resolve_vision_config(ctx, override_model=model)
@@ -232,10 +230,10 @@ def run_vision_with_gating(
     except HaltError:
         raise
 
-    _materialize_raw_structure(ctx, logger, base_dir=Path(base_dir), slug=slug)
+    _materialize_raw_structure(ctx, logger, base_dir=Path(repo_root_dir), slug=slug)
 
-    _save_hash(base_dir, digest=digest, model=resolved_config.model)
-    logger.info("ui.vision.update_hash", extra={"slug": slug, "file_path": str(_hash_sentinel(base_dir))})
+    _save_hash(repo_root_dir, digest=digest, model=resolved_config.model)
+    logger.info("ui.vision.update_hash", extra={"slug": slug, "file_path": str(_hash_sentinel(repo_root_dir))})
 
     return {
         "skipped": False,

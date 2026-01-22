@@ -74,7 +74,7 @@ def test_build_logs_archive_applies_limits(tmp_path: Path, monkeypatch: pytest.M
         with path.open("rb") as fh:
             yield fh
 
-    monkeypatch.setattr(diag, "resolve_base_dir", lambda slug: None)
+    monkeypatch.setattr(diag, "resolve_repo_root_dir", lambda slug: None)
 
     data = diag.build_logs_archive(
         files,
@@ -107,24 +107,24 @@ def test_build_logs_archive_returns_none_on_errors(tmp_path: Path, monkeypatch: 
         raise RuntimeError("boom")
         yield  # pragma: no cover
 
-    monkeypatch.setattr(diag, "resolve_base_dir", lambda slug: None)
+    monkeypatch.setattr(diag, "resolve_repo_root_dir", lambda slug: None)
     assert diag.build_logs_archive([missing], slug="dummy", safe_reader=reader) is None
 
 
-def test_build_workspace_summary_uses_base_dir(tmp_path: Path) -> None:
-    base_dir = tmp_path / "workspace"
-    (base_dir / "raw").mkdir(parents=True)
-    (base_dir / "book").mkdir()
-    (base_dir / "semantic").mkdir()
-    (base_dir / "raw" / "one.txt").write_text("x", encoding="utf-8")
-    (base_dir / "logs").mkdir()
-    log_file = base_dir / "logs" / "log0.txt"
+def test_build_workspace_summary_uses_repo_root_dir(tmp_path: Path) -> None:
+    repo_root_dir = tmp_path / "workspace"
+    (repo_root_dir / "raw").mkdir(parents=True)
+    (repo_root_dir / "book").mkdir()
+    (repo_root_dir / "semantic").mkdir()
+    (repo_root_dir / "raw" / "one.txt").write_text("x", encoding="utf-8")
+    (repo_root_dir / "logs").mkdir()
+    log_file = repo_root_dir / "logs" / "log0.txt"
     log_file.write_text("log", encoding="utf-8")
 
     summary = diag.build_workspace_summary(
         "dummy",
         [log_file],
-        base_dir=base_dir,
+        repo_root_dir=repo_root_dir,
     )
 
     assert summary is not None
@@ -135,5 +135,5 @@ def test_build_workspace_summary_uses_base_dir(tmp_path: Path) -> None:
 
 
 def test_build_workspace_summary_returns_none_without_base(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(diag, "resolve_base_dir", lambda slug: None)
-    assert diag.build_workspace_summary("missing-slug", [], base_dir=None) is None
+    monkeypatch.setattr(diag, "resolve_repo_root_dir", lambda slug: None)
+    assert diag.build_workspace_summary("missing-slug", [], repo_root_dir=None) is None

@@ -39,9 +39,9 @@ def convert_markdown(
     start_ts = time.perf_counter()
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
     paths = resolve_context_paths(layout)
-    base_dir, raw_dir, md_dir = paths.base_dir, paths.raw_dir, paths.md_dir
-    ensure_within(base_dir, raw_dir)
-    ensure_within(base_dir, md_dir)
+    repo_root_dir, raw_dir, md_dir = paths.repo_root_dir, paths.raw_dir, paths.md_dir
+    ensure_within(repo_root_dir, raw_dir)
+    ensure_within(repo_root_dir, md_dir)
 
     md_dir.mkdir(parents=True, exist_ok=True)
 

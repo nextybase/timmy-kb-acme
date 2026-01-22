@@ -102,7 +102,7 @@ def ledger_path_from_layout(layout: WorkspaceLayout) -> Path:
             slug=layout.slug,
             file_path=config_dir,
         )
-    return ensure_within_and_resolve(layout.base_dir, config_dir / "ledger.db")
+    return ensure_within_and_resolve(layout.repo_root_dir, config_dir / "ledger.db")
 
 
 def open_ledger(layout: WorkspaceLayout) -> sqlite3.Connection:

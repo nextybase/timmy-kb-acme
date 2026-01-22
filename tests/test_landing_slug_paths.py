@@ -9,8 +9,8 @@ from typing import Any
 import pytest
 
 
-def test_base_dir_for_prefers_clientcontext(tmp_path: Path, monkeypatch: Any) -> None:
-    """_base_dir_for deve preferire ClientContext (che rispetta REPO_ROOT_DIR) rispetto a
+def test_repo_root_dir_for_prefers_clientcontext(tmp_path: Path, monkeypatch: Any) -> None:
+    """_repo_root_dir_for deve preferire ClientContext (che rispetta REPO_ROOT_DIR) rispetto a
     semantic.api.get_paths."""
     repo_root = tmp_path / "repo-root"
     repo_root.mkdir()
@@ -20,11 +20,11 @@ def test_base_dir_for_prefers_clientcontext(tmp_path: Path, monkeypatch: Any) ->
 
     mod = importlib.import_module("src.ui.landing_slug")
 
-    # Patch ClientContext.load per restituire un finto contesto con base_dir personalizzato
+    # Patch ClientContext.load per restituire un finto contesto con repo_root_dir personalizzato
     class DummyCtx:
-        def __init__(self, base_dir: Path) -> None:
-            self.base_dir = base_dir
-            self.raw_dir = base_dir / "raw"
+        def __init__(self, repo_root_dir: Path) -> None:
+            self.repo_root_dir = repo_root_dir
+            self.raw_dir = repo_root_dir / "raw"
 
     dummy_base = repo_root / "dummy-slug"
     dummy_base.mkdir()
@@ -34,13 +34,13 @@ def test_base_dir_for_prefers_clientcontext(tmp_path: Path, monkeypatch: Any) ->
         lambda **kwargs: DummyCtx(dummy_base),
     )
 
-    base_dir = mod._base_dir_for("dummy-slug")
-    assert base_dir == dummy_base
-    assert str(base_dir).startswith(str(repo_root))
+    repo_root_dir = mod._repo_root_dir_for("dummy-slug")
+    assert repo_root_dir == dummy_base
+    assert str(repo_root_dir).startswith(str(repo_root))
 
 
-def test_base_dir_for_runtime_error(monkeypatch: Any) -> None:
-    """In assenza di ClientContext valido, _base_dir_for deve sollevare RuntimeError segnalando la
+def test_repo_root_dir_for_runtime_error(monkeypatch: Any) -> None:
+    """In assenza di ClientContext valido, _repo_root_dir_for deve sollevare RuntimeError segnalando la
     mancanza del contesto."""
     mod = importlib.import_module("src.ui.landing_slug")
 
@@ -50,6 +50,6 @@ def test_base_dir_for_runtime_error(monkeypatch: Any) -> None:
     )
 
     with pytest.raises(RuntimeError) as excinfo:
-        mod._base_dir_for("sem-slug")
+        mod._repo_root_dir_for("sem-slug")
 
     assert "ClientContext" in str(excinfo.value)

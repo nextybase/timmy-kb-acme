@@ -16,7 +16,7 @@ def _ctx(
     raw: Path = Path("."),
     md: Path = Path("book"),
 ) -> ContextPaths:
-    return ContextPaths(base_dir=base, raw_dir=raw, md_dir=md, slug="x")
+    return ContextPaths(repo_root_dir=base, raw_dir=raw, md_dir=md, slug="x")
 
 
 def test_call_convert_md_raises_on_non_callable() -> None:

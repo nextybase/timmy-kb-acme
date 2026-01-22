@@ -98,6 +98,7 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
         semantic_dir=ctx.semantic_dir,
         book_dir=ctx.repo_root_dir / "book",
         base_dir=ctx.repo_root_dir,
+        repo_root_dir=ctx.repo_root_dir,
         config_path=ctx.config_dir / "config.yaml",
         slug=ctx.slug,
     )

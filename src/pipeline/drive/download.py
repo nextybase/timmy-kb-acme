@@ -220,7 +220,7 @@ def download_drive_pdfs_to_local(
         remote_root_folder_id: ID della cartella radice su Drive.
         local_root_dir: cartella locale "raw/" dentro la sandbox cliente.
         progress: se True, logga avanzamento al 10/20/.../100%.
-        context: ClientContext opzionale per log arricchiti (slug, base_dir, redact).
+        context: ClientContext opzionale per log arricchiti (slug, repo_root_dir, redact).
         redact_logs: se True, redige ID sensibili nei log.
         chunk_size: dimensione chunk per MediaIoBaseDownload (byte).
         overwrite: se True forza la riscrittura anche quando il file esiste con size diversa.
@@ -232,7 +232,7 @@ def download_drive_pdfs_to_local(
     if context is None:
         raise ConfigError("Context mancante: impossibile risolvere il workspace in modo deterministico.")
     layout = WorkspaceLayout.from_context(context)
-    base_dir = layout.base_dir
+    repo_root_dir = layout.repo_root_dir
     local_root_dir = Path(local_root_dir).resolve()
     if local_root_dir != layout.raw_dir:
         raise ConfigError(
@@ -240,9 +240,9 @@ def download_drive_pdfs_to_local(
             file_path=str(local_root_dir),
         )
 
-    # STRONG: local_root_dir deve essere *dentro* base_dir
+    # STRONG: local_root_dir deve essere *dentro* repo_root_dir
     try:
-        ensure_within(base_dir, local_root_dir)
+        ensure_within(repo_root_dir, local_root_dir)
         local_root_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         raise ConfigError(
@@ -266,7 +266,7 @@ def download_drive_pdfs_to_local(
         list_folders=_list_drive_folders,
         list_pdfs=_list_drive_pdfs,
         ensure_dest=_ensure_dest,
-        base_dir=base_dir,
+        base_dir=repo_root_dir,
         local_root=local_root_dir,
         logger=logger,
     )
