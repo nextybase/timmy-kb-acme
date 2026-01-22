@@ -20,6 +20,7 @@ from .query_params import get_slug as _qp_get
 from .query_params import set_slug as _qp_set
 
 LOGGER = get_structured_logger("ui.slug")
+_PERSIST_UNAVAILABLE_LOGGED = False
 _RUNTIME_SLUG_RESOLVE_GUARD = False
 
 
@@ -106,7 +107,7 @@ def _load_persisted() -> Optional[str]:
     try:
         path = get_ui_state_path()
     except ConfigError as exc:
-        LOGGER.info("ui.slug.persist_unavailable", extra={"code": getattr(exc, "code", None)})
+        _log_persist_unavailable_once(exc)
         return None
     try:
         raw_text = read_text_safe(path.parent, path)
@@ -148,11 +149,24 @@ def get_runtime_slug() -> Optional[str]:
         _RUNTIME_SLUG_RESOLVE_GUARD = False
 
 
+def _log_persist_unavailable_once(exc: ConfigError) -> None:
+    global _PERSIST_UNAVAILABLE_LOGGED
+    try:
+        if st.session_state.get("__persist_unavailable_logged"):
+            return
+        st.session_state["__persist_unavailable_logged"] = True
+    except Exception:
+        if _PERSIST_UNAVAILABLE_LOGGED:
+            return
+        _PERSIST_UNAVAILABLE_LOGGED = True
+    LOGGER.info("ui.slug.persist_unavailable", extra={"code": getattr(exc, "code", None)})
+
+
 def _save_persisted(slug: Optional[str]) -> None:
     try:
         path = get_ui_state_path()
     except ConfigError as exc:
-        LOGGER.info("ui.slug.persist_unavailable", extra={"code": getattr(exc, "code", None)})
+        _log_persist_unavailable_once(exc)
         return
     try:
         base_dir = path.parent

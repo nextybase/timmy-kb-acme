@@ -112,6 +112,11 @@ Streamlit-based UI.
 Acts as a thin facade over backend functions.
 Must preserve backend signatures and semantics.
 
+### Streamlit UI Startup (Phase 0)
+Before logging, preflight, or navigation, the UI entrypoint must load `.env`
+via `pipeline.env_utils.ensure_dotenv_loaded()` to stabilize workspace resolution.
+The operation is idempotent and must not create repeated startup logs.
+
 ### src/semantic/
 Semantic transformation and enrichment:
 - content conversion,

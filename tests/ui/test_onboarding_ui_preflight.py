@@ -5,6 +5,7 @@ import logging
 import sys
 import types
 from contextlib import nullcontext
+from pathlib import Path
 
 import pytest
 
@@ -183,3 +184,24 @@ def test_hydrate_query_defaults_runtime_error_stops(
     assert stub.error_messages
     assert any("Errore nel routing UI" in msg for msg in stub.error_messages)
     assert any("ui.route_state.hydration_failed" in record.getMessage() for record in caplog.records)
+
+
+def test_main_loads_env_before_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def _ensure_env(*_args: object, **_kwargs: object) -> bool:
+        calls.append("env")
+        return True
+
+    def _bootstrap(_repo_root) -> logging.Logger:
+        calls.append("bootstrap")
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr("pipeline.env_utils.ensure_dotenv_loaded", _ensure_env)
+    monkeypatch.setattr(onboarding_ui, "_lazy_bootstrap", _bootstrap, raising=True)
+    monkeypatch.setattr(onboarding_ui, "get_repo_root", lambda: Path("."), raising=True)
+
+    with pytest.raises(RuntimeError):
+        onboarding_ui.main()
+
+    assert calls == ["env", "bootstrap"]

@@ -22,6 +22,7 @@ from ui import config_store
 from ui.types import StreamlitLike
 
 LOGGER = get_structured_logger("ui.bootstrap")
+_ENV_BOOTSTRAPPED = False
 
 # REPO_ROOT_DIR deve puntare alla repo root; WORKSPACE_ROOT_DIR definisce il workspace.
 
@@ -52,6 +53,17 @@ def _lazy_bootstrap(repo_root: Path) -> logging.Logger:
 
     _init_ui_logging(repo_root)
     return get_structured_logger("ui.preflight")
+
+
+def _ensure_env_loaded_once() -> None:
+    """Carica .env in fase 0, idempotente su rerun."""
+    global _ENV_BOOTSTRAPPED
+    if _ENV_BOOTSTRAPPED:
+        return
+    _ENV_BOOTSTRAPPED = True
+    from pipeline import env_utils
+
+    env_utils.ensure_dotenv_loaded(strict=False, allow_fallback=False)
 
 
 def _render_preflight_header(st_module: StreamlitLike, logger: logging.Logger, *, repo_root: Path) -> None:
@@ -309,6 +321,7 @@ def build_navigation(
 
 
 def main() -> None:
+    _ensure_env_loaded_once()
     try:
         repo_root = get_repo_root()
     except ConfigError as exc:

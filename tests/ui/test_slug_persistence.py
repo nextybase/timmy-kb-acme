@@ -108,3 +108,18 @@ def test_save_persisted_configerror_is_non_fatal(
 
     assert any(rec.getMessage() == "ui.slug.persist_unavailable" for rec in caplog.records)
     assert not any(rec.getMessage() == "ui.slug.persist_failed" for rec in caplog.records)
+
+
+def test_persist_unavailable_logged_once(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    def _raise_config() -> Path:
+        raise ConfigError("boom", code="clients_store.workspace_root.invalid")
+
+    monkeypatch.setattr(slug_utils, "get_ui_state_path", _raise_config, raising=False)
+    monkeypatch.setattr(slug_utils, "st", SimpleNamespace(session_state={}), raising=False)
+
+    with caplog.at_level(logging.INFO):
+        slug_utils._load_persisted()
+        slug_utils._load_persisted()
+        slug_utils._save_persisted("dummy")
+
+    assert sum(rec.getMessage() == "ui.slug.persist_unavailable" for rec in caplog.records) == 1
