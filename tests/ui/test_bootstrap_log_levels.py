@@ -50,7 +50,7 @@ def test_ui_startup_logged_at_info(monkeypatch: pytest.MonkeyPatch, caplog: pyte
 
     records = [record for record in caplog.records if record.getMessage() == "ui.startup"]
     assert records
-    assert all(record.levelno == logging.INFO for record in records)
+    assert all(record.levelname == "INFO" for record in records)
 
 
 def test_repo_root_env_event_not_info(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:

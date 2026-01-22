@@ -13,6 +13,19 @@ Il sistema non nasce per "avere ragione", ma per **rendere esplicito ciò che è
 ### 2. Il principio fondante: l'envelope epistemico
 Al centro di Timmy-KB c'è il concetto di **envelope epistemico**.
 
+Timmy-KB è strutturato attorno a **due domini epistemici distinti e non sovrapponibili**:
+
+- **Epistemic Envelope**
+- **Agency Engine**
+
+Entrambi utilizzano inferenza artificiale, ma sono separati dal concetto di *agency*.
+Questa separazione costituisce il confine filosofico e operativo fondamentale del sistema.
+
+L’Epistemic Envelope è il dominio dell’**inferenza senza agency**.
+L’Agency Engine è il dominio dell’**inferenza con agency**.
+
+Ogni violazione o confusione tra questi due domini costituisce un errore architetturale.
+
 Un envelope epistemico è il perimetro entro cui un sistema può operare in modo:
 - semanticamente coerente
 - eticamente controllabile
@@ -30,8 +43,25 @@ Ogni inferenza, suggerimento o output è valido **solo all'interno di quell'enve
 
 ---
 
+### 2.a Epistemic Envelope (inferenza senza agency)
+L’Epistemic Envelope governa i processi di ingestione, normalizzazione, arricchimento semantico,
+costruzione dei metadati e del Knowledge Graph.
+
+In questo dominio l’inferenza è **ammessa esclusivamente in forma descrittiva e costruttiva**:
+il sistema può proporre strutture e relazioni, ma non può prendere decisioni, selezionare alternative
+o produrre output deliberativi.
+
+Ogni trasformazione è:
+- tracciata
+- riproducibile
+- reversibile
+- verificabile a posteriori
+
+L’obiettivo non è produrre risposte, ma **costruire il perimetro del conoscibile**.
+
 ### 3. Probabilismo e umiltà operativa
-Timmy-KB adotta un paradigma **probabilistico**, non deterministico.
+Timmy-KB adotta un paradigma **probabilistico nell’Agency Engine**, e
+un paradigma **operativamente deterministico nell’Epistemic Envelope**.
 
 Ogni risultato:
 - ha un grado di confidenza
@@ -51,6 +81,20 @@ Questa postura è una scelta progettuale: **l'umiltà algoritmica è una forma d
 
 ---
 
+### 3.a Agency Engine (inferenza con agency)
+L’Agency Engine è il dominio in cui l’inferenza assume carattere deliberativo.
+
+Qui operano la Prompt Chain, i Gatekeeper e i micro-agenti.
+Il sistema esplora alternative, valuta traiettorie e produce output operativi e creativi,
+accettando il probabilismo e l’emergenza come strumenti progettuali.
+
+L’Agency Engine non è deterministico nel risultato,
+ma è **vincolato nel contesto**:
+il suo spazio d’azione è interamente delimitato dall’Epistemic Envelope.
+
+Nessuna decisione o output dell’Agency Engine è valido
+se non è riconducibile all’envelope epistemico attivo.
+
 ### 4. Timmy non è un agente autonomo
 Timmy-KB non è un soggetto decisionale.
 
@@ -58,6 +102,9 @@ Timmy-KB non è un soggetto decisionale.
 - un **orchestratore di conoscenza**
 - un **amplificatore semantico**
 - un **dispositivo di chiarificazione**
+
+L’agency esercitata dal sistema è sempre **mediata, contestuale e revocabile**,
+e risiede esclusivamente nell’Agency Engine.
 
 Le decisioni restano sempre:
 - attribuibili
@@ -133,10 +180,23 @@ Fuori da questo perimetro, Timmy-KB preferisce non parlare.
 
 ---
 
+### 4.a Principio di cooperazione asimmetrica
+L’intelligenza del sistema non risiede in uno dei due domini presi singolarmente,
+ma **nella loro separazione rigorosa e nella loro cooperazione asimmetrica**.
+
+- L’Epistemic Envelope riduce l’incertezza strutturale.
+- L’Agency Engine utilizza l’incertezza residua come spazio di esplorazione controllata.
+
+L’Epistemic Envelope precede logicamente e operativamente l’Agency Engine.
+
 ### 9. Rigor e fallimento esplicito
 Timmy-KB distingue nettamente i domini di tolleranza all'errore:
-- **Prompt Chain / governance agentica:** il non-fatal è ammesso solo qui perché l'errore è cognitivo (interpretazione, piano, template) e viene gestito tramite Evidence Gate + Skeptic Gate nella sequenza Planner → OCP → Codex → OCP → Planner.
-- **Runtime operativo (pipeline, semantic, storage, ui, metrics):** le failure infrastrutturali sono **strict** o devono emettere segnali deterministici e tracciabili; è vietata ogni degradazione silenziosa.
+- **Agency Engine (Prompt Chain / governance agentica):**
+  il non-fatal è ammesso solo qui perché l'errore è cognitivo
+  ed è gestito tramite Evidence Gate + Skeptic Gate.
+- **Epistemic Envelope e runtime operativo:**
+  le failure infrastrutturali sono **strict** o devono emettere segnali deterministici e tracciabili;
+  è vietata ogni degradazione silenziosa.
 
 Runtime behavior is governed by `instructions/10_runtime_strict_contract_beta.md`.
 Questa asimmetria protegge l'envelope epistemico: l'incertezza del dialogo agentico resta osservabile e governata, mentre l'operatività pretende fallimenti espliciti e telemetria (log/eventi/exit code) che rendano verificabili cause e impatti.

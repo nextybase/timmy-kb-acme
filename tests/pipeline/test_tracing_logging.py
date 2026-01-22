@@ -25,5 +25,5 @@ def test_tracing_disabled_logs_structured(monkeypatch: pytest.MonkeyPatch, caplo
     records = [record for record in caplog.records if record.getMessage() == "observability.tracing.disabled"]
     assert records
     assert len(records) == 1
-    assert all(record.levelno == logging.INFO for record in records)
+    assert all(record.levelname == "INFO" for record in records)
     assert all(record.name == "pipeline.observability" for record in records)

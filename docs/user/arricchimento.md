@@ -17,7 +17,7 @@ Le decisioni di stato sono sempre demandate a:
 - Azione: **Estrai tag / Avvia arricchimento semantico**
 - Handler: `ui.services.tags_adapter.run_tags_update(slug)`
 - Effetti immediati:
-  - risoluzione del contesto cliente (`base_dir`, `raw_dir`, `semantic_dir`);
+  - **WorkspaceLayout** come fonte autorevole per i path (base/raw/semantic);
   - verifica path-safety;
   - avvio della run tecnica di estrazione.
 

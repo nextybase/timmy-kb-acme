@@ -1,5 +1,32 @@
 # NeXT ↔ Timmy-KB: Mapping concettuale
 
+Questo documento descrive l’allineamento concettuale tra Timmy-KB,
+il Manifesto e la documentazione di sistema.
+
+L’allineamento si fonda su due **domini epistemici distinti e non sovrapponibili**:
+
+- **Epistemic Envelope**
+- **Agency Engine**
+
+Questi domini rappresentano il riferimento canonico
+per l’interpretazione dell’architettura, dei processi e delle policy.
+
+---
+
+## Mappa dei domini epistemici
+
+**Epistemic Envelope**
+- pipeline di ingestione e trasformazione
+- artefatti strutturati (markdown, metadata)
+- Knowledge Graph
+- lineage, ledger e tracciabilità
+
+**Agency Engine**
+- Prompt Chain
+- ruoli degli agenti (Timmy, Gatekeeper, micro-agenti)
+- gate epistemici (Evidence Gate, Skeptic Gate)
+- work orders e output deliberativi
+
 ## 1. Introduzione
 Questo documento esplicita come i concetti chiave del framework NeXT siano tradotti operativamente in Timmy-KB. L'obiettivo è fornire ai reviewer e ai developer una bussola concettuale: il paper NeXT definisce il perimetro teorico (envelope epistemico, Human-in-the-Loop, governance by design), Timmy-KB ne rappresenta l'implementazione concreta nei file README, MANIFEST e nelle guide. Non si tratta di ripetere il manifesto, ma di mostrare dove, nel repo, ciascun asse teorico trova una corrispondenza pratica e verificabile.
 

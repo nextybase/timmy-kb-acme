@@ -1,11 +1,23 @@
 # AGENTS Index - Shared Policies for All Agents
 
+Questo documento elenca gli agenti operativi del sistema,
+che operano esclusivamente nel dominio dell’**Agency Engine**.
+
+Gli agenti non accedono direttamente ai dati grezzi
+né ai processi di ingestione:
+operano sempre entro i confini fissati
+dall’**Epistemic Envelope**.
+
 This index gathers the shared policies that every agent must follow in the repository. Avoid duplicating rules: the individual `AGENTS.md` files under their respective areas should contain only the minimal, scope-specific overrides and point back to this index for everything else.
 
 
 ## Operational Approach (Agent-first, HiTL)
 
 The repository treats the agent as a teammate with clear responsibilities: the **common policies** live here, and area-specific `AGENTS.md` files define only **local overrides**. The workflow is **Human-in-the-Loop**: the agent proposes idempotent micro-PRs, avoids side effects, and closes the loop with lint/type/test.
+
+L’agency è sempre mediata, contestuale e revocabile.
+Nessun agente può produrre conoscenza
+al di fuori dell’Epistemic Envelope attivo.
 
 Core principles:
 - **SSoT & Safety:** all reads/writes go through the utility belt and stay within the workspace; no unannounced collateral effects.

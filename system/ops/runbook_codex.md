@@ -1,5 +1,14 @@
 # Runbook Codex - Timmy KB (v1.0 Beta)
 
+Questo runbook descrive il flusso operativo tra OCP e Codex
+all’interno dell’**Agency Engine**.
+
+L’Agency Engine è il dominio deliberativo del sistema
+e opera sempre entro i vincoli definiti
+dall’**Epistemic Envelope**.
+
+---
+
 > This runbook is the operational guide for working safely and effectively on the Timmy KB repository with an agent-first, HiTL approach. It serves as the day-to-day reference for flows; design details live in the supporting documents cited below.
 
 - **Audience:** developers, tech writers, QA, maintainers, and the repo-aware agent Codex.

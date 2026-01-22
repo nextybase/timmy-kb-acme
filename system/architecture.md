@@ -5,6 +5,20 @@
 > duplicare i contenuti. Per regole tecniche e di stile vedi
 > [docs/developer/coding_rule.md](../docs/developer/coding_rule.md).
 
+This document describes the runtime architecture of Timmy-KB and its
+alignment with the system’s epistemic foundations.
+
+Timmy-KB is architected around **two distinct and non-overlapping epistemic domains**:
+
+- **Epistemic Envelope**
+- **Agency Engine**
+
+These domains are not implementation details, but **first-class architectural concepts**.
+All runtime components, pipelines and execution models are subordinate to this separation.
+
+The Epistemic Envelope and the Agency Engine both rely on AI-based inference,
+but are strictly separated by the presence or absence of *agency*.
+
 This document defines:
 - the architectural invariants of the Timmy-KB runtime,
 - the execution model and responsibility boundaries,
@@ -16,6 +30,78 @@ However, it **does explicitly map** the repository and runtime structure, becaus
 the filesystem layout is part of the architecture, not an implementation detail.
 Determinism here refers to runtime execution, I/O, and enforcement paths;
 epistemic probabilism remains defined in `MANIFEST.md`.
+
+## Epistemic Domains Overview
+
+| Epistemic Domain     | Role                              | Nature of inference           |
+|----------------------|-----------------------------------|-------------------------------|
+| Epistemic Envelope   | Knowledge foundation & constraints| Inferential, non-deliberative |
+| Agency Engine        | Decision & action orchestration   | Inferential, deliberative     |
+
+Any violation or blurring of this separation constitutes an architectural error.
+
+## Execution Model Overview
+
+The system execution model is composed of two main layers,
+which are **architectural realizations** of the two epistemic domains:
+
+- **Foundation Pipeline** → implementation of the *Epistemic Envelope*
+- **Control Plane** → implementation of the *Agency Engine*
+
+These layers are intentionally asymmetric in behavior and guarantees.
+
+## Epistemic Envelope (Foundation Pipeline)
+
+The **Epistemic Envelope** is implemented through the Foundation Pipeline
+and the deterministic runtime core.
+
+Its responsibility is to transform raw inputs into structured, observable
+and explainable informational artifacts:
+
+- normalized and chunked markdown
+- metadata
+- semantic representations
+- knowledge graphs
+- ledgers and lineage
+
+Inference is allowed exclusively in a **descriptive and constructive form**.
+No decisions, selections or goal-oriented actions are permitted in this domain.
+
+All operations within the Epistemic Envelope must be:
+- deterministic at the operational level
+- strictly observable
+- reproducible and auditable
+
+## Agency Engine (Control Plane)
+
+The **Agency Engine** is implemented through the Control Plane.
+
+It governs agent interactions, prompt chains and deliberative workflows.
+
+This is the domain where *agency is explicitly allowed*.
+
+The Agency Engine is intentionally probabilistic:
+- multiple models may be involved
+- alternative solutions may be explored
+- emergent behavior is permitted
+
+However, its operational context is **strictly bounded** by the Epistemic Envelope.
+
+No agent, prompt or decision may:
+- bypass the Epistemic Envelope
+- introduce knowledge not derived from it
+- invalidate its constraints
+
+## Principle of Asymmetric Cooperation
+
+The intelligence of Timmy-KB does not emerge from either domain in isolation,
+but from their **strict separation and asymmetric cooperation**.
+
+- The Epistemic Envelope reduces structural uncertainty.
+- The Agency Engine exploits residual uncertainty for controlled exploration.
+
+Any attempt to merge or collapse these domains undermines the system’s
+epistemic integrity.
 
 ## Repository Map (Root Level)
 
