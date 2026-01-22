@@ -69,7 +69,7 @@ Un documento **attivo** può essere raffinato, ma:
 
 ## Terminologia ufficiale
 
-Per evitare ambiguitÃ , il sistema utilizza una terminologia controllata.
+Per evitare ambiguità, il sistema utilizza una terminologia controllata.
 Si raccomanda di evitare l'introduzione di nuovi termini concettuali.
 
 Domini epistemici canonici:
