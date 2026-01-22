@@ -34,7 +34,7 @@ class _LayoutCtx:
         return self._layout.raw_dir
 
     @property
-    def md_dir(self) -> Path:
+    def book_dir(self) -> Path:
         return self._layout.book_dir
 
 

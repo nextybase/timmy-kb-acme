@@ -128,7 +128,7 @@ def _bench_semantic_index() -> Tuple[
     class Ctx:
         base_dir: "Path"
         raw_dir: "Path"
-        md_dir: "Path"
+        book_dir: "Path"
         slug: str
 
     class Nd2:
@@ -161,7 +161,7 @@ def _bench_semantic_index() -> Tuple[
         _prepare_md(book, n)
         _prepare_raw_pdfs(raw_dir, n)
         clear_iter_safe_pdfs_cache(root=raw_dir)
-        ctx = Ctx(base_dir=base, raw_dir=base / "raw", md_dir=book, slug=slug)
+        ctx = Ctx(base_dir=base, raw_dir=base / "raw", book_dir=book, slug=slug)
         logger = logging.getLogger(f"bench.semantic.{label}")
 
         def _run(client: Any) -> int:
@@ -297,7 +297,7 @@ def main() -> int:
                 )
         except Exception:
             pass
-        print("âš ï¸Ž regression")
+        print("⚠️ regression")
         return 0
 
 
