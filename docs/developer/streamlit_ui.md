@@ -314,7 +314,6 @@ def import_tags_yaml_to_db(semantic_dir: Path, yaml_path: Path, logger):
 - Vision: `semantic.vision.*` (es. `semantic.vision.create_thread`, `semantic.vision.run_failed`, `semantic.vision.completed`)
 - Conversione/Book: `semantic.convert.*`, `semantic.summary.*`, `semantic.readme.*`, `semantic.book.*`
 - Indicizzazione: `semantic.index.*`
-- Preflight (bypass one-shot): `ui.preflight.once`
 
 ### Naming & payload
 

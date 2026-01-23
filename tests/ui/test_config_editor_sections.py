@@ -106,7 +106,7 @@ def test_handle_actions_updates_configuration(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(module, "update_config_with_drive_ids", _fake_update)
 
     ctx = types.SimpleNamespace(logger=None)
-    data = {"skip_preflight": False}
+    data: Dict[str, Any] = {}
     vision_cfg = {"engine": "assistant", "model": "gpt", "strict_output": True}
     retriever_cfg = {
         "auto": False,

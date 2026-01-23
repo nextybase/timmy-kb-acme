@@ -132,7 +132,7 @@ def render_body(
         st_mod.markdown("### UI")
         skip_preflight = st_mod.toggle(
             "Salta preflight iniziale",
-            value=bool(ui_cfg.get("skip_preflight", data.get("skip_preflight", False))),
+            value=bool(ui_cfg.get("skip_preflight", False)),
             help="Persistente: memorizza ui.skip_preflight nel config del cliente.",
         )
 
@@ -187,8 +187,6 @@ def _build_updates(
     new_ui = _copy_section(ui_cfg)
     new_ui["skip_preflight"] = bool(values["skip_preflight"])
     updates["ui"] = new_ui
-
-    updates.setdefault("skip_preflight", bool(data.get("skip_preflight", False)))
 
     return updates
 

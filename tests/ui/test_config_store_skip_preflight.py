@@ -21,12 +21,6 @@ def test_get_skip_preflight_reads_ui_key(tmp_path: Path) -> None:
     assert config_store.get_skip_preflight(repo_root=repo_root) is True
 
 
-def test_get_skip_preflight_reads_legacy_top_level(tmp_path: Path) -> None:
-    repo_root = tmp_path / "repo"
-    _write_cfg(repo_root, "skip_preflight: true\n")
-    assert config_store.get_skip_preflight(repo_root=repo_root) is True
-
-
 def test_get_skip_preflight_defaults_false(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     _write_cfg(repo_root, "ui:\n  skip_preflight: false\n")

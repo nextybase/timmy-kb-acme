@@ -64,20 +64,12 @@ def test_handle_exit_param_truthy_triggers_stop() -> None:
     assert any("Sessione terminata" in msg for msg in st.info_messages)
 
 
-def test_run_preflight_flow_skips_when_already_ok() -> None:
+def test_run_preflight_flow_skips_when_already_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     st = _make_st()
     st.session_state["preflight_ok"] = True
     calls = {"run_preflight": 0}
-    skip_preflight_state = {"value": False}
 
-    def _get_skip_preflight() -> bool:
-        return skip_preflight_state["value"]
-
-    def _set_skip_preflight(value: bool) -> None:
-        skip_preflight_state["value"] = value
-
-    def _apply_preflight_once(_once_skip: bool, _session_state: dict, _logger: logging.Logger) -> bool:
-        return False
+    monkeypatch.setattr(onboarding_ui.config_store, "get_skip_preflight", lambda **_kwargs: False, raising=True)
 
     def _run_preflight():
         calls["run_preflight"] += 1
@@ -86,30 +78,19 @@ def test_run_preflight_flow_skips_when_already_ok() -> None:
     onboarding_ui._run_preflight_flow(
         st,
         logger=logging.getLogger("tests.onboarding_ui"),
-        get_skip_preflight=_get_skip_preflight,
-        set_skip_preflight=_set_skip_preflight,
-        apply_preflight_once=_apply_preflight_once,
         run_preflight=_run_preflight,
         status_guard=lambda *args, **kwargs: nullcontext(),  # type: ignore[arg-type]
+        repo_root=Path("."),
     )
 
     assert calls["run_preflight"] == 0
     assert st._rerun_called is False
 
 
-def test_run_preflight_flow_sets_flag_when_skipped_persistently() -> None:
+def test_run_preflight_flow_sets_flag_when_skipped_persistently(monkeypatch: pytest.MonkeyPatch) -> None:
     st = _make_st()
     calls = {"run_preflight": 0}
-    skip_preflight_state = {"value": True}
-
-    def _get_skip_preflight() -> bool:
-        return skip_preflight_state["value"]
-
-    def _set_skip_preflight(value: bool) -> None:
-        skip_preflight_state["value"] = value
-
-    def _apply_preflight_once(_once_skip: bool, _session_state: dict, _logger: logging.Logger) -> bool:
-        return False
+    monkeypatch.setattr(onboarding_ui.config_store, "get_skip_preflight", lambda **_kwargs: True, raising=True)
 
     def _run_preflight():
         calls["run_preflight"] += 1
@@ -118,11 +99,9 @@ def test_run_preflight_flow_sets_flag_when_skipped_persistently() -> None:
     onboarding_ui._run_preflight_flow(
         st,
         logger=logging.getLogger("tests.onboarding_ui"),
-        get_skip_preflight=_get_skip_preflight,
-        set_skip_preflight=_set_skip_preflight,
-        apply_preflight_once=_apply_preflight_once,
         run_preflight=_run_preflight,
         status_guard=lambda *args, **kwargs: nullcontext(),  # type: ignore[arg-type]
+        repo_root=Path("."),
     )
 
     assert calls["run_preflight"] == 0

@@ -229,7 +229,6 @@ def get_skip_preflight(*, repo_root: Path | None = None) -> bool:
     Fonte: config/config.yaml
 
     Chiave canonica: ui.skip_preflight
-    Legacy supportato (OR secco, non "degradazioni morbide"): skip_preflight top-level
     """
     root = repo_root or REPO_ROOT
     cfg: GlobalConfig = _load_repo_config(root)
@@ -238,9 +237,7 @@ def get_skip_preflight(*, repo_root: Path | None = None) -> bool:
     ui_skip = False
     if isinstance(ui, dict):
         ui_skip = bool(ui.get("skip_preflight", False))
-
-    legacy_skip = bool(cfg.get("skip_preflight", False))
-    return bool(ui_skip or legacy_skip)
+    return bool(ui_skip)
 
 
 def set_skip_preflight(flag: bool, *, repo_root: Path | None = None) -> None:

@@ -132,26 +132,6 @@ Provisioning struttura su **Drive**:
 
 ---
 
-## Preflight: preferenza persistente vs. bypass "solo questa run"
-
-Nella sezione **Prerequisiti** trovi due controlli distinti:
-
-1. **Salta il controllo** (persistente)
-   Aggiorna la preferenza `ui.skip_preflight` in `config/config.yaml`. Da quel momento il preflight viene **saltato** in modo stabile.
-
-2. **Salta il controllo solo per questa esecuzione** (one-shot)
-   Bypassa il preflight **solo** nella sessione corrente, senza toccare la preferenza persistente.
-   Al primo utilizzo logga l'evento: `ui.preflight.once`.
-
-Comportamento:
-- Se la preferenza persistente e' attiva, il preflight non viene eseguito.
-- Se non e' attiva, puoi usare il bypass one-shot per test/supporto rapido.
-- Il bypass one-shot e' idempotente nella stessa sessione (non riloggato piu' volte).
-
-> Suggerimento: usa il bypass **one-shot** in fase di sviluppo/diagnostica; usa la preferenza **persistente** in ambienti demo o dove il check e' superfluo.
-
----
-
 ## Vocabolario semantico: YAML vs DB
 
 ```mermaid
@@ -290,11 +270,6 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
 - **Nessun PDF rilevato** -> carica su Drive e **Scarica**, oppure copia in locale e **Rileva PDF**.
 - **README non in PDF** -> manca ReportLab -> viene caricato **README.txt** (comunque ok).
 - **Tag strani o mancanti** -> rivedi mapping (aree/keywords/sinonimi), poi **Arricchisci**.
-- **Preflight "solo questa run" non ha effetto** -> verifica che **"Salta il controllo" (persistente)** sia **disattivo**; il bypass one-shot non sovrascrive la preferenza salvata. Dopo aver spuntato il one-shot, deve avvenire un **rerun** (la UI lo innesca automaticamente).
-- **Il bypass one-shot resta appiccicato tra run** -> il flag e' in `session_state`. Forza un **refresh** o passa `?exit=1` per chiudere la sessione e azzerare lo stato.
-
----
-
 ## 11) Best practice
 
 - Scegli **slug** chiari e stabili (es. \`evagrin\`).
