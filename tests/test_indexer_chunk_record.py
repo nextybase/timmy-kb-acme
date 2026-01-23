@@ -50,6 +50,8 @@ def test_indexer_accepts_chunk_records(tmp_path: Path, monkeypatch: pytest.Monke
     base = tmp_path / "kb"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     ctx = _Ctx(base)
     logger = _NoopLogger()
     inserted_meta: dict[str, object] | None = None
@@ -79,7 +81,7 @@ def test_indexer_accepts_chunk_records(tmp_path: Path, monkeypatch: pytest.Monke
         logger=logger,
         scope="book",
         embeddings_client=_EmbClient(),
-        db_path=tmp_path / "kb.sqlite",
+        db_path=semantic_dir / "kb.sqlite",
         chunk_records=[record],
     )
 
@@ -95,6 +97,8 @@ def test_indexer_chunking_heading(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     base = tmp_path / "kb"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "doc.md").write_text("# Intro\nCiao\n# Details\nContenuti", encoding="utf-8")
 
     ctx = _Ctx(base)
@@ -115,7 +119,7 @@ def test_indexer_chunking_heading(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         logger=logger,
         scope="book",
         embeddings_client=_EmbClient(),
-        db_path=tmp_path / "kb.sqlite",
+        db_path=semantic_dir / "kb.sqlite",
     )
 
     assert inserted >= 1
@@ -132,6 +136,8 @@ def test_indexer_skipped_paths_only_missing_files_logged(
     base = tmp_path / "kb"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "doc.md").write_text("# Section\nContenuto", encoding="utf-8")
     (book / "empty.md").write_text("", encoding="utf-8")
 
@@ -153,7 +159,7 @@ def test_indexer_skipped_paths_only_missing_files_logged(
         logger=logger,
         scope="book",
         embeddings_client=_EmbClient(),
-        db_path=tmp_path / "kb.sqlite",
+        db_path=semantic_dir / "kb.sqlite",
     )
 
     assert inserted >= 1

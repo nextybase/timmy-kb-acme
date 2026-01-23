@@ -42,13 +42,15 @@ def test_indexer_initializes_schema_once(tmp_path: Path, monkeypatch: pytest.Mon
     base = tmp_path / "kb"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     # Due file di contenuto (no README/SUMMARY)
     (book / "a.md").write_text("# A\nBody\n", encoding="utf-8")
     (book / "b.md").write_text("# B\nBody\n", encoding="utf-8")
 
     ctx = _Ctx(base)
     logger = _NoopLogger()
-    db_path = tmp_path / "kb.sqlite"
+    db_path = semantic_dir / "kb.sqlite"
 
     import kb_db as kdb
 
@@ -75,12 +77,14 @@ def test_indexer_reduces_overhead_with_single_init(tmp_path: Path, monkeypatch: 
     base = tmp_path / "kb"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     for i in range(3):
         (book / f"f{i}.md").write_text(f"# F{i}\nBody\n", encoding="utf-8")
 
     ctx = _Ctx(base)
     logger = _NoopLogger()
-    db_path = tmp_path / "kb2.sqlite"
+    db_path = semantic_dir / "kb2.sqlite"
 
     import kb_db as kdb
 
@@ -102,7 +106,7 @@ def test_indexer_reduces_overhead_with_single_init(tmp_path: Path, monkeypatch: 
         return len(calls) - before
 
     single_init_count = run(db_path) + run(db_path)
-    repeat_count = run(tmp_path / "kb_repeat_1.sqlite") + run(tmp_path / "kb_repeat_2.sqlite")
+    repeat_count = run(semantic_dir / "kb_repeat_1.sqlite") + run(semantic_dir / "kb_repeat_2.sqlite")
 
     assert repeat_count >= 2
     assert single_init_count <= repeat_count

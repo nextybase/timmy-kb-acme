@@ -50,6 +50,7 @@ def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
     (book / "B.md").write_text("# B\ndue", encoding="utf-8")
     ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=base / "raw", book_dir=book, slug="dummy")
     logger = _logger("test.obs.index")
+    db_path = base / "semantic" / "kb.sqlite"
 
     # Stub embeddings e inserimento DB
     class Emb:
@@ -64,7 +65,7 @@ def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
     monkeypatch.setattr(semb, "_insert_chunks", lambda **kwargs: 1)
 
     caplog.set_level(logging.INFO)
-    _ = sapi.index_markdown_to_db(ctx, logger, slug="dummy", scope="book", embeddings_client=Emb(), db_path=None)
+    _ = sapi.index_markdown_to_db(ctx, logger, slug="dummy", scope="book", embeddings_client=Emb(), db_path=db_path)
 
     # Verifica record strutturati
     started = next(
@@ -137,6 +138,7 @@ def test_observability_indexing_failure_emits_error(monkeypatch, tmp_path, caplo
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
     ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=base / "raw", book_dir=book, slug="dummy")
     logger = _logger("test.obs.index.fail")
+    db_path = base / "semantic" / "kb.sqlite"
 
     class Emb:
         def embed_texts(
@@ -156,7 +158,7 @@ def test_observability_indexing_failure_emits_error(monkeypatch, tmp_path, caplo
     import pytest
 
     with pytest.raises(RuntimeError):
-        sapi.index_markdown_to_db(ctx, logger, slug="dummy", scope="book", embeddings_client=Emb(), db_path=None)
+        sapi.index_markdown_to_db(ctx, logger, slug="dummy", scope="book", embeddings_client=Emb(), db_path=db_path)
 
     failed = next(
         r for r in caplog.records if r.msg == "phase_failed" and getattr(r, "phase", None) == "index_markdown_to_db"

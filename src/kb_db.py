@@ -8,7 +8,7 @@ Espone:
 
 Questo modulo centralizza la gestione del path del DB e l'inizializzazione.
 Il contratto sul path e' formalizzato in `storage.kb_store.KbStore`, che risolve
- gia' i DB per workspace/slug (default: <workspace>/semantic/kb.sqlite).
+gia' i DB per workspace/slug (default: <workspace>/semantic/kb.sqlite).
 Le embedding sono salvate come array JSON per portabilita'. Usa la modalita' WAL
 per ridurre la contesa dei lock.
 """
@@ -21,11 +21,10 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterator, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve
 
 if TYPE_CHECKING:
     from storage.kb_store import KbStore
@@ -45,37 +44,25 @@ def _resolve_db_path(db_path: Optional[Path]) -> Path:
     """Risoluzione sicura del path DB.
 
     Regole:
-    - Se `db_path` è None: usa `data/kb.sqlite` e valida che resti sotto `data/`.
-    - Se `db_path` è assoluto: usa il path risolto così com'è (compatibilità test/override).
-    - Se `db_path` è relativo: interpretalo sotto `data/` e valida che resti entro il perimetro.
+    - `db_path` e' obbligatorio e deve essere esplicito.
+    - Deve essere un path assoluto (derivato da WorkspaceLayout/ClientContext).
     """
     if db_path is None:
-        base = Path.cwd().resolve()
-        semantic_dir = base / "semantic"
-        if not semantic_dir.exists():
-            raise ConfigError(
-                "DB KB non configurato: esegui il comando dentro un workspace (directory con `semantic/`) "
-                "oppure passa un db_path esplicito (workspace-based).",
-                code="kb.db_path.missing",
-                component="kb_db",
-                file_path=str(base),
-            )
-        candidate = semantic_dir / "kb.sqlite"
-        resolved = cast(Path, ensure_within_and_resolve(base, candidate))
-        if resolved.parts[-2:] == _LEGACY_GLOBAL_DB_PARTS:
-            raise ConfigError(
-                "DB globale legacy `data/kb.sqlite` non supportato: usa `<workspace>/semantic/kb.sqlite`.",
-                code="kb.db_path.legacy",
-                component="kb_db",
-                file_path=str(resolved),
-            )
-        return resolved
+        raise ConfigError(
+            "db_path must be provided explicitly via WorkspaceLayout / ClientContext. "
+            "Implicit CWD-based resolution is forbidden.",
+            code="kb.db_path.missing",
+            component="kb_db",
+        )
     p = Path(db_path)
-    if p.is_absolute():
-        resolved = p.resolve()
-    else:
-        base = Path.cwd().resolve()
-        resolved = cast(Path, ensure_within_and_resolve(base, (base / p)))
+    if not p.is_absolute():
+        raise ConfigError(
+            "db_path must be absolute and derived from WorkspaceLayout / ClientContext.",
+            code="kb.db_path.relative",
+            component="kb_db",
+            file_path=str(p),
+        )
+    resolved = p.resolve()
     if resolved.parts[-2:] == _LEGACY_GLOBAL_DB_PARTS:
         raise ConfigError(
             "DB globale legacy `data/kb.sqlite` non supportato: usa `<workspace>/semantic/kb.sqlite`.",
@@ -87,7 +74,10 @@ def _resolve_db_path(db_path: Optional[Path]) -> Path:
 
 
 def get_db_path() -> Path:
-    """Restituisce il path del DB SQLite del workspace corrente (`./semantic/kb.sqlite`)."""
+    """Restituisce il path del DB SQLite del workspace corrente.
+
+    Nota: l'uso implicito di CWD e' vietato; passa sempre un db_path esplicito.
+    """
     return _resolve_db_path(None)
 
 

@@ -20,9 +20,14 @@ def test_override_absolute_and_relative(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir(parents=True, exist_ok=True)
 
-    absolute = tmp_path / "custom.sqlite"
-    store_abs = KbStore.for_slug("x", repo_root_dir=workspace, db_path=absolute)
-    assert store_abs.effective_db_path() == absolute.resolve()
+    absolute_outside = tmp_path / "custom.sqlite"
+    store_abs_outside = KbStore.for_slug("x", repo_root_dir=workspace, db_path=absolute_outside)
+    with pytest.raises(ConfigError, match="db_path fuori dal workspace root"):
+        store_abs_outside.effective_db_path()
+
+    absolute_inside = workspace / "semantic" / "custom.sqlite"
+    store_abs = KbStore.for_slug("x", repo_root_dir=workspace, db_path=absolute_inside)
+    assert store_abs.effective_db_path() == absolute_inside.resolve()
 
     relative = Path("dbs") / "kb.sqlite"
     store_rel = KbStore.for_slug("x", repo_root_dir=workspace, db_path=relative)

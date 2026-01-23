@@ -34,7 +34,6 @@ def test_index_markdown_partial_on_mismatch_inserts_and_logs(tmp_path, caplog, m
 
     # stub del DB per evitare IO reale
     monkeypatch.setattr(embedding_service, "_init_kb_db", lambda db_path=None: None, raising=True)
-    monkeypatch.setattr(embedding_service, "_get_db_path", lambda: base / "kb.sqlite", raising=True)
 
     calls = {"count": 0}
 

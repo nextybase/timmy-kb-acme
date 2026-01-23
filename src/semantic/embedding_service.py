@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from kb_db import get_db_path as _get_db_path
 from kb_db import init_db as _init_kb_db
 from kb_db import insert_chunks as _insert_chunks
 from pipeline.content_utils import build_chunk_records_from_markdown_files
@@ -421,6 +420,12 @@ def index_markdown_to_db(
     chunk_records: Sequence[ChunkRecord] | None = None,
 ) -> int:
     """Indicizza i Markdown presenti in `book_dir` nel DB con embeddings."""
+    if db_path is None:
+        raise ConfigError(
+            "db_path must be provided explicitly via WorkspaceLayout / ClientContext. "
+            "Implicit CWD-based resolution is forbidden.",
+            slug=slug,
+        )
     ensure_within(repo_root_dir, book_dir)
     book_dir.mkdir(parents=True, exist_ok=True)
 
@@ -519,14 +524,10 @@ def index_markdown_to_db(
         try:
             _init_kb_db(db_path)
         except Exception as exc:  # noqa: BLE001 - vogliamo contesto completo
-            try:
-                effective = _get_db_path() if db_path is None else Path(db_path).resolve()
-            except Exception:
-                effective = db_path or Path("data/kb.sqlite")
             raise ConfigError(
                 f"Inizializzazione DB fallita: {exc}",
                 slug=slug,
-                file_path=effective,
+                file_path=str(Path(db_path).resolve()),
             ) from exc
 
         logger.info(

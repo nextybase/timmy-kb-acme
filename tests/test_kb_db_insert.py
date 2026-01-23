@@ -21,7 +21,10 @@ class _DummyEmbeddings:
 
 
 def test_insert_chunks_idempotency_and_index_aggregate(tmp_path: Path):
-    db_path = tmp_path / "kb.sqlite"
+    base = tmp_path / "kb_out"
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    db_path = semantic_dir / "kb.sqlite"
 
     # Inserimento diretto a basso livello
     k1 = insert_chunks(
@@ -50,7 +53,6 @@ def test_insert_chunks_idempotency_and_index_aggregate(tmp_path: Path):
     assert k2 == 0
 
     # High-level: indicizzazione da book/
-    base = tmp_path / "kb_out"
     book = base / "book"
     raw = base / "raw"
     book.mkdir(parents=True, exist_ok=True)

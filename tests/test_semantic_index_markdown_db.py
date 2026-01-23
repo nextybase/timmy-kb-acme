@@ -39,10 +39,12 @@ def test_index_markdown_to_db_inserts_rows(tmp_path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\ncontenuto uno", encoding="utf-8")
     (book / "B.md").write_text("# B\ncontenuto due", encoding="utf-8")
 
-    dbp = tmp_path / "db.sqlite"
+    dbp = semantic_dir / "db.sqlite"
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),  # bypass nominal type di ClientContext
         logging.getLogger("test"),
@@ -62,6 +64,8 @@ def test_index_markdown_to_db_numpy_array(tmp_path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
     (book / "B.md").write_text("# B\ndue", encoding="utf-8")
 
@@ -69,7 +73,7 @@ def test_index_markdown_to_db_numpy_array(tmp_path):
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
             return np.array([[1.0, 0.0], [0.5, 0.5]])
 
-    dbp = tmp_path / "db.sqlite"
+    dbp = semantic_dir / "db.sqlite"
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
@@ -87,6 +91,8 @@ def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
 
     # Generatore coerente
@@ -105,7 +111,7 @@ def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
         slug="dummy",
         scope="book",
         embeddings_client=GenEmb(),
-        db_path=tmp_path / "db_gen.sqlite",
+        db_path=semantic_dir / "db_gen.sqlite",
     )
     assert ok == 1
 
@@ -120,7 +126,7 @@ def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
         slug="dummy",
         scope="book",
         embeddings_client=EmptyVecEmb(),
-        db_path=tmp_path / "db_empty.sqlite",
+        db_path=semantic_dir / "db_empty.sqlite",
     )
     assert ret == 0
     # Verifica i log strutturati emessi quando gli embeddings risultano vuoti
@@ -142,6 +148,8 @@ def test_index_markdown_to_db_list_of_numpy_arrays(tmp_path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
     (book / "B.md").write_text("# B\ndue", encoding="utf-8")
 
@@ -149,7 +157,7 @@ def test_index_markdown_to_db_list_of_numpy_arrays(tmp_path):
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
             return [np.array([1.0, 0.0]), np.array([0.5, 0.5])]
 
-    dbp = tmp_path / "db_list_np.sqlite"
+    dbp = semantic_dir / "db_list_np.sqlite"
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
@@ -170,6 +178,8 @@ def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog)
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
     (book / "B.md").write_text("# B\ndue", encoding="utf-8")
 
@@ -185,7 +195,7 @@ def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog)
         slug="dummy",
         scope="book",
         embeddings_client=ShortEmb(),
-        db_path=tmp_path / "db_short.sqlite",
+        db_path=semantic_dir / "db_short.sqlite",
     )
     # nuovo comportamento: indicizzazione parziale sul minimo comune
     assert ret == 1
@@ -207,6 +217,8 @@ def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, mon
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
 
     class OkEmb:
@@ -229,7 +241,7 @@ def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, mon
             slug="dummy",
             scope="book",
             embeddings_client=OkEmb(),
-            db_path=tmp_path / "db_fail.sqlite",
+            db_path=semantic_dir / "db_fail.sqlite",
         )
 
     # Dentro il phase_scope deve comparire phase_failed e non artifact_count
@@ -242,6 +254,8 @@ def test_index_excludes_readme_and_summary(tmp_path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     # Contenuto reale
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
     # File da escludere
@@ -253,7 +267,7 @@ def test_index_excludes_readme_and_summary(tmp_path):
             # Deve essere chiamato solo per A.md
             return [[1.0, 0.0] for _ in texts]
 
-    dbp = tmp_path / "db_exclude.sqlite"
+    dbp = semantic_dir / "db_exclude.sqlite"
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
@@ -269,6 +283,8 @@ def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "A.md").write_text("# A\nuno", encoding="utf-8")
     (book / "B.md").write_text("# B\ndue", encoding="utf-8")
 
@@ -278,7 +294,7 @@ def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
             return [[], [1.0, 0.5]]
 
     caplog.set_level(logging.INFO)
-    dbp = tmp_path / "db_filter.sqlite"
+    dbp = semantic_dir / "db_filter.sqlite"
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
@@ -300,6 +316,8 @@ def test_index_preserves_frontmatter_and_metadata(tmp_path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     (book / "guide").mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "guide" / "Intro.md").write_text(
         """---
 title: "Introduzione"
@@ -318,7 +336,7 @@ Contenuto principale del capitolo.
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
             return [[1.0, 0.5, 0.25] for _ in texts]
 
-    dbp = tmp_path / "db_frontmatter.sqlite"
+    dbp = semantic_dir / "db_frontmatter.sqlite"
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),
@@ -344,13 +362,15 @@ def test_lineage_persisted_in_markdown_index(tmp_path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     (book / "Lineage.md").write_text("# Lineage\nContenuto lineage", encoding="utf-8")
 
     class Emb:
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
             return [[0.1, 0.2, 0.3] for _ in texts]
 
-    dbp = tmp_path / "db_lineage.sqlite"
+    dbp = semantic_dir / "db_lineage.sqlite"
     inserted = index_markdown_to_db(
         cast(Any, _ctx(base)),
         logging.getLogger("test"),

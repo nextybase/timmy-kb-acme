@@ -71,7 +71,7 @@ These functions extend the semantic pipeline without altering UI/CLI flows. They
 - `build_mapping_from_vision(context, logger, slug) -> Path`: generates `config/semantic_mapping.yaml` from `config/vision_statement.yaml`. Input: vision YAML. Output: normalized mapping. Clear errors, no network.
 - `build_tags_csv(context, logger, slug) -> Path`: scans `raw/` (PDF) and produces `semantic/tags_raw.csv` (conservative heuristics) plus `README_TAGGING.md`. Idempotent; CSV headers: `relative_path | suggested_tags | entities | keyphrases | score | sources`.
 - `build_markdown_book(context, logger, slug) -> list[Path]`: converts RAW Markdown (one `.md` per top-level folder), ensures `README.md`/`SUMMARY.md` in `book/`. If `semantic/tags.db` is available, adds front matter enrichment (title/tags). Minimal fallback if helper repos are missing.
-- `index_markdown_to_db(context, logger, slug, scope="book", embeddings_client, db_path=None) -> int`: indexes `.md` files into SQLite (one chunk per file, embeddings via `embeddings_client`). Metadata: `{file: <name>}`; daily versioned by `YYYYMMDD`. `db_path` allows isolated storage in tests.
+- `index_markdown_to_db(context, logger, slug, scope="book", embeddings_client, db_path) -> int`: indexes `.md` files into SQLite (one chunk per file, embeddings via `embeddings_client`). Metadata: `{file: <name>}`; daily versioned by `YYYYMMDD`. `db_path` must be provided explicitly (tests may pass a temporary absolute path within the workspace semantic dir).
 
 Common invariants
 - path safety via `pipeline.path_utils.ensure_within(...)` on outputs (and inputs where appropriate).

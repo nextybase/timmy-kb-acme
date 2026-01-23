@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve
 
 __all__ = ["KbStore"]
 
@@ -67,7 +67,25 @@ class KbStore:
         if self.db_path_override is not None:
             p = Path(self.db_path_override)
             if p.is_absolute():
-                return p.resolve()
+                resolved = p.resolve()
+                if self.repo_root_dir is None:
+                    raise ConfigError(
+                        "KbStore: db_path assoluto richiede workspace root per validare il perimetro.",
+                        code="kb.db_path.outside_workspace",
+                        slug=self.slug,
+                        file_path=resolved,
+                    )
+                repo_root_dir = Path(self.repo_root_dir).resolve()
+                try:
+                    ensure_within(repo_root_dir, resolved)
+                except Exception as exc:
+                    raise ConfigError(
+                        "KbStore: db_path fuori dal workspace root.",
+                        code="kb.db_path.outside_workspace",
+                        slug=self.slug,
+                        file_path=resolved,
+                    ) from exc
+                return resolved
             if self.repo_root_dir is not None:
                 repo_root_dir = Path(self.repo_root_dir).resolve()
                 perimeter_root = repo_root_dir
