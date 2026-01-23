@@ -260,7 +260,13 @@ def _to_list(body: str) -> List[str]:
     return cleaned
 
 
-def pdf_to_vision_yaml(pdf_path: Path, out_yaml_path: Path, root_dir: Path | str) -> Path:
+def _pdf_to_vision_yaml(pdf_path: Path, out_yaml_path: Path, root_dir: Path | str) -> Path:
+    """
+    INTERNAL IMPLEMENTATION DETAIL.
+
+    Do not call directly.
+    Public entry point: semantic.core.compile_document_to_vision_yaml
+    """
     pdf_path = Path(pdf_path)
     out_yaml_path = Path(out_yaml_path)
     root_path = Path(root_dir)

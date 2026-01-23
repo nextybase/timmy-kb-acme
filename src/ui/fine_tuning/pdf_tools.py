@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from semantic.vision_parser import pdf_to_vision_yaml
+from semantic.core import compile_document_to_vision_yaml
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
@@ -27,10 +27,10 @@ def run_pdf_to_yaml_config() -> None:
         return
 
     try:
-        created = pdf_to_vision_yaml(pdf_path, yaml_path, repo_root)
-        st.success(f"Creato: {created}")
+        compile_document_to_vision_yaml(pdf_path, yaml_path)
+        st.success(f"Creato: {yaml_path}")
         try:
-            preview = read_text_safe(repo_root, created)
+            preview = read_text_safe(repo_root, yaml_path)
             st.code(preview, language="yaml")
         except Exception:
             LOG.info("ui.pdf_tools.preview_unavailable")
