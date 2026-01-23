@@ -211,7 +211,6 @@ def _run_preflight_flow(
     """
     Esegue il preflight, gestendo session_state e rerun/stop.
 
-    Beta 1.0: il preflight e' obbligatorio (nessun bypass).
     - se preflight_ok e' gia' True non fa nulla;
     - altrimenti mostra la UI di controllo, blocca finche' non si preme Prosegui
       o in caso di errore chiama st.stop().

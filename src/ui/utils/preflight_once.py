@@ -12,8 +12,6 @@ def apply_preflight_once(
     logger: Optional[Any] = None,
 ) -> bool:
     """
-    Beta 1.0: bypass disabilitato nella UI runtime.
-
     Ritorna sempre False (nessun effetto su session_state).
     """
     if logger is not None:

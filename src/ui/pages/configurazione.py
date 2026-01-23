@@ -15,7 +15,7 @@ from ui.config_store import get_config_path
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
-logger = get_structured_logger(__name__)
+logger = get_structured_logger("ui.configurazione")
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 

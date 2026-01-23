@@ -293,7 +293,7 @@ def _mirror_repo_config_into_client(
 
 def _ui_logger() -> logging.Logger:
     """Logger minimale per Vision lato UI."""
-    log = cast(logging.Logger, get_structured_logger("ui.vision.new_client", propagate=False))
+    log = cast(logging.Logger, get_structured_logger("ui.vision.new_client"))
     return log
 
 
@@ -345,30 +345,16 @@ def _log_diagnostics(
     layout: WorkspaceLayout | None = None,
 ) -> None:
     """
-    Scrive un evento nel log Diagnostica (WARNING-only by convention) e chiude l'handler
-    per evitare lock su Windows. Usiamo sempre livelli >= warning quando invochiamo questa funzione.
+    Scrive un evento nel log Diagnostica (WARNING-only by convention).
+    Usiamo sempre livelli >= warning quando invochiamo questa funzione.
     """
-    layout = _require_layout(slug, layout)
-    logs_dir = layout.logs_dir
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    logger = get_structured_logger("ui.diagnostics", log_file=(logs_dir / "ui.log"))
+    _require_layout(slug, layout)
+    logger = get_structured_logger("ui.diagnostics")
     log_method = getattr(logger, level, None)
     if callable(log_method):
         log_method(message, extra=extra)
     else:  # degradazione a warning se il livello non esiste
         logger.warning(message, extra=extra)
-
-    for handler in list(logger.handlers):
-        if isinstance(handler, logging.FileHandler):
-            try:
-                handler.flush()
-            except Exception:
-                pass
-            try:
-                handler.close()
-            except Exception:
-                pass
-            logger.removeHandler(handler)
 
 
 # Registry unificato (SSoT) via ui.clients_store
