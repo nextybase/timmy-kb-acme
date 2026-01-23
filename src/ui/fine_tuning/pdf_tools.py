@@ -27,7 +27,7 @@ def run_pdf_to_yaml_config() -> None:
         return
 
     try:
-        created = pdf_to_vision_yaml(pdf_path, yaml_path)
+        created = pdf_to_vision_yaml(pdf_path, yaml_path, repo_root)
         st.success(f"Creato: {created}")
         try:
             preview = read_text_safe(repo_root, created)

@@ -551,25 +551,8 @@ if current_phase == UI_PHASE_INIT:
                         "ui.new_client.vision_yaml_generation_failed",
                         extra={"slug": s, "error": str(exc), "pdf": str(_client_pdf_path(s, layout=layout))},
                     )
-                    fallback_payload = {
-                        "version": 1,
-                        "metadata": {
-                            "source_pdf_path": str(_client_pdf_path(s, layout=layout)),
-                            "source_pdf_sha256": "",
-                            "pipeline_version": "1.0",
-                            "source_type": "pdf",
-                        },
-                        "content": {
-                            "pages": [],
-                            "full_text": "Vision statement non disponibile: usa il PDF originale o rigenera lo YAML.",
-                        },
-                    }
-                    safe_write_text(
-                        yaml_target,
-                        yaml.safe_dump(fallback_payload, allow_unicode=True, sort_keys=False),
-                        encoding="utf-8",
-                        atomic=True,
-                    )
+                    st.error("Generazione Vision fallita. Nessun artefatto epistemico è stato prodotto.")
+                    st.stop()
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Workspace locale pronto.", state="complete")
                 progress.progress(30, text="Workspace locale pronto.")

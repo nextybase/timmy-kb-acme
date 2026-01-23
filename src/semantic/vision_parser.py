@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Tuple, cast
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within
+from pipeline.path_utils import ensure_within_and_resolve
 from semantic.document_ingest import read_document
 
 try:
@@ -260,9 +260,10 @@ def _to_list(body: str) -> List[str]:
     return cleaned
 
 
-def pdf_to_vision_yaml(pdf_path: Path, out_yaml_path: Path) -> Path:
+def pdf_to_vision_yaml(pdf_path: Path, out_yaml_path: Path, root_dir: Path | str) -> Path:
     pdf_path = Path(pdf_path)
     out_yaml_path = Path(out_yaml_path)
+    root_path = Path(root_dir)
     if not pdf_path.is_file():
         raise FileNotFoundError(f"PDF non trovato: {pdf_path}")
 
@@ -311,8 +312,7 @@ def pdf_to_vision_yaml(pdf_path: Path, out_yaml_path: Path) -> Path:
         },
     }
 
-    base_dir = out_yaml_path.parent.parent if out_yaml_path.name else out_yaml_path.parent
-    ensure_within(base_dir, out_yaml_path)
+    ensure_within_and_resolve(root_path, out_yaml_path)
 
     if yaml_module is None:
         raise RuntimeError("Libreria YAML non disponibile")
