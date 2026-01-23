@@ -5,8 +5,8 @@
 * [Home](README.md)
 * Documentazione
   * [Indice documentazione](docs/index.md)
+  * [User Quickstart](docs/user/quickstart.md)
   * [User Guide](docs/user/user_guide.md)
-  * [Guida UI (Streamlit)](docs/user/guida_ui.md)
   * [Strict vs Dummy - Guida Operativa](docs/strict_vs_dummy_beta.md)
 * Developer
   * [Developer Guide (contesto e onboarding, non normativo)](docs/developer/developer_guide.md)
@@ -21,7 +21,7 @@
   * [Policy di versioning](docs/policies/versioning_policy.md)
   * [Import contract](docs/policies/import_contract.md)
   * [Core rules per assistant](docs/policies/next_core_for_assistants.md)
-  * [Guida Codex](docs/policies/guida_codex.md)
+  * [Guida Codex](docs/developer/guida_codex.md)
   * [OCP Workflow](docs/policies/OCP_WORKFLOW.md)
 * System & governance
   * [MANIFEST](MANIFEST.md)

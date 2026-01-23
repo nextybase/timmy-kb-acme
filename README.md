@@ -33,11 +33,13 @@ Per il logging avanzato usa `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TI
 
 ## Quickstart essenziale
 
+Guida rapida: [User Quickstart](docs/user/quickstart.md).
+
 ### Interfaccia Streamlit
 ```bash
 python -m streamlit run src/timmy_kb/ui/onboarding_ui.py
 ```
-La UI guida l'onboarding end-to-end. Per flussi completi e screenshot consulta la [User Guide](docs/user/user_guide.md).
+La UI guida l'onboarding end-to-end. Per flussi completi consulta la [User Guide](docs/user/user_guide.md).
 
 ### CLI automatizzata
 ```bash
@@ -91,6 +93,7 @@ Usalo per interpretare il ledger in modo deterministico.
 ---
 
 ## Documentazione & riferimenti
+- [User Quickstart](docs/user/quickstart.md) - avvio rapido UI/CLI.
 - [User Guide](docs/user/user_guide.md) - flussi UI/CLI, Vision, workspace.
 - [Developer Guide](docs/developer/developer_guide.md) - contesto e onboarding (non normativo).
 - [Coding Rules](docs/developer/coding_rule.md) e [Architecture Overview](system/architecture.md).

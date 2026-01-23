@@ -31,8 +31,8 @@ def _read_markdown(rel_path: str) -> str:
 # Header + sidebar coerenti con le altre pagine; slug NON obbligatorio.
 render_chrome_then_require(allow_without_slug=True)
 
-st.subheader("Guida UI")
-st.caption("Questa pagina visualizza la documentazione locale `docs/user/guida_ui.md`.")
+st.subheader("User Guide")
+st.caption("Questa pagina visualizza la documentazione locale `docs/user/user_guide.md`.")
 
 # Aumenta SOLO il corpo del testo (p, li, dd, code/pre) lasciando invariati gli headings
 st.html(
@@ -48,5 +48,5 @@ div[data-testid="stMarkdownContainer"] pre code { font-size: .90rem; }
 """
 )
 
-md = _read_markdown("docs/user/guida_ui.md")
+md = _read_markdown("docs/user/user_guide.md")
 render_markdown(st, md)

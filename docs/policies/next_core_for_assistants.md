@@ -169,4 +169,4 @@ In sintesi, il Tag KG Builder e uno strumento per far emergere in modo ordinato 
 - **References:**
   - [MANIFEST.md](../../MANIFEST.md)
   - [Prompt Chain spec](../../system/specs/promptchain_spec.md)
-  - [Guida Codex](guida_codex.md)
+  - [Guida Codex](../developer/guida_codex.md)

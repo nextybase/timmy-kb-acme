@@ -17,9 +17,9 @@ dall'**Epistemic Envelope**.
 
 ## Visual summary of the Codex system
 
-This repository blends the shared policies (`system/ops/agents_index.md`), area overrides (`AGENTS.md`), prompt APIs (`.codex/PROMPTS.md`), the runbook, and workflow documentation. Codex follows the integration manual (`docs/guida_codex.md`) and uses the Onboarding Task as the entry point. The flow is: AGENTS → Onboarding prompt → micro-PR + QA → matrix updates.
+This repository blends the shared policies (`system/ops/agents_index.md`), area overrides (`AGENTS.md`), prompt APIs (`.codex/PROMPTS.md`), the runbook, and workflow documentation. Codex follows the integration manual (`docs/developer/guida_codex.md`) and uses the Onboarding Task as the entry point. The flow is: AGENTS → Onboarding prompt → micro-PR + QA → matrix updates.
 
-> Note: the Prompt Chain governance SSoT is `system/specs/promptchain_spec.md`. The Codex integration manual lives in `docs/guida_codex.md` and references the three SSoT documents (AGENTS index, area AGENTS, `~/.codex/AGENTS.md`). The runbook remains the practical flow guide.
+> Note: the Prompt Chain governance SSoT is `system/specs/promptchain_spec.md`. The Codex integration manual lives in `docs/developer/guida_codex.md` and references the three SSoT documents (AGENTS index, area AGENTS, `~/.codex/AGENTS.md`). The runbook remains the practical flow guide.
 
 ---
 
@@ -56,7 +56,7 @@ References: [README](../README.md), [Developer Guide → Dependencies & QA](../.
 
 ### Prompt Chain governance
 - Lifecycle, ruoli e fasi: vedi [`system/specs/promptchain_spec.md`](../specs/promptchain_spec.md) (SSoT).
-- Active Rules, template e QA gates: vedi [`.codex/PROMPTS.md`](../../.codex/PROMPTS.md) e [`docs/policies/guida_codex.md`](../../docs/policies/guida_codex.md).
+- Active Rules, template e QA gates: vedi [`.codex/PROMPTS.md`](../../.codex/PROMPTS.md) e [`docs/developer/guida_codex.md`](../../docs/developer/guida_codex.md).
 - Workflow OCP e gate: vedi [`docs/policies/OCP_WORKFLOW.md`](../../docs/policies/OCP_WORKFLOW.md).
 -## Agency, Control Plane e ruolo dei micro-agent
 - I riferimenti al flusso CLI o agli helper `pipeline.*` delineano gli strumenti della foundation: producono markdown semanticamente arricchiti e validano il knowledge graph ma NON orchestrano né decidono.
@@ -166,7 +166,7 @@ References: [.codex/WORKFLOWS.md](../../.codex/WORKFLOWS.md), [User Guide](../..
 
 ### 5.0 Common operating principles (v2)
 - The default scenario is Agent mode with path safety, atomic writes, and doc/test updates.
-- All activities follow Codex v2 (see `docs/guida_codex.md`), the AGENTS perimeter, and explicit micro-PR + QA.
+- All activities follow Codex v2 (see `docs/developer/guida_codex.md`), the AGENTS perimeter, and explicit micro-PR + QA.
 - Select prompts from `.codex/PROMPTS.md`; the Onboarding Task Codex is mandatory.
 - Collaboration between developer, Codex, and Senior Reviewer guides sensitive tasks.
 

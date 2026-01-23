@@ -1,9 +1,29 @@
-# Modalità **Strict** e **Dummy** - Guida Operativa (Beta 1.0)
+# Strict vs Dummy Mode - Guida Operativa (Beta 1.0)
 
-## Scopo del documento
-Questo documento definisce **in modo operativo** il comportamento delle modalità **Strict** e **Dummy** nei flussi di onboarding (in particolare *tag_onboarding*), chiarendo **cosa è consentito**, **cosa è vietato** e **come viene tracciato nel Decision Ledger**.
+Questo documento descrive un **vincolo strutturale della Beta 1.0 di Timmy-KB**.
 
-L'obiettivo è evitare **ambiguità di stato**, **generazione implicita di artefatti** e **degrado silenzioso** durante la Beta.
+Non e' una guida introduttiva ne' una modalita' di configurazione opzionale:
+serve a chiarire **perche' il sistema, in Beta, e' intenzionalmente limitato**
+e come interpretare correttamente i suoi comportamenti in termini di
+governance, auditabilita' e stato del workspace.
+
+## Perche' esistono Strict e Dummy
+
+In Beta 1.0, Timmy-KB opera per default in **Strict Mode**.
+Questo significa che l'esecuzione end-to-end della pipeline e'
+volontariamente bloccata prima delle fasi di agency completa.
+
+La **Dummy Mode** non e' una modalita' "piu' permissiva":
+e' un'eccezione esplicita, tracciata e auditabile, pensata esclusivamente
+per test, demo e validazioni controllate.
+
+Ogni uso della Dummy Mode:
+- richiede un flag esplicito,
+- e' registrato nel Decision Ledger,
+- non puo' essere confuso con un'esecuzione reale in ambiente operativo.
+
+Se stai usando Timmy-KB in Beta e ti chiedi "perche' il flusso si ferma qui",
+la risposta e' quasi sempre in questo documento.
 
 ---
 

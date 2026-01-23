@@ -19,7 +19,7 @@ Serve ridurre la latenza preservando path-safety, idempotenza e HiTL.
 - **Parallelizzazione controllata**: `run_nlp_to_db` usa `ThreadPoolExecutor` con coda in-order e tuning `--nlp-workers`, `--nlp-batch-size`, `--nlp-no-parallel`.
 - **Lock GitHub configurabile**: `TIMMY_GITHUB_LOCK_TIMEOUT_S`, `TIMMY_GITHUB_LOCK_POLL_S`, `TIMMY_GITHUB_LOCK_DIRNAME` tarano il lease su workspace multi-utente.
 
-Documentazione aggiornata (`system/ops/runbook_codex.md`, `docs/guida_codex.md`), nuovo test su invalidazione cache e CLI ampliata.
+Documentazione aggiornata (`system/ops/runbook_codex.md`, `docs/developer/guida_codex.md`), nuovo test su invalidazione cache e CLI ampliata.
 
 ## Alternative considerate
 - **ProcessPoolExecutor**: scartato per overhead nel caricare modelli NLP per processo e logging piu complesso.

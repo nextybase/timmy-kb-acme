@@ -268,7 +268,7 @@ make ci-safe
 
 ### Prompt Chain e QA
 - Lifecycle e ruoli: vedi [`system/specs/promptchain_spec.md`](../../system/specs/promptchain_spec.md) (SSoT).
-- Active Rules, template e QA gates: vedi [`.codex/PROMPTS.md`](../../.codex/PROMPTS.md) e [`docs/policies/guida_codex.md`](../policies/guida_codex.md).
+- Active Rules, template e QA gates: vedi [`.codex/PROMPTS.md`](../../.codex/PROMPTS.md) e [`docs/developer/guida_codex.md`](guida_codex.md).
 - Workflow OCP e gate: vedi [`docs/policies/OCP_WORKFLOW.md`](../policies/OCP_WORKFLOW.md).
 
 Solo dopo questa fase la modifica è pronta per PR.

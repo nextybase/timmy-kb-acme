@@ -34,7 +34,7 @@ macchine a stati sono definiti esclusivamente nelle fonti normative.
 
 - **Quickstart**
 
-  - [User Quickstart](user/user_guide.md)
+  - [User Quickstart](user/quickstart.md)
   - [Developer Quickstart](developer/developer_quickstart.md)
 
 ---
@@ -44,7 +44,6 @@ macchine a stati sono definiti esclusivamente nelle fonti normative.
 Guida per chi **utilizza Timmy-KB** tramite UI o CLI.
 
 - **[User Guide](user/user_guide.md)** - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, preview).
-- **[Guida UI (Streamlit)](user/guida_ui.md)** - interfaccia grafica e avvio rapido.
 - **[Arricchimento semantico](user/arricchimento.md)** - flusso completo UI/CLI, generazione tag, euristica vs SpaCy.
 
 Questi documenti descrivono **cosa fa il sistema e cosa osserva l'utente**, senza introdurre regole normative.
@@ -116,7 +115,7 @@ Gli ADR sono **scritti per esseri umani**, ma **leggibili dagli agenti** come fo
 
 ## Agent & tooling
 
-- **[Guida Codex](policies/guida_codex.md)** - uso di Codex come coding agent.
+- **[Guida Codex](developer/guida_codex.md)** - uso di Codex come coding agent.
 - **[Runbook Codex](../system/ops/runbook_codex.md)** - flussi operativi.
 - **[AGENTS (repo)](policies/AGENTS.md)** - regole locali per gli agent.
 - **[AGENTS index](../system/ops/agents_index.md)** - indice delle policy per agent.

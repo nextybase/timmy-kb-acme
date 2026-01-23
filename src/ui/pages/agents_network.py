@@ -469,7 +469,7 @@ def _render_codex_docs_panel() -> None:
         if st.button("Guida Codex", key="doc_codex_guide"):
             _open_markdown_modal(
                 title="Integrazione Codex",
-                rel_path="docs/guida_codex.md",
+                rel_path="docs/developer/guida_codex.md",
                 editable=False,
             )
 

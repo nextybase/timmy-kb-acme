@@ -44,7 +44,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
     Skip mirato (deterministico) solo per test UI che, nel repository corrente,
     dipendono esplicitamente da stub/headless helpers.
-    Rif: docs/policies/guida_codex.md (sezione "UI testing stance (Beta 1.0)").
+    Rif: docs/developer/guida_codex.md (sezione "UI testing stance (Beta 1.0)").
     """
     marker = pytest.mark.skip(reason="Test UI basato su Streamlit stub/headless: non supportato in Beta 1.0.")
     stub_ui_test_files: set[str] = {
