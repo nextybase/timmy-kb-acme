@@ -10,7 +10,7 @@ import streamlit as st
 from pipeline.context import validate_slug
 from pipeline.exceptions import ConfigError, InvalidSlug
 
-# Manteniamo compat con l'attuale gestione querystring
+# Manteniamo l'attuale gestione querystring
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import read_text_safe

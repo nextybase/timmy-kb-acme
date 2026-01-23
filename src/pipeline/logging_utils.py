@@ -238,7 +238,10 @@ class _KVFormatter(logging.Formatter):
 
 
 class _SafeStreamHandler(logging.StreamHandler):
-    """StreamHandler con flush best-effort per evitare crash su stdout Windows."""
+    """StreamHandler con flush best-effort (no effetti su gate/ledger).
+
+    Evita crash su stdout Windows.
+    """
 
     def flush(self) -> None:
         try:
@@ -371,7 +374,7 @@ def get_structured_logger(
         context:  oggetto con attributi opzionali `.slug`, `.redact_logs`, `.run_id`.
         log_file: path file log; se presente, aggiunge file handler (dir gia' creata a monte).
         run_id:   identificativo run usato se `context.run_id` assente.
-        level:    livello logging (default: dalle preferenze osservabilita', fallback INFO).
+        level:    livello logging (default: dalle preferenze osservabilita', default INFO).
         redact_logs: abilita/disabilita redazione (default: preferenze o context.redact_logs).
         enable_tracing: abilita OTEL (default: preferenze globali).
 
@@ -422,7 +425,7 @@ def get_structured_logger(
             if log_file.suffix:
                 log_file = log_file.with_name(f"{log_file.stem}-{run_id}{log_file.suffix}")
         except Exception:
-            # fallback: usa il path originale se qualcosa va storto
+            # In caso di errore, usa il path originale.
             pass
 
     lg = logging.getLogger(name)
@@ -747,7 +750,7 @@ def log_gate_event(
     *,
     fields: Mapping[str, Any] | None = None,
 ) -> None:
-    """Emette eventi canonici di gate con bridge fields best-effort."""
+    """Emette eventi canonici di gate con bridge fields best-effort (non influenza artefatti/gate/ledger/exit code)."""
     payload: dict[str, Any] = dict(fields or {})
     ctx_view = getattr(logger, "_logging_ctx_view", None)
     if ctx_view is not None:

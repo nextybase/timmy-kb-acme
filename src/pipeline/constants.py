@@ -36,7 +36,7 @@ BASE_DIR_NAME = "."
 
 # 📦 Google Drive MIME Types
 GDRIVE_FOLDER_MIME = "application/vnd.google-apps.folder"
-GDRIVE_FILE_MIME = "application/vnd.google-apps.file"  # compat; poco usato
+GDRIVE_FILE_MIME = "application/vnd.google-apps.file"  # poco usato
 
 # 📄 MIME Types generici
 PDF_MIME_TYPE = "application/pdf"

@@ -17,10 +17,6 @@ class _LayoutCtx:
         self._layout = WorkspaceLayout.from_context(self)
 
     @property
-    def base_dir(self) -> Path:
-        return self._layout.base_dir
-
-    @property
     def raw_dir(self) -> Path:
         return self._layout.raw_dir
 

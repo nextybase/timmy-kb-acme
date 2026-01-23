@@ -55,7 +55,7 @@ def _load_context_layout(slug: str) -> Optional[WorkspaceLayout]:
 
 
 def get_ui_workspace_layout(slug: str, *, require_env: bool = True) -> WorkspaceLayout:
-    """Helper compat per le UI: restituisce sempre il layout canonico per lo slug dato."""
+    """Helper UI: restituisce sempre il layout canonico per lo slug dato."""
     slug_value = (slug or "").strip().lower()
     validate_slug(slug_value)
 
@@ -72,7 +72,7 @@ def get_ui_workspace_layout(slug: str, *, require_env: bool = True) -> Workspace
 
 def resolve_raw_dir(_slug: str) -> Path:
     """
-    Compat helper legacy: non è più consentito ricavare manualmente il raw dir.
+    Helper UI: non è più consentito ricavare manualmente il raw dir.
     """
     raise ConfigError(
         "DEPRECATO: `resolve_raw_dir` è stato disabilitato. Risolvi il workspace via WorkspaceLayout "
@@ -93,7 +93,7 @@ def clear_base_cache(*, slug: str | None = None) -> None:
 
 def workspace_root(_slug: str) -> Path:
     """
-    Compat helper legacy: non è più consentito derivare manualmente la root.
+    Helper UI: non è più consentito derivare manualmente la root.
     """
     raise ConfigError(
         "DEPRECATO: `workspace_root` è stato disabilitato. Risolvi il workspace tramite WorkspaceLayout "

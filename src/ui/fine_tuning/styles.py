@@ -18,7 +18,7 @@ def _html(fragment: str) -> None:
 
 
 def apply_modal_css() -> None:
-    """Inietta uno stile comune per i dialog Streamlit con fallback sicuro."""
+    """Inietta uno stile comune per i dialog Streamlit con degradazione sicura."""
     css = """
     <style>
     /* dark overlay */

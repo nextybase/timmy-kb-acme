@@ -98,7 +98,7 @@ def _build_evidence_json(
         "requested": requested,
         "effective": effective_final,
         "outcome": outcome,  # ok | deny_config | deny_pipeline | deny_unexpected
-        # Policy: Environment Certification (best-effort evidence)
+        # Policy: Environment Certification (best-effort (non influenza artefatti/gate/ledger/exit code) evidence)
         "timmy_env": os.getenv("TIMMY_ENV", "dev"),
         "timmy_beta_strict_env": os.getenv("TIMMY_BETA_STRICT"),
         "env_fingerprint": build_env_fingerprint(),
@@ -364,7 +364,7 @@ def main() -> int:
                 logger.exception("cli.semantic_onboarding.unexpected_error", extra={"slug": slug, "error": str(exc)})
                 return code
 
-        # Riepilogo artefatti (best-effort, non influenza l'exit code)
+        # Riepilogo artefatti (best-effort (non influenza artefatti/gate/ledger/exit code), non influenza l'exit code)
         summary_extra: dict[str, object] = {}
         try:
             book_dir: Path = layout.book_dir

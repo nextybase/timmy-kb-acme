@@ -55,7 +55,7 @@ class MarkdownSection:
 def _read_markdown(rel_path: str) -> str:
     """
     Lettura sicura e cacheata di un file Markdown relativo alla root del repo.
-    In caso di errore solleva ConfigError (hard cut, niente fallback silenzioso).
+    In caso di errore solleva ConfigError (hard cut, niente degradazioni silenziose).
     """
     try:
         repo_root = get_repo_root()
@@ -228,7 +228,7 @@ def _regenerate_agents_matrix() -> None:
     """
     try:
         from tools import gen_agents_matrix
-    except Exception as exc:  # pragma: no cover - import fallback
+    except Exception as exc:  # pragma: no cover - import alternativo
         LOGGER.warning(
             "ui.agents_network.matrix_regen_import_failed",
             extra={"error": str(exc)},

@@ -27,7 +27,7 @@ def import_from_candidates(
         candidates: lista di moduli/attributi da tentare in ordine.
         package: package base per i nomi relativi (default: modulo chiamante).
         description: descrizione usata nel messaggio di errore finale.
-        logger: logger opzionale per tracciare i fallback.
+        logger: logger opzionale per tracciare i tentativi di import.
 
     Returns:
         Il simbolo importato (modulo o attributo).

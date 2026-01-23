@@ -69,7 +69,7 @@ def discover_candidates(
                 },
             )
             return
-        name = sanitize_filename(raw_name)
+        name = sanitize_filename(raw_name, strict=True)
         if not name.lower().endswith(".pdf"):
             name = f"{name}.pdf"
         remote_size = int(file_info.get("size") or 0)

@@ -148,7 +148,7 @@ def _render_scalar_input(full_key: str, label: str, value: Any) -> Any:
                 label_visibility="collapsed",
             )
 
-        # fallback string
+        # stringa di default
         return st.text_input(
             "",
             value=str(value) if value is not None else "",

@@ -229,7 +229,7 @@ def get_skip_preflight(*, repo_root: Path | None = None) -> bool:
     Fonte: config/config.yaml
 
     Chiave canonica: ui.skip_preflight
-    Legacy supportato (OR secco, non "fallback morbidi"): skip_preflight top-level
+    Legacy supportato (OR secco, non "degradazioni morbide"): skip_preflight top-level
     """
     root = repo_root or REPO_ROOT
     cfg: GlobalConfig = _load_repo_config(root)

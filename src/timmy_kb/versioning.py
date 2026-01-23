@@ -62,7 +62,7 @@ def _best_effort_git_sha() -> str | None:
 
 def build_env_fingerprint() -> dict[str, Any]:
     """
-    Fingerprint ambiente (best-effort, no hard deps).
+    Fingerprint ambiente (best-effort (non influenza artefatti/gate/ledger/exit code), no hard deps).
     Usato per auditabilita': NON deve influenzare flusso o determinismo.
     """
     import os

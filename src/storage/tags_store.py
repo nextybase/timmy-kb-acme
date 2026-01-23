@@ -123,7 +123,7 @@ def _parse_inline_mapping(value: str) -> dict[str, Any]:
     for token in _split_top_level(inner, ","):
         key, sep, remainder = token.partition(":")
         if not sep:
-            raise ConfigError("Mapping inline non valido nel fallback YAML.")
+            raise ConfigError("Mapping inline non valido nello YAML inline.")
         key_clean = key.strip().strip('"').strip("'")
         result[key_clean] = _parse_scalar(remainder.strip())
     return result

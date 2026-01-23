@@ -37,20 +37,20 @@ GLOBAL_SUPERADMIN_ENV = "TIMMY_GLOBAL_SUPERADMINS"
 LOGGER = get_structured_logger("pipeline.ownership")
 
 
-def _clients_root(base_dir: Path) -> Path:
-    base = Path(base_dir)
+def _clients_root(repo_root_dir: Path) -> Path:
+    base = Path(repo_root_dir)
     return ensure_within_and_resolve(base, base / "clients_db" / "clients")
 
 
-def _ownership_file(base_dir: Path, slug: str) -> Path:
-    clients_root = _clients_root(base_dir)
+def _ownership_file(repo_root_dir: Path, slug: str) -> Path:
+    clients_root = _clients_root(repo_root_dir)
     slug_dir = ensure_within_and_resolve(clients_root, clients_root / slug)
     return ensure_within_and_resolve(slug_dir, slug_dir / OWNERSHIP_FILENAME)
 
 
-def load_ownership(slug: str, base_dir: Path | str) -> OwnershipConfig:
-    base_path = Path(base_dir)
-    path = _ownership_file(base_path, slug)
+def load_ownership(slug: str, repo_root_dir: Path | str) -> OwnershipConfig:
+    repo_root = Path(repo_root_dir)
+    path = _ownership_file(repo_root, slug)
     if not path.exists():
         raise ConfigError(
             "Ownership non configurata (percorso canonico mancante)",
@@ -127,17 +127,18 @@ def validate_ownership(cfg: OwnershipConfig | Dict[str, object], slug: str) -> O
     }
 
 
-def _template_file(base_dir: Path) -> Path:
-    clients_root = _clients_root(base_dir)
+def _template_file(repo_root_dir: Path) -> Path:
+    clients_root = _clients_root(repo_root_dir)
     template_dir = ensure_within_and_resolve(clients_root, clients_root / TEMPLATE_SLUG)
     return ensure_within_and_resolve(template_dir, template_dir / OWNERSHIP_FILENAME)
 
 
-def ensure_ownership_file(slug: str, base_dir: Path | str) -> Path:
-    path = _ownership_file(Path(base_dir), slug)
+def ensure_ownership_file(slug: str, repo_root_dir: Path | str) -> Path:
+    repo_root = Path(repo_root_dir)
+    path = _ownership_file(repo_root, slug)
     if path.exists():
         return path
-    template = _template_file(Path(base_dir))
+    template = _template_file(repo_root)
     if not template.exists():
         raise ConfigError(
             "Template ownership mancante",

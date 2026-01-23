@@ -5,7 +5,7 @@ Metriche Prometheus opzionali per Timmy KB (hard cut 1.0 Beta).
 
 Principi:
 - Le metriche sono abilitate solo se richieste esplicitamente (env/parametri).
-- Se abilitate, `prometheus_client` deve essere presente: nessun fallback silenzioso.
+- Se abilitate, `prometheus_client` deve essere presente: nessuna degradazione silenziosa.
 - Se non abilitate, il modulo resta inattivo (niente server, niente export).
 """
 

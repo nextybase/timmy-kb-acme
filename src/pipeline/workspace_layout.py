@@ -54,7 +54,6 @@ class WorkspaceLayout:
 
     slug: str
     repo_root_dir: Path
-    base_dir: Path  # DEPRECATED: legacy shim (test only), non usare come root canonica.
     raw_dir: Path
     semantic_dir: Path
     book_dir: Path
@@ -117,7 +116,6 @@ class WorkspaceLayout:
         return cls(
             slug=context.slug,
             repo_root_dir=root,
-            base_dir=root,
             raw_dir=raw_dir,
             semantic_dir=semantic_dir,
             book_dir=book_dir,
@@ -198,7 +196,6 @@ class WorkspaceLayout:
         return cls(
             slug=resolved_slug,
             repo_root_dir=repo_root,
-            base_dir=repo_root,
             raw_dir=raw_dir,
             semantic_dir=semantic_dir,
             book_dir=book_dir,

@@ -11,31 +11,27 @@ import pipeline.path_utils as path_utils
 
 
 def test_sanitize_filename_non_strict_empty_returns_hashed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
-    value = path_utils.sanitize_filename("")
+    value = path_utils.sanitize_filename("", strict=False)
     assert value != "file"
     assert re.fullmatch(r"file-[0-9a-f]{12}", value)
 
 
 def test_sanitize_filename_non_strict_whitespace_returns_hashed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
-    value = path_utils.sanitize_filename("   ")
+    value = path_utils.sanitize_filename("   ", strict=False)
     assert value != "file"
     assert re.fullmatch(r"file-[0-9a-f]{12}", value)
 
 
 def test_sanitize_filename_strict_raises_on_internal_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
     dummy_unicode = types.SimpleNamespace(
         normalize=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     monkeypatch.setattr(path_utils, "unicodedata", dummy_unicode, raising=True)
     with pytest.raises(path_utils.FilenameSanitizeError):
-        path_utils.sanitize_filename("ok")
+        path_utils.sanitize_filename("ok", strict=True)
 
 
 def test_sorted_paths_strict_raises_on_base_resolve(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
     original_resolve = path_utils.Path.resolve
 
     def _resolve(self: Path, *args: object, **kwargs: object) -> Path:
@@ -49,7 +45,6 @@ def test_sorted_paths_strict_raises_on_base_resolve(monkeypatch: pytest.MonkeyPa
 
 
 def test_sorted_paths_strict_raises_on_item_resolve(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
     original_resolve = path_utils.Path.resolve
 
     def _resolve(self: Path, *args: object, **kwargs: object) -> Path:

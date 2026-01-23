@@ -103,7 +103,7 @@ def _retrieve_assistant(client: Any, assistant_id: str) -> Any:
         assistants = getattr(client, "assistants")
         if hasattr(assistants, "retrieve"):
             return assistants.retrieve(assistant_id)
-    # fallback deprecato incapsulato
+    # percorso deprecato incapsulato
     beta = getattr(client, "beta", None)
     if beta is None or not hasattr(beta, "assistants"):
         raise ConfigError("Client OpenAI non espone l'API assistants.")

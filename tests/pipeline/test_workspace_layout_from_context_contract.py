@@ -29,7 +29,6 @@ def test_from_context_ignores_context_dir_overrides(tmp_path: Path) -> None:
     ctx = SimpleNamespace(
         slug="dummy",
         repo_root_dir=workspace_root,
-        base_dir=workspace_root,
         raw_dir=outside / "raw",
         book_dir=outside / "book",
         semantic_dir=outside / "semantic",
@@ -41,16 +40,16 @@ def test_from_context_ignores_context_dir_overrides(tmp_path: Path) -> None:
     )
 
     layout = WorkspaceLayout.from_context(ctx)  # type: ignore[arg-type]
-    assert layout.base_dir == workspace_root
+    assert layout.repo_root_dir == workspace_root
     assert layout.raw_dir == workspace_root / "raw"
     assert layout.book_dir == workspace_root / "book"
     assert layout.semantic_dir == workspace_root / "semantic"
     assert layout.logs_dir == workspace_root / "logs"
 
 
-def test_from_context_requires_repo_root_dir_even_if_base_dir_present(tmp_path: Path) -> None:
+def test_from_context_requires_repo_root_dir(tmp_path: Path) -> None:
     workspace_root = tmp_path / "timmy-kb-dummy"
     _write_minimal_workspace(workspace_root)
-    ctx = SimpleNamespace(slug="dummy", repo_root_dir=None, base_dir=workspace_root)
+    ctx = SimpleNamespace(slug="dummy", repo_root_dir=None)
     with pytest.raises(WorkspaceNotFound):
         WorkspaceLayout.from_context(ctx)  # type: ignore[arg-type]

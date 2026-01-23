@@ -33,7 +33,7 @@ from ui.errors import to_user_message
 from ui.gating import reset_gating_cache as _reset_gating_cache
 from ui.pages.registry import PagePaths
 from ui.utils.context_cache import get_client_context
-from ui.utils.status import status_guard  # helper condiviso (con fallback)
+from ui.utils.status import status_guard  # helper condiviso (con degradazione)
 from ui.utils.workspace import get_ui_workspace_layout, raw_ready, tagging_ready
 
 LOGGER = get_structured_logger("ui.semantics")

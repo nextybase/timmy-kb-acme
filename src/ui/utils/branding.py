@@ -43,7 +43,7 @@ def _resolve_theme_base() -> str:
             if normalized in {"light", "dark"}:
                 return normalized
     except Exception:
-        # Ignora errori di Streamlit e passa al fallback applicativo
+        # Ignora errori di Streamlit e passa alla degradazione applicativa
         pass
 
     # 2) Fallback: configurazione applicativa

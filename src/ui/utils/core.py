@@ -9,7 +9,7 @@ from ui.utils import backend as _backend
 
 ensure_within_and_resolve = _backend.ensure_within_and_resolve
 to_kebab = _backend.to_kebab
-_safe_write_text = _backend.safe_write_text  # compat: usato dai test/monkeypatch UI
+_safe_write_text = _backend.safe_write_text  # hook per test/monkeypatch UI
 
 
 def safe_write_text(
@@ -82,7 +82,7 @@ def get_theme_base(default: str = "light") -> str:
             or _normalize_theme_value(state.get("_current_theme"))
         )
 
-    # 3) Fallback da contesto runtime (caso legacy)
+    # 3) Percorso alternativo da contesto runtime (caso storico)
     runtime_base: str | None = None
     try:  # pragma: no cover -- Streamlit internals non disponibili in test
         from streamlit.runtime.scriptrunner import script_run_context as _ctx_mod

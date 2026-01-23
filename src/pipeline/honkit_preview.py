@@ -6,7 +6,7 @@ Cosa fa:
 - Garantisce la presenza di `book.json` e `package.json` minimi (idempotente).
 - Esegue la build statica (`honkit build`) in container Docker.
 - Avvia la preview (`honkit serve`) in foreground o detached.
-- Attende opzionalmente la disponibilità della porta (best-effort).
+- Attende opzionalmente la disponibilità della porta (best-effort (non influenza artefatti/gate/ledger/exit code)).
 - Fornisce uno stop sicuro del container.
 
 Linee guida applicate:
@@ -455,13 +455,13 @@ def run_gitbook_docker_preview(
         try:
             run_cmd(cmd, op="docker run serve (fg)", logger=logger)
         except CmdError as e:
-            # tentativo cleanup best-effort e rilancio
+            # tentativo cleanup best-effort (non influenza artefatti/gate/ledger/exit code) e rilancio
             try:
                 stop_container_safely(container_name)
             finally:
                 raise PreviewError(f"Errore 'honkit serve' (fg): {e}", slug=context.slug)
         finally:
-            # best-effort cleanup post-exec
+            # best-effort (non influenza artefatti/gate/ledger/exit code) cleanup post-exec
             stop_container_safely(container_name)
     else:
         # Detached: avvia e ritorna subito; orchestratore gestirà lo stop a fine run.
@@ -474,7 +474,8 @@ def run_gitbook_docker_preview(
             redact_logs=redact_logs,
         )
 
-        # 3) Attendi che la preview sia raggiungibile (best-effort, ma utile per early feedback)
+        # 3) Attendi che la preview sia raggiungibile (best-effort, no effetti su gate/ledger),
+        #    ma utile per early feedback.
         wait_until_ready(
             "127.0.0.1",
             host_port,

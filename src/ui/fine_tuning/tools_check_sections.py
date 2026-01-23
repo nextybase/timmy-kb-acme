@@ -206,7 +206,7 @@ def _emit_json(st_module: Any, payload: Any) -> None:
     json_renderer = getattr(st_module, "json", None)
     if callable(json_renderer):
         json_renderer(payload)
-    else:  # pragma: no cover - fallback per test/headless
+    else:  # pragma: no cover - degradazione per test/headless
         st_module.markdown(f"```json\n{payload}\n```")
 
 
@@ -321,7 +321,7 @@ def render_global_entities(*, st_module: Any | None = None) -> None:
     with st.expander("Entità globali di NeXT", expanded=False):
         try:
             data = ontology.load_entities()
-        except Exception as exc:  # pragma: no cover - fallback UI
+        except Exception as exc:  # pragma: no cover - degradazione UI
             st.warning(f"Impossibile caricare le entità globali: {exc}")
             return
 

@@ -99,7 +99,7 @@ def _render_preflight_header(st_module: StreamlitLike, logger: logging.Logger, *
             logger.warning("ui.preflight.header_render_failed", extra={"error": repr(exc)})
 
     try:
-        # Alcuni stub non supportano il context manager, quindi fallback esplicito.
+        # Alcuni stub non supportano il context manager, quindi degradazione esplicita (UI-only).
         with target:  # type: ignore[assignment]
             _render(target)
     except Exception as exc:
@@ -194,7 +194,7 @@ def _handle_exit_param(
     try:
         clear_active_slug(persist=True, update_query=True)
         clear_tab()
-    except Exception as exc:  # pragma: no cover - best effort logging
+    except Exception as exc:  # pragma: no cover - best effort (non influenza artefatti/gate/ledger/exit code) logging
         logger.warning("ui.slug.reset_failed", extra={"error": str(exc)})
     st_module.stop()
     return True
@@ -293,7 +293,9 @@ def build_navigation(
     if slug:
         try:
             has_raw_pdfs(slug)
-        except Exception as exc:  # pragma: no cover - best effort logging
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - best effort (non influenza artefatti/gate/ledger/exit code) logging
             logger.warning(
                 "ui.workspace.raw_check_failed",
                 extra={"event": "ui.workspace.raw_check_failed", "slug": slug, "error": str(exc)},

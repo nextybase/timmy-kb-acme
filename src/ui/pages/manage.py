@@ -47,7 +47,7 @@ def _safe_rerun() -> None:
     if callable(rerun_fn):
         try:
             rerun_fn()
-        except Exception as exc:  # pragma: no cover - fallback silenzioso
+        except Exception as exc:  # pragma: no cover - degradazione silenziosa
             LOGGER.warning("ui.manage.safe_rerun_failed", extra={"error": repr(exc)})
 
 
@@ -55,7 +55,7 @@ _MANAGE_FILE = Path(__file__).resolve()
 
 
 def _clients_db_path() -> Path:
-    """Percorso al registro clienti (per compat test/log)."""
+    """Percorso al registro clienti (supporto test/log)."""
     path = manage_helpers.clients_db_path(_MANAGE_FILE)
     if isinstance(path, Path):
         return path
@@ -298,7 +298,7 @@ def _open_tags_raw_modal(slug: str, layout: WorkspaceLayout) -> None:
     )
 
 
-# --- piccoli helper per compat con stub di test ---
+# --- piccoli helper per stub di test ---
 # helper centralizzati in ui.utils.ui_controls (DRY)
 
 

@@ -23,7 +23,7 @@ from pipeline.workspace_layout import WorkspaceLayout
 from semantic.context_paths import resolve_context_paths
 from semantic.types import ClientContextProtocol as _Ctx  # SSoT: protocollo condiviso
 
-# Logger di modulo (fallback).
+# Logger di modulo (default).
 logger = get_structured_logger("pipeline.cleanup_utils")
 
 

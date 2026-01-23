@@ -47,9 +47,9 @@ def test_dummy_validate_structure_passes_when_mapping_present(tmp_path: Path, lo
     )
     layout = bootstrap_client_workspace(context)
 
-    _write_required_dummy_files(layout.base_dir)
+    _write_required_dummy_files(layout.repo_root_dir)
 
-    validate_dummy_structure(layout.base_dir, logger)
+    validate_dummy_structure(layout.repo_root_dir, logger)
 
 
 def test_dummy_validate_structure_fails_when_mapping_missing(tmp_path: Path, logger: logging.Logger) -> None:
@@ -64,11 +64,11 @@ def test_dummy_validate_structure_fails_when_mapping_missing(tmp_path: Path, log
     )
     layout = bootstrap_client_workspace(context)
 
-    _write_required_dummy_files(layout.base_dir)
+    _write_required_dummy_files(layout.repo_root_dir)
     (layout.semantic_dir / "semantic_mapping.yaml").unlink()
 
     with pytest.raises(RuntimeError) as exc:
-        validate_dummy_structure(layout.base_dir, logger)
+        validate_dummy_structure(layout.repo_root_dir, logger)
     assert "semantic_mapping" in str(exc.value)
 
 

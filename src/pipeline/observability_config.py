@@ -113,7 +113,7 @@ def load_observability_settings() -> ObservabilitySettings:
     try:
         raw: Dict[str, Any] = yaml.safe_load(_read_text(path_safe)) or {}
     except Exception:
-        # In caso di file corrotto, fallback ai default
+        # In caso di file corrotto, usa i default
         return ObservabilitySettings()
 
     return ObservabilitySettings(

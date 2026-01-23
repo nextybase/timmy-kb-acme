@@ -51,7 +51,7 @@ MAX_CANDIDATE_LIMIT = 20000
 
 
 def _validate_params(params: QueryParams) -> None:
-    """Validazioni minime (fail-fast, senza fallback).
+    """Validazioni minime (fail-fast, senza degradazioni).
 
     Range candidato: 500-20000 inclusi.
     """

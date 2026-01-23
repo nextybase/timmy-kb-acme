@@ -93,7 +93,7 @@ def _refresh_context_settings(context: ClientContext) -> None:
         )
     except Exception as exc:  # noqa: BLE001
         # Beta 1.0 STRICT: qui NON rendiamo fatal (write già avvenuta),
-        # ma è vietato un fallback silenzioso in runtime.
+        # ma è vietata una degradazione silenziosa in runtime.
         logger.warning(
             "pipeline.config_utils.context_settings_refresh_failed",
             extra={
@@ -145,7 +145,7 @@ def load_client_settings(
             except Exception as exc:  # noqa: BLE001
                 # Beta 1.0 STRICT: vietato degradare a payload vuoto.
                 # Se Settings.load(...) restituisce un oggetto non convertibile,
-                # è un errore di provisioning/compat.
+                # è un errore di provisioning/versione non supportata.
                 if logger:
                     logger.error(
                         "pipeline.config_utils.settings_payload_coerce_failed",
@@ -211,7 +211,7 @@ class ClientEnvSettings(_BaseSettings):
         try:
             super().model_post_init(__context)
         except Exception:
-            # compat, nessuna azione se la super non definisce model_post_init
+            # Nessuna azione se la super non definisce model_post_init.
             pass
 
         for key in ("DRIVE_ID", "SERVICE_ACCOUNT_FILE"):
@@ -335,7 +335,7 @@ def validate_preonboarding_environment(context: ClientContext, repo_root_dir: Op
 
 
 # ----------------------------------------------------------
-#  Scrittura sicura di file generici (wrapper legacy) - ATOMICA
+#  Scrittura sicura di file generici (wrapper interno) - ATOMICA
 # ----------------------------------------------------------
 
 

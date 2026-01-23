@@ -2,7 +2,7 @@
 """Package interno `drive` (client/download/upload).
 
 Nota:
-- Il package non re-esporta API pubbliche: usare `pipeline.drive_utils` come facciata
+- Il package non re-esporta API pubbliche: usare `pipeline.drive_utils` come adapter
   ufficiale oppure importare i moduli specifici (`download`, `upload`, `client`).
 - I moduli qui dentro non devono essere importati dagli orchestratori.
 - Nessun import implicito di sottopacchetti per evitare side effect o ImportError.

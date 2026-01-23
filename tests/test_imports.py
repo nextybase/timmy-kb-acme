@@ -27,27 +27,14 @@ def test_reexports_present() -> None:
     except ImportError:
         pytest.skip("googleapiclient non installato: modulo non importabile (no fallback)")
     expected = {
-        "MIME_FOLDER",
-        "MIME_PDF",
-        "MediaIoBaseDownload",
         "get_drive_service",
         "list_drive_files",
         "get_file_metadata",
-        "_retry",
         "create_drive_folder",
+        "create_drive_minimal_structure",
         "upload_config_to_drive_folder",
         "delete_drive_file",
         "download_drive_pdfs_to_local",
     }
     missing = [name for name in expected if not hasattr(mod, name)]
     assert not missing, f"Simboli mancanti nella facciata drive_utils: {missing}"
-
-
-def test_media_iobase_download_importable_or_skip() -> None:
-    """Con hard import, se la dipendenza manca il modulo non è importabile: skip in quel caso."""
-    try:
-        mod = importlib.import_module("pipeline.drive_utils")
-    except ImportError:
-        pytest.skip("googleapiclient non installato: modulo non importabile (no fallback)")
-    cls = getattr(mod, "MediaIoBaseDownload", None)
-    assert cls is not None

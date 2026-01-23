@@ -273,7 +273,7 @@ def safe_write_bytes(
 
 
 def safe_append_text(
-    base_dir: Path,
+    root_dir: Path,
     target: Path,
     data: str,
     *,
@@ -291,8 +291,8 @@ def safe_append_text(
     - Con `fsync=True` sincronizza file e directory.
     - `fsync_dir_allow_fallback=True` abilita il fallback esplicito per fsync(dir).
     """
-    base_dir = Path(base_dir)
-    resolved_base = base_dir.resolve()
+    root_dir = Path(root_dir)
+    resolved_base = root_dir.resolve()
     candidate = Path(target)
     if not candidate.is_absolute():
         candidate = resolved_base / candidate

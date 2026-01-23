@@ -127,10 +127,10 @@ def test_modal_save_uses_path_safety(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     # Eseguiamo il modal (simula click su "Salva")
     manage._open_tags_editor_modal("dummy", layout=layout)
 
-    # Asserzioni: ensure_within_and_resolve chiamato con layout.base_dir e semantic/tags_reviewed.yaml
+    # Asserzioni: ensure_within_and_resolve chiamato con layout.repo_root_dir e semantic/tags_reviewed.yaml
     assert called_args, "ensure_within_and_resolve non è stato chiamato"
     root_arg, candidate_arg = called_args[0]
-    assert root_arg == layout.base_dir
+    assert root_arg == layout.repo_root_dir
     assert candidate_arg == layout.semantic_dir / "tags_reviewed.yaml"
 
     # E safe_write_text deve ricevere il path 'risolto'

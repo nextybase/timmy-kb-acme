@@ -261,7 +261,7 @@ EXIT_CODES = {
 
 
 def exit_code_for(exc: BaseException) -> int:
-    """Restituisce il codice di uscita per un'eccezione (fallback a PipelineError=1)."""
+    """Restituisce il codice di uscita per un'eccezione (default: PipelineError=1)."""
     return EXIT_CODES.get(type(exc).__name__, EXIT_CODES["PipelineError"])
 
 

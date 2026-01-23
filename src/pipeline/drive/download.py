@@ -97,7 +97,7 @@ def _walk_drive_tree(service: Any, root_id: str) -> Iterable[Tuple[List[str], Di
             fields="id, name, mimeType, size",
         )
         for it in children:
-            name = sanitize_filename(it.get("name") or "")
+            name = sanitize_filename(it.get("name") or "", strict=True)
             if not name:
                 logger.warning(
                     "drive.tree_item.invalid",

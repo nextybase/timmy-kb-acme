@@ -4,7 +4,7 @@
 Ownership esplicita del percorso DB della Knowledge Base.
 
 Questo modulo incapsula la policy di mapping tra slug cliente e file SQLite nel modello
-slug/workspace-based (nessun fallback globale).
+slug/workspace-based (nessuna risoluzione globale implicita).
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ class KbStore:
         - Se `db_path` è valorizzato: verrà usato come override esplicito (tipico dei test).
         - Se `db_path` è None ma `repo_root_dir` è valorizzato: verrà usato `repo_root_dir/semantic/kb.sqlite`
           (validato con path-safety).
-        - Se `repo_root_dir` è None: viene sollevato un errore (nessun fallback globale).
+        - Se `repo_root_dir` è None: viene sollevato un errore (nessuna risoluzione globale implicita).
         """
         normalized_slug = slug.strip()
         if not normalized_slug:
@@ -59,10 +59,10 @@ class KbStore:
         - Se `db_path_override` è valorizzato:
             - se è assoluto: usalo tal quale;
             - se è relativo e `repo_root_dir` è valorizzato: ancoralo sotto `repo_root_dir` con path-safety;
-            - se è relativo e `repo_root_dir` è None: solleva un errore (nessun fallback globale).
+            - se è relativo e `repo_root_dir` è None: solleva un errore (nessuna risoluzione globale implicita).
         - Se non c'è override ma `repo_root_dir` è valorizzato: usa `repo_root_dir/semantic/kb.sqlite`
           validato con `ensure_within_and_resolve`.
-        - Se non c'è né override né repo_root_dir: alleva un errore (il fallback globale è stato rimosso).
+        - Se non c'è né override né repo_root_dir: alleva un errore (risoluzione globale implicita rimossa).
         """
         if self.db_path_override is not None:
             p = Path(self.db_path_override)
@@ -99,4 +99,4 @@ class KbStore:
             candidate = repo_root_dir / "semantic" / "kb.sqlite"
             return ensure_within_and_resolve(perimeter_root, candidate)
 
-        raise ConfigError("KbStore richiede slug/repo_root_dir espliciti; il fallback globale è stato rimosso.")
+        raise ConfigError("KbStore richiede slug/repo_root_dir espliciti; risoluzione globale implicita rimossa.")

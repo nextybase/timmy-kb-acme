@@ -19,7 +19,7 @@ from pipeline.semantic_mapping_validation import validate_area_dict, validate_ar
 def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
     """
     Converte il payload Vision v1.0 in semantic_mapping.yaml (1:1 con il JSON dell'assistente).
-    Nessun uso di 'keywords' legacy.
+    Nessun uso di 'keywords' storiche.
     """
     if not isinstance(data, dict):
         raise ConfigError("Vision data: atteso un oggetto JSON.")

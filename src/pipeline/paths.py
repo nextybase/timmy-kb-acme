@@ -8,7 +8,7 @@ Obiettivi:
 - get_repo_root: trova la root repository usando sentinel (.git/pyproject), opzionale override ENV.
 - global_logs_dir / clients_db_paths / preview_logs_dir: percorsi globali path-safe.
 
-Fail-fast: nessun fallback silenzioso; in caso di layout incoerente solleva ConfigError.
+Fail-fast: nessuna degradazione silenziosa; in caso di layout incoerente solleva ConfigError.
 """
 
 import os

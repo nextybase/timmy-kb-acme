@@ -84,7 +84,7 @@ def _warn_once(key: str, event: str, *, page: str, slug: str | None, message: st
 
 
 def _safe_link_button(label: str, url: str, **kwargs: Any) -> bool:
-    """Fallback compatto quando l'API `link_button` non è disponibile."""
+    """Resa compatta quando l'API `link_button` non è disponibile."""
     link_btn = getattr(st, "link_button", None)
     if callable(link_btn):
         try:
@@ -407,7 +407,7 @@ def _render_observability_controls() -> None:
         try:
             current_index = levels.index(settings.log_level.upper())
         except ValueError:
-            current_index = 1  # fallback INFO
+            current_index = 1  # default INFO
         log_level = st.selectbox(
             "Verbosity log CLI/UI",
             options=levels,

@@ -24,7 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _on_exit() -> None:
-    _shutdown(None)  # compat con firma (_request_shutdown(log))
+    _shutdown(None)  # firma compatibile con _request_shutdown(log)
 
 
 # ---------- layout ----------

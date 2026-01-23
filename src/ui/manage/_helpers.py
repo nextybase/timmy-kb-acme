@@ -28,7 +28,7 @@ def clients_db_path(manage_file: Path) -> Path:
 
 def workspace_root(slug: str, *, layout: WorkspaceLayout | None = None) -> Path:
     """
-    Compat helper legacy: restituisce la root workspace.
+    Helper storico: restituisce la root workspace.
 
     In contesti moderni dove il layout è disponibile, preferire `layout.repo_root_dir` direttamente.
     Questo wrapper rimane per non modificare le chiamate esistenti dalla pagina `manage`.

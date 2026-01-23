@@ -210,7 +210,7 @@ def write_tags_reviewed_from_nlp_db(
     Args:
         semantic_dir: directory `semantic/` del cliente.
         db_path: percorso del DB NLP (tipicamente `semantic/tags.db`).
-        logger: logger su cui emettere le informazioni (best-effort).
+        logger: logger su cui emettere le informazioni (best-effort (non influenza artefatti/gate/ledger/exit code)).
         limit: numero massimo di tag da includere (ordinati per peso globale).
         min_weight: soglia minima sul peso aggregato per includere un termine.
         keep_only_listed: flag da salvare nel payload finale.

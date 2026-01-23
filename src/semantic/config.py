@@ -29,7 +29,7 @@ from pipeline.settings import Settings as PipelineSettings
 from pipeline.workspace_layout import WorkspaceLayout
 from pipeline.yaml_utils import yaml_read
 
-try:  # compat per import in UI/CLI
+try:  # import condizionale per UI/CLI
     from pipeline.context import ClientContext
 except Exception:  # pragma: no cover
     ClientContext = None
@@ -55,7 +55,7 @@ _DEFAULTS: dict[str, Any] = {
     "keyphrases": True,  # estrazione keyphrase
     "embeddings": False,  # fase 2 (clustering sinonimi)
     "stop_tags": ["bozza", "varie"],  # blacklist locale
-    "nlp_backend": "spacy",  # default SpaCy, fallback heuristic se assente
+    "nlp_backend": "spacy",  # default SpaCy, heuristic di default se assente
     "spacy_model": "it_core_news_sm",
 }
 

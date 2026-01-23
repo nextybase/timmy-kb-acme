@@ -282,7 +282,7 @@ else:
                     "book_path": book_tail,
                 },
             )
-        except Exception:  # pragma: no cover - logging best effort
+        except Exception:  # pragma: no cover - logging best effort (non influenza artefatti/gate/ledger/exit code)
             pass
         st.session_state.pop("preview_container", None)
 

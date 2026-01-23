@@ -80,7 +80,7 @@ def _load_settings() -> Settings:
     try:
         return Settings.load(_REPO_ROOT)
     except Exception as exc:  # noqa: BLE001
-        # Beta 1.0 STRICT: niente fallback silenziosi in runtime.
+        # Beta 1.0 STRICT: niente degradazioni silenziose in runtime.
         # Se la config globale non è caricabile è un errore di provisioning.
         try:
             LOGGER.error(

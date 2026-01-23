@@ -159,7 +159,7 @@ def _extract_semantic_candidates_heuristic(
         try:
             rel_from_base = pdf_path.relative_to(repo_root_dir)
         except ValueError:
-            # se per qualche motivo non è sotto repo_root_dir, fallback a path relativo da RAW
+            # se per qualche motivo non è sotto repo_root_dir, usa path relativo da RAW
             rel_from_base = pdf_path.relative_to(raw_dir)
 
         rel_str = rel_from_base.as_posix()

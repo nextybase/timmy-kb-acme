@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 from pipeline.config_utils import get_client_config
+from pipeline.constants import GDRIVE_FOLDER_MIME as MIME_FOLDER
 from pipeline.drive.download_steps import compute_created, discover_candidates, emit_progress, snapshot_existing
 from pipeline.exceptions import CapabilityUnavailableError, WorkspaceLayoutInvalid
 from pipeline.path_utils import ensure_within_and_resolve
@@ -19,8 +20,6 @@ download_drive_pdfs_to_local: Callable[..., Any] | None
 upload_config_to_drive_folder: Callable[..., Any] | None
 _drive_get_service: Callable[[ClientContext], Any] | None
 _drive_list_files: Callable[..., Any] | None
-MIME_FOLDER: str | None
-
 _drive_import_error: Optional[str] = None
 
 try:
@@ -32,7 +31,6 @@ try:
     _drive_get_service = _du.get_drive_service
     _drive_list_files = _du.list_drive_files
     upload_config_to_drive_folder = _du.upload_config_to_drive_folder
-    MIME_FOLDER = _du.MIME_FOLDER
 except ImportError as exc:  # pragma: no cover
     _drive_import_error = str(exc)
     create_drive_folder = None
@@ -41,7 +39,6 @@ except ImportError as exc:  # pragma: no cover
     _drive_get_service = None
     _drive_list_files = None
     upload_config_to_drive_folder = None
-    MIME_FOLDER = None
 
 from pipeline.logging_utils import get_structured_logger
 
@@ -388,7 +385,7 @@ def plan_raw_download(
 
 
 def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tuple[bytes, str]:
-    """Tenta PDF via reportlab, altrimenti TXT (fallback)."""
+    """Tenta PDF via reportlab, altrimenti TXT (degradazione)."""
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import cm
@@ -494,7 +491,7 @@ def _extract_categories_from_mapping(mapping: Dict[str, Any]) -> Dict[str, Dict[
     return cats
 
 
-# ===== README per ogni categoria raw (PDF o TXT fallback) =====================
+# ===== README per ogni categoria raw (PDF o TXT con degradazione) =============
 
 
 def emit_readmes_for_raw(
@@ -503,7 +500,7 @@ def emit_readmes_for_raw(
     base_root: Path | str = "output",
     require_env: bool = True,
 ) -> Dict[str, str]:
-    """Per ogni categoria Vision (sottocartella di raw) genera un README.pdf (o .txt fallback):
+    """Per ogni categoria Vision (sottocartella di raw) genera un README.pdf (o .txt con degradazione):
 
     - legge `semantic_mapping.yaml` nel workspace (cartella semantic/) in formato Vision;
     - costruisce il set categorie da `areas` (+ `system_folders` se presenti);

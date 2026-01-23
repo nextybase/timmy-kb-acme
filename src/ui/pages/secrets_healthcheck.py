@@ -222,7 +222,7 @@ def main() -> None:
     else:
         st.success("Tutte le variabili obbligatorie risultano impostate.", icon="✅")
 
-    # Apertura del modal (se supportato), altrimenti fallback inline
+    # Apertura del modal (se supportato), altrimenti degradazione inline
     info_name = st.session_state.get("secret_info_name")
     if info_name and guide.get(info_name):
         if dialog_factory is not None:

@@ -233,7 +233,7 @@ def _filter_safe_pdfs(
     return out
 
 
-def _dump_frontmatter(meta: dict[str, Any]) -> str:  # compat wrapper
+def _dump_frontmatter(meta: dict[str, Any]) -> str:  # wrapper interno
     meta_dict: dict[str, Any] = dict(meta)
     return cast(str, _shared_dump_frontmatter(meta_dict))
 
@@ -640,7 +640,7 @@ def generate_readme_markdown(ctx: _ReadmeCtx, book_dir: Path | None = None) -> P
             if descr:
                 section_body += f"\n{descr}\n"
             sections.append(section_body.strip())
-    except Exception as exc:  # pragma: no cover - fallback path
+    except Exception as exc:  # pragma: no cover - percorso di recupero controllato
         logger.warning(
             "pipeline.content.mapping_failed",
             extra={

@@ -335,7 +335,7 @@ def _build_prompt_from_snapshot(snapshot: str, *, slug: str, ctx: Any, logger: "
 
 def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") -> str:
     """
-    Percorso legacy mantenuto solo per compatibilità test/monkeypatch.
+    Percorso di test mantenuto solo per monkeypatch.
     """
     try:
         pages = extract_text_from_pdf(pdf_path)
@@ -378,7 +378,7 @@ def _extract_pdf_text(pdf_path: Path, *, slug: str, logger: "logging.Logger") ->
 def _load_vision_yaml_text(repo_root_dir: Path, yaml_path: Path, *, slug: str) -> str:
     """
     Carica il testo Vision dal file YAML generato a monte (visionstatement.yaml).
-    Richiede content.full_text presente e non vuoto (hard cut: niente fallback su pages[]).
+    Richiede content.full_text presente e non vuoto (hard cut: nessun percorso alternativo su pages[]).
     """
     try:
         safe_yaml = ensure_within_and_resolve(repo_root_dir, yaml_path)
@@ -532,7 +532,7 @@ def _raise_for_section_reports(reports: List[VisionSectionReport]) -> None:
 def debug_analyze_vision_sections_from_yaml(yaml_path: Path) -> Tuple[str, List[VisionSectionReport]]:
     """
     Carica visionstatement.yaml, estrae il testo come farebbe il runtime e ritorna testo+report.
-    In caso di file invalido solleva ConfigError (hard cut: nessun fallback).
+    In caso di file invalido solleva ConfigError (hard cut: nessuna degradazione).
     """
     text = _load_vision_yaml_text(yaml_path.parent, yaml_path, slug=yaml_path.parent.name or "vision")
     reports = analyze_vision_sections(text)

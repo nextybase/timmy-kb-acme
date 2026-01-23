@@ -168,7 +168,7 @@ def _repo_root_dir_for(slug: str) -> Path:
 
 
 def _st_notify(level: str, message: str) -> None:
-    """Invoca st.<level> se disponibile, altrimenti fallback a warning/info.
+    """Invoca st.<level> se disponibile, altrimenti degradazione a warning/info.
 
     Compatibile con stub/dummy usati nei test dove `st.error`/`st.warning`
     possono non esistere. Non solleva eccezioni.

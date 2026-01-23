@@ -16,7 +16,7 @@ def to_user_message(exc: Exception) -> Tuple[str, str, Optional[str]]:
     if exc.__class__.__name__.lower() == "halterror":
         caption = None
         missing = ""
-        # best-effort: alcuni HaltError espongono un dict con sections mancanti
+        # best-effort: nessun effetto su gate/ledger/exit code; alcuni HaltError espongono dict "sections".
         details = getattr(exc, "missing", None)
         if isinstance(details, dict) and "sections" in details:
             try:

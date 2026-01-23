@@ -130,7 +130,8 @@ def start_preview(
 
 
 def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> None:
-    """Ferma la preview in modo sicuro (best-effort). Non solleva se il container non esiste.
+    """Ferma la preview in modo sicuro (best-effort, non influenza artefatti/gate/ledger/exit code).
+    Non solleva se il container non esiste.
 
     Args:
         logger: logger strutturato.
@@ -140,7 +141,7 @@ def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> No
         logger.debug("adapter.preview.stop.skip_no_name", extra={"container": None})
         return
 
-    # Validazione "soft": se non valido, log avviso e interrompiamo (best-effort)
+    # Validazione "soft": se non valido, log avviso e interrompiamo (best-effort, no effetti su gate/ledger).
     if not _CONTAINER_RE.match(container_name):
         logger.warning(
             "adapter.preview.stop.invalid_name",
@@ -151,7 +152,7 @@ def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> No
     try:
         stop_container_safely(container_name)
         logger.info("adapter.preview.stopped", extra={"container": container_name})
-    except Exception as e:  # best-effort
+    except Exception as e:  # best-effort (non influenza artefatti/gate/ledger/exit code)
         hint = _docker_unavailable_hint(str(e))
         if hint:
             logger.warning(

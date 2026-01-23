@@ -97,7 +97,8 @@ def ensure_oidc_context(
     logger: Optional[logging.Logger] = None,
 ) -> dict[str, Any]:
     """
-    Risolve i parametri OIDC dal config ed esegue un fetch best-effort del token GitHub.
+    Risolve i parametri OIDC dal config ed esegue un fetch best-effort
+    (no effetti su gate/ledger/exit code) del token GitHub.
     Ritorna solo metadati (mai il token).
     """
     log = logger or get_structured_logger(_LOG_NAME)

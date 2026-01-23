@@ -12,7 +12,7 @@ Cosa fa il modulo
   * idempotenza semplice (skip se esiste ed ha stessa dimensione),
   * logging strutturato e propagazione di errori aggregati tramite `PipelineError`.
 
-Schema CSV (compat con orchestratori/tag_onboarding)
+Schema CSV (allineato con orchestratori/tag_onboarding)
 ----------------------------------------------------
 relative_path | suggested_tags | entities | keyphrases | score | sources
 
@@ -81,10 +81,10 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
         try:
             rel = src.relative_to(src_dir)
         except ValueError:
-            rel = Path(sanitize_filename(src.name))
+            rel = Path(sanitize_filename(src.name, strict=True))
 
         # Sanitize di ogni componente del path relativo
-        rel_sanitized = Path(*[sanitize_filename(p) for p in rel.parts])
+        rel_sanitized = Path(*[sanitize_filename(p, strict=True) for p in rel.parts])
         dst = raw_dir / rel_sanitized
 
         # SOFT: filtro preliminare (non autorizza write)

@@ -16,7 +16,7 @@ Formati supportati in input (senza dipendenze runtime extra):
 
 Note:
 - Non lancia eccezioni su forme "strane"; degrada in modo conservativo
-  materializzando liste. Il cast a ``float`` è best-effort.
+  materializzando liste. Il cast a ``float`` è best-effort (non influenza artefatti/gate/ledger/exit code).
 - Usa ``is_numeric_vector`` per verificare se un vettore è utilizzabile
   per calcoli (tutti gli elementi numerici finiti e lunghezza > 0).
 """

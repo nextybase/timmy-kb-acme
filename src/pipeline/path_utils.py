@@ -10,11 +10,11 @@ Ruolo del modulo (path-safety SSoT + regole di normalizzazione):
   Da usare prima di write/copy/delete.
 - `_load_slug_regex()` / `clear_slug_regex_cache()`
   Carica/azzera la regex di validazione slug da `config/config.yaml`
-  (chiave `slug_regex`) con fallback sicuro.
+  (chiave `slug_regex`) con default interno sicuro.
 - `is_valid_slug(slug)` / `validate_slug(slug)`
   Valida lo slug; `validate_slug` alza `InvalidSlug` se non conforme.
 - `normalize_path(path) -> Path`
-  Normalizza/risolve un path con gestione errori non-critica (log + fallback al path originale).
+  Normalizza/risolve un path in modo deterministico (fail-fast su errori).
 - `sanitize_filename(name, max_length=100) -> str`
   **Ottimizzata**: usa regex precompilata; ammette solo `[A-Za-z0-9_.-]`,
   compatta separatori, NFKC, tronca a `max_length`.
@@ -26,7 +26,7 @@ Ruolo del modulo (path-safety SSoT + regole di normalizzazione):
 Principi:
 - Nessun I/O distruttivo; solo letture facoltative (es. `config/config.yaml`).
 - Logging strutturato solo su errori (silenzioso quando tutto ok).
-- Portabilità: niente dipendenze da `ClientContext`; fallback a `Path.relative_to` dove serve.
+- Portabilità: niente dipendenze da `ClientContext`; usa `Path.relative_to` dove possibile.
 """
 
 from __future__ import annotations
@@ -581,7 +581,7 @@ def _load_slug_regex() -> str:
 
     Strategia:
     - Usa `Settings` (SSoT) del progetto.
-    - Fallback interno minimo: `^[a-z0-9-]+$`.
+    - Default interno minimo: `^[a-z0-9-]+$`.
     """
     default_regex = r"^[a-z0-9-]+$"
     settings = _load_global_settings()
@@ -652,7 +652,7 @@ def sanitize_filename(
     max_length: int = 100,
     *,
     replacement: str = "_",
-    strict: bool | None = None,
+    strict: bool,
     allow_fallback: bool = False,
 ) -> str:
     """Pulisce un nome file per l'uso su filesystem.
@@ -669,13 +669,9 @@ def sanitize_filename(
         max_length: lunghezza massima del risultato (default 100).
         replacement: carattere con cui sostituire i caratteri non permessi (default "_").
         strict: se True, solleva `FilenameSanitizeError` su errori/risultato vuoto.
-            Se None, usa TIMMY_BETA_STRICT per compatibilita legacy.
-        allow_fallback: se True, usa un fallback deterministico su errore/risultato vuoto.
+        allow_fallback: se True, usa un fallback deterministico esplicito (opt-in) su errore/risultato vuoto.
     """
     raw_name = str(name or "")
-    if strict is None:
-        raw = os.getenv("TIMMY_BETA_STRICT", "")
-        strict = raw.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
     try:
         # Normalizzazione unicode
         s = unicodedata.normalize("NFKC", raw_name)
@@ -696,12 +692,12 @@ def sanitize_filename(
         if s:
             return s
         if allow_fallback or not strict:
-            # Fallback esplicito per contesti non-exec o non-strict legacy.
+            # Fallback esplicito in modalita permissiva.
             return _fallback_filename(raw_name)
         raise FilenameSanitizeError("Nome file sanitizzato vuoto")
     except Exception as exc:
         if allow_fallback or not strict:
-            # Fallback esplicito per contesti non-exec o non-strict legacy.
+            # Fallback esplicito in modalita permissiva.
             return _fallback_filename(raw_name)
         raise FilenameSanitizeError("Errore sanitizzazione nome file") from exc
 
@@ -734,7 +730,7 @@ def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None, *, allow_fa
 
     Criterio: confronto case-insensitive sul path relativo a `base` (se fornita),
     altrimenti sul path assoluto risolto. I path non risolvibili sollevano errore
-    a meno di `allow_fallback`.
+    solo se `allow_fallback=True` (opt-in).
     """
     items: List[Tuple[str, Path]] = []
     base_resolved: Optional[Path] = None

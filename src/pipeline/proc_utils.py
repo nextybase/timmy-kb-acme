@@ -11,11 +11,13 @@ Funzionalità principali
 - wait_for_port(...): attende la raggiungibilità di una porta TCP con polling e timebox.
 - docker_available(...): rileva se Docker è disponibile ed eseguibile.
 - run_docker_preview(...): esegue build + serve HonKit in un container Docker in modalità
-  detached e attende la readiness (porta up); gestisce cleanup best-effort su failure.
-- stop_docker_preview(...): prova a fermare/rimuovere il container di preview (best-effort).
+  detached e attende la readiness (porta up); gestisce cleanup best-effort
+  (no effetti su gate/ledger/exit code) su failure.
+- stop_docker_preview(...): prova a fermare/rimuovere il container di preview
+  (best-effort, no effetti su gate/ledger/exit code).
 
 Note:
-- Nessuna retro-compatibilità con vecchie funzioni legacy.
+- Nessuna compatibilità retroattiva con funzioni dismesse.
 - Il redattore di default per i log è `pipeline.logging_utils.redact_secrets`.
 """
 
@@ -515,7 +517,7 @@ def run_docker_preview(
                 "preview.ready.timeout",
                 extra={"container": container_name, "port": port, "running": running},
             )
-        # best-effort cleanup
+        # best-effort (non influenza artefatti/gate/ledger/exit code) cleanup
         _docker_rm_force(container_name, logger=logger)
         raise CmdError(str(e), cmd=["docker", "run", "..."], op="docker honkit serve")
 

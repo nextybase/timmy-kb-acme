@@ -33,7 +33,7 @@ def resolve_perform_cleanup() -> Optional[Callable[..., Any]]:
 
 
 def client_display_name(slug: str, load_clients: Callable[[], Iterable[Any]]) -> str:
-    """Restituisce il nome cliente leggendo il registry; fallback allo slug."""
+    """Restituisce il nome cliente leggendo il registry; default allo slug."""
     try:
         for entry in load_clients():
             entry_slug = getattr(entry, "slug", "") or ""

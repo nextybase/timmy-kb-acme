@@ -451,7 +451,7 @@ class ClientContext:
         env_vars[REPO_ROOT_ENV] = get_env_var(REPO_ROOT_ENV, default=None)
         env_vars[WORKSPACE_ROOT_ENV] = get_env_var(WORKSPACE_ROOT_ENV, default=None)
 
-        # Versione booleana di CI per chiamanti legacy
+        # Versione booleana di CI per chiamanti storici
         env_vars["_CI_BOOL"] = get_bool("CI", default=False)
         env_vars["_VISION_SAVE_SNAPSHOT_BOOL"] = get_bool("VISION_SAVE_SNAPSHOT", default=True)
 

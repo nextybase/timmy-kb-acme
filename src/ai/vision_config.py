@@ -37,7 +37,7 @@ class AiCfgRoot(TypedDict, total=False):
 
 
 def _vision_section(payload: Mapping[str, Any]) -> VisionCfg:
-    # Legacy compat: vision.* a root (hard cut)
+    # vision.* a root non supportato (hard cut)
     if "vision" in payload:
         LOGGER.error(
             "ai.vision_config.legacy_root_vision",
@@ -287,7 +287,7 @@ def resolve_vision_config(ctx: Any, *, override_model: Optional[str] = None) -> 
     """Micro-agente `vision`: non decide il 'cosa', produce risposte a contratto.
 
     - Tipo: Micro-agente stateless con input/output definiti.
-    - fallback model-from-assistant: SÌ.
+    - default model-from-assistant: SI.
     - Usa KB: SÌ.
     """
     settings_obj, settings_payload = _extract_context_settings(ctx)

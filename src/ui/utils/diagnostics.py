@@ -85,7 +85,7 @@ def build_workspace_summary(
         counts = summarize_workspace_folders(resolved)
     except Exception:
         counts = None
-    safe_names = [sanitize_filename(path.name) for path in log_files if path]
+    safe_names = [sanitize_filename(path.name, strict=False) for path in log_files if path]
     return {
         "slug": slug,
         "repo_root_dir": str(resolved),
@@ -201,8 +201,10 @@ def build_logs_archive(
                             safe_path = None
                     if safe_path is None:
                         safe_path = ensure_within_and_resolve(file_path.parent, file_path)
-                    parent_component = sanitize_filename(safe_path.parent.name) if safe_path.parent else ""
-                    basename = sanitize_filename(safe_path.name)
+                    parent_component = (
+                        sanitize_filename(safe_path.parent.name, strict=False) if safe_path.parent else ""
+                    )
+                    basename = sanitize_filename(safe_path.name, strict=False)
                     arc_components = [part for part in (parent_component, basename) if part]
                     arcname = "/".join(arc_components) or basename
                     reader_cm: ContextManager[io.BufferedReader]

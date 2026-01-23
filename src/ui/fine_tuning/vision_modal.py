@@ -18,7 +18,7 @@ from .yaml_io import build_prompt_from_yaml, load_root_yaml, save_root_yaml
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext
-else:  # pragma: no cover - fallback per runtime
+else:  # pragma: no cover - degradazione per runtime
     ClientContext = Any  # type: ignore[misc]
 
 st = get_streamlit()

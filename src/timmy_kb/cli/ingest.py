@@ -10,7 +10,7 @@ Legge file di testo, li divide in chunk, calcola le embedding e le salva in SQLi
 tramite kb_db.insert_chunks. Salta i file binari. Registra un riepilogo nei log.
 
 Nota Vision: il flusso Vision è ora **inline-only** e delega tutta l'elaborazione
-all'Assistant preconfigurato. Non esistono più modalità vector/attachments/fallback.
+all'Assistant preconfigurato. Non esistono più modalità vector/attachments/alternative.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from glob import iglob
 from pathlib import Path
 from typing import Any, Callable, Iterable, List, Optional, Sequence, cast
 
-# Importa kb_db in modo locale senza alias legacy
+# Importa kb_db in modo locale senza alias storici
 from kb_db import insert_chunks
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var
@@ -647,7 +647,7 @@ def ingest_folder(
 def get_vision_cfg(cfg: dict | None) -> dict:
     """
     Restituisce la configurazione Vision normalizzata **inline-only**.
-    - Percorso unico: engine = "assistant" (Threads/Runs), niente vector/attachments/fallback.
+    - Percorso unico: engine = "assistant" (Threads/Runs), niente vector/attachments/alternative.
     - Modello non configurato qui: lo decide il profilo Assistant (dashboard).
     - `assistant_id` è OBBLIGATORIO: letto da OBNEXT_ASSISTANT_ID.
     - `strict_output` resta abilitato di default.

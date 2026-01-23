@@ -355,7 +355,7 @@ def _log_diagnostics(
     log_method = getattr(logger, level, None)
     if callable(log_method):
         log_method(message, extra=extra)
-    else:  # fallback a warning se il livello non esiste
+    else:  # degradazione a warning se il livello non esiste
         logger.warning(message, extra=extra)
 
     for handler in list(logger.handlers):
@@ -779,7 +779,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_PROVISIONED and (
 ):
     eff = st.session_state.get(slug_state_key) or effective_slug
     eff_q = esc_url_component(eff)
-    # Navigazione nativa (preferita) con fallback
+    # Navigazione nativa (preferita) con degradazione
     if hasattr(st, "page_link"):
         st.page_link(PagePaths.MANAGE, label="Vai a Gestisci cliente")
     else:

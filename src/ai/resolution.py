@@ -22,7 +22,7 @@ def resolve_assistant_env(
 
     :param settings_value: valore proveniente da Settings (es. vision_assistant_env).
     :param payload_value: valore dichiarato nel payload ai.<sezione>.assistant_id_env.
-    :param default_env_name: nome fallback (es. "OBNEXT_ASSISTANT_ID").
+    :param default_env_name: nome di default (es. "OBNEXT_ASSISTANT_ID").
     :return: il nome della variabile ambiente effettivamente usata.
     """
     candidate = _normalize_string(settings_value)
@@ -40,7 +40,7 @@ def resolve_assistant_id(
 ) -> str:
     """
     Restituisce l'assistant_id effettivo: preferisce la variabile primaria,
-    poi fallback_env_name. Solleva ConfigError se nessuna è impostata.
+    poi il default. Solleva ConfigError se nessuna è impostata.
     """
     primary = _normalize_string(env_value)
     if primary:

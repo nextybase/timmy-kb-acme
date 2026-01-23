@@ -122,7 +122,7 @@ def _build_ledger_evidence(
         "effective_mode": effective_mode,
         "gate_scope": "intra_state",
         "state_transition": False,
-        # Policy: Environment Certification (best-effort evidence)
+        # Policy: Environment Certification (best-effort (non influenza artefatti/gate/ledger/exit code) evidence)
         "timmy_env": os.getenv("TIMMY_ENV"),
         "timmy_beta_strict_env": os.getenv("TIMMY_BETA_STRICT"),
         "env_fingerprint": build_env_fingerprint(),

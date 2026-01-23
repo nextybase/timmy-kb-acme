@@ -239,7 +239,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
             return {k: {"aliases": v} for k, v in out.items()}
         _raise_invalid()
 
-    # 3) fallback: shape non riconosciuta
+    # 3) ramo di default: shape non riconosciuta
     _raise_invalid()
     return {}
 

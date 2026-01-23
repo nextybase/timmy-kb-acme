@@ -276,7 +276,7 @@ def build_diff_dataset(
 
 
 def render_file_actions(dataset: DiffDataset, st_module: Any, *, columns: Optional[tuple[Any, Any]] = None) -> None:
-    """Rende le sezioni "Solo su Drive" e "Solo su locale" su due colonne (fallback: singola)."""
+    """Rende le sezioni "Solo su Drive" e "Solo su locale" su due colonne (degradazione: singola)."""
     col_drive, col_local = columns or (st_module, st_module)
 
     def _expander(target: Any) -> Any:
@@ -384,7 +384,7 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
         metric_fn = getattr(col, "metric", None)
         if callable(metric_fn):
             metric_fn(label, value)
-        else:  # fallback minimale per gli stub
+        else:  # degradazione minima per gli stub
             st.write(f"{label}: {value}")
 
     try:
