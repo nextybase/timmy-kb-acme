@@ -26,6 +26,8 @@ L'Agency Engine è il dominio dell'**inferenza con agency**.
 
 Ogni violazione o confusione tra questi due domini costituisce un errore architetturale.
 
+L'ownership non è un artefatto epistemico e non fa parte dell'Epistemic Envelope: è una policy di accesso del Control Plane, versionata e gestita separatamente.
+
 Un envelope epistemico è il perimetro entro cui un sistema può operare in modo:
 - semanticamente coerente
 - eticamente controllabile

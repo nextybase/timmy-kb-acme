@@ -40,9 +40,9 @@ Document the 1.0 Beta split between the **User channel** (Streamlit screens plus
 - Mentioned guardrail tests already live in `.codex/CHECKLISTS.md` and `system/ops/agents_index.md`.
 - The enforcement is automated by `tools/ci/entrypoint_guard_ack.py`, which rejects changes touching public entrypoints unless `.codex/USER_DEV_SEPARATION.md` or `SEPARATION_ACK.md` is updated with rationale.
 - Ownership mappings are enforced per channel via `.github/CODEOWNERS`, keeping reviews aligned with these boundaries.
-- Il flusso "Nuovo cliente" ora invoca `pipeline.ownership.ensure_ownership_file()` e crea `clients/<slug>/ownership.yaml` per ogni workspace; aggiorna la governance tenant-level quando cambia la pagina `src/ui/pages/new_client.py`.
+- The "New client" flow calls `pipeline.ownership.ensure_ownership_file()` in the Control Plane policy store and creates `clients_db/clients/<slug>/ownership.yaml`; it does not write in the tenant workspace. Governance provisioning (Team C) and workspace activation (Envelope) remain separate.
 
 ## Ownership semantics
 - Ownership here describes epistemic responsibility and interface boundaries, not individual or team assignment: the **User channel** owns user-facing logic and UI safety, the **Dev channel** owns automation flows and pipeline guardrails, and the **Architecture channel** (guardrail tests + CI) owns enforcement of these boundaries.
-- CODEOWNERS captures the repo-level review ownership, while tenant-level ownership lives under `clients/<slug>/ownership.yaml` (schema in `.codex/OWNERSHIP_SCHEMA.md`). Each slug file names a `superadmin` and lists the canonical `user/dev/architecture` owners for that tenant, allowing the team to trace responsibility per client.
+- CODEOWNERS captures the repo-level review ownership, while tenant-level ownership lives under `clients_db/clients/<slug>/ownership.yaml` (schema in `.codex/OWNERSHIP_SCHEMA.md`). Each slug file lists the canonical `user/dev/architecture` owners for that tenant, allowing the team to trace responsibility per client.
 - When modifying a surface, document which channel owns the change and ensure the other channel sees a stable interface (e.g., UI surfaces expose facades pulled by CLI/tests, Dev surfaces expose deterministic pipelines consumed by UI via `ai.*` or `pipeline.*` facades).
