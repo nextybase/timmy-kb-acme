@@ -9,15 +9,17 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional,
 
 from pipeline.config_utils import get_client_config
 from pipeline.drive.download_steps import compute_created, discover_candidates, emit_progress, snapshot_existing
-from pipeline.exceptions import WorkspaceLayoutInvalid
+from pipeline.exceptions import CapabilityUnavailableError, WorkspaceLayoutInvalid
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.workspace_layout import WorkspaceLayout
 
 create_drive_folder: Callable[..., Any] | None
 create_drive_minimal_structure: Callable[..., Any] | None
 download_drive_pdfs_to_local: Callable[..., Any] | None
-get_drive_service: Callable[[ClientContext], Any] | None
 upload_config_to_drive_folder: Callable[..., Any] | None
+_drive_get_service: Callable[[ClientContext], Any] | None
+_drive_list_files: Callable[..., Any] | None
+MIME_FOLDER: str | None
 
 _drive_import_error: Optional[str] = None
 
@@ -27,15 +29,19 @@ try:
     create_drive_folder = _du.create_drive_folder
     create_drive_minimal_structure = _du.create_drive_minimal_structure
     download_drive_pdfs_to_local = _du.download_drive_pdfs_to_local
-    get_drive_service = _du.get_drive_service
+    _drive_get_service = _du.get_drive_service
+    _drive_list_files = _du.list_drive_files
     upload_config_to_drive_folder = _du.upload_config_to_drive_folder
+    MIME_FOLDER = _du.MIME_FOLDER
 except ImportError as exc:  # pragma: no cover
     _drive_import_error = str(exc)
     create_drive_folder = None
     create_drive_minimal_structure = None
     download_drive_pdfs_to_local = None
-    get_drive_service = None
+    _drive_get_service = None
+    _drive_list_files = None
     upload_config_to_drive_folder = None
+    MIME_FOLDER = None
 
 from pipeline.logging_utils import get_structured_logger
 
@@ -48,6 +54,25 @@ if TYPE_CHECKING:
     from pipeline.context import ClientContext
 else:  # pragma: no cover
     ClientContext = Any  # type: ignore[misc]
+
+# ===== Public Drive facade (UI-safe) =========================================
+
+
+def get_drive_service(context: ClientContext) -> Any:
+    if not callable(_drive_get_service):
+        raise CapabilityUnavailableError(
+            "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
+        )
+    return _drive_get_service(context)
+
+
+def list_drive_files(service: Any, parent_id: str, **kwargs: Any) -> Iterable[Dict[str, Any]]:
+    if not callable(_drive_list_files):
+        raise CapabilityUnavailableError(
+            "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
+        )
+    return _drive_list_files(service, parent_id, **kwargs)
+
 
 # ===== Logger =================================================================
 
@@ -85,7 +110,7 @@ def _assert_directory_exists(path: Path, slug: str, description: str) -> None:
 
 def _require_drive_utils_ui() -> None:
     missing: list[str] = []
-    if not callable(get_drive_service):
+    if not callable(_drive_get_service):
         missing.append("get_drive_service")
     if not callable(create_drive_minimal_structure):
         missing.append("create_drive_minimal_structure")
@@ -96,13 +121,15 @@ def _require_drive_utils_ui() -> None:
         if _drive_import_error:
             reason = f"{reason} ImportError: {_drive_import_error}"
         _log_drive_failure("drive_utils_unavailable", extra={"missing": missing, "import_error": _drive_import_error})
-        raise RuntimeError(f"{reason} Installa gli extra con: pip install .[drive]")
+        raise CapabilityUnavailableError(
+            "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
+        )
 
 
 def _require_drive_minimal_ui() -> None:
     """Prerequisiti minimi per creare cartella cliente + struttura base e caricare il config."""
     missing: list[str] = []
-    if not callable(get_drive_service):
+    if not callable(_drive_get_service):
         missing.append("get_drive_service")
     if not callable(create_drive_folder):
         missing.append("create_drive_folder")
@@ -115,7 +142,9 @@ def _require_drive_minimal_ui() -> None:
         if _drive_import_error:
             reason = f"{reason} ImportError: {_drive_import_error}"
         _log_drive_failure("drive_minimal_unavailable", extra={"missing": missing, "import_error": _drive_import_error})
-        raise RuntimeError(f"{reason} Installa gli extra con: pip install .[drive]")
+        raise CapabilityUnavailableError(
+            "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
+        )
 
 
 # =====================================================================
@@ -301,15 +330,13 @@ def plan_raw_download(
         labels: tutte le destinazioni che il downloader processerebbe
     """
     missing: list[str] = []
-    if not callable(get_drive_service):
+    if not callable(_drive_get_service):
         missing.append("get_drive_service")
     if not callable(create_drive_folder):
         missing.append("create_drive_folder")
     if missing:
-        raise RuntimeError(
-            "Funzionalità Google Drive non disponibili (plan): "
-            + ", ".join(missing)
-            + ". Installa gli extra con: pip install .[drive]"
+        raise CapabilityUnavailableError(
+            "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
         )
 
     ctx = get_client_context(slug, require_env=require_env)
@@ -485,8 +512,10 @@ def emit_readmes_for_raw(
     Ritorna {category_name -> file_id}
     """
     _require_drive_utils_ui()
-    if get_drive_service is None or create_drive_folder is None:
-        raise RuntimeError("Funzioni Drive non disponibili.")
+    if not callable(_drive_get_service) or not callable(create_drive_folder):
+        raise CapabilityUnavailableError(
+            "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
+        )
 
     # Context & service
     ctx = get_client_context(slug, require_env=require_env)
@@ -597,15 +626,13 @@ def download_raw_from_drive_with_progress(
     """
     # Guard: tutte le dipendenze minime devono esistere
     missing = []
-    if not callable(get_drive_service):
+    if not callable(_drive_get_service):
         missing.append("get_drive_service")
     if not callable(download_drive_pdfs_to_local):
         missing.append("download_drive_pdfs_to_local")
     if missing:
-        raise RuntimeError(
-            "Funzionalità Google Drive non disponibili (download): "
-            + ", ".join(missing)
-            + ". Installa gli extra con: pip install .[drive]"
+        raise CapabilityUnavailableError(
+            "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
         )
 
     # Context & service
@@ -664,3 +691,10 @@ def download_raw_from_drive_with_progress(
     )
 
     return cast(list[Path], compute_created(candidates, before))
+
+
+__all__ = [
+    "get_drive_service",
+    "list_drive_files",
+    "MIME_FOLDER",
+]

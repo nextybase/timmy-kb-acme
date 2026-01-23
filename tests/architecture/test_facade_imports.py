@@ -19,7 +19,6 @@ FACADES += list(Path("src/api").rglob("*.py"))
 # `pipeline.exceptions` o `semantic.api`.
 BLACKLIST = (
     "pipeline.drive",
-    "pipeline.drive_utils",
     "semantic.vision_provision",
     "semantic.vision_api",
 )

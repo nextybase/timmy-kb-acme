@@ -106,6 +106,10 @@ class RetrieverError(ValueError, TimmyError):
     """Errore di validazione/uso del retriever (parametri, limiti, ecc.)."""
 
 
+class CapabilityUnavailableError(RuntimeError):
+    """Raised when an optional but explicitly requested capability is unavailable."""
+
+
 # ---------------------------------------------------------------------------
 # Errori tipizzati di pipeline
 # ---------------------------------------------------------------------------
@@ -254,6 +258,7 @@ __all__ = [
     "PipelineError",
     # extra-pipeline
     "RetrieverError",
+    "CapabilityUnavailableError",
     # pipeline
     "DriveDownloadError",
     "DriveUploadError",

@@ -3,22 +3,15 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional, cast
 
+from pipeline.exceptions import CapabilityUnavailableError
 from pipeline.logging_utils import get_structured_logger
+from ui.services.drive_runner import MIME_FOLDER, get_drive_service, list_drive_files
 from ui.utils.context_cache import get_client_context
 
 try:
     import streamlit as st
 except Exception:  # pragma: no cover
     st = None
-
-_drive_import_error: Optional[str] = None
-try:
-    from pipeline.drive_utils import MIME_FOLDER, get_drive_service, list_drive_files
-except ImportError as exc:  # pragma: no cover
-    _drive_import_error = str(exc)
-    MIME_FOLDER = "application/vnd.google-apps.folder"  # fallback literal
-    get_drive_service = None
-    list_drive_files = None
 
 _LOGGER = get_structured_logger("ui.components.drive_tree")
 _FIELDS_MINIMAL = "nextPageToken, files(id, name, mimeType, size, modifiedTime)"
@@ -67,7 +60,9 @@ def _human_size(size: Optional[int]) -> str:
 def _list_children(service: Any, parent_id: str) -> List[Dict[str, Any]]:
     files: List[Dict[str, Any]] = []
     if not callable(list_drive_files):  # pragma: no cover
-        return files
+        raise CapabilityUnavailableError(
+            "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
+        )
     for item in list_drive_files(service, parent_id, fields=_FIELDS_MINIMAL):
         files.append(item)
     files.sort(key=lambda f: (0 if f.get("mimeType") == MIME_FOLDER else 1, (f.get("name") or "").lower()))
@@ -76,7 +71,9 @@ def _list_children(service: Any, parent_id: str) -> List[Dict[str, Any]]:
 
 def _find_child_folder(service: Any, parent_id: str, name: str) -> Optional[Dict[str, Any]]:
     if not callable(list_drive_files):  # pragma: no cover
-        return None
+        raise CapabilityUnavailableError(
+            "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
+        )
     query_name = name.replace("'", "\\'")
     query = "mimeType = 'application/vnd.google-apps.folder' " f"and name = '{query_name}'"
     for item in list_drive_files(service, parent_id, query=query, fields=_FIELDS_MINIMAL):
@@ -116,13 +113,6 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
     index: Dict[str, Dict[str, Any]] = {}
     if st is None:
         return index
-    if not callable(get_drive_service):
-        _LOGGER.error(
-            "ui.drive.failure",
-            extra={"reason": "drive_utils_unavailable", "import_error": _drive_import_error},
-        )
-        st.error("Google Drive non disponibile. Installa gli extra: pip install .[drive]")
-        return index
     try:
         ctx = get_client_context(slug, require_env=True)
     except Exception as exc:  # pragma: no cover
@@ -137,6 +127,17 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
 
     try:
         service = get_drive_service(ctx)
+    except CapabilityUnavailableError as exc:
+        _LOGGER.error(
+            "ui.drive.failure",
+            extra={
+                "reason": "capability_unavailable",
+                "capability": "drive",
+                "error": str(exc),
+            },
+        )
+        st.error(str(exc))
+        raise
     except Exception as exc:  # pragma: no cover
         st.error("Connessione a Google Drive fallita.")
         _LOGGER.warning("drive_tree.service_failed", extra={"slug": slug, "error": str(exc)})
