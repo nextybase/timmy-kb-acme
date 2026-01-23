@@ -42,6 +42,8 @@ def _check_config(repo_root_dir: Path) -> CheckItem:
 
 
 def _check_output_writable(repo_root_dir: Path) -> CheckItem:
+    # repo_root_dir here is REPO_ROOT_DIR (system repo root), not workspace root.
+    # Do not copy this pattern into workspace-scoped runtime code.
     output_dir = repo_root_dir / "output"
     try:
         output_dir.mkdir(parents=True, exist_ok=True)

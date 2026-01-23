@@ -272,6 +272,7 @@ def scan_raw_to_db(
 ) -> dict[str, int]:
     """Indicizza cartelle e PDF di `raw/` dentro il DB (schema v2)."""
 
+    # Fallback is CLI/tooling only; avoid heuristics, prefer ClientContext/WorkspaceLayout when available.
     repo_root_dir_path = Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(raw_dir).resolve().parent
     perimeter_root = repo_root_dir_path
 
@@ -362,6 +363,7 @@ def run_nlp_to_db(
 ) -> dict[str, Any]:
     """Esegue estrazione keyword, clustering e aggregazione per cartella."""
 
+    # Fallback is CLI/tooling only; avoid heuristics, prefer ClientContext/WorkspaceLayout when available.
     repo_root_dir_path = Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(raw_dir).resolve().parent
     perimeter_root = repo_root_dir_path
 
@@ -413,6 +415,7 @@ def run_nlp_to_db(
         try:
             from semantic.entities_runner import run_doc_entities_pipeline
 
+            # repo_root_dir here is workspace root, not the system REPO_ROOT_DIR.
             ent_stats = run_doc_entities_pipeline(
                 repo_root_dir=repo_root_dir_path,
                 raw_dir=raw_dir_path,

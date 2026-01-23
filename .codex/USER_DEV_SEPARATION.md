@@ -6,6 +6,11 @@ Document the 1.0 Beta split between the **User channel** (Streamlit screens plus
 - **User channel**: everything under `src/ui/**` together with approved facades under `src/ui/services` (e.g. `vision_provision`, `drive_runner`). The User channel drives Streamlit flows and relies on UI guards (safe inputs, session-state, telemetry).
 - **Dev channel**: automation entrypoints (typical CLI/tools) in `python -m timmy_kb.cli.*`, `tools/*`, `src/api/*` plus any scripts under `src/timmy_kb/cli`. Dev consumers may talk to UI facades when reusing logic, but they operate headless and must keep compatibility with CLI patterns.
 
+## Roots SSoT
+- REPO_ROOT_DIR = system repo root.
+- WORKSPACE_ROOT_DIR = output/timmy-kb-<slug>.
+- Legacy `repo_root_dir` may refer to workspace root: do not deduce paths; use `.env` -> ClientContext/WorkspaceLayout.
+
 ## Canonical Entrypoints
 - **User**: `src/ui/**` screens (pages, components) and `ui.services.*` facades that expose safe APIs such as `vision_services.provision_from_vision_with_config` or `drive_runner.ensure_drive_minimal_and_upload_config`. Any Streamlit page must import only these facades plus pipeline/core libs.
 - **Dev**: modules under `src/timmy_kb/cli/*`, `tools/*`, `src/api/*`, `src/pipeline/capabilities/*`, `src/ai/*`. These entrypoints integrate with the CLI/testing harness and may load UI facades only when the UI is the real consumer.

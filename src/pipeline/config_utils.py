@@ -124,13 +124,8 @@ def load_client_settings(
 
     cfg_path = context.config_path
     root_dir = context.repo_root_dir
-    if root_dir is None and cfg_path is not None:
-        try:
-            root_dir = cfg_path.parent.parent
-        except Exception:
-            root_dir = None
     if root_dir is None or cfg_path is None:
-        raise PipelineError("Contesto incompleto: repo_root_dir/config_path mancanti", slug=context.slug)
+        raise PipelineError("Contesto incompleto: workspace root/config_path mancanti", slug=context.slug)
 
     settings_raw = ContextSettings.load(
         cast(Path, root_dir),

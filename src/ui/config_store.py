@@ -15,6 +15,7 @@ from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.settings import Settings
 from ui.utils.context_cache import get_client_context
 from ui.utils.repo_root import get_repo_root
+from ui.utils.stubs import get_streamlit
 
 try:
     from pipeline.context import ClientContext
@@ -89,6 +90,13 @@ def _load_client_config(slug: str) -> tuple[Path, GlobalConfig]:
             ctx = get_client_context(slug, require_env=False)
     except Exception as exc:
         raise ConfigError(f"Impossibile caricare il contesto per {slug}: {exc}", slug=slug) from exc
+
+    if ctx.repo_root_dir is None:
+        st = get_streamlit()
+        error = getattr(st, "error", None)
+        if callable(error):
+            error("Workspace non inizializzato. Completa l'onboarding o verifica l'ambiente.")
+        raise ConfigError("Workspace root non disponibile nel contesto.", slug=slug)
 
     if ctx.config_path is None:
         raise ConfigError("Config path non disponibile", slug=slug)
