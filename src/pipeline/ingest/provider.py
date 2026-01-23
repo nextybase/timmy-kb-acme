@@ -7,14 +7,14 @@ from typing import Optional, Protocol
 
 from pipeline.config_utils import get_client_config
 from pipeline.context import ClientContext
-from pipeline.exceptions import ConfigError
+from pipeline.exceptions import CapabilityUnavailableError, ConfigError
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, iter_safe_pdfs
 from semantic.api import copy_local_pdfs_to_raw
 
 try:
     from pipeline.drive_utils import download_drive_pdfs_to_local, get_drive_service
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     download_drive_pdfs_to_local = None
     get_drive_service = None
 
@@ -46,15 +46,9 @@ class DriveIngestProvider:
         if not drive_folder_id:
             raise ConfigError("drive_raw_folder_id mancante in config.yaml.")
 
-        missing = []
-        if not callable(get_drive_service):
-            missing.append("get_drive_service")
-        if not callable(download_drive_pdfs_to_local):
-            missing.append("download_drive_pdfs_to_local")
-        if missing:
-            raise ConfigError(
-                "Sorgente Drive selezionata ma dipendenze non installate. "
-                f"Funzioni mancanti: {', '.join(missing)}.\nInstalla gli extra: pip install .[drive]"
+        if not callable(get_drive_service) or not callable(download_drive_pdfs_to_local):
+            raise CapabilityUnavailableError(
+                "Drive capability not available. Install extra dependencies with: pip install .[drive]"
             )
 
         service = get_drive_service(context)

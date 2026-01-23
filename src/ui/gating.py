@@ -12,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from pipeline.exceptions import PipelineError
+from pipeline.exceptions import CapabilityUnavailableError, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
@@ -47,6 +47,16 @@ _LAST_OPTIONAL_GATES: dict[str, dict[str, bool]] = {}
 
 def _log_gating_failure(event: str, exc: Exception, *, extra: dict[str, object] | None = None) -> None:
     payload = {"error": repr(exc)}
+    if isinstance(exc, CapabilityUnavailableError):
+        cap = getattr(exc, "capability", None)
+        detail = getattr(exc, "capability_detail", None)
+        provider_issue = getattr(exc, "provider_issue", None)
+        if cap is not None:
+            payload["capability"] = cap
+        if detail is not None:
+            payload["capability_detail"] = detail
+        if provider_issue is not None:
+            payload["provider_issue"] = provider_issue
     if extra:
         payload.update(extra)
     try:

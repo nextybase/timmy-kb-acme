@@ -109,6 +109,19 @@ class RetrieverError(ValueError, TimmyError):
 class CapabilityUnavailableError(RuntimeError):
     """Raised when an optional but explicitly requested capability is unavailable."""
 
+    def __init__(
+        self,
+        message: Optional[str] = None,
+        *,
+        capability: Optional[str] = None,
+        detail: Optional[str] = None,
+        provider_issue: Optional[bool] = False,
+    ) -> None:
+        super().__init__(message or "")
+        self.capability: Optional[str] = capability
+        self.capability_detail: Optional[str] = detail
+        self.provider_issue: Optional[bool] = provider_issue
+
 
 # ---------------------------------------------------------------------------
 # Errori tipizzati di pipeline

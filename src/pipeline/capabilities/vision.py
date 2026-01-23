@@ -6,6 +6,8 @@ from importlib import import_module
 from types import ModuleType
 from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Type
 
+from pipeline.exceptions import CapabilityUnavailableError
+
 
 class _ProvisionFromVisionFunc(Protocol):
     def __call__(self, *args: Any, **kwargs: Any) -> Dict[str, Any]: ...
@@ -50,10 +52,18 @@ def iter_available_vision_providers(
     if candidates is None:
         candidates = VISION_PROVIDER_CANDIDATES
 
+    found = False
     for module_name in candidates:
         module = _import_module(module_name)
         if module is not None:
+            found = True
             yield module
+    if not found:
+        raise CapabilityUnavailableError(
+            "Vision capability not available. Install extra dependencies with: pip install .[vision]",
+            capability="vision",
+            detail="missing_or_unavailable",
+        )
 
 
 def load_vision_bindings(
@@ -62,11 +72,13 @@ def load_vision_bindings(
     """Carica le binding Vision dalla lista ufficiale."""
 
     module_candidates = candidates if candidates is not None else VISION_PROVIDER_CANDIDATES
+    found = False
 
     for module_name in module_candidates:
         module = _import_module(module_name)
         if module is None:
             continue
+        found = True
 
         halt_error = getattr(module, "HaltError", None)
         provision = getattr(module, "provision_from_vision_with_config", None)
@@ -83,6 +95,16 @@ def load_vision_bindings(
                 prepare_yaml_with_config=prepare_yaml if callable(prepare_yaml) else None,
             )
 
-    raise ImportError(
-        "Unable to load Vision bindings: no module among " f"{', '.join(module_candidates)} exposes the required API."
+    if not found:
+        raise CapabilityUnavailableError(
+            "Vision capability not available. Install extra dependencies with: pip install .[vision]",
+            capability="vision",
+            detail="missing_or_unavailable",
+        )
+
+    raise CapabilityUnavailableError(
+        "Vision capability not available. No provider exposes the required API.",
+        capability="vision",
+        detail="provider_invalid",
+        provider_issue=True,
     )

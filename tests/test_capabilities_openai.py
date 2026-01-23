@@ -8,7 +8,8 @@ import types
 import pytest
 
 from pipeline.capabilities import get_openai_ctor
-from pipeline.exceptions import ConfigError
+from pipeline.capabilities import openai as openai_capability
+from pipeline.exceptions import CapabilityUnavailableError
 
 
 def test_get_openai_ctor_filters_missing_openai(monkeypatch):
@@ -29,8 +30,9 @@ def test_get_openai_ctor_filters_missing_openai(monkeypatch):
         "pipeline.capabilities.openai.import_module",
         fake_import_module,
     )
+    monkeypatch.setattr(openai_capability, "_openai_ctor", None)
 
-    with pytest.raises(ConfigError, match="OpenAI SDK non disponibile"):
+    with pytest.raises(CapabilityUnavailableError, match="OpenAI capability not available"):
         get_openai_ctor()
 
 
@@ -42,6 +44,7 @@ def test_get_openai_ctor_returns_ctor_from_dummy_module(monkeypatch):
 
     module.OpenAI = DummyOpenAI
     monkeypatch.setitem(sys.modules, "openai", module)
+    monkeypatch.setattr(openai_capability, "_openai_ctor", DummyOpenAI)
 
     ctor = get_openai_ctor()
 

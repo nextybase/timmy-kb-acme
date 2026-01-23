@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from pipeline.exceptions import ConfigError
+from pipeline.exceptions import CapabilityUnavailableError
 from pipeline.ingest import provider as ingest_module
 
 
@@ -29,7 +29,7 @@ def test_drive_provider_requires_drive_utils(monkeypatch, tmp_path):
     )
 
     provider = ingest_module.DriveIngestProvider()
-    with pytest.raises(ConfigError) as exc:
+    with pytest.raises(CapabilityUnavailableError) as exc:
         provider.ingest_raw(
             context=ctx,
             raw_dir=raw_dir,

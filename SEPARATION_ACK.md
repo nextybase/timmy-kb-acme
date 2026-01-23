@@ -1,4 +1,4 @@
-# Separation Acknowledgement (User/Dev split) — 1.0 Beta
+# Separation Acknowledgement (User/Dev split) - 1.0 Beta
 
 ## WHY
 The architecture SSoT (.codex/USER_DEV_SEPARATION.md) explicitly requires that UI code does **not** import internal Drive modules (`pipeline.drive.*`) and uses the public Drive facade `pipeline.drive_utils` instead.

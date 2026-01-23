@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from pipeline.capabilities.vision import iter_available_vision_providers, load_vision_bindings
+from pipeline.exceptions import CapabilityUnavailableError
 
 
 def test_load_vision_bindings_uses_candidate(monkeypatch):
@@ -36,9 +37,9 @@ def test_load_vision_bindings_fallback(monkeypatch):
         raise ImportError("nope")
 
     monkeypatch.setattr("pipeline.capabilities.vision.import_module", always_fail)
-    with pytest.raises(ImportError) as exc:
+    with pytest.raises(CapabilityUnavailableError) as exc:
         load_vision_bindings(candidates=("missing.module",))
-    assert "missing.module" in str(exc.value)
+    assert "Vision capability not available" in str(exc.value)
 
 
 def test_iter_available_vision_providers(monkeypatch):
@@ -64,4 +65,5 @@ def test_iter_available_vision_providers_none(monkeypatch):
         raise ImportError()
 
     monkeypatch.setattr("pipeline.capabilities.vision.import_module", always_fail)
-    assert list(iter_available_vision_providers(candidates=("missing.one",))) == []
+    with pytest.raises(CapabilityUnavailableError):
+        list(iter_available_vision_providers(candidates=("missing.one",)))

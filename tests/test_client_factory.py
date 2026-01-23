@@ -9,6 +9,7 @@ import pytest
 
 import ai.client_factory as client_factory
 from ai.client_factory import make_openai_client
+from pipeline.capabilities import openai as openai_capability
 from pipeline.exceptions import ConfigError
 
 
@@ -26,6 +27,7 @@ def test_make_openai_client_requires_modern_sdk(monkeypatch):
     dummy_module = types.ModuleType("openai")
     dummy_module.OpenAI = LegacyOpenAI  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "openai", dummy_module)
+    monkeypatch.setattr(openai_capability, "_openai_ctor", LegacyOpenAI)
 
     with pytest.raises(ConfigError) as excinfo:
         make_openai_client()
@@ -52,6 +54,7 @@ def test_make_openai_client_success(monkeypatch):
     dummy_module = types.ModuleType("openai")
     dummy_module.OpenAI = ModernOpenAI  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "openai", dummy_module)
+    monkeypatch.setattr(openai_capability, "_openai_ctor", ModernOpenAI)
 
     make_openai_client()
 
