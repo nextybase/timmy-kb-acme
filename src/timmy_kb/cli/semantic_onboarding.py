@@ -39,7 +39,6 @@ from semantic.frontmatter_service import (  # noqa: F401  # esposto per monkeypa
 from semantic.types import SemanticContextProtocol
 from storage import decision_ledger
 from timmy_kb.cli.kg_builder import build_kg_for_workspace
-from timmy_kb.versioning import build_env_fingerprint
 
 
 def get_paths(slug: str) -> dict[str, Path]:
@@ -75,7 +74,7 @@ def _resolve_requested_effective(args: argparse.Namespace) -> tuple[dict[str, ob
     return requested, effective
 
 
-def _build_evidence_json(
+def _build_evidence_refs(
     *,
     layout: WorkspaceLayout,
     requested: dict[str, object],
@@ -84,31 +83,37 @@ def _build_evidence_json(
     tag_kg_effective: str | None = None,
     exit_code: int | None = None,
     error_summary: str | None = None,
-) -> str:
+) -> list[str]:
     # Se abbiamo un esito sul KG (built/skipped), lo materializziamo nell'effective
     effective_final = dict(effective)
     if tag_kg_effective is not None:
         effective_final["tag_kg"] = tag_kg_effective
 
-    payload: dict[str, object] = {
-        "slug": layout.slug,
-        "workspace_root": str(layout.repo_root_dir),
-        "config_path": str(layout.config_path),
-        "semantic_dir": str(layout.semantic_dir),
-        "requested": requested,
-        "effective": effective_final,
-        "outcome": outcome,  # ok | deny_config | deny_pipeline | deny_unexpected
-        # Policy: Environment Certification (best-effort (non influenza artefatti/gate/ledger/exit code) evidence)
-        "timmy_env": os.getenv("TIMMY_ENV", "dev"),
-        "timmy_beta_strict_env": os.getenv("TIMMY_BETA_STRICT"),
-        "env_fingerprint": build_env_fingerprint(),
-    }
+    refs = [
+        f"path:{layout.config_path}",
+        f"path:{layout.semantic_dir}",
+        f"requested:{json.dumps(requested, sort_keys=True, separators=(',', ':'))}",
+        f"effective:{json.dumps(effective_final, sort_keys=True, separators=(',', ':'))}",
+        f"outcome:{outcome}",
+    ]
+    normalized_dir = getattr(layout, "normalized_dir", None)
+    if normalized_dir is not None:
+        refs.append(f"path:{normalized_dir}")
     if exit_code is not None:
-        payload["exit_code"] = int(exit_code)
+        refs.append(f"exit_code:{int(exit_code)}")
     if error_summary:
-        payload["error"] = error_summary
+        refs.append(f"error:{error_summary}")
+    if tag_kg_effective is not None:
+        refs.append(f"tag_kg:{tag_kg_effective}")
+    return refs
 
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
+    if isinstance(exc, ConfigError):
+        return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_CONFIG_ERROR
+    if isinstance(exc, PipelineError):
+        return decision_ledger.NORMATIVE_FAIL, decision_ledger.STOP_CODE_PIPELINE_ERROR
+    return decision_ledger.NORMATIVE_FAIL, decision_ledger.STOP_CODE_UNEXPECTED_ERROR
 
 
 def _deny_rationale(exc: BaseException) -> str:
@@ -239,24 +244,27 @@ def main() -> int:
                         parent_folder_id=ctx.drive_raw_folder_id,
                         log=logger,
                     )
-                decision_ledger.record_decision(
+                decision_ledger.record_normative_decision(
                     ledger_conn,
-                    decision_id=uuid.uuid4().hex,
-                    run_id=run_id,
-                    slug=slug,
-                    gate_name="semantic_onboarding",
-                    from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                    to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                    verdict=decision_ledger.DECISION_ALLOW,
-                    subject="semantic_onboarding",
-                    decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    evidence_json=_build_evidence_json(
-                        layout=layout,
-                        requested=requested,
-                        effective=effective,
-                        outcome="ok",
+                    decision_ledger.NormativeDecisionRecord(
+                        decision_id=uuid.uuid4().hex,
+                        run_id=run_id,
+                        slug=slug,
+                        gate_name="semantic_onboarding",
+                        from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                        to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                        verdict=decision_ledger.NORMATIVE_PASS,
+                        subject="semantic_onboarding",
+                        decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        actor="cli.semantic_onboarding",
+                        evidence_refs=_build_evidence_refs(
+                            layout=layout,
+                            requested=requested,
+                            effective=effective,
+                            outcome="ok",
+                        ),
+                        rationale="ok",
                     ),
-                    rationale="ok",
                 )
 
                 # 3) Costruisci il Knowledge Graph dei tag (Tag KG Builder)
@@ -277,51 +285,59 @@ def main() -> int:
                     kg_json = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.json")
                     kg_md = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.md")
                     if kg_json.exists() and kg_md.exists():
-                        decision_ledger.record_decision(
+                        decision_ledger.record_normative_decision(
                             ledger_conn,
-                            decision_id=uuid.uuid4().hex,
-                            run_id=run_id,
-                            slug=slug,
-                            gate_name="semantic_onboarding",
-                            from_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                            to_state=decision_ledger.STATE_VISUALIZATION_REFRESH,
-                            verdict=decision_ledger.DECISION_ALLOW,
-                            subject="tag_kg_builder",
-                            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                            evidence_json=_build_evidence_json(
-                                layout=layout,
-                                requested=requested,
-                                effective=effective,
-                                outcome="ok",
-                                tag_kg_effective=tag_kg_effective,
+                            decision_ledger.NormativeDecisionRecord(
+                                decision_id=uuid.uuid4().hex,
+                                run_id=run_id,
+                                slug=slug,
+                                gate_name="semantic_onboarding",
+                                from_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                                to_state=decision_ledger.STATE_VISUALIZATION_REFRESH,
+                                verdict=decision_ledger.NORMATIVE_PASS,
+                                subject="tag_kg_builder",
+                                decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                actor="cli.semantic_onboarding",
+                                evidence_refs=_build_evidence_refs(
+                                    layout=layout,
+                                    requested=requested,
+                                    effective=effective,
+                                    outcome="ok",
+                                    tag_kg_effective=tag_kg_effective,
+                                ),
+                                rationale="ok",
                             ),
-                            rationale="ok",
                         )
             except (ConfigError, PipelineError) as exc:
                 # Mappa verso exit code deterministici (no traceback non gestiti)
                 original_error = _summarize_error(exc)
                 code: int = int(exit_code_for(exc))  # exit_code_for non è tipizzato: forza int per mypy
                 try:
-                    decision_ledger.record_decision(
+                    verdict, stop_code = _normative_verdict_for_error(exc)
+                    decision_ledger.record_normative_decision(
                         ledger_conn,
-                        decision_id=uuid.uuid4().hex,
-                        run_id=run_id,
-                        slug=slug,
-                        gate_name="semantic_onboarding",
-                        from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                        to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                        verdict=decision_ledger.DECISION_DENY,
-                        subject="semantic_onboarding",
-                        decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        evidence_json=_build_evidence_json(
-                            layout=layout,
-                            requested=requested,
-                            effective=effective,
-                            outcome=_deny_rationale(exc),
-                            exit_code=code,
-                            error_summary=original_error,
+                        decision_ledger.NormativeDecisionRecord(
+                            decision_id=uuid.uuid4().hex,
+                            run_id=run_id,
+                            slug=slug,
+                            gate_name="semantic_onboarding",
+                            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                            to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                            verdict=verdict,
+                            subject="semantic_onboarding",
+                            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            actor="cli.semantic_onboarding",
+                            evidence_refs=_build_evidence_refs(
+                                layout=layout,
+                                requested=requested,
+                                effective=effective,
+                                outcome=_deny_rationale(exc),
+                                exit_code=code,
+                                error_summary=original_error,
+                            ),
+                            stop_code=stop_code,
+                            rationale=_deny_rationale(exc),
                         ),
-                        rationale=_deny_rationale(exc),
                     )
                 except Exception as ledger_exc:
                     ledger_error = _summarize_error(ledger_exc)
@@ -349,26 +365,30 @@ def main() -> int:
                 original_error = _summarize_error(exc)
                 code = 99
                 try:
-                    decision_ledger.record_decision(
+                    decision_ledger.record_normative_decision(
                         ledger_conn,
-                        decision_id=uuid.uuid4().hex,
-                        run_id=run_id,
-                        slug=slug,
-                        gate_name="semantic_onboarding",
-                        from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                        to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                        verdict=decision_ledger.DECISION_DENY,
-                        subject="semantic_onboarding",
-                        decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        evidence_json=_build_evidence_json(
-                            layout=layout,
-                            requested=requested,
-                            effective=effective,
-                            outcome="deny_unexpected_error",
-                            exit_code=code,
-                            error_summary=original_error,
+                        decision_ledger.NormativeDecisionRecord(
+                            decision_id=uuid.uuid4().hex,
+                            run_id=run_id,
+                            slug=slug,
+                            gate_name="semantic_onboarding",
+                            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                            to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                            verdict=decision_ledger.NORMATIVE_FAIL,
+                            subject="semantic_onboarding",
+                            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            actor="cli.semantic_onboarding",
+                            evidence_refs=_build_evidence_refs(
+                                layout=layout,
+                                requested=requested,
+                                effective=effective,
+                                outcome="deny_unexpected_error",
+                                exit_code=code,
+                                error_summary=original_error,
+                            ),
+                            stop_code=decision_ledger.STOP_CODE_UNEXPECTED_ERROR,
+                            rationale="deny_unexpected_error",
                         ),
-                        rationale="deny_unexpected_error",
                     )
                 except Exception as ledger_exc:
                     ledger_error = _summarize_error(ledger_exc)

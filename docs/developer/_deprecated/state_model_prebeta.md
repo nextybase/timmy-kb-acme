@@ -1,6 +1,7 @@
 Documento storico pre-Beta.
 Non normativo.
 Superseded dal modello Beta 1.0 in docs/developer/state_model.md.
+Nota: le etichette NEW/WORKSPACE_READY/TAGS_* sono legacy e non vanno usate nel ledger runtime.
 # State Model (Beta 1.0)
 
 ## Scopo

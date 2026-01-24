@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
-import json
 import logging
 import uuid
 from pathlib import Path
@@ -196,13 +195,19 @@ def _summarize_error(exc: BaseException) -> str:
     return f"{name}: {first_line}"
 
 
-def _build_ledger_evidence(layout: WorkspaceLayout) -> str:
-    payload = {
-        "slug": layout.slug,
-        "workspace_root": str(layout.repo_root_dir),
-        "config_path": str(layout.config_path),
-    }
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+def _build_evidence_refs(layout: WorkspaceLayout) -> list[str]:
+    return [
+        f"path:{layout.config_path}",
+        f"path:{layout.repo_root_dir}",
+    ]
+
+
+def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
+    if isinstance(exc, ConfigError):
+        return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_CONFIG_ERROR
+    if isinstance(exc, PipelineError):
+        return decision_ledger.NORMATIVE_FAIL, decision_ledger.STOP_CODE_PIPELINE_ERROR
+    return decision_ledger.NORMATIVE_FAIL, decision_ledger.STOP_CODE_UNEXPECTED_ERROR
 
 
 def _create_local_structure(context: ClientContext, logger: logging.Logger, *, client_name: str) -> Path:
@@ -511,19 +516,22 @@ def pre_onboarding_main(
                     "config": str(config_path),
                 },
             )
-            decision_ledger.record_decision(
+            decision_ledger.record_normative_decision(
                 ledger_conn,
-                decision_id=uuid.uuid4().hex,
-                run_id=run_id,
-                slug=context.slug,
-                gate_name="pre_onboarding",
-                from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
-                to_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                verdict=decision_ledger.DECISION_ALLOW,
-                subject="workspace_bootstrap",
-                decided_at=_utc_now_iso(),
-                evidence_json=_build_ledger_evidence(layout),
-                rationale="ok",
+                decision_ledger.NormativeDecisionRecord(
+                    decision_id=uuid.uuid4().hex,
+                    run_id=run_id,
+                    slug=context.slug,
+                    gate_name="pre_onboarding",
+                    from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
+                    to_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                    verdict=decision_ledger.NORMATIVE_PASS,
+                    subject="workspace_bootstrap",
+                    decided_at=_utc_now_iso(),
+                    actor="cli.pre_onboarding",
+                    evidence_refs=_build_evidence_refs(layout),
+                    rationale="ok",
+                ),
             )
             return
 
@@ -538,36 +546,44 @@ def pre_onboarding_main(
             require_env=require_env,
         )
         logger.info("cli.pre_onboarding.completed", extra={"slug": context.slug, "artifacts": 1})
-        decision_ledger.record_decision(
+        decision_ledger.record_normative_decision(
             ledger_conn,
-            decision_id=uuid.uuid4().hex,
-            run_id=run_id,
-            slug=context.slug,
-            gate_name="pre_onboarding",
-            from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
-            to_state=decision_ledger.STATE_SEMANTIC_INGEST,
-            verdict=decision_ledger.DECISION_ALLOW,
-            subject="workspace_bootstrap",
-            decided_at=_utc_now_iso(),
-            evidence_json=_build_ledger_evidence(layout),
-            rationale="ok",
-        )
-    except Exception as exc:
-        original_error = _summarize_error(exc)
-        try:
-            decision_ledger.record_decision(
-                ledger_conn,
+            decision_ledger.NormativeDecisionRecord(
                 decision_id=uuid.uuid4().hex,
                 run_id=run_id,
                 slug=context.slug,
                 gate_name="pre_onboarding",
                 from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
                 to_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                verdict=decision_ledger.DECISION_DENY,
+                verdict=decision_ledger.NORMATIVE_PASS,
                 subject="workspace_bootstrap",
                 decided_at=_utc_now_iso(),
-                evidence_json=_build_ledger_evidence(layout),
-                rationale=str(exc).splitlines()[:1][0] if str(exc) else "error",
+                actor="cli.pre_onboarding",
+                evidence_refs=_build_evidence_refs(layout),
+                rationale="ok",
+            ),
+        )
+    except Exception as exc:
+        original_error = _summarize_error(exc)
+        try:
+            verdict, stop_code = _normative_verdict_for_error(exc)
+            decision_ledger.record_normative_decision(
+                ledger_conn,
+                decision_ledger.NormativeDecisionRecord(
+                    decision_id=uuid.uuid4().hex,
+                    run_id=run_id,
+                    slug=context.slug,
+                    gate_name="pre_onboarding",
+                    from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
+                    to_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                    verdict=verdict,
+                    subject="workspace_bootstrap",
+                    decided_at=_utc_now_iso(),
+                    actor="cli.pre_onboarding",
+                    evidence_refs=_build_evidence_refs(layout),
+                    stop_code=stop_code,
+                    rationale=_summarize_error(exc),
+                ),
             )
         except Exception as ledger_exc:
             ledger_error = _summarize_error(ledger_exc)

@@ -7,7 +7,6 @@ import argparse
 import datetime as _dt
 import hashlib
 import json
-import os
 import uuid
 from pathlib import Path
 from typing import Any, Optional
@@ -27,7 +26,6 @@ from pipeline.path_utils import (
 from pipeline.raw_transform_service import STATUS_FAIL, STATUS_OK, STATUS_SKIP, get_default_raw_transform_service
 from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
 from storage import decision_ledger
-from timmy_kb.versioning import build_env_fingerprint
 
 
 def _utc_now_iso() -> str:
@@ -51,31 +49,24 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _build_evidence_json(
+def _build_evidence_refs(
     layout: WorkspaceLayout,
     *,
     transformer_name: str,
     transformer_version: str,
     ruleset_hash: str,
     stats: dict[str, int],
-) -> str:
-    payload: dict[str, object] = {
-        "slug": layout.slug,
-        "workspace_root": str(layout.repo_root_dir),
-        "config_path": str(layout.config_path),
-        "raw_dir": str(layout.raw_dir),
-        "normalized_dir": str(layout.normalized_dir),
-        "index_path": str(layout.normalized_dir / "INDEX.json"),
-        "transformer_name": transformer_name,
-        "transformer_version": transformer_version,
-        "ruleset_hash": ruleset_hash,
-        "stats": stats,
-        # Policy: Environment Certification (best-effort evidence)
-        "timmy_env": os.getenv("TIMMY_ENV"),
-        "timmy_beta_strict_env": os.getenv("TIMMY_BETA_STRICT"),
-        "env_fingerprint": build_env_fingerprint(),
-    }
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+) -> list[str]:
+    return [
+        f"path:{layout.config_path}",
+        f"path:{layout.raw_dir}",
+        f"path:{layout.normalized_dir}",
+        f"path:{layout.normalized_dir / 'INDEX.json'}",
+        f"transformer_name:{transformer_name}",
+        f"transformer_version:{transformer_version}",
+        f"ruleset_hash:{ruleset_hash}",
+        f"stats:{json.dumps(stats, sort_keys=True, separators=(',', ':'))}",
+    ]
 
 
 def _parse_args() -> argparse.Namespace:
@@ -192,25 +183,28 @@ def run_raw_ingest(
     write_index(index_path, records)
 
     stats = {"ok": ok_count, "skip": skip_count, "fail": fail_count}
-    decision_ledger.record_decision(
+    decision_ledger.record_normative_decision(
         ledger_conn,
-        decision_id=uuid.uuid4().hex,
-        run_id=run_id,
-        slug=slug,
-        gate_name="normalize_raw",
-        from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
-        to_state=decision_ledger.STATE_SEMANTIC_INGEST,
-        verdict=decision_ledger.DECISION_ALLOW,
-        subject="raw_ingest",
-        decided_at=_utc_now_iso(),
-        evidence_json=_build_evidence_json(
-            layout,
-            transformer_name=getattr(transform, "transformer_name", "unknown"),
-            transformer_version=getattr(transform, "transformer_version", "unknown"),
-            ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
-            stats=stats,
+        decision_ledger.NormativeDecisionRecord(
+            decision_id=uuid.uuid4().hex,
+            run_id=run_id,
+            slug=slug,
+            gate_name="normalize_raw",
+            from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
+            to_state=decision_ledger.STATE_SEMANTIC_INGEST,
+            verdict=decision_ledger.NORMATIVE_PASS,
+            subject="raw_ingest",
+            decided_at=_utc_now_iso(),
+            actor="cli.raw_ingest",
+            evidence_refs=_build_evidence_refs(
+                layout,
+                transformer_name=getattr(transform, "transformer_name", "unknown"),
+                transformer_version=getattr(transform, "transformer_version", "unknown"),
+                ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
+                stats=stats,
+            ),
+            rationale="ok",
         ),
-        rationale="ok",
     )
     logger.info("cli.raw_ingest.completed", extra={"slug": slug, **stats})
 
