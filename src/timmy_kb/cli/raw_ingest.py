@@ -191,7 +191,7 @@ def run_raw_ingest(
             slug=slug,
             gate_name="normalize_raw",
             from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
-            to_state=decision_ledger.STATE_SEMANTIC_INGEST,
+            to_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
             verdict=decision_ledger.NORMATIVE_PASS,
             subject="raw_ingest",
             decided_at=_utc_now_iso(),

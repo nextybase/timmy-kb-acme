@@ -35,6 +35,9 @@ Decision Ledger e non guidano le transizioni runtime.
 ### Gate: pre_onboarding
 - `WORKSPACE_BOOTSTRAP -> SEMANTIC_INGEST` (PASS/BLOCK/FAIL)
 
+### Gate: normalize_raw (raw_ingest)
+- Nessuna transizione di stato: opera intra-state su `WORKSPACE_BOOTSTRAP`.
+
 ### Gate: tag_onboarding
 - Nessuna transizione di stato: opera intra-state su `SEMANTIC_INGEST`.
 
@@ -42,6 +45,14 @@ Decision Ledger e non guidano le transizioni runtime.
 - `SEMANTIC_INGEST -> FRONTMATTER_ENRICH` (PASS/BLOCK/FAIL)
 - `FRONTMATTER_ENRICH -> VISUALIZATION_REFRESH` (PASS/BLOCK/FAIL)
 - `VISUALIZATION_REFRESH -> PREVIEW_READY` (PASS/BLOCK/FAIL) se previsto dal gate di preview
+
+## Golden trace (esempio, run OK)
+- pre_onboarding: `WORKSPACE_BOOTSTRAP -> SEMANTIC_INGEST` (PASS)
+- normalize_raw: `WORKSPACE_BOOTSTRAP -> WORKSPACE_BOOTSTRAP` (PASS)
+- tag_onboarding: `SEMANTIC_INGEST -> SEMANTIC_INGEST` (PASS)
+- semantic_onboarding: `SEMANTIC_INGEST -> FRONTMATTER_ENRICH` (PASS)
+- semantic_onboarding: `FRONTMATTER_ENRICH -> VISUALIZATION_REFRESH` (PASS)
+- semantic_onboarding: `VISUALIZATION_REFRESH -> PREVIEW_READY` (PASS)
 
 ## Semantica di PASS / BLOCK / FAIL
 
