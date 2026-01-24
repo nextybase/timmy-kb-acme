@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import hashlib
+import importlib
 import logging
 import os
 import uuid
@@ -48,6 +49,7 @@ from typing import Any, Optional, cast
 
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.context import ClientContext
+from pipeline.env_utils import is_beta_strict
 from pipeline.exceptions import ConfigError, PathTraversalError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.metrics import start_metrics_server_once
@@ -139,11 +141,6 @@ def _deny_rationale(exc: BaseException) -> str:
     if isinstance(exc, PipelineError):
         return "deny_pipeline_error"
     return "deny_unexpected_error"
-
-
-def _is_beta_strict() -> bool:
-    flag = os.getenv("TIMMY_BETA_STRICT", "").strip().lower()
-    return flag in {"1", "true", "yes", "on"}
 
 
 def _resolve_modes(*, dummy_mode: bool, strict_mode: bool, force_dummy: bool) -> tuple[str, str, str]:
@@ -240,6 +237,10 @@ def scan_normalized_to_db(
 ) -> dict[str, int]:
     """Indicizza cartelle e markdown di `normalized/` dentro il DB (schema v2)."""
 
+    if is_beta_strict() and repo_root_dir is None:
+        raise ConfigError(
+            "repo_root_dir mancante: richiesto in strict mode per scan_normalized_to_db.",
+        )
     # Fallback is CLI/tooling only; avoid heuristics, prefer ClientContext/WorkspaceLayout when available.
     repo_root_dir_path = (
         Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(normalized_dir).resolve().parent
@@ -333,6 +334,12 @@ def run_nlp_to_db(
 ) -> dict[str, Any]:
     """Esegue estrazione keyword, clustering e aggregazione per cartella."""
 
+    strict_mode = is_beta_strict()
+    if strict_mode and repo_root_dir is None:
+        raise ConfigError(
+            "repo_root_dir mancante: richiesto in strict mode per run_nlp_to_db.",
+            slug=slug,
+        )
     # Fallback is CLI/tooling only; avoid heuristics, prefer ClientContext/WorkspaceLayout when available.
     repo_root_dir_path = (
         Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(normalized_dir).resolve().parent
@@ -383,27 +390,66 @@ def run_nlp_to_db(
             logger=log,
         )
 
+    entities_status = "skipped"
+    entities_error_type: str | None = None
     if enable_entities:
         try:
-            from semantic.entities_runner import run_doc_entities_pipeline
-
-            # repo_root_dir here is workspace root, not the system REPO_ROOT_DIR.
-            ent_stats = run_doc_entities_pipeline(
-                repo_root_dir=repo_root_dir_path,
-                raw_dir=normalized_dir_path,
-                semantic_dir=repo_root_dir_path / "semantic",
-                db_path=db_path_path,
-                logger=log,
+            entities_module = importlib.import_module("semantic.entities_runner")
+            run_doc_entities_pipeline = getattr(entities_module, "run_doc_entities_pipeline")
+        except Exception as exc:
+            if strict_mode:
+                log.error(
+                    "tag_onboarding.entities.failed",
+                    extra={"slug": slug, "error_type": type(exc).__name__, "strict": True},
+                )
+                raise PipelineError(
+                    "Entities pipeline non disponibile in strict mode.",
+                    slug=slug,
+                    file_path=str(db_path_path),
+                ) from exc
+            log.warning(
+                "tag_onboarding.entities.skipped",
+                extra={"slug": slug, "error_type": type(exc).__name__, "strict": False},
             )
-            stats = {**stats, **ent_stats}
-        except Exception as exc:  # pragma: no cover
-            log.warning("tag_onboarding.entities.failed", extra={"error": str(exc)})
+            entities_status = "skipped"
+        else:
+            try:
+                # repo_root_dir here is workspace root, not the system REPO_ROOT_DIR.
+                ent_stats = run_doc_entities_pipeline(
+                    repo_root_dir=repo_root_dir_path,
+                    raw_dir=normalized_dir_path,
+                    semantic_dir=repo_root_dir_path / "semantic",
+                    db_path=db_path_path,
+                    logger=log,
+                )
+                stats = {**stats, **ent_stats}
+                entities_status = "ok"
+            except Exception as exc:  # pragma: no cover
+                if strict_mode:
+                    log.error(
+                        "tag_onboarding.entities.failed",
+                        extra={"slug": slug, "error_type": type(exc).__name__, "strict": True},
+                    )
+                    raise PipelineError(
+                        "Entities pipeline fallita in strict mode.",
+                        slug=slug,
+                        file_path=str(db_path_path),
+                    ) from exc
+                log.warning(
+                    "tag_onboarding.entities.degraded",
+                    extra={"slug": slug, "error_type": type(exc).__name__, "strict": False},
+                )
+                entities_status = "failed"
+                entities_error_type = type(exc).__name__
 
     enriched_stats = {
         **stats,
         "workers": worker_count,
         "batch_size": worker_batch_size,
+        "entities_status": entities_status,
     }
+    if entities_error_type:
+        enriched_stats["entities_error_type"] = entities_error_type
 
     log.info("cli.tag_onboarding.nlp_completed", extra=enriched_stats)
 
@@ -584,7 +630,7 @@ def tag_onboarding_main(
         started_at=_utc_now_iso(),
     )
     dummy_mode = bool(dummy_mode)
-    strict_mode_resolved = _is_beta_strict() if strict_mode is None else bool(strict_mode)
+    strict_mode_resolved = is_beta_strict() if strict_mode is None else bool(strict_mode)
     requested_mode = "dummy" if dummy_mode else "standard"
     decision_recorded = False
     if strict_mode_resolved and force_dummy:

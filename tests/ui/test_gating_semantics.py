@@ -134,6 +134,7 @@ def test_visible_page_specs_continues_on_normalized_ready_error(
 ) -> None:
     stub = StreamlitStub()
     monkeypatch.setitem(sys.modules, "streamlit", stub)
+    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
     monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
     monkeypatch.setattr(
         gating,
@@ -142,7 +143,7 @@ def test_visible_page_specs_continues_on_normalized_ready_error(
     )
 
     gates = GateState(drive=True, vision=True, tags=True)
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         groups = visible_page_specs(gates)
 
     assert any("ui.gating.normalized_ready_failed" in record.getMessage() for record in caplog.records)
@@ -155,13 +156,14 @@ def test_visible_page_specs_continues_on_state_error(
 ) -> None:
     stub = StreamlitStub()
     monkeypatch.setitem(sys.modules, "streamlit", stub)
+    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
     monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
     monkeypatch.setattr(gating, "normalized_ready", lambda _slug, **_kwargs: (True, None), raising=False)
     monkeypatch.setattr(gating, "tagging_ready", lambda _slug, **_kwargs: (True, None), raising=False)
     monkeypatch.setattr(gating, "get_state", lambda _slug: (_ for _ in ()).throw(RuntimeError("boom")))
 
     gates = GateState(drive=True, vision=True, tags=True)
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         groups = visible_page_specs(gates)
 
     assert any("ui.gating.state_failed" in record.getMessage() for record in caplog.records)

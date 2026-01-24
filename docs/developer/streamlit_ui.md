@@ -370,6 +370,10 @@ def test_emette_eventi_tags(caplog, monkeypatch):
 
 La semantica è disponibile da stato 'pronto' in poi e richiede Markdown presenti in `normalized/`.
 
+**Strict mode (TIMMY_BETA_STRICT=1):** la UI non deve usare fallback local-only.
+Se Drive o gli ID Drive non sono disponibili, l'onboarding si blocca con messaggio deterministico
+e un evento strutturato `ui.drive.capability_missing`.
+
 1. Calcola i gate con `ui.gating.compute_gates(os.environ)`; combina la disponibilita runtime dei servizi (`ui.services.*`) con gli override da variabili di ambiente:
     - `DRIVE=0` disabilita i flussi Drive (cartelle, cleanup, download).
     - `VISION=0` disabilita il provisioning Vision (estrazione PDF, tool assistito).

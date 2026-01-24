@@ -12,6 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
+from pipeline.env_utils import is_beta_strict
 from pipeline.exceptions import CapabilityUnavailableError, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -260,6 +261,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     semantic_ready = False
     tagging_ready_flag = False
     state_norm = ""
+    strict_mode = is_beta_strict()
     try:
         slug = get_active_slug()
     except Exception as exc:
@@ -285,17 +287,33 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
             ready, _path = normalized_ready(slug, strict=False)
             normalized_ready_flag = bool(ready)
         except Exception as exc:
-            _LOGGER.error(
+            if strict_mode:
+                _stop_gating_error(
+                    "ui.gating.normalized_ready_failed",
+                    "Errore nel gating UI: normalized_ready fallito.",
+                    slug=slug,
+                    error=exc,
+                )
+            _log_gating_failure(
                 "ui.gating.normalized_ready_failed",
-                extra={"slug": slug, "path": "", "error": str(exc)},
+                exc,
+                extra={"slug": slug, "path": "", "strict": False, "reason": "exception"},
             )
             normalized_ready_flag = False
         try:
             tagging_ready_flag, _ = tagging_ready(slug, strict=False)
         except Exception as exc:
-            _LOGGER.error(
+            if strict_mode:
+                _stop_gating_error(
+                    "ui.gating.tagging_ready_failed",
+                    "Errore nel gating UI: tagging_ready fallito.",
+                    slug=slug,
+                    error=exc,
+                )
+            _log_gating_failure(
                 "ui.gating.tagging_ready_failed",
-                extra={"slug": slug, "path": "", "error": str(exc)},
+                exc,
+                extra={"slug": slug, "path": "", "strict": False, "reason": "exception"},
             )
             tagging_ready_flag = False
         try:
@@ -303,9 +321,17 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
             state_norm = state_value.strip().lower()
             semantic_ready = state_norm in SEMANTIC_READY_STATES
         except Exception as exc:
-            _LOGGER.error(
+            if strict_mode:
+                _stop_gating_error(
+                    "ui.gating.state_failed",
+                    "Errore nel gating UI: stato cliente non disponibile.",
+                    slug=slug,
+                    error=exc,
+                )
+            _log_gating_failure(
                 "ui.gating.state_failed",
-                extra={"slug": slug, "path": "", "error": str(exc)},
+                exc,
+                extra={"slug": slug, "path": "", "strict": False, "reason": "exception"},
             )
             state_norm = ""
             semantic_ready = False

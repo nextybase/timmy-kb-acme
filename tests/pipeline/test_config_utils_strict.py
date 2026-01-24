@@ -22,6 +22,7 @@ def test_refresh_context_settings_logs_on_failure(monkeypatch: pytest.MonkeyPatc
         raise RuntimeError("load failed")
 
     monkeypatch.setattr(config_utils.ContextSettings, "load", _boom)
+    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
 
     caplog.set_level(logging.WARNING, logger="pipeline.config_utils")
 
@@ -34,6 +35,23 @@ def test_refresh_context_settings_logs_on_failure(monkeypatch: pytest.MonkeyPatc
     )
     assert rec is not None
     assert getattr(rec, "slug", None) == "dummy"
+
+
+def test_refresh_context_settings_strict_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ctx = ClientContext(
+        slug="dummy",
+        repo_root_dir=tmp_path,
+        config_path=tmp_path / "config" / "config.yaml",
+    )
+
+    def _boom(*_a: object, **_k: object):
+        raise RuntimeError("load failed")
+
+    monkeypatch.setattr(config_utils.ContextSettings, "load", _boom)
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+
+    with pytest.raises(ConfigError):
+        config_utils._refresh_context_settings(ctx)
 
 
 def test_load_client_settings_raises_on_non_convertibile_settings(

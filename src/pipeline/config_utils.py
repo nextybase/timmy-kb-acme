@@ -54,6 +54,7 @@ else:
 
 from pipeline.constants import BACKUP_SUFFIX
 from pipeline.context import ClientContext
+from pipeline.env_utils import is_beta_strict
 from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidationError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -92,8 +93,12 @@ def _refresh_context_settings(context: ClientContext) -> None:
             slug=context.slug,
         )
     except Exception as exc:  # noqa: BLE001
-        # Beta 1.0 STRICT: qui NON rendiamo fatal (write già avvenuta),
-        # ma è vietata una degradazione silenziosa in runtime.
+        if is_beta_strict():
+            raise ConfigError(
+                "Impossibile ricaricare Settings dopo write (strict mode).",
+                slug=context.slug,
+                file_path=str(context.config_path),
+            ) from exc
         logger.warning(
             "pipeline.config_utils.context_settings_refresh_failed",
             extra={

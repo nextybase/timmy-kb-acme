@@ -1093,7 +1093,7 @@ def persist_with_transaction(
         try:
             term_id = upsert_term(conn, canonical, default_lang)
         except Exception as exc:  # pragma: no cover
-            raise ConfigError(f"Impossibile registrare il termine '{canonical}'.")
+            raise ConfigError(f"Impossibile registrare il termine '{canonical}'.") from exc
 
         if canonical not in seen_terms:
             counts["terms"] += 1
@@ -1115,7 +1115,7 @@ def persist_with_transaction(
             try:
                 folder_id = upsert_folder(conn, path, parent_path=parent)
             except Exception as exc:  # pragma: no cover
-                raise ConfigError(f"Impossibile registrare la cartella '{path}'.")
+                raise ConfigError(f"Impossibile registrare la cartella '{path}'.") from exc
 
             if path not in seen_folders:
                 counts["folders"] += 1
@@ -1127,7 +1127,7 @@ def persist_with_transaction(
             try:
                 upsert_folder_term(conn, folder_id, term_id, weight=float(weight), status=str(status))
             except Exception as exc:  # pragma: no cover
-                raise ConfigError(f"Impossibile associare '{canonical}' a '{path}'.")
+                raise ConfigError(f"Impossibile associare '{canonical}' a '{path}'.") from exc
             counts["links"] += 1
             seen_links.add(link_key)
 

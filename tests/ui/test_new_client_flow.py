@@ -113,7 +113,7 @@ def test_init_workspace_skips_drive_when_helper_missing(
 
     caplog.clear()
     with caplog.at_level(logging.INFO):
-        sys.modules.pop("src.ui.pages.new_client", None)
+        sys.modules.pop("ui.pages.new_client", None)
         import ui.pages.new_client as new_client
 
         try:
@@ -127,6 +127,7 @@ def test_init_workspace_skips_drive_when_helper_missing(
             assert stub.error_messages == [
                 "Per aprire il workspace serve semantic/semantic_mapping.yaml. " "Esegui prima 'Inizializza Workspace'."
             ]
+        assert any(msg == "Drive non configurato: modalita local-only attiva." for msg in stub.warning_messages)
         assert stub.session_state.get("new_client.phase") == "pronto_apertura"
         assert stub.session_state.get("new_client.slug") == slug
         assert bootstrap_called["count"] == 1
@@ -134,6 +135,83 @@ def test_init_workspace_skips_drive_when_helper_missing(
     finally:
         if workspace_root.exists():
             shutil.rmtree(workspace_root, ignore_errors=True)
+
+
+def test_init_workspace_blocks_local_only_in_strict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    slug = "dummy"
+    repo_root = tmp_path / "repo-root"
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
+
+    stub = _make_st()
+    stub.session_state = {"new_client.phase": "iniziale", "new_client.slug": "", "client_name": ""}
+    orig_text_input = stub.text_input
+    stub.text_input = lambda label, **kwargs: (
+        "dummy" if "Slug" in label else kwargs.get("value", "")
+    ) or orig_text_input(label, **kwargs)
+    stub.file_uploader = lambda *_args, **_kwargs: _make_pdf_stub(b"%PDF-1.4")
+
+    settings_stub = types.SimpleNamespace(ui_allow_local_only=True)
+    monkeypatch.setattr("pipeline.settings.Settings.load", lambda *_a, **_k: settings_stub)
+    monkeypatch.setitem(sys.modules, "streamlit", stub)
+    register_streamlit_runtime(monkeypatch, stub)
+
+    fake_drive_module = types.ModuleType("ui.services.drive_runner")
+    monkeypatch.setitem(sys.modules, "ui.services.drive_runner", fake_drive_module)
+
+    import pipeline.workspace_bootstrap as workspace_bootstrap
+
+    def _fake_bootstrap(context: Any) -> WorkspaceLayout:
+        base = workspace_root
+        base.mkdir(parents=True, exist_ok=True)
+        config_dir = base / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.yaml").write_text("client_name: Dummy\n", encoding="utf-8")
+        (base / "book").mkdir(parents=True, exist_ok=True)
+        (base / "raw").mkdir(parents=True, exist_ok=True)
+        (base / "semantic").mkdir(parents=True, exist_ok=True)
+        (base / "logs").mkdir(parents=True, exist_ok=True)
+        if isinstance(context, dict):
+            slug = context.get("slug", "dummy")
+        else:
+            slug = getattr(context, "slug", "dummy")
+            context.repo_root_dir = base
+            context.base_dir = base
+            context.config_path = config_dir / "config.yaml"
+        return WorkspaceLayout.from_workspace(workspace=base, slug=slug)
+
+    monkeypatch.setattr(workspace_bootstrap, "bootstrap_client_workspace", _fake_bootstrap, raising=True)
+
+    sys.modules.pop("ui.utils.status", None)
+    from contextlib import contextmanager
+
+    import ui.utils.status as status_mod
+
+    @contextmanager
+    def _guard(*_a: Any, **_k: Any):
+        with stub.status() as status:
+            yield status
+
+    monkeypatch.setattr(status_mod, "status_guard", _guard, raising=True)
+
+    caplog.clear()
+    with caplog.at_level(logging.ERROR):
+        sys.modules.pop("ui.pages.new_client", None)
+        import ui.pages.new_client as new_client
+
+        with pytest.raises(RuntimeError):
+            importlib.reload(new_client)
+
+    assert any("Provisioning Drive non disponibile in strict mode" in msg for msg in stub.error_messages)
+    assert any("ui.drive.capability_missing" in record.getMessage() for record in caplog.records)
+
+    if workspace_root.exists():
+        shutil.rmtree(workspace_root, ignore_errors=True)
 
 
 def test_ui_allow_local_only_reloads_settings(monkeypatch: pytest.MonkeyPatch) -> None:

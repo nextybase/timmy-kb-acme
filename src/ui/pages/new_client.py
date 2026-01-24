@@ -15,6 +15,7 @@ import yaml
 
 from pipeline.config_utils import get_client_config, update_config_with_drive_ids
 from pipeline.context import validate_slug
+from pipeline.env_utils import is_beta_strict
 from pipeline.exceptions import ConfigError, WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.file_utils import safe_write_bytes, safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -357,6 +358,26 @@ def _log_diagnostics(
         logger.warning(message, extra=extra)
 
 
+def _log_drive_capability_missing(
+    slug: str,
+    *,
+    phase: str,
+    strict: bool,
+    helper_missing: bool,
+    ids_missing: bool,
+) -> None:
+    payload = {
+        "slug": slug,
+        "phase": phase,
+        "strict": bool(strict),
+        "missing": {"helper": bool(helper_missing), "ids": bool(ids_missing)},
+    }
+    if strict:
+        LOGGER.error("ui.drive.capability_missing", extra=payload)
+    else:
+        LOGGER.warning("ui.drive.capability_missing", extra=payload)
+
+
 # Registry unificato (SSoT) via ui.clients_store
 def _upsert_client_registry(slug: str, client_name: str, *, target_state: Optional[str] = "pronto") -> None:
     """
@@ -545,7 +566,28 @@ if current_phase == UI_PHASE_INIT:
 
             # 4) Provisioning minimo su Drive (obbligatorio solo quando disponibile)
             local_only_mode = ui_allow_local_only_enabled()
+            strict_mode = is_beta_strict()
             if _ensure_drive_minimal is None:
+                if strict_mode:
+                    _log_drive_capability_missing(
+                        s,
+                        phase="init",
+                        strict=True,
+                        helper_missing=True,
+                        ids_missing=False,
+                    )
+                    st.error(
+                        "Provisioning Drive non disponibile in strict mode. "
+                        "Installa gli extra `pip install .[drive]` e riprova."
+                    )
+                    st.stop()
+                _log_drive_capability_missing(
+                    s,
+                    phase="init",
+                    strict=False,
+                    helper_missing=True,
+                    ids_missing=False,
+                )
                 if local_only_mode:
                     LOGGER.info(
                         "ui.drive.provisioning_skipped",
@@ -729,6 +771,25 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
     # ora leggerà la configurazione aggiornata.
     has_drive_ids = _has_drive_ids(eff)
     local_only_mode = ui_allow_local_only_enabled()
+    strict_mode = is_beta_strict()
+    if not has_drive_ids and strict_mode:
+        _log_drive_capability_missing(
+            eff,
+            phase="open",
+            strict=True,
+            helper_missing=_ensure_drive_minimal is None,
+            ids_missing=True,
+        )
+        st.error("Config privo degli ID Drive. In strict mode non è consentito proseguire senza Drive.")
+        st.stop()
+    if not has_drive_ids:
+        _log_drive_capability_missing(
+            eff,
+            phase="open",
+            strict=False,
+            helper_missing=_ensure_drive_minimal is None,
+            ids_missing=True,
+        )
     if not has_drive_ids and not local_only_mode:
         st.warning(
             "Config privo degli ID Drive (drive_folder_id/drive_raw_folder_id). "
@@ -741,8 +802,9 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         st.error("Config privo degli ID Drive. Ripeti 'Inizializza Workspace' dopo aver configurato Drive.")
         st.stop()
 
-    if local_only_mode:
+    if local_only_mode and not has_drive_ids:
         LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})
+        LOGGER.info("ui.wizard.local_only_requested", extra={"slug": eff, "local_only": True})
         _log_diagnostics(
             eff,
             "warning",
@@ -750,7 +812,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
             extra={"slug": eff},
             layout=layout,
         )
-        st.success("Drive non configurato, continuo in locale.")
+        st.warning("Drive non configurato: modalita local-only attiva.")
 
     _upsert_client_registry(eff, display_name)
     st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
