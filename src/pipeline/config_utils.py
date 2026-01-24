@@ -52,9 +52,9 @@ else:
         SettingsConfigDict as _SettingsConfigDict,
     )
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.constants import BACKUP_SUFFIX
 from pipeline.context import ClientContext
-from pipeline.env_utils import is_beta_strict
 from pipeline.exceptions import ConfigError, PipelineError, PreOnboardingValidationError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger

@@ -47,9 +47,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional, cast
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.context import ClientContext
-from pipeline.env_utils import is_beta_strict
 from pipeline.exceptions import ConfigError, PathTraversalError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.metrics import start_metrics_server_once

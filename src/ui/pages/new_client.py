@@ -13,9 +13,9 @@ from ui.utils.stubs import get_streamlit
 st = get_streamlit()
 import yaml
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import get_client_config, update_config_with_drive_ids
 from pipeline.context import validate_slug
-from pipeline.env_utils import is_beta_strict
 from pipeline.exceptions import ConfigError, WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.file_utils import safe_write_bytes, safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -370,6 +370,7 @@ def _log_drive_capability_missing(
         "slug": slug,
         "phase": phase,
         "strict": bool(strict),
+        "capability": "drive",
         "missing": {"helper": bool(helper_missing), "ids": bool(ids_missing)},
     }
     if strict:

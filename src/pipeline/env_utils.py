@@ -26,7 +26,6 @@ __all__ = [
     "get_env_var",
     "get_bool",
     "get_int",
-    "is_beta_strict",
     "compute_redact_flag",
 ]
 
@@ -217,10 +216,6 @@ def get_int(name: str, default: int = 0, *, strict: bool = True, allow_fallback:
         if strict:
             raise ConfigError(f"ENV invalid int: {name}", file_path=str(val)) from exc
     return int(default)
-
-
-def is_beta_strict(env: Mapping[str, str] | None = None) -> bool:
-    return get_bool("TIMMY_BETA_STRICT", default=False, env=env, strict=False)
 
 
 def compute_redact_flag(env: Optional[Dict[str, Any]] = None, level: str = "INFO") -> bool:
