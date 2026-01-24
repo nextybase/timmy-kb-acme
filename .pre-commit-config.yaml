@@ -240,6 +240,13 @@ repos:
         pass_filenames: false
         stages: [pre-commit, pre-push]
 
+      - id: ui-strict-runtime-guard
+        name: UI strict runtime guard (dotenv/schema bypass)
+        entry: python tools/ai_checks/ui_strict_runtime_guard.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: forbid-hardcoded-vision-model
         name: Forbid hardcoded Vision model in UI services
         entry: python tools/smoke/check_no_hardcoded_vision_model.py

@@ -9,6 +9,7 @@ from ai.check import run_prototimmy_dummy_check
 from ai.codex_runner import run_codex_cli
 from ai.responses import run_json_model, run_text_model
 from ai.types import AssistantConfig
+from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
 from ui.chrome import render_chrome_then_require
 from ui.utils.repo_root import get_repo_root
@@ -177,23 +178,26 @@ def _build_transcript(history: Sequence[Mapping[str, str]]) -> str:
 
 
 def _call_ocp(message: str) -> str:
-    settings = _load_settings()
-    cfg = resolve_ocp_executor_config(settings)
-    response = run_text_model(
-        model=cfg.model,
-        messages=(
-            dict(_OCP_SYSTEM_MESSAGE),
-            {"role": "user", "content": f"Rispondi con i dati richiesti: {message}"},
-        ),
-        invocation=_build_chat_invocation(
-            cfg,
-            component="prototimmy.chat",
-            operation="prototimmy.chat.ocp",
-            step="ocp",
-            request_tag="prototimmy_chat_ocp",
-        ),
-    )
-    return cast(str, response.text)
+    try:
+        settings = _load_settings()
+        cfg = resolve_ocp_executor_config(settings)
+        response = run_text_model(
+            model=cfg.model,
+            messages=(
+                dict(_OCP_SYSTEM_MESSAGE),
+                {"role": "user", "content": f"Rispondi con i dati richiesti: {message}"},
+            ),
+            invocation=_build_chat_invocation(
+                cfg,
+                component="prototimmy.chat",
+                operation="prototimmy.chat.ocp",
+                step="ocp",
+                request_tag="prototimmy_chat_ocp",
+            ),
+        )
+        return cast(str, response.text)
+    except Exception as exc:
+        raise ConfigError("OCP non raggiungibile") from exc
 
 
 def _render_ocp_response(text: str) -> None:
@@ -319,8 +323,7 @@ def _invoke_prototimmy_json(
         ocp_request = str(data.get("message_for_ocp", "")).strip()
         return (reply or None, ocp_request or "")
     except Exception as exc:  # pragma: no cover - logging happens in downstream libs
-        st.error(f"ProtoTimmy non ha risposto: {exc}")
-        return None, ""
+        raise ConfigError("ProtoTimmy non raggiungibile") from exc
 
 
 def _invoke_prototimmy_text(prompt_text: str) -> str | None:
@@ -375,16 +378,12 @@ def main() -> None:
         if reply:
             history.append({"role": "assistant", "content": reply})
         if ocp_request:
-            try:
-                ocp_response = _call_ocp(ocp_request)
-            except Exception:
-                st.error("OCP non raggiungibile")
-            else:
-                _render_ocp_response(ocp_response)
-                summary_prompt = f"Questa è la risposta reale di OCP:\n{ocp_response}\nRiassumila per l'utente."
-                summary = _invoke_prototimmy_text(summary_prompt)
-                if summary:
-                    history.append({"role": "assistant", "content": summary})
+            ocp_response = _call_ocp(ocp_request)
+            _render_ocp_response(ocp_response)
+            summary_prompt = f"Questa è la risposta reale di OCP:\n{ocp_response}\nRiassumila per l'utente."
+            summary = _invoke_prototimmy_text(summary_prompt)
+            if summary:
+                history.append({"role": "assistant", "content": summary})
     _render_history(history)
     _render_smoke_test()
     _render_codex_section()

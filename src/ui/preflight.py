@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import importlib
 import json
-import os
 import socket
 from pathlib import Path
 from typing import Any, Iterable, List, Tuple, cast
@@ -14,6 +13,7 @@ except Exception:  # pragma: no cover
     st = None
 
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 
 CheckItem = Tuple[str, bool, str]
@@ -33,16 +33,17 @@ DEPENDENCY_CHECKS = [
 def _maybe_load_dotenv() -> None:
     """Carica .env solo quando serve (no side-effects a import-time)."""
     env_path = Path(".env")
-    try:
-        loaded = ensure_dotenv_loaded(strict=False, allow_fallback=True)
-    except Exception as exc:
-        _logger().warning(
-            "ui.preflight.dotenv_error",
-            extra={"error": repr(exc), "path": str(env_path)},
-        )
-        return
     if not env_path.exists():
         _logger().info("ui.preflight.dotenv_missing", extra={"path": str(env_path)})
+        return
+    try:
+        loaded = ensure_dotenv_loaded(strict=True, allow_fallback=False)
+    except Exception as exc:
+        _logger().error(
+            "ui.preflight.dotenv_error",
+            extra={"path": str(env_path)},
+        )
+        raise ConfigError("dotenv load failed", file_path=str(env_path)) from exc
     _logger().info(
         "ui.preflight.dotenv_loaded",
         extra={"loaded": bool(loaded), "path": str(env_path)},
@@ -169,8 +170,6 @@ def _vision_schema_ok() -> tuple[bool, str]:
             return False, "; ".join(parts)
         return True, "Vision schema allineato"
 
-    if os.getenv("TIMMY_VISION_SKIP_SCHEMA_CHECK", "0").lower() in {"1", "true", "yes", "on"}:
-        return True, "Vision schema check bypassed (TIMMY_VISION_SKIP_SCHEMA_CHECK)"
     repo_root = Path(__file__).resolve().parents[2]
     schema_path = _resolve_schema_path(repo_root)
 

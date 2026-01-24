@@ -13,7 +13,7 @@ def _dummy_client(output_text: str = "ok"):
     class DummyResponses:
         def create(self, **_: object) -> SimpleNamespace:
             return SimpleNamespace(
-                output=[SimpleNamespace(type="output_text", text=SimpleNamespace(value=output_text))],
+                output_text=output_text,
                 status="completed",
                 id="dummy-run",
                 model="dummy-model",

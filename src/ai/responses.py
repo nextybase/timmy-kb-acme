@@ -137,48 +137,14 @@ def _build_invocation_extra(
 
 
 def _extract_output_text(response: Any) -> str:
-    """
-    Estrae il testo da una risposta OpenAI Responses, replicando il pattern usato nel repo.
-    """
-    # Alcune versioni dell'SDK espongono direttamente l'output aggregato.
     direct_text = getattr(response, "output_text", None)
     if isinstance(direct_text, str) and direct_text.strip():
         return direct_text.strip()
-
-    output = getattr(response, "output", None)
-    if not isinstance(output, list):
-        raise ConfigError(
-            "Risposta Responses non valida: attributo 'output' mancante o non-list.",
-            code="responses.output.invalid",
-            component="responses",
-        )
-
-    def _maybe_text_from_block(block: Any) -> str | None:
-        if block is None:
-            return None
-        if getattr(block, "type", None) == "output_text":
-            text_obj = getattr(block, "text", None)
-            value = getattr(text_obj, "value", None) if text_obj is not None else None
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        return None
-
-    for item in output:
-        # Forma A: output=[OutputText(...)]
-        direct = _maybe_text_from_block(item)
-        if direct:
-            return direct
-
-        # Forma B (più comune): output=[Message(content=[OutputText(...), ...]), ...]
-        if getattr(item, "type", None) == "message":
-            content = getattr(item, "content", None)
-            if isinstance(content, list):
-                for block in content:
-                    nested = _maybe_text_from_block(block)
-                    if nested:
-                        return nested
-
-    raise ConfigError("Responses completata ma nessun testo nel messaggio di output.")
+    raise ConfigError(
+        "Responses output_text missing or empty; upgrade required.",
+        code="responses.output.invalid",
+        component="responses",
+    )
 
 
 def _mask_metadata(metadata: Optional[Mapping[str, Any]]) -> Dict[str, Any]:

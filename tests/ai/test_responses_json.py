@@ -20,12 +20,7 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 class _FakeResponse:
     def __init__(self, text: str):
-        self.output = [
-            SimpleNamespace(
-                type="output_text",
-                text=SimpleNamespace(value=text),
-            )
-        ]
+        self.output_text = text
         self.status = "completed"
         self.id = "fake"
 
