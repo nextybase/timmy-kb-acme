@@ -4,7 +4,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
+
 import pipeline.env_utils as envu
+
+pytestmark = pytest.mark.unit
 
 
 def test_env_lazy_load(monkeypatch, tmp_path: Path):

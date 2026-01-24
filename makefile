@@ -2,7 +2,7 @@
 PY ?= python3
 PIP := $(PY) -m pip
 
-.PHONY: env-check install pre-commit lint type type-pyright test test-vscode fmt fmt-check ci qa-safe ci-safe bench
+.PHONY: env-check install pre-commit lint type type-pyright test test-fast test-arch test-full test-vscode fmt fmt-check ci qa-safe ci-safe bench
 
 env-check:
 	@if [ -n "$$ALLOW_GLOBAL" ]; then \
@@ -49,8 +49,16 @@ type-pyright: env-check
 	  npx -y pyright; \
 	fi
 
-test: env-check
-	@$(PY) -m pytest -ra
+test: test-full
+
+test-fast: env-check
+	@$(PY) tools/test_runner.py fast
+
+test-arch: env-check
+	@$(PY) tools/test_runner.py arch
+
+test-full: env-check
+	@$(PY) tools/test_runner.py full
 
 # Esegue pytest usando esplicitamente il venv locale (se presente)
 test-vscode:

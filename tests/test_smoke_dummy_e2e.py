@@ -7,6 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 
 def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
     """

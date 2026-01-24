@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
+import pytest
+
 from semantic.tags_validator import validate_tags_reviewed
+
+pytestmark = pytest.mark.unit
 
 
 def test_validate_ok_minimal():

@@ -30,7 +30,9 @@ class NormalizedIndexRecord:
 
 def write_index(index_path: Path, records: Iterable[NormalizedIndexRecord]) -> None:
     payload = [record.__dict__ for record in records]
-    safe_write_text(index_path, json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8", atomic=True)
+    safe_write_text(
+        index_path, json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8", atomic=True
+    )
 
 
 def load_index(repo_root_dir: Path, index_path: Path) -> list[dict[str, object]]:

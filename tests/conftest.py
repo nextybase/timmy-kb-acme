@@ -22,6 +22,7 @@ SRC_ROOT = REPO_ROOT / "src"
 import sqlite3
 
 from pipeline.env_constants import WORKSPACE_ROOT_ENV
+from pipeline.file_utils import safe_write_text
 
 try:
     import pipeline  # type: ignore # noqa: F401
@@ -78,6 +79,60 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         filename = Path(str(fspath)).name if fspath is not None else ""
         if filename in stub_ui_test_files:
             item.add_marker(marker)
+
+    arch_files = {
+        "test_architecture_paths.py",
+        "test_imports.py",
+        "test_preflight_import_safety.py",
+    }
+    contract_files = {
+        "test_chunk_record_contract.py",
+    }
+    tools_files = {
+        "test_gen_dummy_kb_import_safety.py",
+        "test_tools_check.py",
+    }
+    for item in items:
+        nodeid = getattr(item, "nodeid", "") or ""
+        nodeid_norm = nodeid.replace("\\", "/")
+        fspath = getattr(item, "fspath", None)
+        filename = Path(str(fspath)).name if fspath is not None else ""
+
+        if nodeid_norm.startswith("tests/architecture/") or nodeid_norm.startswith("tests/encoding/"):
+            item.add_marker(pytest.mark.arch)
+        elif filename in arch_files or filename.startswith("test_architecture_"):
+            item.add_marker(pytest.mark.arch)
+
+        if (
+            nodeid_norm.startswith("tests/contract/")
+            or filename.startswith("test_contract_")
+            or filename in contract_files
+        ):
+            item.add_marker(pytest.mark.contract)
+
+        if nodeid_norm.startswith("tests/ui/") or filename.startswith("test_ui_"):
+            item.add_marker(pytest.mark.ui)
+
+        if nodeid_norm.startswith("tests/semantic/") or filename.startswith("test_semantic_"):
+            item.add_marker(pytest.mark.semantic)
+
+        if nodeid_norm.startswith("tests/pipeline/") or filename.startswith("test_pipeline_"):
+            item.add_marker(pytest.mark.pipeline)
+
+        if nodeid_norm.startswith("tests/ai/") or filename.startswith("test_ai_"):
+            item.add_marker(pytest.mark.ai)
+
+        if nodeid_norm.startswith("tests/retriever/") or filename.startswith("test_retriever_"):
+            item.add_marker(pytest.mark.retriever)
+
+        if nodeid_norm.startswith("tests/scripts/"):
+            item.add_marker(pytest.mark.scripts)
+
+        if nodeid_norm.startswith("tests/tools/") or filename.startswith("test_tools_") or filename in tools_files:
+            item.add_marker(pytest.mark.tools)
+
+        if nodeid_norm.startswith("tests/e2e/"):
+            item.add_marker(pytest.mark.e2e)
 
 
 @pytest.fixture(autouse=True)
@@ -161,9 +216,6 @@ def pytest_runtest_setup(item):  # type: ignore[no-untyped-def]
     if os.name != "nt":
         return
     _apply_safe_stdio_flush()
-
-
-from pipeline.file_utils import safe_write_text
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -300,6 +352,33 @@ def _bool_env(name: str, default: bool) -> bool:
     if v is None:
         return default
     return v not in {"0", "false", "False", ""}
+
+
+@pytest.fixture(scope="session")
+def sandbox_workspace(tmp_path_factory):
+    """
+    Workspace minimale per test unit: evita il costo di gen_dummy_kb.
+    Usato solo per l'ambiente stabile (cwd + clients_db).
+    """
+    base_parent = tmp_path_factory.mktemp("kb-sandbox")
+    base = Path(base_parent) / f"timmy-kb-{DUMMY_SLUG}"
+    base.mkdir(parents=True, exist_ok=True)
+
+    clients_db_file = base / "clients_db" / "clients.yaml"
+    if not clients_db_file.exists():
+        safe_write_text(clients_db_file, "clients: []\n")
+
+    cfg = base / "config" / "config.yaml"
+    if not cfg.exists():
+        safe_write_text(cfg, "vision_statement_pdf: config/VisionStatement.pdf\n")
+
+    return {
+        "base": base,
+        "config": cfg,
+        "clients_db_file": clients_db_file,
+        "clients_db_dir": clients_db_file.parent,
+        "slug": DUMMY_SLUG,
+    }
 
 
 @pytest.fixture(scope="session")
@@ -451,7 +530,7 @@ def dummy_logger():
 
 
 @pytest.fixture(autouse=True)
-def _stable_env(monkeypatch, dummy_workspace):
+def _stable_env(monkeypatch, sandbox_workspace):
     """
     Ambiente coerente per tutti i test:
     - evita che i test tocchino output/ reale del repo
@@ -469,10 +548,10 @@ def _stable_env(monkeypatch, dummy_workspace):
 
     # Evita side-effect su output/ del repo: se qualche codice usa default,
     # meglio che punti alla base temporanea del dummy.
-    monkeypatch.chdir(dummy_workspace["base"])
+    monkeypatch.chdir(sandbox_workspace["base"])
 
     # Reindirizza il registry clienti verso la copia temporanea
-    repo_root_override = Path(dummy_workspace["base"])
+    repo_root_override = Path(sandbox_workspace["base"])
     clients_db_dir = Path("clients_db")
     clients_db_file = Path("clients.yaml")
     try:

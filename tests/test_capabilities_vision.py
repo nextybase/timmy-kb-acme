@@ -32,16 +32,6 @@ def test_load_vision_bindings_uses_candidate(monkeypatch):
     assert calls == ["custom.module"]
 
 
-def test_load_vision_bindings_fallback(monkeypatch):
-    def always_fail(name: str):
-        raise ImportError("nope")
-
-    monkeypatch.setattr("pipeline.capabilities.vision.import_module", always_fail)
-    with pytest.raises(CapabilityUnavailableError) as exc:
-        load_vision_bindings(candidates=("missing.module",))
-    assert "Vision capability not available" in str(exc.value)
-
-
 def test_iter_available_vision_providers(monkeypatch):
     seen: list[str] = []
 

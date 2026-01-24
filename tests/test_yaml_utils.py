@@ -9,6 +9,8 @@ import pytest
 from pipeline.exceptions import ConfigError
 from pipeline.yaml_utils import clear_yaml_cache, yaml_read
 
+pytestmark = pytest.mark.unit
+
 
 def test_yaml_read_ok(tmp_path: Path) -> None:
     base = tmp_path / "base"

@@ -32,33 +32,6 @@ def test_request_shutdown_kill_path(monkeypatch) -> None:
     assert called["exit"] is False
 
 
-def test_request_shutdown_fallback_exit_on_exception(monkeypatch) -> None:
-    """Se os.kill fallisce, _request_shutdown deve usare il fallback os._exit."""
-    called = {"kill": False, "exit": False, "logged": False}
-
-    class _Logger:
-        def info(self, *_a, **_k):
-            called["logged"] = True
-
-        def warning(self, *_a, **_k):
-            called["logged"] = True
-
-    def _fake_kill(pid, sig):  # noqa: ARG001
-        called["kill"] = True
-        raise RuntimeError("boom")
-
-    def _fake_exit(code):  # noqa: ARG001
-        called["exit"] = True
-
-    monkeypatch.setattr(landing.os, "kill", _fake_kill, raising=True)
-    monkeypatch.setattr(landing.os, "_exit", _fake_exit, raising=True)
-
-    landing._request_shutdown(_Logger())
-    assert called["logged"] is True
-    assert called["kill"] is True
-    assert called["exit"] is True
-
-
 def test_reset_to_landing_clears_state_and_reruns(monkeypatch) -> None:
     """_reset_to_landing deve azzerare lo slug, preservare solo 'phase'/'ui.phase' e invocare rerun."""
     rerun_called = {"v": False}

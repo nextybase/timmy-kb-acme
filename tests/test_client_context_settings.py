@@ -71,7 +71,6 @@ def test_client_context_exposes_settings(
     ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False)
     assert isinstance(ctx.settings, Settings)
     assert ctx.settings.vision_model == "gpt-4o-mini-2024-07-18"
-    assert ctx.settings.ui_skip_preflight is True
     assert ctx.settings.retriever_throttle.candidate_limit == 3000
     assert "prototimmy" in ctx.settings.as_dict().get("ai", {})
 

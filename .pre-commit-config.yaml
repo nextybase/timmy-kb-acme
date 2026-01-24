@@ -178,6 +178,21 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
+      - id: pytest-fast
+        name: pytest-fast (FAST inner-loop)
+        entry: python tools/test_runner.py fast
+        language: system
+        pass_filenames: false
+        files: ^(src|tests)/.*$
+        stages: [pre-commit]
+
+      - id: pytest-full
+        name: pytest-full (FULL suite)
+        entry: python tools/test_runner.py full
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
       - id: no-secrets-in-yaml
         name: Forbid inline secrets in config YAML
         entry: python tools/smoke/check_yaml_secrets.py

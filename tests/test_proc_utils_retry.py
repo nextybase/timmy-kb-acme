@@ -8,6 +8,8 @@ import pytest
 from pipeline import proc_utils
 from pipeline.proc_utils import CmdContext, CmdError, cmd_attempt, retry_loop
 
+pytestmark = pytest.mark.unit
+
 
 class DummyLogger:
     def __init__(self) -> None:

@@ -26,7 +26,7 @@ Si adotta una separazione fisica e logica:
 ## Alternative considerate
 
 - **Continuare con `raw/` come input semantico**: scartato per rischio di regressioni e difficolta di audit.
-- **Conversione on-the-fly dentro la semantica**: scartata per mancanza di isolamento e versioning del trasformer.
+- **Conversione on-the-fly dentro la semantica**: scartata per mancanza di isolamento e versioning del transformer.
 
 ## Revisione
 

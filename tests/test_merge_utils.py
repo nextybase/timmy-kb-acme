@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import pytest
+
 from ui.utils.merge import deep_merge_dict
+
+pytestmark = pytest.mark.unit
 
 
 def test_deep_merge_preserves_nested() -> None:

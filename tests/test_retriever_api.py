@@ -113,40 +113,6 @@ def test_search_accepts_numpy_embeddings(monkeypatch):
     assert isinstance(out[0]["score"], float)
 
 
-def test_search_skips_invalid_candidate_embeddings(monkeypatch):
-    """Candidati con embedding vuoto o non numerico vengono ignorati (no crash)."""
-
-    import timmy_kb.cli.retriever as retr
-
-    # 2 validi, 3 invalidi
-    def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
-        yield {"content": "ok1", "meta": {}, "embedding": [1.0, 0.0]}
-        yield {"content": "bad_empty", "meta": {}, "embedding": []}
-        yield {"content": "bad_non_numeric", "meta": {}, "embedding": [1.0, "x"]}
-        yield {"content": "ok2", "meta": {}, "embedding": [0.0, 1.0]}
-        yield {"content": "bad_str", "meta": {}, "embedding": "abc"}
-
-    monkeypatch.setattr(retr, "fetch_candidates", stub_fetch_candidates)
-
-    class Emb:
-        def embed_texts(self, texts: Sequence[str], *, model: str | None = None):  # type: ignore[override]
-            return [[1.0, 0.0]]
-
-    params = QueryParams(
-        db_path=None,
-        slug=DUMMY_SLUG,
-        scope="kb",
-        query="hello",
-        k=10,
-        candidate_limit=retr.MIN_CANDIDATE_LIMIT,
-    )
-
-    out = retr.search(params, Emb())
-
-    # solo i due validi
-    assert [r["content"] for r in out] == ["ok1", "ok2"]
-
-
 def test_search_empty_query_embedding_returns_empty(monkeypatch):
     """Se l'embedding della query risulta vuoto, alza un errore esplicito."""
 

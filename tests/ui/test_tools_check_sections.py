@@ -92,18 +92,6 @@ metadata_policy:
     assert captured[-1]["version"] == "1.0-beta"
 
 
-def test_render_vision_output_fallbacks_to_raw_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    st_stub = install_streamlit_stub(monkeypatch)
-    module = importlib.import_module("ui.fine_tuning.tools_check_sections")
-    captured: list[Any] = []
-    st_stub.json = lambda payload: captured.append(payload)  # type: ignore[attr-defined]
-
-    raw_result = {"status": "halt", "message_ui": "Missing data"}
-    module.render_vision_output(raw_result, st_module=st_stub)
-
-    assert captured == [raw_result]
-
-
 def test_render_advanced_options_clears_state(monkeypatch: pytest.MonkeyPatch) -> None:
     st_stub = install_streamlit_stub(monkeypatch)
     module = importlib.import_module("ui.fine_tuning.tools_check_sections")

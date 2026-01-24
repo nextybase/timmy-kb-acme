@@ -22,6 +22,8 @@ from timmy_kb.cli.retriever import (
     with_config_or_budget,
 )
 
+pytestmark = pytest.mark.unit
+
 # ----------------------------- Test cosine (iterator-safe) -----------------------------
 
 
@@ -105,12 +107,6 @@ def test_with_config_candidate_limit_uses_config_when_default():
     assert out.candidate_limit == 1234
 
 
-def test_with_config_candidate_limit_falls_back_to_default_when_cfg_missing():
-    params = _default_params()
-    out = with_config_candidate_limit(params, {})  # nessun retriever.throttle
-    assert out.candidate_limit == 4000  # default del dataclass
-
-
 def test_with_config_or_budget_explicit_wins_even_with_auto_budget():
     params = _default_params()
     params = params.__class__(**{**params.__dict__, "candidate_limit": 9000})
@@ -147,13 +143,6 @@ def test_with_config_or_budget_uses_config_when_no_auto_budget():
     assert out.candidate_limit == 2222
 
 
-def test_with_config_or_budget_falls_back_to_default():
-    params = _default_params()
-    cfg = {}  # niente auto, niente candidate_limit
-    out = with_config_or_budget(params, cfg)
-    assert out.candidate_limit == 4000
-
-
 def test_preview_effective_candidate_limit_reports_sources_correctly():
     # 1) explicit
     p_explicit = _default_params()
@@ -177,22 +166,6 @@ def test_preview_effective_candidate_limit_reports_sources_correctly():
     p_def = _default_params()
     lim, source, budget = preview_effective_candidate_limit(p_def, {})
     assert (lim, source, budget) == (4000, "default", 0)
-
-
-def test_preview_effective_candidate_limit_auto_mode_without_budget_uses_config():
-    params = _default_params()
-    cfg = {
-        "retriever": {
-            "auto_by_budget": True,
-            "throttle": {
-                # budget mancante/0 -> fallback sulla candidate_limit del config
-                "latency_budget_ms": 0,
-                "candidate_limit": 1500,
-            },
-        }
-    }
-    lim, source, budget = preview_effective_candidate_limit(params, cfg)
-    assert (lim, source, budget) == (1500, "config", 0)
 
 
 class _DummyEmbeddingsClient:

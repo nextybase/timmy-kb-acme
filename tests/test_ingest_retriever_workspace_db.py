@@ -9,6 +9,7 @@ import pytest
 
 import timmy_kb.cli.ingest as ingest_mod
 from kb_db import fetch_candidates
+from pipeline.file_utils import safe_write_text
 from storage.kb_store import KbStore
 from timmy_kb.cli.ingest import ingest_path
 from timmy_kb.cli.retriever import MIN_CANDIDATE_LIMIT, QueryParams, search
@@ -26,18 +27,30 @@ class DummyEmbeddingsClient:
         return vectors
 
 
-def test_ingest_and_search_use_workspace_db(dummy_workspace: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
-    base: Path = dummy_workspace["base"]
-    slug: str = dummy_workspace["slug"]
-    ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
+def _prepare_workspace(base: Path) -> None:
+    (base / "config").mkdir(parents=True, exist_ok=True)
+    (base / "raw").mkdir(parents=True, exist_ok=True)
     (base / "normalized").mkdir(parents=True, exist_ok=True)
+    (base / "book").mkdir(parents=True, exist_ok=True)
+    (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "logs").mkdir(parents=True, exist_ok=True)
+    safe_write_text(base / "config" / "config.yaml", "{}\n")
+    safe_write_text(base / "book" / "README.md", "# Dummy KB\n")
+    safe_write_text(base / "book" / "SUMMARY.md", "* [Intro](intro.md)\n")
+
+
+def test_ingest_and_search_use_workspace_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    slug = "dummy"
+    base = tmp_path / f"timmy-kb-{slug}"
+    ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
+    _prepare_workspace(base)
 
     store = KbStore.for_slug(slug=slug, repo_root_dir=base)
     db_path = store.effective_db_path()
     assert base / "semantic" in db_path.parents or "semantic" in db_path.parts
 
     content_path = base / "raw" / "note_ingest.md"
-    content_path.write_text("Questo è un contenuto di prova per Timmy KB.", encoding="utf-8")
+    safe_write_text(content_path, "Questo è un contenuto di prova per Timmy KB.")
 
     def _no_chunk(text: str, *, target_tokens: int = 400, overlap_tokens: int = 40) -> list[str]:
         return [text]
@@ -74,17 +87,17 @@ def test_ingest_and_search_use_workspace_db(dummy_workspace: dict[str, Path], mo
     assert results[0].get("meta", {}).get("slug") == slug
 
 
-def test_lineage_persisted_in_ingest_path(dummy_workspace: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
-    base: Path = dummy_workspace["base"]
-    slug: str = dummy_workspace["slug"]
+def test_lineage_persisted_in_ingest_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    slug = "dummy"
+    base = tmp_path / f"timmy-kb-{slug}"
     ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
-    (base / "normalized").mkdir(parents=True, exist_ok=True)
+    _prepare_workspace(base)
 
     store = KbStore.for_slug(slug=slug, repo_root_dir=base)
     db_path = store.effective_db_path()
 
     content_path = base / "raw" / "lineage_ingest.md"
-    content_path.write_text("# Title\ncontenuto lineage", encoding="utf-8")
+    safe_write_text(content_path, "# Title\ncontenuto lineage")
 
     def _single_chunk(text: str, *, target_tokens: int = 400, overlap_tokens: int = 40) -> list[str]:
         return [text]

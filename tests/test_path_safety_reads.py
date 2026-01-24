@@ -7,6 +7,8 @@ import pytest
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within_and_resolve
 
+pytestmark = pytest.mark.unit
+
 
 def test_resolve_allows_file_within_base(tmp_path: Path) -> None:
     base = tmp_path / "base"

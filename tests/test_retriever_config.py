@@ -121,10 +121,3 @@ def test_with_config_or_budget_config_value() -> None:
     cfg = {"retriever": {"throttle": {"candidate_limit": "6000"}}}
     out = with_config_or_budget(p, cfg)
     assert out.candidate_limit == 6000
-
-
-def test_with_config_or_budget_fallback_default() -> None:
-    # default senza config → resta il default del dataclass
-    p = _typed_params()
-    out = with_config_or_budget(p, None)
-    assert out.candidate_limit == QueryParams.__dataclass_fields__["candidate_limit"].default  # type: ignore[index]

@@ -7,6 +7,8 @@ import pytest
 
 import pipeline.env_utils as envu
 
+pytestmark = pytest.mark.unit
+
 
 def test_get_env_var_loads_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange: create a temporary .env with a variable not present in process env

@@ -5,6 +5,10 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 
 def test_safe_write_text_passes_fsync(monkeypatch, tmp_path):
     ui = importlib.import_module("src.ui.utils.core")

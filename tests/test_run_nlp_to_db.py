@@ -2,6 +2,8 @@
 
 import pytest
 
+pytestmark = [pytest.mark.slow, pytest.mark.pipeline]
+
 from pipeline.exceptions import PathTraversalError
 from storage.tags_store import ensure_schema_v2, get_conn
 from storage.tags_store import save_doc_terms as real_save_doc_terms

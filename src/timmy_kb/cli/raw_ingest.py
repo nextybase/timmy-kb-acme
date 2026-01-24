@@ -16,10 +16,15 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.ingest.provider import build_ingest_provider
 from pipeline.logging_utils import get_structured_logger
-from pipeline.observability_config import get_observability_settings
-from pipeline.path_utils import ensure_valid_slug, ensure_within_and_resolve, iter_safe_paths, open_for_read_bytes_selfguard
-from pipeline.raw_transform_service import STATUS_FAIL, STATUS_OK, STATUS_SKIP, get_default_raw_transform_service
 from pipeline.normalized_index import NormalizedIndexRecord, write_index
+from pipeline.observability_config import get_observability_settings
+from pipeline.path_utils import (
+    ensure_valid_slug,
+    ensure_within_and_resolve,
+    iter_safe_paths,
+    open_for_read_bytes_selfguard,
+)
+from pipeline.raw_transform_service import STATUS_FAIL, STATUS_OK, STATUS_SKIP, get_default_raw_transform_service
 from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
 from storage import decision_ledger
 from timmy_kb.versioning import build_env_fingerprint

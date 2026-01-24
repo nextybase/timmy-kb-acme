@@ -11,6 +11,8 @@ from pipeline import file_utils
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import strip_extended_length_path
 
+pytestmark = pytest.mark.unit
+
 # Nota: i test seguono una simulazione best-effort; non abbiamo crash reali di processo ma
 # verifichiamo che l'utility resti robusta in scenari di concorrenza e errori controllati.
 

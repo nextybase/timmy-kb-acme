@@ -11,6 +11,8 @@ from pipeline.exceptions import PathTraversalError
 from pipeline.file_utils import safe_write_bytes
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
 
+pytestmark = pytest.mark.unit
+
 
 def test_ensure_within_ok_fail(tmp_path: Path) -> None:
     base = tmp_path / "sandbox"

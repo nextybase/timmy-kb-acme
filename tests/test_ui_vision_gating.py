@@ -38,6 +38,7 @@ def test_ui_gating_hash_file_and_block_then_force(
     import ui.services.vision_provision as VP
 
     base = dummy_workspace["base"]
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
     pdf = dummy_workspace["vision_pdf"]
     slug = dummy_workspace["slug"]
     mapping_path = dummy_workspace["semantic_mapping"]
@@ -151,6 +152,7 @@ def test_vision_mode_smoke_skips_without_touching_hash(
     monkeypatch.setattr(runner, "_provision_from_vision_yaml_with_config", _boom)
 
     base = dummy_workspace["base"]
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
     pdf = dummy_workspace["vision_pdf"]
     slug = dummy_workspace["slug"]
     hash_path = base / "semantic" / ".vision_hash"
@@ -195,6 +197,8 @@ def test_vision_mode_deep_propagates_failure(
     )
     monkeypatch.setattr(runner, "resolve_vision_config", lambda ctx, override_model=None: config)
     monkeypatch.setattr(runner, "resolve_vision_retention_days", lambda ctx: 7)
+    base = dummy_workspace["base"]
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
 
     with pytest.raises(ConfigError):
         runner.run_vision_with_gating(
