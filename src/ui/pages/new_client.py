@@ -28,7 +28,7 @@ from pipeline.workspace_layout import WorkspaceLayout
 from pipeline.yaml_utils import yaml_read
 from semantic.core import compile_document_to_vision_yaml
 from ui.chrome import header, sidebar
-from ui.clients_store import ClientEntry, set_state, upsert_client
+from ui.clients_store import ClientEntry, get_registry_paths, set_state, upsert_client
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
 from ui.errors import to_user_message
 from ui.imports import getattr_if_callable, import_first
@@ -395,6 +395,64 @@ def _upsert_client_registry(slug: str, client_name: str, *, target_state: Option
         set_state(slug, desired)
 
 
+def _log_registry_failed(slug: str, exc: Exception, *, registry_path: Optional[Path] = None) -> None:
+    payload = {
+        "slug": slug,
+        "type": exc.__class__.__name__,
+        "error": str(exc),
+    }
+    if registry_path is not None:
+        payload["path"] = str(registry_path)
+    LOGGER.error("client_registry_failed", extra=payload)
+
+
+def _register_client_after_vision(slug: str, client_name: str) -> None:
+    try:
+        _, registry_path = get_registry_paths()
+    except Exception as exc:
+        _log_registry_failed(slug, exc)
+        st.error(f"Registry clienti non leggibile per slug={slug}. Causa: {exc}")
+        st.stop()
+        raise
+    try:
+        _upsert_client_registry(slug, client_name, target_state="nuovo")
+    except Exception as exc:
+        _log_registry_failed(slug, exc, registry_path=registry_path)
+        st.error(
+            f"Registry clienti non aggiornabile per slug={slug}. Path: {registry_path}. Causa: {exc}",
+        )
+        st.stop()
+        raise
+    LOGGER.info("client_registry_upserted", extra={"slug": slug, "path": str(registry_path)})  # cspell:ignore upserted
+
+
+def _warn_drive_raw_skipped(
+    slug: str,
+    *,
+    mapping_path: Path,
+    raw_info: Optional[Dict[str, Any]],
+    strict: bool,
+) -> None:
+    if not isinstance(raw_info, dict):
+        return
+    status = raw_info.get("drive_status")
+    if status != "skipped":
+        return
+    reason = str(raw_info.get("drive_reason") or "unknown")
+    payload = {"slug": slug, "reason": reason, "mapping": str(mapping_path)}
+    if strict:
+        LOGGER.error("drive_unavailable_raw_structure_skipped", extra=payload)
+        raise ConfigError(
+            "Drive non disponibile: struttura raw su Drive non creata.",
+            slug=slug,
+            file_path=str(mapping_path),
+        )
+    LOGGER.warning("drive_unavailable_raw_structure_skipped", extra=payload)
+    st.warning(
+        f"Drive non disponibile: struttura raw su Drive non creata. slug={slug} mapping={mapping_path} causa={reason}"
+    )
+
+
 # --------- UI ---------
 header(None)
 sidebar(None)
@@ -656,17 +714,49 @@ if current_phase == UI_PHASE_INIT:
                 try:
                     step_progress = st.progress(0, text="Preparazione Vision...")
                     progress.progress(80, text="Eseguo Vision...")
-                    run_vision(
+                    vision_result = run_vision(
                         ctx,
                         slug=s,
                         pdf_path=_client_pdf_path(s, layout=layout),
                         logger=ui_logger,
                         preview_prompt=preview_prompt,
                     )
+                    vision_payload = vision_result if isinstance(vision_result, dict) else {}
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Vision completata.", state="complete")
                     step_progress.progress(100, text="Vision completata.")
                     progress.progress(100, text="Vision completata.")
+                    _warn_drive_raw_skipped(
+                        s,
+                        mapping_path=_semantic_dir_client(s, layout=layout) / "semantic_mapping.yaml",
+                        raw_info=cast(Optional[Dict[str, Any]], vision_payload.get("raw_structure")),
+                        strict=is_beta_strict(),
+                    )
+                    old_root = ctx.repo_root_dir
+                    invalidate_client_context(s)
+                    ctx_reloaded = get_client_context(s, require_env=False, force_reload=True)
+                    if ctx_reloaded.repo_root_dir != old_root:
+                        msg = (
+                            f"Workspace root drift rilevato per slug={s}. "
+                            f"Prima: {old_root} | Dopo: {ctx_reloaded.repo_root_dir}. "
+                            "Controlla REPO_ROOT_DIR / WORKSPACE_ROOT_DIR e riavvia l'app."
+                        )
+                        LOGGER.error(
+                            "workspace_root_drift",
+                            extra={
+                                "slug": s,
+                                "old_root": str(old_root),
+                                "new_root": str(ctx_reloaded.repo_root_dir),
+                            },
+                        )
+                        st.error(msg)
+                        st.stop()
+                    ctx = ctx_reloaded
+                    if getattr(ctx, "repo_root_dir", None) is None:
+                        raise ConfigError(
+                            "Context privo di repo_root_dir dopo Vision.",
+                            slug=s,
+                        )
                 except Exception as exc:
                     # Mapping unico degli errori (PR-C)
                     try:
@@ -692,7 +782,7 @@ if current_phase == UI_PHASE_INIT:
                                     status.update(label="Forzo rigenerazione Vision...", state="running")
                                 step_progress.progress(10, text="Forzo rigenerazione Vision...")
                                 progress.progress(80, text="Eseguo Vision (forzata)...")
-                                run_vision(
+                                forced_result = run_vision(
                                     ctx,
                                     slug=s,
                                     pdf_path=_client_pdf_path(s, layout=layout),
@@ -700,15 +790,48 @@ if current_phase == UI_PHASE_INIT:
                                     preview_prompt=preview_prompt,
                                     force=True,
                                 )
+                                forced_payload = forced_result if isinstance(forced_result, dict) else {}
                                 if status is not None and hasattr(status, "update"):
                                     status.update(label="Vision completata (forzata).", state="complete")
                                 step_progress.progress(100, text="Vision completata (forzata).")
                                 progress.progress(100, text="Vision completata.")
+                                _warn_drive_raw_skipped(
+                                    s,
+                                    mapping_path=_semantic_dir_client(s, layout=layout) / "semantic_mapping.yaml",
+                                    raw_info=cast(Optional[Dict[str, Any]], forced_payload.get("raw_structure")),
+                                    strict=is_beta_strict(),
+                                )
+                                old_root = ctx.repo_root_dir
+                                invalidate_client_context(s)
+                                ctx_reloaded = get_client_context(s, require_env=False, force_reload=True)
+                                if ctx_reloaded.repo_root_dir != old_root:
+                                    msg = (
+                                        f"Workspace root drift rilevato per slug={s}. "
+                                        f"Prima: {old_root} | Dopo: {ctx_reloaded.repo_root_dir}. "
+                                        "Controlla REPO_ROOT_DIR / WORKSPACE_ROOT_DIR e riavvia l'app."
+                                    )
+                                    LOGGER.error(
+                                        "workspace_root_drift",
+                                        extra={
+                                            "slug": s,
+                                            "old_root": str(old_root),
+                                            "new_root": str(ctx_reloaded.repo_root_dir),
+                                        },
+                                    )
+                                    st.error(msg)
+                                    st.stop()
+                                if getattr(ctx_reloaded, "repo_root_dir", None) is None:
+                                    raise ConfigError(
+                                        "Context privo di repo_root_dir dopo Vision.",
+                                        slug=s,
+                                    )
                                 if _exists_semantic_files(s, layout=layout):
+                                    display_name = (name or "").strip() or s
+                                    _register_client_after_vision(s, display_name)
                                     set_slug(s)
                                     st.session_state[slug_state_key] = s
                                     st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
-                                    st.session_state["client_name"] = name or ""
+                                    st.session_state["client_name"] = display_name
                                 return True
                             except Exception as inner:
                                 try:
@@ -732,15 +855,14 @@ if current_phase == UI_PHASE_INIT:
 
             # 6) Controllo file semantici e avanzamento fase
             if _exists_semantic_files(s, layout=layout):
-                entry = ClientEntry(slug=s, nome=(name or "").strip() or s, stato="nuovo")
-                upsert_client(entry)
-                set_state(s, "nuovo")
+                display_name = (name or "").strip() or s
+                _register_client_after_vision(s, display_name)
 
                 # Aggiorna contesto UI: mostra Step 2
                 set_slug(s)
                 st.session_state[slug_state_key] = s
                 st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
-                st.session_state["client_name"] = name or ""
+                st.session_state["client_name"] = display_name
                 st.success("Workspace inizializzato e YAML generati.")
             else:
                 st.error("Vision terminata ma i file attesi non sono presenti in semantic/.")

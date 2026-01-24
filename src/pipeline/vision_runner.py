@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
+from pipeline.beta_flags import is_beta_strict
 from pipeline.drive.upload import create_drive_structure_from_names
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
@@ -87,29 +88,144 @@ def _sha256_of_file(repo_root_dir: Path, path: Path, chunk_size: int = 8192) -> 
     return h.hexdigest()
 
 
-def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_dir: Path, slug: str) -> None:
+def _sha256_text(value: str) -> str:
+    h = hashlib.sha256()
+    h.update(value.encode("utf-8"))
+    return h.hexdigest()
+
+
+def _areas_sha256(areas: list[str]) -> str:
+    normalized = [a.strip() for a in areas if isinstance(a, str) and a.strip()]
+    joined = "\n".join(normalized)
+    return _sha256_text(joined)
+
+
+def _mapping_metrics(repo_root_dir: Path, mapping_path: Path) -> dict[str, Any]:
+    safe_mapping = ensure_within_and_resolve(repo_root_dir, mapping_path)
+    text = read_text_safe(repo_root_dir, safe_mapping, encoding="utf-8")
+    payload = text.encode("utf-8")
+    return {
+        "mapping_path": str(safe_mapping),
+        "mapping_sha256": _sha256_text(text),
+        "mapping_size": len(payload),
+    }
+
+
+def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_dir: Path, slug: str) -> Dict[str, Any]:
     layout = WorkspaceLayout.from_workspace(Path(repo_root_dir), slug=slug)
     mapping_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "semantic_mapping.yaml")
-    categories = raw_categories_from_semantic_mapping(
-        semantic_dir=layout.semantic_dir,
-        mapping_path=Path(mapping_path),
-    )
+    try:
+        categories = raw_categories_from_semantic_mapping(
+            semantic_dir=layout.semantic_dir,
+            mapping_path=Path(mapping_path),
+        )
+    except ConfigError as exc:
+        logger.error(
+            "vision_mapping_missing_areas",
+            extra={"slug": slug, "path": str(mapping_path), "error": str(exc)},
+        )
+        raise ConfigError(str(exc), slug=slug, file_path=str(mapping_path)) from exc
     if not categories:
-        raise ConfigError("semantic_mapping.yaml non contiene aree valide: impossibile materializzare raw/")
+        logger.error(
+            "vision_mapping_missing_areas",
+            extra={"slug": slug, "path": str(mapping_path), "error": "empty_areas"},
+        )
+        raise ConfigError(
+            f"semantic_mapping.yaml non contiene aree valide: {mapping_path}",
+            slug=slug,
+            file_path=str(mapping_path),
+        )
+    areas_hash = _areas_sha256(categories)
+    logger.info(
+        "raw_structure_areas_extracted",
+        extra={"slug": slug, "count": len(categories), "sha256": areas_hash},
+    )
     for name in categories:
         target = ensure_within_and_resolve(layout.raw_dir, layout.raw_dir / name)
         target.mkdir(parents=True, exist_ok=True)
-    if getattr(ctx, "drive_raw_folder_id", None):
-        create_drive_structure_from_names(
+    logger.info(
+        "raw_structure_local_created",
+        extra={"slug": slug, "count": len(categories), "sha256": areas_hash},
+    )
+
+    drive_parent = getattr(ctx, "drive_raw_folder_id", None)
+    strict_mode = is_beta_strict()
+    if not drive_parent:
+        reason = "drive_raw_folder_id_missing"
+        log_payload = {"slug": slug, "reason": reason}
+        if strict_mode:
+            logger.error("raw_structure_drive_skipped", extra=log_payload)
+            raise ConfigError(
+                "Drive raw folder id mancante: impossibile materializzare raw su Drive.",
+                slug=slug,
+                file_path=str(mapping_path),
+            )
+        logger.warning("raw_structure_drive_skipped", extra=log_payload)
+        logger.info(
+            "vision.raw_structure.done",
+            extra={"local_count": len(categories), "drive_enabled": False, "drive_status": "skipped"},
+        )
+        return {
+            "areas": categories,
+            "areas_sha256": areas_hash,
+            "local_count": len(categories),
+            "drive_status": "skipped",
+            "drive_reason": reason,
+            "drive_count": 0,
+        }
+
+    try:
+        created = create_drive_structure_from_names(
             ctx=ctx,
             folder_names=categories,
-            parent_folder_id=ctx.drive_raw_folder_id,
+            parent_folder_id=drive_parent,
             log=logger,
         )
+    except Exception as exc:
+        reason = "drive_error"
+        log_payload = {"slug": slug, "reason": reason, "error": str(exc)}
+        if strict_mode:
+            logger.error("raw_structure_drive_skipped", extra=log_payload)
+            raise ConfigError(
+                "Drive non disponibile: impossibile materializzare raw su Drive.",
+                slug=slug,
+                file_path=str(mapping_path),
+            ) from exc
+        logger.warning("raw_structure_drive_skipped", extra=log_payload)
+        logger.info(
+            "vision.raw_structure.done",
+            extra={"local_count": len(categories), "drive_enabled": True, "drive_status": "skipped"},
+        )
+        return {
+            "areas": categories,
+            "areas_sha256": areas_hash,
+            "local_count": len(categories),
+            "drive_status": "skipped",
+            "drive_reason": reason,
+            "drive_count": 0,
+        }
+
+    logger.info(
+        "raw_structure_drive_created",
+        extra={"slug": slug, "count": len(created)},
+    )
     logger.info(
         "vision.raw_structure.done",
-        extra={"local_count": len(categories), "drive_enabled": bool(getattr(ctx, "drive_raw_folder_id", None))},
+        extra={"local_count": len(categories), "drive_enabled": True, "drive_status": "created"},
     )
+    return {
+        "areas": categories,
+        "areas_sha256": areas_hash,
+        "local_count": len(categories),
+        "drive_status": "created",
+        "drive_reason": "",
+        "drive_count": len(created),
+    }
+
+
+def materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_dir: Path, slug: str) -> Dict[str, Any]:
+    """Wrapper pubblico per materializzare la struttura raw/ da semantic_mapping.yaml."""
+    return _materialize_raw_structure(ctx, logger, repo_root_dir=repo_root_dir, slug=slug)
 
 
 def _load_last_hash(repo_root_dir: Path) -> Optional[Dict[str, Any]]:
@@ -230,7 +346,17 @@ def run_vision_with_gating(
     except HaltError:
         raise
 
-    _materialize_raw_structure(ctx, logger, repo_root_dir=Path(repo_root_dir), slug=slug)
+    try:
+        metrics = _mapping_metrics(Path(repo_root_dir), _artifacts_paths(repo_root_dir)["mapping"])
+    except Exception as exc:
+        raise ConfigError(
+            f"semantic_mapping.yaml non leggibile: {exc}",
+            slug=slug,
+            file_path=str(_artifacts_paths(repo_root_dir)["mapping"]),
+        ) from exc
+    logger.info("vision_completed", extra={"slug": slug, **metrics})
+
+    raw_info = _materialize_raw_structure(ctx, logger, repo_root_dir=Path(repo_root_dir), slug=slug)
 
     _save_hash(repo_root_dir, digest=digest, model=resolved_config.model)
     logger.info("ui.vision.update_hash", extra={"slug": slug, "file_path": str(_hash_sentinel(repo_root_dir))})
@@ -239,7 +365,8 @@ def run_vision_with_gating(
         "skipped": False,
         "hash": digest,
         "mapping": cast(str, result.get("mapping", "")),
+        "raw_structure": raw_info,
     }
 
 
-__all__ = ["run_vision_with_gating", "HaltError"]
+__all__ = ["run_vision_with_gating", "HaltError", "materialize_raw_structure"]
