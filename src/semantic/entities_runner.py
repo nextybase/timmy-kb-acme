@@ -60,9 +60,7 @@ def run_doc_entities_pipeline(
         cfg = load_semantic_config(workspace_root)
     except Exception as exc:  # pragma: no cover
         if strict_spacy:
-            err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
-            err_type = type(exc).__name__
-            raise ConfigError(f"Config semantica non caricabile: {err_type}: {err_line}") from exc
+            raise ConfigError("Config semantica non caricabile.") from exc
         log.warning("semantic.entities.config_failed", extra={"error": str(exc)})
         return {"entities_written": 0}
 
@@ -81,9 +79,7 @@ def run_doc_entities_pipeline(
         matcher = make_phrase_matcher(nlp, lexicon)
     except Exception as exc:
         if strict_spacy:
-            err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
-            err_type = type(exc).__name__
-            raise ConfigError(f"SpaCy non disponibile: {err_type}: {err_line}") from exc
+            raise ConfigError("SpaCy non disponibile.") from exc
         log.warning("semantic.entities.spacy_unavailable", extra={"error": str(exc)})
         return {"entities_written": 0}
 
@@ -102,10 +98,8 @@ def run_doc_entities_pipeline(
             text = _read_document_text(pdf_path)
         except Exception as exc:
             if strict_spacy:
-                err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
-                err_type = type(exc).__name__
                 raise ConfigError(
-                    f"Lettura PDF fallita: {err_type}: {err_line}",
+                    "Lettura PDF fallita.",
                     file_path=pdf_path,
                 ) from exc
             log.warning("semantic.entities.pdf_read_failed", extra={"file": str(pdf_path), "error": str(exc)})
@@ -139,10 +133,8 @@ def run_doc_entities_pipeline(
         hits_count = len(records)
     except Exception as exc:
         if strict_spacy:
-            err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
-            err_type = type(exc).__name__
             raise ConfigError(
-                f"Salvataggio doc_entities fallito: {err_type}: {err_line}",
+                "Salvataggio doc_entities fallito.",
                 file_path=db_path,
             ) from exc
         log.warning("semantic.entities.save_failed", extra={"error": str(exc)})

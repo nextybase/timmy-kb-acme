@@ -411,7 +411,7 @@ class ClientContext:
         except ConfigError:
             raise
         except Exception as e:  # pragma: no cover
-            raise ConfigError(f"Errore lettura config cliente: {e}", file_path=config_path, slug=slug) from e
+            raise ConfigError("Errore lettura config cliente.", file_path=config_path, slug=slug) from e
 
     @staticmethod
     def _load_env(*, require_env: bool) -> Dict[str, Any]:

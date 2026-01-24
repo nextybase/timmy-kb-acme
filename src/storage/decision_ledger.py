@@ -119,7 +119,7 @@ def open_ledger(layout: WorkspaceLayout) -> sqlite3.Connection:
         conn = sqlite3.connect(db_path)
     except sqlite3.Error as exc:
         raise ConfigError(
-            f"Errore apertura ledger: {exc}",
+            "Errore apertura ledger.",
             slug=layout.slug,
             file_path=db_path,
         ) from exc

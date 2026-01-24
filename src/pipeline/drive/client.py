@@ -262,12 +262,12 @@ def get_drive_service(context: Any) -> Any:
             scopes=["https://www.googleapis.com/auth/drive"],
         )
     except Exception as e:  # noqa: BLE001
-        raise ConfigError(f"Caricamento credenziali service account fallito: {e}") from e
+        raise ConfigError("Caricamento credenziali service account fallito.") from e
 
     try:
         service = build("drive", "v3", credentials=creds, cache_discovery=False)
     except Exception as e:  # noqa: BLE001
-        raise ConfigError(f"Creazione client Google Drive fallita: {e}") from e
+        raise ConfigError("Creazione client Google Drive fallita.") from e
 
     local_logger.debug(
         "drive.client.built",

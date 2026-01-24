@@ -126,7 +126,7 @@ def start_preview(
             "adapter.preview.start_failed",
             extra={"container": cname, "port": port, "error": str(e), "slug": getattr(context, "slug", None)},
         )
-        raise ConfigError(f"Avvio preview fallito: {e}")
+        raise ConfigError("Avvio preview fallito.")
 
 
 def stop_preview(logger: logging.Logger, *, container_name: Optional[str]) -> None:

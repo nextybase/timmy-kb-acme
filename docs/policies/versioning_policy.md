@@ -56,6 +56,8 @@ PR obbligatorie verso `main`. Protezioni:
 ## 6) Rilascio tipico
 
 1. Verifica lint/test e guide aggiornate.
+   - **Prerequisito runtime (Beta 1.0):** Responses richiede `output_text` dal client OpenAI.
+     Assicurare SDK OpenAI pin/compatibile con l'API Responses e il campo `output_text`.
 2. Aggiorna `CHANGELOG.md`.
 3. Bump versione nei doc.
 4. Merge in `main`.

@@ -59,7 +59,7 @@ def ensure_dotenv_loaded(*, strict: bool = True, allow_fallback: bool = False) -
                     extra={"error": str(exc), "path": str(env_path)},
                 )
                 return False
-            raise ConfigError(f"Caricamento .env fallito: {exc}", file_path=str(env_path)) from exc
+            raise ConfigError("Caricamento .env fallito.", file_path=str(env_path)) from exc
         _LOGGER.info(
             "env.loaded",
             extra={"loaded": bool(loaded), "path": str(env_path)},
@@ -122,7 +122,7 @@ def ensure_dotenv_loaded(*, strict: bool = True, allow_fallback: bool = False) -
                 extra={"error": str(exc), "path": str(env_path)},
             )
             return False
-        raise ConfigError(f"Caricamento .env fallito: {exc}", file_path=str(env_path)) from exc
+        raise ConfigError("Caricamento .env fallito.", file_path=str(env_path)) from exc
     finally:
         # Non ripristiniamo le variabili mancanti: se .env le fornisce, sono necessarie
         # per i flussi reali (Drive/GitHub) e devono rimanere disponibili nel processo.

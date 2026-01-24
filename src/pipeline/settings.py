@@ -627,7 +627,7 @@ class Settings:
         except ConfigError:
             raise
         except Exception as exc:
-            raise ConfigError(str(exc), file_path=str(self.config_path)) from exc
+            raise ConfigError("Errore lettura segreto da ENV.", file_path=str(self.config_path)) from exc
 
     def get_secret(self, name: str, *, required: bool = False, default: Optional[str] = None) -> Optional[str]:
         """Recupera un segreto delegando a env_utils con load idempotente del .env."""

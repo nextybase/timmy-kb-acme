@@ -51,9 +51,9 @@ def _load_spacy(model_name: str) -> Any:
         return spacy.load(model_name)
     except OSError as exc:  # pragma: no cover
         # Modello non installato
-        raise ConfigError(f"Modello SpaCy '{model_name}' non disponibile: {exc}") from exc
+        raise ConfigError(f"Modello SpaCy '{model_name}' non disponibile.") from exc
     except Exception as exc:  # pragma: no cover
-        raise ConfigError(f"Errore nel caricamento di SpaCy: {exc}") from exc
+        raise ConfigError("Errore nel caricamento di SpaCy.") from exc
 
 
 @lru_cache(maxsize=2)
@@ -94,7 +94,7 @@ def _build_phrase_matcher(nlp: Any, lexicon: Iterable[LexiconEntry]) -> Tuple[An
     try:
         from spacy.matcher import PhraseMatcher
     except Exception as exc:  # pragma: no cover
-        raise ConfigError(f"SpaCy matcher non disponibile: {exc}") from exc
+        raise ConfigError("SpaCy matcher non disponibile.") from exc
 
     matcher = PhraseMatcher(nlp.vocab, attr="LOWER")
     label_map: Dict[int, Tuple[str, str]] = {}
@@ -184,7 +184,7 @@ def extract_spacy_tags(
     except Exception as exc:
         err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
         err_type = type(exc).__name__
-        raise ConfigError(f"SpaCy fallito (model={model_name}): {err_type}: {err_line}") from exc
+        raise ConfigError(f"SpaCy fallito (model={model_name}).") from exc
 
     candidates: Dict[str, Dict[str, Any]] = {}
     for md_path in iter_safe_paths(

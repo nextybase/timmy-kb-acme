@@ -125,11 +125,11 @@ def write_tags_review_stub_from_csv(
                     break
 
     except FileNotFoundError as e:
-        raise ConfigError(f"CSV dei tag non trovato: {e}", file_path=str(csv_path)) from e
+        raise ConfigError("CSV dei tag non trovato.", file_path=str(csv_path)) from e
     except ConfigError:
         raise
     except Exception as e:
-        raise ConfigError(f"Errore durante la lettura del CSV: {e}", file_path=str(csv_path)) from e
+        raise ConfigError("Errore durante la lettura del CSV.", file_path=str(csv_path)) from e
 
     # Persistenza su SQLite (usiamo lo stesso dict logico del vecchio YAML)
     semantic_dir.mkdir(parents=True, exist_ok=True)
@@ -270,7 +270,7 @@ def write_tags_reviewed_from_nlp_db(
                     }
                 )
     except Exception as exc:
-        raise ConfigError(f"Impossibile esportare i tag dal DB NLP: {exc}", file_path=str(db_path)) from exc
+        raise ConfigError("Impossibile esportare i tag dal DB NLP.", file_path=str(db_path)) from exc
 
     payload: dict[str, Any] = {
         "version": version,

@@ -67,7 +67,7 @@ def _fsync_file(fd: int, *, path: Optional[Path] = None, allow_fallback: bool = 
                 extra={"file_path": str(path) if path else None, "error": str(exc)},
             )
             return
-        raise ConfigError(f"fsync(file) fallito: {exc}", file_path=str(path) if path else None) from exc
+        raise ConfigError("fsync(file) fallito.", file_path=str(path) if path else None) from exc
 
 
 def _fsync_dir(dir_path: Path, *, allow_fallback: bool = False) -> None:
@@ -90,7 +90,7 @@ def _fsync_dir(dir_path: Path, *, allow_fallback: bool = False) -> None:
                 extra={"dir_path": str(dir_path), "error": str(exc)},
             )
             return
-        raise ConfigError(f"fsync(dir) fallito: {exc}", file_path=str(dir_path)) from exc
+        raise ConfigError("fsync(dir) fallito.", file_path=str(dir_path)) from exc
 
 
 def _extended_str(path: Path) -> str:
@@ -112,7 +112,7 @@ def create_lock_file(path: Path, *, payload: str = "", mode: int = 0o600) -> Non
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except Exception as exc:
-        raise ConfigError(f"Impossibile creare la directory padre del lock: {exc}", file_path=str(path)) from exc
+        raise ConfigError("Impossibile creare la directory padre del lock.", file_path=str(path)) from exc
 
     lock_str = _extended_str(path)
     try:
@@ -120,14 +120,14 @@ def create_lock_file(path: Path, *, payload: str = "", mode: int = 0o600) -> Non
     except FileExistsError:
         raise
     except OSError as exc:
-        raise ConfigError(f"Impossibile creare il lock file: {exc}", file_path=str(path)) from exc
+        raise ConfigError("Impossibile creare il lock file.", file_path=str(path)) from exc
 
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             if payload:
                 handle.write(payload)
     except Exception as exc:
-        raise ConfigError(f"Scrittura lock file fallita: {exc}", file_path=str(path)) from exc
+        raise ConfigError("Scrittura lock file fallita.", file_path=str(path)) from exc
 
 
 def remove_lock_file(path: Path) -> None:
@@ -135,7 +135,7 @@ def remove_lock_file(path: Path) -> None:
     try:
         Path(path).unlink(missing_ok=True)
     except OSError as exc:
-        raise ConfigError(f"Impossibile rimuovere il lock file: {exc}", file_path=str(path)) from exc
+        raise ConfigError("Impossibile rimuovere il lock file.", file_path=str(path)) from exc
 
 
 def safe_write_text(
@@ -160,7 +160,7 @@ def safe_write_text(
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        raise ConfigError(f"Impossibile creare la directory padre: {e}", file_path=str(path)) from e
+        raise ConfigError("Impossibile creare la directory padre.", file_path=str(path)) from e
 
     parent_path = path.parent
     path_str = _extended_str(path)
@@ -178,7 +178,7 @@ def safe_write_text(
             _post_write_hooks(path)
             return
         except Exception as e:
-            raise ConfigError(f"Scrittura file fallita: {e}", file_path=str(path)) from e
+            raise ConfigError("Scrittura file fallita.", file_path=str(path)) from e
 
     # Modalita atomica: temp + replace
     tmp_path: Optional[Path] = None
@@ -209,7 +209,7 @@ def safe_write_text(
                 tmp_path.unlink(missing_ok=True)
         except Exception:
             pass
-        raise ConfigError(f"Scrittura atomica fallita: {e}", file_path=str(path)) from e
+        raise ConfigError("Scrittura atomica fallita.", file_path=str(path)) from e
 
 
 def safe_write_bytes(
@@ -224,7 +224,7 @@ def safe_write_bytes(
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        raise ConfigError(f"Impossibile creare la directory padre: {e}", file_path=str(path)) from e
+        raise ConfigError("Impossibile creare la directory padre.", file_path=str(path)) from e
 
     parent_path = path.parent
     path_str = _extended_str(path)
@@ -242,7 +242,7 @@ def safe_write_bytes(
             _post_write_hooks(path)
             return
         except Exception as e:
-            raise ConfigError(f"Scrittura file (bytes) fallita: {e}", file_path=str(path)) from e
+            raise ConfigError("Scrittura file (bytes) fallita.", file_path=str(path)) from e
 
     tmp_path: Optional[Path] = None
     try:
@@ -269,7 +269,7 @@ def safe_write_bytes(
                 tmp_path.unlink(missing_ok=True)
         except Exception:
             pass
-        raise ConfigError(f"Scrittura atomica (bytes) fallita: {e}", file_path=str(path)) from e
+        raise ConfigError("Scrittura atomica (bytes) fallita.", file_path=str(path)) from e
 
 
 def safe_append_text(
@@ -322,7 +322,7 @@ def safe_append_text(
             continue
         except OSError as exc:
             raise ConfigError(
-                f"Impossibile creare il lock file: {exc}",
+                "Impossibile creare il lock file.",
                 file_path=str(resolved),
             ) from exc
 
@@ -337,7 +337,7 @@ def safe_append_text(
                 _fsync_dir(parent_path, allow_fallback=fsync_dir_allow_fallback)
         except Exception as exc:
             raise ConfigError(
-                f"Append fallito: {exc}",
+                "Append fallito.",
                 file_path=str(resolved),
             ) from exc
     finally:

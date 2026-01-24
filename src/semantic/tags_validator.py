@@ -38,7 +38,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
         data = yaml_read(base, safe_path) or {}  # <-- passa anche base
         return data if isinstance(data, dict) else {}
     except Exception as e:  # pragma: no cover
-        raise ConfigError(f"Impossibile leggere/parsing YAML: {e}", file_path=str(safe_path)) from e
+        raise ConfigError("Impossibile leggere/parsing YAML.", file_path=str(safe_path)) from e
 
 
 def validate_tags_reviewed(data: dict[str, Any]) -> dict[str, Any]:
@@ -143,6 +143,6 @@ def write_validation_report(report_path: Path, result: dict[str, Any], logger: l
             atomic=True,
         )
     except Exception as e:
-        raise ConfigError(f"Errore scrittura report: {e}", file_path=str(safe_path)) from e
+        raise ConfigError("Errore scrittura report.", file_path=str(safe_path)) from e
 
     logger.info("semantic.tags_validation.report_written", extra={"file_path": str(safe_path)})

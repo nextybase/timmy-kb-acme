@@ -222,7 +222,7 @@ def run_text_model(
         raise ConfigError("Client OpenAI non supporta l'API Responses.") from exc
     except Exception as exc:
         LOGGER.error("ai.responses.error", extra={"error": str(exc)})
-        raise ConfigError(f"Chiamata Responses fallita: {exc}") from exc
+        raise ConfigError("Chiamata Responses fallita.") from exc
 
     text = _extract_output_text(resp)
     return ResponseText(model=model, text=text, raw=resp)
@@ -465,7 +465,7 @@ def run_json_model(
             extra={"error": str(exc), "kwargs": sorted(request_kwargs.keys())},
         )
         raise ConfigError(
-            f"Chiamata Responses fallita per incompatibilita' SDK/argomenti: {exc}",
+            "Chiamata Responses fallita per incompatibilita' SDK/argomenti.",
             code="responses.request.invalid",
             component="responses",
         ) from exc
@@ -479,7 +479,7 @@ def run_json_model(
         ) from exc
     except Exception as exc:
         LOGGER.error("ai.responses.error", extra={"error": str(exc)})
-        raise ConfigError(f"Chiamata Responses fallita: {exc}") from exc
+        raise ConfigError("Chiamata Responses fallita.") from exc
 
     status = getattr(resp, "status", None)
     if status and status != "completed":
@@ -495,7 +495,7 @@ def run_json_model(
         data = _parse_json_payload(text)
     except Exception as exc:
         LOGGER.error("ai.responses.invalid_json", extra={"error": str(exc), "sample": text[:500]})
-        raise ConfigError(f"Risposta modello non JSON valido: {exc}") from exc
+        raise ConfigError("Risposta modello non JSON valido.") from exc
 
     return ResponseJson(model=model, data=data, raw_text=text, raw=resp)
 

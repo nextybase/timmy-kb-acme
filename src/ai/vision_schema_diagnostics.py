@@ -29,7 +29,7 @@ def _load_vision_schema() -> Dict[str, Any]:
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ConfigError(f"Vision schema JSON non valido: {exc}") from exc
+        raise ConfigError("Vision schema JSON non valido.") from exc
 
 
 def build_vision_schema_diagnostics() -> Dict[str, Any]:

@@ -559,7 +559,7 @@ def open_for_read_bytes_selfguard(p: Path) -> Iterator[BinaryIO]:
     try:
         f = safe_p.open("rb")
     except Exception as e:  # pragma: no cover
-        raise ConfigError(f"Errore apertura file: {e}", file_path=str(safe_p)) from e
+        raise ConfigError("Errore apertura file.", file_path=str(safe_p)) from e
     try:
         yield f
     finally:

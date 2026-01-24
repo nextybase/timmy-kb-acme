@@ -233,7 +233,7 @@ def _load_vision_schema() -> Dict[str, Any]:
         raw = read_text_safe(schema_path.parents[0], schema_path, encoding="utf-8")
         schema = cast(Dict[str, Any], json.loads(raw))
     except json.JSONDecodeError as exc:
-        raise ConfigError(f"Vision schema JSON non valido: {exc}", file_path=str(schema_path)) from exc
+        raise ConfigError("Vision schema JSON non valido.", file_path=str(schema_path)) from exc
 
     if "type" not in schema:
         schema["type"] = "object"
@@ -1090,7 +1090,7 @@ def _call_responses_json(
             _evt("responses.exception"),
             extra={"assistant_id": assistant_id, "error": str(exc)},
         )
-        raise ConfigError(f"Responses API fallita: {exc}") from exc
+        raise ConfigError("Responses API fallita.") from exc
 
     return cast(Dict[str, Any], resp.data)
 

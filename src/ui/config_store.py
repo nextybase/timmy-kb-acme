@@ -89,7 +89,7 @@ def _load_client_config(slug: str) -> tuple[Path, GlobalConfig]:
         if ctx is None:
             ctx = get_client_context(slug, require_env=False)
     except Exception as exc:
-        raise ConfigError(f"Impossibile caricare il contesto per {slug}: {exc}", slug=slug) from exc
+        raise ConfigError(f"Impossibile caricare il contesto per {slug}.", slug=slug) from exc
 
     if ctx.repo_root_dir is None:
         st = get_streamlit()

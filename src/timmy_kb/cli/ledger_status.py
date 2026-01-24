@@ -29,7 +29,7 @@ def _open_readonly(db_path: Path, *, slug: str) -> sqlite3.Connection:
     try:
         return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     except sqlite3.Error as exc:
-        raise ConfigError(f"Errore apertura ledger: {exc}", slug=slug, file_path=db_path) from exc
+        raise ConfigError("Errore apertura ledger.", slug=slug, file_path=db_path) from exc
 
 
 def _load_latest_run(conn: sqlite3.Connection) -> dict[str, str] | None:

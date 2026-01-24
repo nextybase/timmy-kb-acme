@@ -39,7 +39,7 @@ def _ensure_within_and_resolve(base: Path | str, p: Path | str) -> Path:
         base_r = Path(base).resolve()
         p_r = Path(p).resolve()
     except Exception as e:  # pragma: no cover
-        raise ConfigError(f"Impossibile risolvere i path: {e}", file_path=str(p)) from e
+        raise ConfigError("Impossibile risolvere i path.", file_path=str(p)) from e
     try:
         p_r.relative_to(base_r)
     except Exception:
@@ -88,13 +88,13 @@ def yaml_read(
     try:
         text = safe_p.read_text(encoding=encoding)
     except Exception as e:
-        raise ConfigError(f"Errore lettura file: {e}", file_path=str(safe_p)) from e
+        raise ConfigError("Errore lettura file.", file_path=str(safe_p)) from e
 
     try:
         data = yaml.safe_load(text)
     except Exception as e:
         # YAML malformato
-        raise ConfigError(f"YAML malformato: {e}", file_path=str(safe_p)) from e
+        raise ConfigError("YAML malformato.", file_path=str(safe_p)) from e
 
     if use_cache:
         try:

@@ -32,7 +32,7 @@ def load_entities() -> Dict[str, Any]:
     try:
         text = read_text_safe(path.parent, path, encoding="utf-8")
     except Exception as exc:  # pragma: no cover - I/O failure
-        raise ConfigError(f"Impossibile leggere entities.yaml: {exc}") from exc
+        raise ConfigError("Impossibile leggere entities.yaml.") from exc
 
     data = yaml.safe_load(text) or {}
     if not isinstance(data, dict):

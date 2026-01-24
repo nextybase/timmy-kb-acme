@@ -49,6 +49,6 @@ def invoke_kgraph_messages(
     except ConfigError:
         raise
     except Exception as exc:  # pragma: no cover - protezione extra
-        raise ConfigError(f"Responses API fallita per assistant {cfg.assistant_id}: {exc}") from exc
+        raise ConfigError(f"Responses API fallita per assistant {cfg.assistant_id}.") from exc
 
     return resp.data

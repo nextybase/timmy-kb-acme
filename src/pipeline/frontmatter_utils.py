@@ -67,7 +67,7 @@ def parse_frontmatter(md_text: str, *, allow_fallback: bool = False) -> Tuple[Di
             return {}, md_text
         if isinstance(exc, ConfigError):
             raise
-        raise ConfigError(f"Errore parse frontmatter: {exc}") from exc
+        raise ConfigError("Errore parse frontmatter.") from exc
 
 
 def dump_frontmatter(meta: Mapping[str, Any], *, allow_fallback: bool = False) -> str:
@@ -77,7 +77,7 @@ def dump_frontmatter(meta: Mapping[str, Any], *, allow_fallback: bool = False) -
         return "---\n" + yaml.safe_dump(dict(meta), sort_keys=False, allow_unicode=True).strip() + "\n---\n"
     except Exception as exc:
         if not allow_fallback:
-            raise ConfigError(f"Errore dump frontmatter: {exc}") from exc
+            raise ConfigError("Errore dump frontmatter.") from exc
         # Fallback esplicito: serializzazione minima per contesti non-exec.
         lines = ["---"]
         for k, v in meta.items():

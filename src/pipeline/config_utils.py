@@ -253,7 +253,7 @@ def write_client_config_file(context: ClientContext, config: ClientConfigPayload
         yaml_dump = yaml.safe_dump(config_to_dump, sort_keys=False, allow_unicode=True)
         safe_write_text(config_path, yaml_dump, encoding="utf-8", atomic=True)
     except Exception as exc:
-        raise ConfigError(f"Errore scrittura config {config_path}: {exc}") from exc
+        raise ConfigError(f"Errore scrittura config {config_path}.") from exc
 
     logger.info(
         "pipeline.config_utils.config_written",
@@ -367,7 +367,7 @@ def merge_client_config_from_template(
     except FileNotFoundError:
         return config_path
     except Exception as exc:  # pragma: no cover
-        raise ConfigError(f"Errore lettura template config {template_path}: {exc}") from exc
+        raise ConfigError(f"Errore lettura template config {template_path}.") from exc
 
     template_data: dict[str, Any] = dict(template_payload or {})
 
@@ -389,7 +389,7 @@ def merge_client_config_from_template(
                 if isinstance(current, dict):
                     existing_data = dict(current)
             except Exception as exc:
-                raise ConfigError(f"Errore lettura config esistente {config_path}: {exc}") from exc
+                raise ConfigError(f"Errore lettura config esistente {config_path}.") from exc
 
     preserve_set = set(preserve_keys)
 
@@ -413,7 +413,7 @@ def merge_client_config_from_template(
         serialized = yaml.safe_dump(merged, sort_keys=False, allow_unicode=True)
         safe_write_text(config_path, serialized, encoding="utf-8", atomic=True)
     except Exception as exc:  # pragma: no cover
-        raise ConfigError(f"Errore scrittura config {config_path}: {exc}") from exc
+        raise ConfigError(f"Errore scrittura config {config_path}.") from exc
 
     if log:
         log.info(
@@ -476,7 +476,7 @@ def update_config_with_drive_ids(
 
             config_raw = yaml_read(config_path.parent, config_path) or {}
         except Exception as e:
-            raise ConfigError(f"Errore lettura config {config_path}: {e}") from e
+            raise ConfigError(f"Errore lettura config {config_path}.") from e
 
         if not isinstance(config_raw, dict):
             raise ConfigError("Config YAML non valido.")
@@ -494,7 +494,7 @@ def update_config_with_drive_ids(
                 extra={"config_path": str(config_path)},
             )
     except Exception as e:
-        raise ConfigError(f"Errore scrittura config {config_path}: {e}") from e
+        raise ConfigError(f"Errore scrittura config {config_path}.") from e
     _refresh_context_settings(context)
 
 
