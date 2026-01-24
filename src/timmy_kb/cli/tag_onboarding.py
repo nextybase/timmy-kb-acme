@@ -133,6 +133,14 @@ def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
     return decision_ledger.NORMATIVE_FAIL, decision_ledger.STOP_CODE_UNEXPECTED_ERROR
 
 
+def _deny_rationale(exc: BaseException) -> str:
+    if isinstance(exc, ConfigError):
+        return "deny_config_error"
+    if isinstance(exc, PipelineError):
+        return "deny_pipeline_error"
+    return "deny_unexpected_error"
+
+
 def _is_beta_strict() -> bool:
     flag = os.getenv("TIMMY_BETA_STRICT", "").strip().lower()
     return flag in {"1", "true", "yes", "on"}
@@ -740,7 +748,7 @@ def tag_onboarding_main(
                     actor="cli.tag_onboarding",
                     evidence_refs=evidence_refs,
                     stop_code=stop_code,
-                    rationale=_summarize_error(exc),
+                    rationale=_deny_rationale(exc),
                 ),
             )
         except Exception as ledger_exc:

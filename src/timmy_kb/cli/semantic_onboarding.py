@@ -82,7 +82,6 @@ def _build_evidence_refs(
     outcome: str,
     tag_kg_effective: str | None = None,
     exit_code: int | None = None,
-    error_summary: str | None = None,
 ) -> list[str]:
     # Se abbiamo un esito sul KG (built/skipped), lo materializziamo nell'effective
     effective_final = dict(effective)
@@ -101,8 +100,6 @@ def _build_evidence_refs(
         refs.append(f"path:{normalized_dir}")
     if exit_code is not None:
         refs.append(f"exit_code:{int(exit_code)}")
-    if error_summary:
-        refs.append(f"error:{error_summary}")
     if tag_kg_effective is not None:
         refs.append(f"tag_kg:{tag_kg_effective}")
     return refs
@@ -333,7 +330,6 @@ def main() -> int:
                                 effective=effective,
                                 outcome=_deny_rationale(exc),
                                 exit_code=code,
-                                error_summary=original_error,
                             ),
                             stop_code=stop_code,
                             rationale=_deny_rationale(exc),
@@ -384,7 +380,6 @@ def main() -> int:
                                 effective=effective,
                                 outcome="deny_unexpected_error",
                                 exit_code=code,
-                                error_summary=original_error,
                             ),
                             stop_code=decision_ledger.STOP_CODE_UNEXPECTED_ERROR,
                             rationale="deny_unexpected_error",

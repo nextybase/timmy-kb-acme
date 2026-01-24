@@ -59,6 +59,25 @@ Code fences, prefixes, suffixes, or tolerant parsing MUST NOT be accepted.
 The `Goal N` format MUST be present and parsable.
 Its absence MUST cause hard-fail.
 
+**I-9 -- Normative Ledger is non-diagnostic**
+Decision Records are **normative** and MUST remain **low-entropy**.
+They MUST NOT persist diagnostic/free-text content derived from runtime exceptions
+or environment-specific error messages.
+
+Allowed in Decision Records:
+- stable `stop_code` values (required for BLOCK/FAIL),
+- stable `actor` identifiers,
+- stable `gate_name` / `from_state` / `to_state`,
+- deterministic `evidence_refs[]` identifiers (artifact IDs, gate IDs, rule IDs),
+- deterministic `rationale` labels.
+
+Forbidden in Decision Records:
+- exception strings, exception summaries, stack traces,
+- host/path/environment-dependent error text,
+- any non-deterministic free text used as a substitute for `stop_code`.
+
+Diagnostic details MUST be emitted only via structured logs/events.
+
 ---
 
 ## 2bis. Capabilities (Core vs Optional adapters)
@@ -77,6 +96,17 @@ Optional adapter prerequisites (Drive):
 - `--dry-run` and local modes are first-class and do not depend on Drive.
 
 ---
+
+## 2ter. Strict Mode and Dummy/Stub Requests
+
+In Beta 1.0, strict-only execution forbids shim paths that force dummy/stub generation.
+
+- If a user requests dummy/stub behavior while strict mode is active, the system MUST NOT
+  generate stubs.
+- If a user attempts to **force** dummy/stub behavior under strict mode, execution MUST:
+  - emit a Decision Record with verdict **BLOCK**,
+  - include a stable `stop_code` (e.g. `STRICT_MODE_VIOLATION`),
+  - terminate with a deterministic non-zero exit.
 
 ## 3. Input Validity Rules
 

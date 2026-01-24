@@ -210,6 +210,14 @@ def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
     return decision_ledger.NORMATIVE_FAIL, decision_ledger.STOP_CODE_UNEXPECTED_ERROR
 
 
+def _deny_rationale(exc: BaseException) -> str:
+    if isinstance(exc, ConfigError):
+        return "deny_config_error"
+    if isinstance(exc, PipelineError):
+        return "deny_pipeline_error"
+    return "deny_unexpected_error"
+
+
 def _create_local_structure(context: ClientContext, logger: logging.Logger, *, client_name: str) -> Path:
     """Crea raw/, book/, config/ e scrive config.yaml minimale. Restituisce il path di config."""
     bootstrap_client_workspace(context)
@@ -582,7 +590,7 @@ def pre_onboarding_main(
                     actor="cli.pre_onboarding",
                     evidence_refs=_build_evidence_refs(layout),
                     stop_code=stop_code,
-                    rationale=_summarize_error(exc),
+                    rationale=_deny_rationale(exc),
                 ),
             )
         except Exception as ledger_exc:
