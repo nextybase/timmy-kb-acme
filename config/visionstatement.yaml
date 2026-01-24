@@ -1,7 +1,7 @@
 version: 1
 metadata:
   source_pdf_path: C:\Users\User\clienti\timmy-kb-acme\config\VisionStatement.pdf
-  source_pdf_sha256: 7a87c5a7eff6a1be47875474d06e16dd086d1adc6f02c604b732350f68f2b1d5
+  source_pdf_sha256: 7a87c5a7eff6a1be47875474d06e16dd086d1adc6f02c604b732350f68f2b1d5 # pragma: allowlist secret
 content:
   pages:
   - 'Vision Statement di NeXT

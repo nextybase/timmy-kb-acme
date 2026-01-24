@@ -57,7 +57,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         "test_manage_cleanup_component.py",
         "test_manage_drive.py",
         "test_manage_modal_save.py",
-        "test_manage_probe_raw.py",
+        "test_manage_probe_normalized.py",
         "test_manage_tags_regression.py",
         "test_new_client_config.py",
         "test_new_client_flow.py",

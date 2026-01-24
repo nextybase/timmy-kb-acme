@@ -23,7 +23,7 @@ def _semantics_visible(groups: dict[str, list[gating.PageSpec]]) -> bool:
 
 
 @pytest.mark.parametrize(
-    ("slug", "raw_ready", "tagging_ready", "expected"),
+    ("slug", "normalized_ready", "tagging_ready", "expected"),
     [
         ("dummy", True, True, True),
         ("dummy", False, True, False),
@@ -31,20 +31,20 @@ def _semantics_visible(groups: dict[str, list[gating.PageSpec]]) -> bool:
         (None, False, False, False),
     ],
 )
-def test_visible_page_specs_hides_semantics_without_raw_or_tagging(
-    slug: Optional[str], raw_ready: bool, tagging_ready: bool, expected: bool, monkeypatch: pytest.MonkeyPatch
+def test_visible_page_specs_hides_semantics_without_normalized_or_tagging(
+    slug: Optional[str], normalized_ready: bool, tagging_ready: bool, expected: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(gating, "get_active_slug", lambda: slug, raising=False)
 
-    def _fake_raw_ready(slug_value: str, **_kwargs: object) -> tuple[bool, Optional[str]]:
+    def _fake_normalized_ready(slug_value: str, **_kwargs: object) -> tuple[bool, Optional[str]]:
         assert slug_value == (slug or slug_value)
-        return raw_ready, None
+        return normalized_ready, None
 
     def _fake_tagging_ready(slug_value: str, **_kwargs: object) -> tuple[bool, Optional[str]]:
         assert slug_value == (slug or slug_value)
         return tagging_ready, None
 
-    monkeypatch.setattr(gating, "raw_ready", _fake_raw_ready, raising=False)
+    monkeypatch.setattr(gating, "normalized_ready", _fake_normalized_ready, raising=False)
     monkeypatch.setattr(gating, "tagging_ready", _fake_tagging_ready, raising=False)
 
     gates = GateState(drive=True, vision=True, tags=True)
@@ -63,7 +63,7 @@ def test_semantics_hidden_logs_once(monkeypatch: pytest.MonkeyPatch) -> None:
     dummy_logger = DummyLogger()
     monkeypatch.setattr(gating, "_LOGGER", dummy_logger, raising=False)
     monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
-    monkeypatch.setattr(gating, "raw_ready", lambda _slug, **_kwargs: (False, None), raising=False)
+    monkeypatch.setattr(gating, "normalized_ready", lambda _slug, **_kwargs: (False, None), raising=False)
     monkeypatch.setattr(gating, "tagging_ready", lambda _slug, **_kwargs: (False, None), raising=False)
 
     gates = GateState(drive=True, vision=True, tags=True)
@@ -128,20 +128,24 @@ def test_gate_capability_manifest_matches_compute_gates(tmp_path, monkeypatch: p
     assert payload["gates"]["tags"]["available"] == gates.tags
 
 
-def test_visible_page_specs_continues_on_raw_ready_error(
+def test_visible_page_specs_continues_on_normalized_ready_error(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     stub = StreamlitStub()
     monkeypatch.setitem(sys.modules, "streamlit", stub)
     monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
-    monkeypatch.setattr(gating, "raw_ready", lambda _slug, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(
+        gating,
+        "normalized_ready",
+        lambda _slug, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
 
     gates = GateState(drive=True, vision=True, tags=True)
     with caplog.at_level(logging.ERROR):
         groups = visible_page_specs(gates)
 
-    assert any("ui.gating.raw_ready_failed" in record.getMessage() for record in caplog.records)
+    assert any("ui.gating.normalized_ready_failed" in record.getMessage() for record in caplog.records)
     assert groups
 
 
@@ -152,7 +156,7 @@ def test_visible_page_specs_continues_on_state_error(
     stub = StreamlitStub()
     monkeypatch.setitem(sys.modules, "streamlit", stub)
     monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
-    monkeypatch.setattr(gating, "raw_ready", lambda _slug, **_kwargs: (True, None), raising=False)
+    monkeypatch.setattr(gating, "normalized_ready", lambda _slug, **_kwargs: (True, None), raising=False)
     monkeypatch.setattr(gating, "tagging_ready", lambda _slug, **_kwargs: (True, None), raising=False)
     monkeypatch.setattr(gating, "get_state", lambda _slug: (_ for _ in ()).throw(RuntimeError("boom")))
 

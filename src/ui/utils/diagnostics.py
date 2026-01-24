@@ -62,10 +62,12 @@ def summarize_workspace_folders(repo_root_dir: Optional[Path]) -> Optional[Dict[
     if repo_root_dir is None:
         return None
     raw = repo_root_dir / "raw"
+    normalized = repo_root_dir / "normalized"
     book = repo_root_dir / "book"
     semantic = repo_root_dir / "semantic"
     return {
         "raw": count_files_with_limit(raw),
+        "normalized": count_files_with_limit(normalized),
         "book": count_files_with_limit(book),
         "semantic": count_files_with_limit(semantic),
     }

@@ -19,7 +19,7 @@ from ui.errors import to_user_message
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
-from ui.utils.workspace import raw_ready, tagging_ready
+from ui.utils.workspace import normalized_ready, tagging_ready
 
 st = get_streamlit()
 
@@ -237,7 +237,7 @@ except Exception as exc:
 else:
     book_dir: Path | None = None
     book_ready = False
-    raw_ok = False
+    normalized_ok = False
     tagging_ok = False
     try:
         book_dir = get_paths(slug)["book"]
@@ -253,12 +253,12 @@ else:
         state_norm = ""
         semantic_ready = False
     try:
-        raw_ok, _ = raw_ready(slug)
+        normalized_ok, _ = normalized_ready(slug)
         tagging_ok, _ = tagging_ready(slug)
     except Exception:
-        raw_ok = False
+        normalized_ok = False
         tagging_ok = False
-    can_preview = raw_ok and tagging_ok and semantic_ready and book_ready
+    can_preview = normalized_ok and tagging_ok and semantic_ready and book_ready
     if not can_preview:
         st.info(
             "Anteprima disponibile dopo l'arricchimento semantico e con la cartella "
@@ -274,7 +274,7 @@ else:
                 "ui.preview.not_ready",
                 extra={
                     "slug": slug,
-                    "raw_ready": raw_ok,
+                    "normalized_ready": normalized_ok,
                     "tagging_ready": tagging_ok,
                     "book_ready": book_ready,
                     "semantic_ready": semantic_ready,

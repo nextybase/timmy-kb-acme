@@ -278,7 +278,7 @@ def build_navigation(
     visible_page_specs,
     get_streamlit,
     get_active_slug,
-    has_raw_pdfs,
+    has_normalized_markdown,
 ) -> None:
     """Costruisce e avvia la navigazione Streamlit (st.navigation + st.Page)."""
     try:
@@ -291,13 +291,13 @@ def build_navigation(
 
     if slug:
         try:
-            has_raw_pdfs(slug)
+            has_normalized_markdown(slug)
         except (
             Exception
         ) as exc:  # pragma: no cover - best effort (non influenza artefatti/gate/ledger/exit code) logging
             logger.warning(
-                "ui.workspace.raw_check_failed",
-                extra={"event": "ui.workspace.raw_check_failed", "slug": slug, "error": str(exc)},
+                "ui.workspace.normalized_check_failed",
+                extra={"event": "ui.workspace.normalized_check_failed", "slug": slug, "error": str(exc)},
             )
 
     _st = get_streamlit()
@@ -344,7 +344,7 @@ def main() -> None:
     from ui.utils.slug import clear_active_slug  # noqa: E402
     from ui.utils.status import status_guard  # noqa: E402
     from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
-    from ui.utils.workspace import has_raw_pdfs  # noqa: E402
+    from ui.utils.workspace import has_normalized_markdown  # noqa: E402
 
     global clear_tab, get_slug_from_qp, get_tab, set_tab
     try:  # noqa: E402
@@ -418,7 +418,7 @@ def main() -> None:
         visible_page_specs=visible_page_specs,
         get_streamlit=_get_streamlit,
         get_active_slug=get_active_slug,
-        has_raw_pdfs=has_raw_pdfs,
+        has_normalized_markdown=has_normalized_markdown,
     )
 
 

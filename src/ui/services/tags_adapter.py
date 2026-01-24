@@ -42,15 +42,15 @@ def _resolve_paths(ctx: ClientContext, slug: str) -> tuple[Path, Path, Path]:
             slug=slug,
         )
 
-    raw_dir = layout.raw_dir
+    normalized_dir = layout.normalized_dir
     semantic_dir = layout.semantic_dir
 
-    raw_path = ensure_within_and_resolve(repo_root_dir, Path(raw_dir))
-    raw_path.mkdir(parents=True, exist_ok=True)
+    normalized_path = ensure_within_and_resolve(repo_root_dir, Path(normalized_dir))
+    normalized_path.mkdir(parents=True, exist_ok=True)
     semantic_path = ensure_within_and_resolve(repo_root_dir, Path(semantic_dir))
     semantic_path.mkdir(parents=True, exist_ok=True)
 
-    return repo_root_dir, raw_path, semantic_path
+    return repo_root_dir, normalized_path, semantic_path
 
 
 def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
@@ -61,7 +61,7 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
     try:
         with st.spinner("Preparazione contesto..."):
             ctx = get_client_context(slug, require_env=False)
-            repo_root_dir, raw_dir, semantic_dir = _resolve_paths(ctx, slug)
+            _, _normalized_dir, semantic_dir = _resolve_paths(ctx, slug)
 
         with st.spinner("Generazione tags_raw.csv (SpaCy/euristica)..."):
             csv_path = build_tags_csv(ctx, svc_logger, slug=slug)

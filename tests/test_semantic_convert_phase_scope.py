@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.exceptions import ConversionError
+from pipeline.file_utils import safe_write_text
 from semantic import convert_service
 from tests.support.contexts import TestClientCtx
 
@@ -24,8 +25,9 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
     (base / "logs").mkdir(parents=True, exist_ok=True)
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
-    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
 
@@ -34,19 +36,11 @@ def test_convert_markdown_logs_done_once_on_success(tmp_path: Path, caplog, monk
     base = tmp_path / "kb"
     raw = base / "raw"
     book = base / "book"
+    normalized = base / "normalized"
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     _write_minimal_layout(base)
-    # Un PDF valido (contenuto irrilevante)
-    (raw / "a.pdf").write_bytes(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-
-    # Falsa conversione: scrive un file di contenuto in book/
-    def _fake_convert(ctx, *, book_dir=None, safe_pdfs=None):  # noqa: ANN001
-        target_dir = Path(book_dir or (ctx.repo_root_dir / "book"))
-        target_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / "alpha.md").write_text("# Alpha\n", encoding="utf-8")
-
-    monkeypatch.setattr(convert_service, "_convert_md", _fake_convert, raising=True)
+    safe_write_text(normalized / "alpha.md", "# Alpha\n", encoding="utf-8", atomic=True)
 
     ctx = _make_ctx(base, raw, book)
     logger = logging.getLogger("test.convert")
@@ -64,16 +58,11 @@ def test_convert_markdown_phase_failed_on_no_output(tmp_path: Path, caplog, monk
     base = tmp_path / "kb"
     raw = base / "raw"
     book = base / "book"
+    normalized = base / "normalized"
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     _write_minimal_layout(base)
-    # Un PDF sicuro ma la conversione non produce contenuti
-    (raw / "b.pdf").write_bytes(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-
-    def _noop_convert(ctx, *, book_dir=None, safe_pdfs=None):  # noqa: ANN001
-        return None
-
-    monkeypatch.setattr(convert_service, "_convert_md", _noop_convert, raising=True)
+    safe_write_text(normalized / "empty.md", "\n", encoding="utf-8", atomic=True)
 
     ctx = _make_ctx(base, raw, book)
     logger = logging.getLogger("test.convert")

@@ -20,6 +20,7 @@ def test_semantic_config_merges_settings(tmp_path: Path) -> None:
     base_dir = tmp_path / "output" / f"timmy-kb-{slug}"
     base_dir.mkdir(parents=True, exist_ok=True)
     (base_dir / "raw").mkdir(parents=True, exist_ok=True)
+    (base_dir / "normalized").mkdir(parents=True, exist_ok=True)
     (base_dir / "logs").mkdir(parents=True, exist_ok=True)
     _write_file(base_dir / "book" / "README.md", "# README\n")
     _write_file(base_dir / "book" / "SUMMARY.md", "# SUMMARY\n")

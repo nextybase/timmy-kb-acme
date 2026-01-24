@@ -7,7 +7,7 @@ Caratteristiche
 ---------------
 - Nessuna dipendenza esterna: funziona anche senza modelli (NER/embeddings).
 - Estrae tag da:
-  1) segmenti di percorso (cartelle significative sotto RAW)
+  1) segmenti di percorso (cartelle significative sotto normalized/)
   2) nome file (tokenizzazione su separatori comuni)
 - Applica stoplist/limiti dal `SemanticConfig` (lang, top_k, score_min, stop_tags).
 - Restituisce un dict per documento + writer CSV pronto all'uso.
@@ -39,7 +39,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_paths
 from pipeline.tracing import start_decision_span
 
 from .config import SemanticConfig
@@ -75,9 +75,9 @@ def _tokenize_filename(name: str) -> list[str]:
     return [t for t in toks if _is_meaningful_token(t)]
 
 
-def _path_segments(rel_from_raw: Path) -> list[str]:
-    """Estrae segmenti di cartella (lowercase) dal path relativo alla RAW."""
-    parts = [p.strip().lower() for p in rel_from_raw.parent.as_posix().split("/") if p.strip()]
+def _path_segments(rel_from_normalized: Path) -> list[str]:
+    """Estrae segmenti di cartella (lowercase) dal path relativo a normalized/."""
+    parts = [p.strip().lower() for p in rel_from_normalized.parent.as_posix().split("/") if p.strip()]
     return [p for p in parts if _is_meaningful_token(p)]
 
 
@@ -119,9 +119,9 @@ def _score_and_rank(
     return tags, weights
 
 
-def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
-    """Itera tutti i PDF sotto la RAW, ricorsivamente, in ordine deterministico."""
-    if not raw_dir.exists():
+def _iter_normalized_files(normalized_dir: Path) -> Iterable[Path]:
+    """Itera tutti i Markdown sotto normalized/, ricorsivamente, in ordine deterministico."""
+    if not normalized_dir.exists():
         return
 
     def _on_skip(candidate: Path, reason: str) -> None:
@@ -133,38 +133,44 @@ def _iter_pdf_files(raw_dir: Path) -> Iterable[Path]:
                 extra={"file_path": str(candidate), "error": reason},
             )
 
-    yield from iter_safe_pdfs(raw_dir, on_skip=_on_skip)
+    yield from iter_safe_paths(
+        normalized_dir,
+        include_dirs=False,
+        include_files=True,
+        suffixes=(".md",),
+        on_skip=_on_skip,
+    )
 
 
 # ------------------------------ API principali ------------------------------- #
 
 
 def _extract_semantic_candidates_heuristic(
-    raw_dir: Path,
+    normalized_dir: Path,
     cfg: SemanticConfig,
     *,
     pdfs: Iterable[Path] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename."""
-    raw_dir = Path(raw_dir).resolve()
+    """Genera candidati dai Markdown sotto `normalized_dir` usando euristiche path/filename."""
+    normalized_dir = Path(normalized_dir).resolve()
     repo_root_dir = Path(cfg.repo_root_dir).resolve()
     perimeter_root = repo_root_dir
 
-    # STRONG guard: RAW deve essere sotto la sandbox del cliente
-    ensure_within(perimeter_root, raw_dir)
+    # STRONG guard: normalized deve essere sotto la sandbox del cliente
+    ensure_within(perimeter_root, normalized_dir)
 
     candidates: dict[str, dict[str, Any]] = {}
 
-    for pdf_path in pdfs or _iter_pdf_files(raw_dir):
+    for pdf_path in pdfs or _iter_normalized_files(normalized_dir):
         try:
             rel_from_base = pdf_path.relative_to(repo_root_dir)
         except ValueError:
-            # se per qualche motivo non è sotto repo_root_dir, usa path relativo da RAW
-            rel_from_base = pdf_path.relative_to(raw_dir)
+            # se per qualche motivo non è sotto repo_root_dir, usa path relativo da normalized
+            rel_from_base = pdf_path.relative_to(normalized_dir)
 
         rel_str = rel_from_base.as_posix()
 
-        path_tags = _path_segments(pdf_path.relative_to(raw_dir))
+        path_tags = _path_segments(pdf_path.relative_to(normalized_dir))
         file_tags = _tokenize_filename(pdf_path.name)
 
         suggested, weights = _score_and_rank(
@@ -237,13 +243,13 @@ def _merge_spacy_candidates(
 
 
 def extract_semantic_candidates(
-    raw_dir: Path,
+    normalized_dir: Path,
     cfg: SemanticConfig,
     *,
     safe_pdfs: Sequence[Path] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Genera candidati dai PDF sotto `raw_dir` usando euristiche path/filename e opzionalmente SpaCy."""
-    candidates = _extract_semantic_candidates_heuristic(raw_dir, cfg, pdfs=safe_pdfs)
+    """Genera candidati dai Markdown sotto `normalized_dir` usando euristiche path/filename e opzionalmente SpaCy."""
+    candidates = _extract_semantic_candidates_heuristic(normalized_dir, cfg, pdfs=safe_pdfs)
 
     backend_env = os.getenv("TAGS_NLP_BACKEND", cfg.nlp_backend).strip().lower()
     if backend_env == "spacy":
@@ -252,7 +258,7 @@ def extract_semantic_candidates(
 
             model_name = os.getenv("SPACY_MODEL", cfg.spacy_model)
             spacy_candidates = extract_spacy_tags(
-                raw_dir,
+                normalized_dir,
                 cfg,
                 model_name=model_name,
                 logger=LOGGER,

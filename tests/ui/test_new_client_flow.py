@@ -13,7 +13,7 @@ import pytest
 
 from pipeline.workspace_layout import WorkspaceLayout
 from tests.ui.streamlit_stub import StreamlitStub
-from tests.ui.test_manage_probe_raw import register_streamlit_runtime
+from tests.ui.test_manage_probe_normalized import register_streamlit_runtime
 
 
 def _make_st() -> StreamlitStub:

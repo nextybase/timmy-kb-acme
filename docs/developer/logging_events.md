@@ -14,8 +14,8 @@ Questi eventi sono emessi con `logger.info/warning` e includono campi `extra` st
   - Record con `meta_json` non valido; il valore viene ignorato.
 - `kb_db.fetch.invalid_embedding_json` extra: `slug`, `scope`
   - Record con `embedding_json` non valido; l'embedding viene ignorato.
-- `ui.gating.sem_hidden` extra: `slug`, `raw_ready`
-  - La pagina Semantica e' stata nascosta perche' `raw/` non contiene PDF validi per lo slug attivo.
+- `ui.gating.sem_hidden` extra: `slug`, `normalized_ready`
+  - La pagina Semantica e' stata nascosta perche' `normalized/` non contiene Markdown validi per lo slug attivo.
 - `cli.pre_onboarding.drive.folder_created` extra: `client_folder_id` (mascherato)
   - Cartella cliente creata su Drive.
 - `cli.pre_onboarding.drive.structure_created` extra: `config_tail`, `created_map_masked`

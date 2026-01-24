@@ -132,8 +132,8 @@ def render_semantic_wizard(
     # Header + DIKW
     st.subheader("Onboarding semantico")
     st.caption(
-        "DIKW: da **Data** (PDF/raw e tag grezzi) a **Information** "
-        "(Markdown chunkizzati con frontmatter); "
+        "DIKW: da **Data** (PDF/raw -> normalized e tag grezzi) a **Information** "
+        "(Markdown in book/ con frontmatter); "
         "**Knowledge** si ottiene arricchendo i frontmatter e generando "
         "README/SUMMARY, quindi la preview è la vista finale."
     )
@@ -150,22 +150,22 @@ def render_semantic_wizard(
 
     _maybe_divider()
 
-    # ---- Passo 1: Converti PDF in Markdown ----
+    # ---- Passo 1: Converti Markdown normalizzati ----
     _render_step_row(
         step_number=1,
         step_id=STEP_CONVERT,
-        title="Converti PDF in Markdown",
+        title="Converti Markdown normalizzati",
         description=(
-            "Trasforma tutti i PDF in `raw/` nei corrispondenti file Markdown "
-            "chunkizzati, con frontmatter base (titolo, categoria, file sorgente, "
+            "Trasforma i Markdown in `normalized/` nei corrispondenti file "
+            "di contenuto in `book/`, con frontmatter base (titolo, categoria, file sorgente, "
             "timestamp, `tags_raw`)."
         ),
-        button_label="Converti PDF in Markdown",
+        button_label="Converti Markdown in book",
         action=actions.get("convert"),
         enabled=client_state_ok,
         slug=slug,
         progress=progress,
-        busy_text="Conversione PDF → Markdown in corso…",
+        busy_text="Conversione normalized → book in corso…",
     )
 
     _maybe_divider()

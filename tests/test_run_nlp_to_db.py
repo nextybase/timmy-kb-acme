@@ -10,28 +10,27 @@ from tests.support.contexts import TestClientCtx
 from timmy_kb.cli.tag_onboarding import _resolve_cli_paths, run_nlp_to_db
 
 
-def test_run_nlp_to_db_processes_nested_pdf(tmp_path, monkeypatch):
-    raw_dir = tmp_path / "raw"
-    pdf_dir = raw_dir / "subdir"
-    pdf_dir.mkdir(parents=True)
-    pdf_path = pdf_dir / "dummy.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4\n% Codex test\n")
+def test_run_nlp_to_db_processes_nested_markdown(tmp_path, monkeypatch):
+    normalized_dir = tmp_path / "normalized"
+    md_dir = normalized_dir / "subdir"
+    md_dir.mkdir(parents=True)
+    md_path = md_dir / "dummy.md"
+    md_path.write_text("dummy text", encoding="utf-8")
 
     db_path = tmp_path / "semantic" / "tags.db"
     ensure_schema_v2(str(db_path))
 
     with get_conn(str(db_path)) as conn:
-        folder_id = upsert_folder(conn, "raw/subdir", "raw")
-        doc_id = upsert_document(conn, folder_id, pdf_path.name, sha256="deadbeef", pages=1)
+        folder_id = upsert_folder(conn, "normalized/subdir", "normalized")
+        doc_id = upsert_document(conn, folder_id, md_path.name, sha256="deadbeef", pages=1)
 
-    captured_path: dict[str, str] = {}
+    captured_text: dict[str, str] = {}
 
-    def fake_extract_text(path: str) -> str:
-        captured_path["value"] = path
-        return "dummy text"
+    def fake_spacy_candidates(text: str, lang: str):
+        captured_text["value"] = text
+        return ["alpha"]
 
-    monkeypatch.setattr("nlp.nlp_keywords.extract_text_from_pdf", fake_extract_text)
-    monkeypatch.setattr("nlp.nlp_keywords.spacy_candidates", lambda text, lang: ["alpha"])
+    monkeypatch.setattr("nlp.nlp_keywords.spacy_candidates", fake_spacy_candidates)
     monkeypatch.setattr("nlp.nlp_keywords.yake_scores", lambda text, top_k, lang: [("alpha", 0.9)])
     monkeypatch.setattr(
         "nlp.nlp_keywords.keybert_scores",
@@ -52,28 +51,27 @@ def test_run_nlp_to_db_processes_nested_pdf(tmp_path, monkeypatch):
 
     monkeypatch.setattr("storage.tags_store.save_doc_terms", fake_save_doc_terms)
 
-    stats = run_nlp_to_db("dummy", raw_dir, str(db_path))
+    stats = run_nlp_to_db("dummy", normalized_dir, str(db_path))
 
-    assert captured_path["value"] == str(pdf_path)
+    assert captured_text["value"] == "dummy text"
     assert captured_doc_ids == [doc_id]
     assert captured_items
     assert stats["doc_terms"] == len(captured_items)
 
 
 def test_run_nlp_to_db_persists_terms_and_folder_terms(tmp_path, monkeypatch):
-    raw_dir = tmp_path / "raw"
-    raw_dir.mkdir()
-    pdf_path = raw_dir / "dummy.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4\n% Codex test\n")
+    normalized_dir = tmp_path / "normalized"
+    normalized_dir.mkdir()
+    md_path = normalized_dir / "dummy.md"
+    md_path.write_text("alpha beta", encoding="utf-8")
 
     db_path = tmp_path / "semantic" / "tags.db"
     ensure_schema_v2(str(db_path))
 
     with get_conn(str(db_path)) as conn:
-        folder_id = upsert_folder(conn, "raw", None)
-        upsert_document(conn, folder_id, pdf_path.name, sha256="feedface", pages=2)
+        folder_id = upsert_folder(conn, "normalized", None)
+        upsert_document(conn, folder_id, md_path.name, sha256="feedface", pages=2)
 
-    monkeypatch.setattr("nlp.nlp_keywords.extract_text_from_pdf", lambda path: "alpha beta")
     monkeypatch.setattr("nlp.nlp_keywords.spacy_candidates", lambda text, lang: ["alpha", "beta"])
     monkeypatch.setattr("nlp.nlp_keywords.yake_scores", lambda text, top_k, lang: [("alpha", 0.9), ("beta", 0.4)])
     monkeypatch.setattr(
@@ -102,7 +100,7 @@ def test_run_nlp_to_db_persists_terms_and_folder_terms(tmp_path, monkeypatch):
 
     monkeypatch.setattr("nlp.nlp_keywords.cluster_synonyms", fake_cluster_synonyms)
 
-    stats = run_nlp_to_db("dummy", raw_dir, str(db_path))
+    stats = run_nlp_to_db("dummy", normalized_dir, str(db_path))
 
     with get_conn(str(db_path)) as conn:
         term_rows = conn.execute("SELECT canonical FROM terms").fetchall()
@@ -117,19 +115,19 @@ def test_run_nlp_to_db_persists_terms_and_folder_terms(tmp_path, monkeypatch):
 
 def test_run_nlp_to_db_rejects_paths_outside_base(tmp_path):
     base_dir = tmp_path / "client"
-    raw_dir = base_dir / "raw"
-    raw_dir.mkdir(parents=True)
+    normalized_dir = base_dir / "normalized"
+    normalized_dir.mkdir(parents=True)
     db_outside = tmp_path.parent / "outside" / "tags.db"
 
     with pytest.raises(PathTraversalError):
-        run_nlp_to_db("dummy", raw_dir, db_outside, repo_root_dir=base_dir)
+        run_nlp_to_db("dummy", normalized_dir, db_outside, repo_root_dir=base_dir)
 
 
 def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):
     base_dir = tmp_path / "client-sandbox"
-    raw_dir = base_dir / "raw"
+    normalized_dir = base_dir / "normalized"
     semantic_dir = base_dir / "semantic"
-    raw_dir.mkdir(parents=True)
+    normalized_dir.mkdir(parents=True)
     semantic_dir.mkdir(parents=True)
     ctx = TestClientCtx(
         slug="dummy",
@@ -140,25 +138,25 @@ def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):
         run_id=None,
     )
 
-    resolved_base, resolved_raw, db_path, resolved_semantic = _resolve_cli_paths(
+    resolved_base, resolved_normalized, db_path, resolved_semantic = _resolve_cli_paths(
         ctx,
-        raw_override=None,
+        normalized_override=None,
         db_override=None,
     )
 
     assert resolved_base == base_dir.resolve()
-    assert resolved_raw == raw_dir.resolve()
+    assert resolved_normalized == normalized_dir.resolve()
     assert resolved_semantic == semantic_dir.resolve()
     assert db_path == (semantic_dir / "tags.db").resolve()
 
-    outside_raw = tmp_path / "elsewhere" / "raw"
+    outside_normalized = tmp_path / "elsewhere" / "normalized"
     with pytest.raises(PathTraversalError):
-        _resolve_cli_paths(ctx, raw_override=str(outside_raw), db_override=None)
+        _resolve_cli_paths(ctx, normalized_override=str(outside_normalized), db_override=None)
 
     inside_db = semantic_dir / "custom.db"
     _, _, custom_db_path, _ = _resolve_cli_paths(
         ctx,
-        raw_override=None,
+        normalized_override=None,
         db_override=str(inside_db),
     )
     assert custom_db_path == inside_db.resolve()

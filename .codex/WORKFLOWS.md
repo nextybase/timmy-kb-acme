@@ -45,13 +45,14 @@ and is **not** the system-level Epistemic Envelope.
 
 ## End-to-End Flow
 1) **pre_onboarding** builds a local sandbox (`output/timmy-kb-<slug>/...`), optionally provisions Drive, and uploads `config.yaml` (no semantic templates copied).
-2) **tag_onboarding** generates `semantic/tags_raw.csv` (heuristic filenames/paths) and the HiTL checkpoint `tags_reviewed.yaml` for manual review.
-3) **Tag KG Builder** (`kg_build.py` / UI Knowledge Graph) reads `semantic/tags_raw.json`, calls the OpenAI assistant `build_tag_kg`, saves `semantic/kg.tags.json` + `semantic/kg.tags.md`, and keeps a human-first inspection layer (watch namespaces).
-4) **semantic_onboarding** (via `semantic.api` or CLI) converts PDFs to Markdown in `book/`, enriches front matter via the canonical `tags.db`, rebuilds README/SUMMARY, and prepares the Docker preview.
+2) **raw_ingest** normalizes RAW PDFs into `normalized/` and emits `normalized/INDEX.json`.
+3) **tag_onboarding** generates `semantic/tags_raw.csv` (heuristic filenames/paths) and the HiTL checkpoint `tags_reviewed.yaml` for manual review.
+4) **Tag KG Builder** (`kg_build.py` / UI Knowledge Graph) reads `semantic/tags_raw.json`, calls the OpenAI assistant `build_tag_kg`, saves `semantic/kg.tags.json` + `semantic/kg.tags.md`, and keeps a human-first inspection layer (watch namespaces).
+5) **semantic_onboarding** (via `semantic.api` or CLI) converts normalized Markdown into `book/`, enriches front matter via the canonical `tags.db`, rebuilds README/SUMMARY, and prepares the Docker preview.
 5) **honkit_preview** prepara e serve la preview Docker/HonKit di `book/`.
 
 ### UI Gating
-- The Semantica tab appears only after the local RAW data (`raw/`) is downloaded.
+- The Semantica tab appears only after `normalized/` is present locally.
 - Docker preview: start/stop with a safe container name and port validation.
 
 ### Tag SSoT
@@ -69,7 +70,7 @@ and is **not** the system-level Epistemic Envelope.
 These functions extend the semantic pipeline without altering UI/CLI flows. They remain idempotent, offline, path-safe, and employ atomic writes, allowing invocation from Codex workflows while honoring micro-PR and QA rules in `.codex/PROMPTS.md`.
 
 - `build_mapping_from_vision(context, logger, slug) -> Path`: generates `config/semantic_mapping.yaml` from `config/vision_statement.yaml`. Input: vision YAML. Output: normalized mapping. Clear errors, no network.
-- `build_tags_csv(context, logger, slug) -> Path`: scans `raw/` (PDF) and produces `semantic/tags_raw.csv` (conservative heuristics) plus `README_TAGGING.md`. Idempotent; CSV headers: `relative_path | suggested_tags | entities | keyphrases | score | sources`.
+- `build_tags_csv(context, logger, slug) -> Path`: scans `normalized/` (Markdown) and produces `semantic/tags_raw.csv` (conservative heuristics) plus `README_TAGGING.md`. Idempotent; CSV headers: `relative_path | suggested_tags | entities | keyphrases | score | sources`.
 - `build_markdown_book(context, logger, slug) -> list[Path]`: converts RAW Markdown (one `.md` per top-level folder), ensures `README.md`/`SUMMARY.md` in `book/`. If `semantic/tags.db` is available, adds front matter enrichment (title/tags). Minimal fallback if helper repos are missing.
 - `index_markdown_to_db(context, logger, slug, scope="book", embeddings_client, db_path) -> int`: indexes `.md` files into SQLite (one chunk per file, embeddings via `embeddings_client`). Metadata: `{file: <name>}`; daily versioned by `YYYYMMDD`. `db_path` must be provided explicitly (tests may pass a temporary absolute path within the workspace semantic dir).
 

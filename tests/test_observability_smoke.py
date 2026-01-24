@@ -32,11 +32,12 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
     (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
     (base / "book").mkdir(parents=True, exist_ok=True)
     (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     (base / "semantic").mkdir(parents=True, exist_ok=True)
-    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (base / "logs").mkdir(parents=True, exist_ok=True)
 
 
@@ -87,8 +88,12 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
     _write_minimal_layout(base)
     raw = base / "raw"
     book = base / "book"
+    normalized = base / "normalized"
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
+    normalized.mkdir(parents=True, exist_ok=True)
+    (normalized / "dummy-a.md").write_text("# Dummy A\ncontenuto\n", encoding="utf-8")
+    (normalized / "dummy-b.md").write_text("# Dummy B\ncontenuto\n", encoding="utf-8")
 
     # RAW deve contenere almeno un PDF affinché il converter venga invocato
     (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n%dummy\n")
@@ -98,7 +103,7 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
         (target / "A.md").write_text("---\ntitle: A\n---\nA", encoding="utf-8")
         (target / "B.md").write_text("---\ntitle: B\n---\nB", encoding="utf-8")
 
-    monkeypatch.setattr(conv, "_convert_md", _fake_convert)
+    monkeypatch.setattr(conv, "_call_convert_md", _fake_convert)
     monkeypatch.setattr(
         front, "_gen_summary", lambda ctx: (ctx.book_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
     )

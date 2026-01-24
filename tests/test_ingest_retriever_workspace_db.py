@@ -30,6 +30,7 @@ def test_ingest_and_search_use_workspace_db(dummy_workspace: dict[str, Path], mo
     base: Path = dummy_workspace["base"]
     slug: str = dummy_workspace["slug"]
     ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
 
     store = KbStore.for_slug(slug=slug, repo_root_dir=base)
     db_path = store.effective_db_path()
@@ -77,6 +78,7 @@ def test_lineage_persisted_in_ingest_path(dummy_workspace: dict[str, Path], monk
     base: Path = dummy_workspace["base"]
     slug: str = dummy_workspace["slug"]
     ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
 
     store = KbStore.for_slug(slug=slug, repo_root_dir=base)
     db_path = store.effective_db_path()

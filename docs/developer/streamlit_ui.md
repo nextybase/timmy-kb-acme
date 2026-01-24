@@ -158,10 +158,10 @@ Checklist minima per una pagina nuova:
 ### Flusso consigliato
 
 1. Risolvi `WorkspaceLayout` a partire dallo slug con `ui.utils.workspace.get_ui_workspace_layout(slug, require_env=False)` (o `WorkspaceLayout.from_<...>` nei contesti CLI).
-2. Usa i campi `layout.raw_dir`, `layout.semantic_dir`, `layout.tags_db` e `layout.vision_pdf` per qualsiasi accesso ai file.
+2. Usa i campi `layout.raw_dir`, `layout.normalized_dir`, `layout.semantic_dir`, `layout.tags_db` e `layout.vision_pdf` per qualsiasi accesso ai file.
 3. Valida tramite `pipeline.path_utils.ensure_within_and_resolve` e scrivi con helper atomici (`safe_write_text`, `safe_write_bytes`, ecc.).
 
-> Gli helper legacy `resolve_raw_dir` e `workspace_root` seguono ancora la firma compatibile, ma non devono essere usati nei nuovi modules che già hanno il layout; preferisci sempre `layout.raw_dir`/`layout.repo_root_dir` (root canonica).
+> Gli helper legacy `resolve_raw_dir` e `workspace_root` seguono ancora la firma compatibile, ma non devono essere usati nei nuovi modules che già hanno il layout; preferisci sempre `layout.raw_dir`/`layout.normalized_dir`/`layout.repo_root_dir` (root canonica).
 
 ### Workspace root (REPO_ROOT_DIR / WORKSPACE_ROOT_DIR)
 
@@ -251,7 +251,7 @@ erDiagram
 
     FOLDERS {
         INTEGER id PK
-        TEXT    path       "percorso relativo (es. raw/..., book/...)"
+        TEXT    path       "percorso relativo (es. normalized/..., book/...)"
     }
 
     FOLDER_TERMS {
@@ -268,7 +268,7 @@ erDiagram
 |--------------------|--------------------------------|-----------------------------|----------------------------------------|
 | `tags[].canonical` | lowercase, trim, deduplicate   | `terms.canonical`           | Unico; merge se duplicato              |
 | `tags[].aliases[]` | lowercase, trim                | (merge in memoria)          | Nessuna tabella `aliases` attualmente |
-| `tags[].folders[]` | percorso relativo normalizzato | `folders.path`              | Path relativi (raw/book/semantic)     |
+| `tags[].folders[]` | percorso relativo normalizzato | `folders.path`              | Path relativi (normalized/book/semantic)     |
 | folder -> tag link | -                              | `folder_terms(..., weight)` | `weight` facoltativo (default 1.0)    |
 
 ```python
@@ -368,7 +368,7 @@ def test_emette_eventi_tags(caplog, monkeypatch):
 
 ## Gating e SSoT di stato
 
-La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`.
+La semantica è disponibile da stato 'pronto' in poi e richiede Markdown presenti in `normalized/`.
 
 1. Calcola i gate con `ui.gating.compute_gates(os.environ)`; combina la disponibilita runtime dei servizi (`ui.services.*`) con gli override da variabili di ambiente:
     - `DRIVE=0` disabilita i flussi Drive (cartelle, cleanup, download).
@@ -391,7 +391,7 @@ st.navigation(pages)
 ```
 
 **Perche**: il router vede solo le pagine abilitate, quindi nessun tab inceppa il flusso quando i servizi sono assenti (localmente o in produzione controllata).
-In aggiunta al gate `TAGS`, la pagina *Semantica* viene mostrata solo quando lo slug attivo ha effettivamente PDF validi in `raw/` (`ui.utils.workspace.has_raw_pdfs`). Analogamente la pagina *Preview* viene resa visibile solo se sono presenti PDF validi e lo stato cliente appartiene a `SEMANTIC_READY_STATES`; in caso contrario il router emette `ui.gating.sem_hidden`/`ui.gating.preview_hidden` per telemetria.
+In aggiunta al gate `TAGS`, la pagina *Semantica* viene mostrata solo quando lo slug attivo ha Markdown validi in `normalized/` (`ui.utils.workspace.has_normalized_markdown`). Analogamente la pagina *Preview* viene resa visibile solo se `normalized/` è pronto e lo stato cliente appartiene a `SEMANTIC_READY_STATES`; in caso contrario il router emette `ui.gating.sem_hidden`/`ui.gating.preview_hidden` per telemetria.
 
 ### Modalita stub e SSoT semantica
 
@@ -408,12 +408,12 @@ except RuntimeError as exc:
     st.caption(str(exc))
     st.stop()
 
-- Il messaggio `SEMANTIC_GATING_MESSAGE` viene riciclato anche nel testo doc: La semantica è disponibile da stato 'pronto' in poi e richiede PDF presenti in `raw/`. Cosi lo snippet rimane allineato alla stringa effettiva (test: `tests/ui/test_semantics_state.py::test_semantics_message_string_matches_docs`).
+- Il messaggio `SEMANTIC_GATING_MESSAGE` viene riciclato anche nel testo doc: La semantica è disponibile da stato 'pronto' in poi e richiede Markdown presenti in `normalized/`. Cosi lo snippet rimane allineato alla stringa effettiva (test: `tests/ui/test_semantics_state.py::test_semantics_message_string_matches_docs`).
 ```
 
 **Nota**: il test di contratto (`pytest -m "contract"`) fotografa le pagine visibili per combinazioni di gate e fallisce se una PR introduce regressioni.
 
-> Per mantenere lo stesso gating anche nelle esecuzioni *headless* (stub di Streamlit, runner CLI, test unitari) la UI centralizza il controllo in `_require_semantic_gating(slug)`. La funzione chiama `has_raw_pdfs`/`get_state`, solleva `RuntimeError` se RAW non e presente o lo stato non e in `SEMANTIC_ENTRY_STATES`, e viene invocata sia appena la pagina viene caricata sia prima dell'avvio di `_run_convert/_run_enrich/_run_summary`. In questo modo anche gli automation test falliscono immediatamente con lo stesso messaggio visibile alla UI e nessun branch puo bypassare il gate.
+> Per mantenere lo stesso gating anche nelle esecuzioni *headless* (stub di Streamlit, runner CLI, test unitari) la UI centralizza il controllo in `_require_semantic_gating(slug)`. La funzione chiama `normalized_ready`/`get_state`, solleva `RuntimeError` se `normalized/` non è presente o lo stato non è in `SEMANTIC_ENTRY_STATES`, e viene invocata sia appena la pagina viene caricata sia prima dell'avvio di `_run_convert/_run_enrich/_run_summary`. In questo modo anche gli automation test falliscono immediatamente con lo stesso messaggio visibile alla UI e nessun branch puo bypassare il gate.
 
 ### Env preview stub e logging
 

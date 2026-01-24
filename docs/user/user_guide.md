@@ -46,21 +46,23 @@ Per un avvio essenziale vedi anche [quickstart](quickstart.md).
 1. `streamlit run onboarding_ui.py`
 2. Inserisci **slug** e **nome cliente**.
 3. Drive: crea struttura, genera README, scarica PDF in `raw/`.
-4. Semantica: **Converti** -> **Arricchisci** -> **README & SUMMARY**.
-5. (Opz.) **Preview Docker**.
+4. `python -m timmy_kb.cli.raw_ingest --slug <slug>` (genera `normalized/`).
+5. Semantica: **Converti** -> **Arricchisci** -> **README & SUMMARY**.
+6. (Opz.) **Preview Docker**.
 
 ### Avvio rapido CLI
 1. `python -m timmy_kb.cli.pre_onboarding --slug <slug> --name "<Cliente>"`
-2. `python -m timmy_kb.cli.tag_onboarding --slug <slug> --proceed`
-3. `py src/kg_build.py --slug <slug>`
-4. `python -m timmy_kb.cli.semantic_onboarding --slug <slug>`
-5. (Opz.) **Preview Docker**.
+2. `python -m timmy_kb.cli.raw_ingest --slug <slug>`
+3. `python -m timmy_kb.cli.tag_onboarding --slug <slug> --proceed`
+4. `py src/kg_build.py --slug <slug>`
+5. `python -m timmy_kb.cli.semantic_onboarding --slug <slug>`
+6. (Opz.) **Preview Docker**.
 
 ### Cosa succede in 10 minuti
 - Crea workspace e config cliente.
 - Genera mapping Vision-only e struttura Drive.
-- Scarica PDF in `raw/`.
-- Converte in Markdown e arricchisce frontmatter.
+- Scarica PDF in `raw/` e genera `normalized/`.
+- Converte i Markdown normalizzati e arricchisce frontmatter.
 - Ricostruisce `README.md`/`SUMMARY.md` e abilita la preview.
 
 ## Uso tramite UI (Streamlit)
@@ -75,7 +77,7 @@ Usa la UI per:
 
 - **Onboarding** di un nuovo cliente/progetto (creazione struttura locale/Drive + mapping).
 - **Raccolta e sincronizzazione** PDF (Drive <-> locale) nelle cartelle giuste.
-- **Pipeline semantica** (PDF -> Markdown -> arricchimento tag -> README/SUMMARY).
+- **Pipeline semantica** (raw -> normalized -> book -> arricchimento tag -> README/SUMMARY).
 - **Verifica & pubblicazione** (anteprima Docker/HonKit facoltativa).
 
 > La UI e' ideale per il setup iniziale e gli aggiornamenti incrementali (nuovi PDF, nuove aree).
@@ -115,6 +117,7 @@ Quando crei un cliente (slug \`\`), trovi in locale:
 output/
 +--- timmy-kb-<slug>/
    +--- raw/                # PDF originali (per categoria)
+   +--- normalized/         # Markdown normalizzati (derivati)
    +--- contrattualistica/  # Documenti legali
    +--- book/               # Markdown generati + indici
    +--- semantic/           # semantic_mapping.yaml, tags*
@@ -229,7 +232,7 @@ Ensure schema v2]
 
 ### 5) Gestione contenuti -> **Gestisci cliente**
 
-**Nota operativa**: prima di lanciare gli arricchimenti assicurati che `raw/<categoria>` contenga i PDF (li puoi scaricare da Drive o copiarli manualmente). Se modifichi le cartelle locali oppure `tags_reviewed.yaml`, premi il pulsante **Ricarica vista Gestisci cliente** (in alto) per rinfrescare i controlli ed evitare stati incoerenti.
+**Nota operativa**: prima di lanciare gli arricchimenti assicurati che `normalized/` contenga i Markdown (genera via `raw_ingest` dopo aver scaricato i PDF in `raw/`). Se modifichi le cartelle locali oppure `tags_reviewed.yaml`, premi il pulsante **Ricarica vista Gestisci cliente** (in alto) per rinfrescare i controlli ed evitare stati incoerenti.
 
 Le azioni principali sono raggruppate in expander distinti: `Scarica PDF da Drive  locale`, `Arricchimento semantico + revisione tags`, `Genera README in raw (Drive)`. Nella sezione centrale viene anche mostrato quale backend NLP e attivo (`TAGS_NLP_BACKEND`, SpaCy di default) e viene ricordato che l'euristica viene sempre eseguita in aggiunta.
 
@@ -266,19 +269,20 @@ Prima di usare i pulsanti controlla il riquadro **Prerequisiti**:
 - L'esportazione `tags_reviewed.yaml` richiede che `semantic/tags.db` esista sotto il workspace cliente; il percorso (workspace -> semantic -> YAML/DB) e validato con `ensure_within_and_resolve` prima di scrivere. Eventuali mismatch (DB fuori workspace o `tags.db` diverso) provocano errori di configurazione e impediscono la pubblicazione.
 
 Esegui nell'ordine (ripetibile per nuovi PDF):
+Prerequisito: `normalized/` deve essere pronta (generata da `raw_ingest`).
 
-1. **Converti PDF -> Markdown**
-   - **Cosa fa:** scansiona `raw/<categoria>/**/*.pdf`, esclude file non-PDF/illeggibili, e crea i corrispondenti `.md` in `book/<categoria>/` (rapporto 1:1).
+1. **Converti Markdown normalizzati -> book**
+   - **Cosa fa:** scansiona `normalized/**/*.md`, esclude file illeggibili, e crea i corrispondenti `.md` in `book/` (rapporto 1:1).
    - **Frontmatter aggiunto:** `title`, `source_category`, `source_file`, `created_at`, `tags_raw` (estratti automatici).
    - **Idempotenza:** genera/aggiorna solo i file nuovi o modificati; non tocca gli altri.
-   - **Note/Errore tipico:** PDF protetti o corrotti vengono segnalati nei log e saltati; gli altri proseguono.
+   - **Note/Errore tipico:** Markdown vuoti o fuori perimetro vengono segnalati nei log e saltati; gli altri proseguono.
 2. **Arricchisci frontmatter**
    - **Cosa fa:** trasforma `tags_raw` in `tags` **canonici** leggendo il vocabolario consolidato da `semantic/tags.db` (tramite `semantic.vocab_loader.load_reviewed_vocab`); `semantic_mapping.yaml` e ora solo per l'authoring/review del mapping e non viene usato al runtime. Il DB e lo SSoT dei tag runtime e viene aggiornato prima di ogni arricchimento.
    - **Risultato:** frontmatter dei `.md` aggiornato con `tags` puliti e coerenti (rispettando limiti/score se configurati).
    - **Telemetria:** l'arricchimento emette `semantic.book.frontmatter` con il numero di file aggiornati (UI/CLI).
    - **Entita e relazioni:** se in `semantic/tags.db` sono presenti entita con `status=approved` nella tabella `doc_entities` (proposte da SpaCy a partire dalle entita definite in `semantic_mapping.yaml`), il frontmatter viene arricchito anche con le chiavi `entities` e `relations_hint`, rendendo esplicite le entita e le relazioni del mapping Vision-only.
     - **Quando rilanciarlo:** dopo nuove conversioni o dopo modifiche al mapping (keywords/sinonimi/aree).
-> **DIKW in azione:** i PDF in `raw/` piu i tag grezzi rappresentano i **Data**, la conversione PDFMarkdown piu l'arricchimento frontmatter diventano **Information**, la generazione di `README/SUMMARY` struttura la **Knowledge** dentro `book/`, e l'anteprima Docker e la vista finale sulla Knowledge disponibile.
+> **DIKW in azione:** i PDF in `raw/` (derivati in `normalized/`) piu i tag grezzi rappresentano i **Data**, la conversione normalized->book piu l'arricchimento frontmatter diventano **Information**, la generazione di `README/SUMMARY` struttura la **Knowledge** dentro `book/`, e l'anteprima Docker e la vista finale sulla Knowledge disponibile.
 
 3. **Costruisci il Knowledge Graph dei tag (Tag KG Builder)**
     - **Cosa fa:** legge `semantic/tags_raw.json`, invoca la tool call `build_tag_kg` con namespace (puoi scegliere di usare lo slug o un valore custom), e pubblica `semantic/kg.tags.json` + `semantic/kg.tags.md`.
@@ -295,13 +299,13 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
      della sessione UI. Il vocabolario arriva da `semantic.vocab_loader.load_reviewed_vocab`.
      Se vuoi replicare il comportamento da terminale trovi un esempio completo nella
      [User Guide](user_guide.md#quick-start----terminale-orchestratori).
-   - **Gating preview:** la UI invoca `semantic.book_readiness.check_book_dir` per assicurarsi che `book/` contenga `README.md`, `SUMMARY.md` e almeno un file Markdown di contenuto prima di abilitare la preview Docker; ora la disponibilita della preview riflette la **Knowledge** pronta anziche la sola presenza di PDF in `raw/`.
+   - **Gating preview:** la UI invoca `semantic.book_readiness.check_book_dir` per assicurarsi che `book/` contenga `README.md`, `SUMMARY.md` e almeno un file Markdown di contenuto prima di abilitare la preview Docker; ora la disponibilita della preview riflette la **Knowledge** pronta anziche la sola presenza di file in `normalized/`.
 4. **Anteprima Docker (HonKit)** *(facoltativa)*
    - **Cosa fa:** avvia un container che serve il sito statico generato da `book/`.
    - **Quando usarla:** per QA visivo prima della pubblicazione; chiudi il container al termine.
    - **Log stub:** imposta `PREVIEW_LOG_DIR` con path relativi o assoluti. Se il percorso non esiste o non e scrivibile la preview si ferma con errore esplicito (nessun fallback).
 
-- La pagina Semantica e accessibile da stato **pronto** in poi (con PDF in `raw/`).
+- La pagina Semantica e accessibile da stato **pronto** in poi (con Markdown in `normalized/`).
 - La **Preview/finishing** resta vincolata agli stati **arricchito/finito**.
 
 ---
@@ -354,10 +358,11 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
 2. (Se onboarding): Step 1 **Inizializza** -> Step 2 **Apri workspace**.
 3. **Genera README in raw (Drive)** (opzionale ma consigliato).
 4. Carica PDF su Drive -> **Scarica** in locale (o **Rileva** se copiati a mano).
-5. **Converti** -> **Arricchisci**.
-6. **Costruisci il Knowledge Graph dei tag** (UI o `kg_build.py`).
-7. **Genera README/SUMMARY**.
-8. (Facoltativo) **Anteprima Docker** -> pubblica.
+5. `python -m timmy_kb.cli.raw_ingest --slug <slug>` (genera `normalized/`).
+6. **Converti** -> **Arricchisci**.
+7. **Costruisci il Knowledge Graph dei tag** (UI o `kg_build.py`).
+8. **Genera README/SUMMARY**.
+9. (Facoltativo) **Anteprima Docker** -> pubblica.
 
 ---
 
@@ -365,6 +370,7 @@ Esegui nell'ordine (ripetibile per nuovi PDF):
 
 - **Vision-only mapping**: mapping semantico generato dal PDF di Vision (\`areas\`, \`system\_folders\`).
 - **raw/**: cartelle con i PDF sorgenti per categoria.
+- **normalized/**: Markdown normalizzati derivati dai PDF.
 - **book/**: output Markdown e indici.
 - **contrattualistica/**: sezione separata per documenti legali.
 
@@ -384,10 +390,13 @@ Esegui gli step in sequenza.
 # 1) Setup locale (+ Drive opzionale)
 python -m timmy_kb.cli.pre_onboarding --slug acme --name "Cliente ACME"
 
-# 2) Tagging semantico (default: Drive)
+# 2) Normalizzazione RAW -> normalized
+python -m timmy_kb.cli.raw_ingest --slug acme
+
+# 3) Tagging semantico (default: Drive)
 python -m timmy_kb.cli.tag_onboarding --slug acme --proceed
 
-# 3) Costruzione Knowledge Graph dei tag
+# 4) Costruzione Knowledge Graph dei tag
 py src/kg_build.py --slug acme
 
 > Nota: `timmy_kb.cli.semantic_onboarding` invoca internamente `build_kg_for_workspace`,
@@ -395,7 +404,7 @@ py src/kg_build.py --slug acme
 > generare README/SUMMARY. La CLI `kg_build.py` serve per ricostruire o isolare
 > questo step quando necessario.
 
-# 4) Conversione + arricchimento + README/SUMMARY (+ preview opz.)
+# 5) Conversione + arricchimento + README/SUMMARY (+ preview opz.)
 Esegui la pipeline semantica con gli helper modulari; ricava i path dal `WorkspaceLayout` (SSoT).
 
 ```bash
@@ -465,6 +474,7 @@ I prefissi non sono decorativi: servono a collegare i file alle entita, alimenta
 ```
 output/timmy-kb-<slug>/
    raw/        # PDF
+   normalized/ # Markdown normalizzati
    book/       # Markdown + SUMMARY.md + README.md
    semantic/   # semantic_mapping.yaml, tags_raw.csv, tags.db
    config/     # config.yaml (con eventuali ID Drive)
@@ -476,7 +486,7 @@ Template seed (repo): nessun template semantico copiato nel workspace durante `p
 ---
 
 ## Note operative
-- **RAW locale e` la sorgente** per conversione/enrichment; Drive e` usato per provisioning/ingest.
+- **normalized/ e` la sorgente** per conversione/enrichment; raw/ e Drive restano l'evidenza di ingest.
 - Solo file **.md** in `book/` vengono pubblicati; i `.md.fp` sono ignorati.
 - Log con redazione automatica se `LOG_REDACTION` e` attivo.
 - I pulsanti **Avvia arricchimento semantico**/**Abilita** nella UI rispettano il servizio `ui.services.tags_adapter`: se non e` disponibile vengono disabilitati (salvo `TAGS_MODE=stub`). In modalita` stub lo YAML viene rigenerato con `DEFAULT_TAGS_YAML` e lo stato cliente torna a **pronto** se il DB resta vuoto.
@@ -512,10 +522,10 @@ python tools/forbid_control_chars.py --fix <path>
 ```
 
 ## Troubleshooting essenziale
-- `DRIVE_ID` mancante  lo richiede `pre_onboarding`/`tag_onboarding` (default Drive).
+- `DRIVE_ID` mancante  lo richiede `pre_onboarding`/`raw_ingest`/`tag_onboarding` (default Drive).
 - PDF non scaricati in UI  assicurati di aver prima **generato i README** in `raw/` e di avere permessi Drive corretti.
 - Preview non parte  verifica Docker e porta libera.
-- Conversione fallisce con "solo PDF non sicuri/fuori perimetro"  in `raw/` ci sono solo symlink o percorsi fuori dal perimetro sicuro. Rimuovi i symlink o sposta i PDF reali dentro `raw/`, quindi riprova la conversione.
+- Conversione fallisce con "solo Markdown non sicuri/fuori perimetro"  in `normalized/` ci sono solo symlink o percorsi fuori dal perimetro sicuro. Rimuovi i symlink o sposta i file reali dentro `normalized/`, quindi riprova la conversione.
 
 ## Limiti e vincoli della Beta 1.0
 Alcune limitazioni del flusso non sono bug ma scelte deliberate

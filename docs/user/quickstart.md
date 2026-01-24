@@ -8,19 +8,21 @@ Guida essenziale per partire in pochi minuti.
 - (Opz.) Docker per anteprima HonKit
 - (Opz.) Drive: `SERVICE_ACCOUNT_FILE` + `DRIVE_ID` + `pip install .[drive]`
 
-## Avvio UI in 3 comandi
+## Avvio UI in 4 step
 1. `streamlit run onboarding_ui.py`
 2. Inserisci **slug** e **nome cliente**.
-3. Completa i tab **Drive** e **Semantica** (Converti → Arricchisci → README/SUMMARY).
+3. Completa **Drive** (download PDF in `raw/`).
+4. Esegui `python -m timmy_kb.cli.raw_ingest --slug <slug>` per generare `normalized/`, poi usa **Semantica** (Converti → Arricchisci → README/SUMMARY).
 
-## Avvio CLI in 3 comandi
+## Avvio CLI in 4 comandi
 1. `python -m timmy_kb.cli.pre_onboarding --slug <slug> --name "<Cliente>"`
-2. `python -m timmy_kb.cli.tag_onboarding --slug <slug> --proceed`
-3. `python -m timmy_kb.cli.semantic_onboarding --slug <slug>`
+2. `python -m timmy_kb.cli.raw_ingest --slug <slug>`
+3. `python -m timmy_kb.cli.tag_onboarding --slug <slug> --proceed`
+4. `python -m timmy_kb.cli.semantic_onboarding --slug <slug>`
 
-> ⚠️ Nota Beta  
-> In Beta, Timmy-KB e' strict by default.  
-> L'esecuzione end-to-end e' consentita solo in Dummy Mode.  
+> ⚠️ Nota Beta
+> In Beta, Timmy-KB e' strict by default.
+> L'esecuzione end-to-end e' consentita solo in Dummy Mode.
 > Vedi: [Strict vs Dummy - Guida Operativa](../strict_vs_dummy_beta.md).
 
 ## Cosa aspettarsi (Beta)

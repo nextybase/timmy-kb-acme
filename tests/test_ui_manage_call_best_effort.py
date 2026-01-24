@@ -29,16 +29,20 @@ def manage_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
     base_dir = tmp_path / "timmy-kb-dummy"
     raw_dir = base_dir / "raw"
+    normalized_dir = base_dir / "normalized"
     semantic_dir = base_dir / "semantic"
     raw_dir.mkdir(parents=True, exist_ok=True)
+    normalized_dir.mkdir(parents=True, exist_ok=True)
     semantic_dir.mkdir(parents=True, exist_ok=True)
 
     fake_workspace = types.ModuleType("ui.utils.workspace")
     fake_workspace.get_ui_workspace_layout = lambda *_a, **_k: SimpleNamespace(
         repo_root_dir=base_dir,
         raw_dir=raw_dir,
+        normalized_dir=normalized_dir,
         semantic_dir=semantic_dir,
     )
+    fake_workspace.count_markdown_safe = lambda *_a, **_k: 0
     fake_workspace.count_pdfs_safe = lambda *_a, **_k: 0
     monkeypatch.setitem(sys.modules, "ui.utils.workspace", fake_workspace)
 

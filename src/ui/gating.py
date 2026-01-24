@@ -31,12 +31,12 @@ from ui.constants import SEMANTIC_READY_STATES
 from ui.navigation_spec import PagePaths, requirements_for
 from ui.pages.registry import PageSpec, page_specs
 from ui.utils import get_active_slug
-from ui.utils.workspace import raw_ready, tagging_ready
+from ui.utils.workspace import normalized_ready, tagging_ready
 
 _DISABLE_VALUES = {"0", "false", "off", "no", ""}
 
 _LOGGER = get_structured_logger("ui.gating")
-_LAST_RAW_READY: dict[str, bool] = {}
+_LAST_NORMALIZED_READY: dict[str, bool] = {}
 _LAST_PREVIEW_READY: dict[str, bool] = {}
 _CAPABILITY_CACHE: dict[Path, dict[str, object]] = {}
 _CAPABILITY_SCHEMA_VERSION = 1
@@ -68,7 +68,7 @@ def _log_gating_failure(event: str, exc: Exception, *, extra: dict[str, object] 
 def reset_gating_cache(slug: str | None = None) -> None:
     """Resetta le cache gating per lo slug indicato (o completamente se slug=None)."""
     if slug is None:
-        _LAST_RAW_READY.clear()
+        _LAST_NORMALIZED_READY.clear()
         _LAST_PREVIEW_READY.clear()
         _CAPABILITY_CACHE.clear()
         try:
@@ -77,7 +77,7 @@ def reset_gating_cache(slug: str | None = None) -> None:
             pass
         return
     slug_key = slug or "<none>"
-    _LAST_RAW_READY.pop(slug_key, None)
+    _LAST_NORMALIZED_READY.pop(slug_key, None)
     _LAST_PREVIEW_READY.pop(slug_key, None)
 
 
@@ -256,7 +256,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     specs_by_group = page_specs()
     required_gates = {name for specs in specs_by_group.values() for spec in specs for name in _requires(spec)}
     slug: str | None
-    raw_ready_flag = False
+    normalized_ready_flag = False
     semantic_ready = False
     tagging_ready_flag = False
     state_norm = ""
@@ -282,14 +282,14 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
 
     if slug:
         try:
-            ready, _path = raw_ready(slug, strict=False)
-            raw_ready_flag = bool(ready)
+            ready, _path = normalized_ready(slug, strict=False)
+            normalized_ready_flag = bool(ready)
         except Exception as exc:
             _LOGGER.error(
-                "ui.gating.raw_ready_failed",
+                "ui.gating.normalized_ready_failed",
                 extra={"slug": slug, "path": "", "error": str(exc)},
             )
-            raw_ready_flag = False
+            normalized_ready_flag = False
         try:
             tagging_ready_flag, _ = tagging_ready(slug, strict=False)
         except Exception as exc:
@@ -310,16 +310,20 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
             state_norm = ""
             semantic_ready = False
     slug_key = slug or "<none>"
-    last_state = _LAST_RAW_READY.get(slug_key)
-    if not raw_ready_flag and last_state is not False:
+    last_state = _LAST_NORMALIZED_READY.get(slug_key)
+    if not normalized_ready_flag and last_state is not False:
         try:
             _LOGGER.debug(
                 "ui.gating.sem_hidden",
-                extra={"slug": slug or "", "raw_ready": raw_ready_flag, "tagging_ready": tagging_ready_flag},
+                extra={
+                    "slug": slug or "",
+                    "normalized_ready": normalized_ready_flag,
+                    "tagging_ready": tagging_ready_flag,
+                },
             )
         except Exception:
             pass
-    _LAST_RAW_READY[slug_key] = raw_ready_flag
+    _LAST_NORMALIZED_READY[slug_key] = normalized_ready_flag
     optional_required = sorted(required_gates & _OPTIONAL_GATES)
     if optional_required:
         last_optional = _LAST_OPTIONAL_GATES.get(slug_key, {})
@@ -347,7 +351,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     last_preview = _LAST_PREVIEW_READY.get(slug_key)
     for group, specs in specs_by_group.items():
         allowed = [spec for spec in specs if _satisfied(_requires(spec), gates)]
-        if not raw_ready_flag:
+        if not normalized_ready_flag:
             allowed = [spec for spec in allowed if spec.path not in {PagePaths.SEMANTICS, PagePaths.PREVIEW}]
         elif not tagging_ready_flag:
             allowed = [spec for spec in allowed if spec.path != PagePaths.SEMANTICS]
@@ -362,7 +366,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
                 "ui.gating.preview_hidden",
                 extra={
                     "slug": slug or "",
-                    "raw_ready": raw_ready_flag,
+                    "normalized_ready": normalized_ready_flag,
                     "tagging_ready": tagging_ready_flag,
                     "semantic_ready": semantic_ready,
                     "state": state_norm,

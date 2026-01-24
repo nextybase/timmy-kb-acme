@@ -9,7 +9,7 @@ from typing import Any, Iterator, Optional, Tuple
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, tail_path
-from pipeline.path_utils import clear_iter_safe_pdfs_cache, iter_safe_pdfs, validate_slug
+from pipeline.path_utils import clear_iter_safe_pdfs_cache, iter_safe_paths, iter_safe_pdfs, validate_slug
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.tags_validator import load_yaml as _load_tags_yaml
 from semantic.tags_validator import validate_tags_reviewed as _validate_tags_reviewed
@@ -114,6 +114,16 @@ def count_pdfs_safe(root: Path, *, use_cache: bool = False, cache_ttl_s: float |
     return sum(1 for _ in iter_pdfs_safe(root, use_cache=use_cache, cache_ttl_s=cache_ttl_s))
 
 
+def iter_markdown_safe(root: Path) -> Iterator[Path]:
+    """Itera i Markdown sotto `root` senza seguire symlink."""
+    yield from iter_safe_paths(root, include_dirs=False, include_files=True, suffixes=(".md",))
+
+
+def count_markdown_safe(root: Path) -> int:
+    """Conta i Markdown in modo sicuro usando iter_markdown_safe."""
+    return sum(1 for _ in iter_markdown_safe(root))
+
+
 def _dir_mtime(p: Path) -> float:
     try:
         return float(p.stat().st_mtime)
@@ -121,9 +131,9 @@ def _dir_mtime(p: Path) -> float:
         return 0.0
 
 
-def has_raw_pdfs(slug: Optional[str], *, strict: bool = False) -> Tuple[bool, Optional[Path]]:
+def has_normalized_markdown(slug: Optional[str], *, strict: bool = False) -> Tuple[bool, Optional[Path]]:
     """
-    Verifica se esistono PDF entro raw/ per lo slug dato.
+    Verifica se esistono Markdown entro normalized/ per lo slug dato.
     - TTL cache breve (3s) su risultati POSITIVI (evita caching negativo).
     - Path-safety su ogni file incontrato durante la scansione.
     - In caso di errore I/O/logico, non cache-izza il risultato e registra un warning.
@@ -134,12 +144,12 @@ def has_raw_pdfs(slug: Optional[str], *, strict: bool = False) -> Tuple[bool, Op
 
     validate_slug(slug_value)
 
-    raw_dir = get_ui_workspace_layout(slug_value, require_env=False).raw_dir
-    if not raw_dir.is_dir():
-        return False, raw_dir
+    normalized_dir = get_ui_workspace_layout(slug_value, require_env=False).normalized_dir
+    if not normalized_dir.is_dir():
+        return False, normalized_dir
 
     # Cache opzionale in session_state (se Streamlit presente)
-    cache_key = f"_raw_has_pdf::{raw_dir}"
+    cache_key = f"_normalized_has_md::{normalized_dir}"
     now = time.time()
     ttl_seconds = 3.0  # TTL breve per evitare staleness percettibile in UI
     current_mtime: float | None = None
@@ -148,15 +158,15 @@ def has_raw_pdfs(slug: Optional[str], *, strict: bool = False) -> Tuple[bool, Op
         if isinstance(cached, dict):
             cached_ts = float(cached.get("ts", 0))
             cached_mtime = float(cached.get("mtime", 0))
-            current_mtime = _dir_mtime(raw_dir)
+            current_mtime = _dir_mtime(normalized_dir)
             if (now - cached_ts) <= ttl_seconds and abs(cached_mtime - current_mtime) < 1e-6:
                 has_pdf_cached = bool(cached.get("has_pdf", False))
-                return has_pdf_cached, raw_dir
+                return has_pdf_cached, normalized_dir
 
     # Scansione robusta utilizzando l'helper condiviso
     try:
         # basta verificare l'esistenza del primo elemento
-        first = next(iter_pdfs_safe(raw_dir, use_cache=True, cache_ttl_s=_UI_RAW_CACHE_TTL), None)
+        first = next(iter_markdown_safe(normalized_dir), None)
         has_pdf = first is not None
     except Exception as e:
         if strict:
@@ -164,17 +174,17 @@ def has_raw_pdfs(slug: Optional[str], *, strict: bool = False) -> Tuple[bool, Op
         # Non scrivere cache negative su errore: segnala e rientra
         try:
             _log.warning(
-                "ui.workspace.scan_raw_failed",
-                extra={"error": str(e), "raw_dir": tail_path(raw_dir)},
+                "ui.workspace.scan_normalized_failed",
+                extra={"error": str(e), "normalized_dir": tail_path(normalized_dir)},
             )
         except Exception:
             pass
-        return False, raw_dir
+        return False, normalized_dir
 
     if st is not None and hasattr(st, "session_state"):
         if has_pdf:
             if current_mtime is None:
-                current_mtime = _dir_mtime(raw_dir)
+                current_mtime = _dir_mtime(normalized_dir)
             st.session_state[cache_key] = {
                 "has_pdf": True,
                 "mtime": current_mtime,
@@ -188,17 +198,17 @@ def has_raw_pdfs(slug: Optional[str], *, strict: bool = False) -> Tuple[bool, Op
             except Exception:
                 pass
 
-    return has_pdf, raw_dir
+    return has_pdf, normalized_dir
 
 
-def raw_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, Optional[Path]]:
+def normalized_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, Optional[Path]]:
     """
-    Predicate canonico per raw_ready: richiede layout/config validi e almeno un PDF in raw/.
-    Ritorna (ready, raw_dir) per logging/gating.
+    Predicate canonico per normalized_ready: richiede layout/config validi e almeno un Markdown in normalized/.
+    Ritorna (ready, normalized_dir) per logging/gating.
     """
     slug_value = (slug or "").strip().lower()
     if not slug_value:
-        # NOT_APPLICABLE: niente slug => niente gating su raw
+        # NOT_APPLICABLE: niente slug => niente gating su normalized
         return True, None
     try:
         layout = get_ui_workspace_layout(slug_value, require_env=False)
@@ -206,38 +216,38 @@ def raw_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, Optio
         if strict:
             raise
         # Drastico ma non bug-friendly:
-        # - se il layout non si può risolvere perché manca il contesto/slug, non bloccare la UI
+        # - se il layout non si pu? risolvere perch? manca il contesto/slug, non bloccare la UI
         # - per errori reali (config/permessi/altro), non dichiarare ready
         if isinstance(exc, ConfigError):
             return True, None
         return False, None
 
-    # Vision gating: raw/ non è semanticamente rilevante finché la Vision non è completata
+    # Vision gating: normalized/ non ? semanticamente rilevante finch? la Vision non ? completata
     vision_hash = layout.semantic_dir / ".vision_hash"
     if not vision_hash.exists():
-        # NOT_APPLICABLE: evita warning e check prematuri su raw/
+        # NOT_APPLICABLE: evita warning e check prematuri su normalized/
         return True, None
 
-    ready, raw_dir = has_raw_pdfs(slug_value, strict=strict)
-    # `has_raw_pdfs` giù verifica slug/layout; il controllo su config/layout è quindi implicito.
+    ready, normalized_dir = has_normalized_markdown(slug_value, strict=strict)
+    # `has_normalized_markdown` gi? verifica slug/layout; il controllo su config/layout ? quindi implicito.
     if not ready:
-        return False, raw_dir or layout.raw_dir
-    return True, raw_dir or layout.raw_dir
+        return False, normalized_dir or layout.normalized_dir
+    return True, normalized_dir or layout.normalized_dir
 
 
 def tagging_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, Optional[Path]]:
     """
     Predicate canonico per tagging_ready:
-    - richiede raw_ready
+    - richiede normalized_ready
     - richiede semantic/tags.db presente
     - richiede semantic/tags_reviewed.yaml presente e non vuoto
     Ritorna (ready, semantic_dir) per logging/gating.
     """
     if get_tags_env_config().is_stub:
         return False, None
-    raw_ok, raw_dir = raw_ready(slug, strict=strict)
-    if not raw_ok:
-        return False, raw_dir
+    normalized_ok, normalized_dir = normalized_ready(slug, strict=strict)
+    if not normalized_ok:
+        return False, normalized_dir
     try:
         layout = get_ui_workspace_layout(slug or "", require_env=False)
     except Exception as exc:

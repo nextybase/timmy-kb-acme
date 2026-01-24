@@ -33,11 +33,12 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
     (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
     (base / "book").mkdir(parents=True, exist_ok=True)
     (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     (base / "semantic").mkdir(parents=True, exist_ok=True)
-    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (base / "logs").mkdir(parents=True, exist_ok=True)
 
 
@@ -49,22 +50,18 @@ def test_convert_markdown_ignores_ctx_overrides(tmp_path: Path, monkeypatch):
     _write_minimal_layout(base)
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
+    (base / "normalized" / "dummy.md").write_text("# Dummy\n", encoding="utf-8")
     ctx = _Ctx(base, raw, book)
 
     # 👇 RAW deve contenere almeno un PDF affinché il converter venga invocato
     (base / "raw" / "dummy.pdf").write_bytes(b"%PDF-1.4\n%dummy\n")
 
-    # Fake converter: deve scrivere in book_dir
-    def _fake_convert_md(ctxlike, book_dir: Path):
-        (book_dir / "A.md").write_text("# A\n", encoding="utf-8")
-
-    monkeypatch.setattr(convert_service, "_convert_md", _fake_convert_md, raising=True)
-
     # cast(Any, ...) per evitare reportArgumentType: accettiamo duck typing nei test
     mds = convert_service.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
 
-    assert (base / "book" / "A.md").exists()
-    assert any(p.name == "A.md" for p in mds)
+    assert (base / "book" / "dummy.md").exists()
+    assert not (base / "custom_book" / "dummy.md").exists()
+    assert any(p.name == "dummy.md" for p in mds)
 
 
 def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, monkeypatch):

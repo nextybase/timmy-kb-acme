@@ -29,7 +29,7 @@ from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  
 from ui.utils.status import status_guard
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
-from ui.utils.workspace import count_pdfs_safe, get_ui_workspace_layout
+from ui.utils.workspace import count_markdown_safe, get_ui_workspace_layout
 
 LOGGER = get_structured_logger("ui.manage")
 st = get_streamlit()
@@ -353,7 +353,7 @@ slug = cast(str, slug)
 
 
 def _render_status_block(
-    pdf_count: int,
+    md_count: int,
     service_ok: bool,
     semantic_dir: Path,
 ) -> None:
@@ -389,25 +389,25 @@ if slug:
     emit_btn_type = "primary" if client_state == "nuovo" else "secondary"
 
     repo_root_dir = layout.repo_root_dir
-    raw_dir = layout.raw_dir
+    normalized_dir = layout.normalized_dir
     semantic_dir = layout.semantic_dir
 
-    pdf_count = count_pdfs_safe(raw_dir, use_cache=True)
-    has_pdfs = pdf_count > 0
+    md_count = count_markdown_safe(normalized_dir)
+    has_markdown = md_count > 0
     tags_cfg = get_tags_env_config()
     tags_mode = tags_cfg.normalized
     run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
     can_stub = tags_cfg.is_stub
     can_run_service = run_tags_fn is not None
     service_ok = can_stub or can_run_service
-    prerequisites_ok = has_pdfs and service_ok
+    prerequisites_ok = has_markdown and service_ok
     semantic_help = (
-        "Estrae keyword dai PDF in raw/, genera/aggiorna tags_raw.csv e lo stub (DB). "
+        "Estrae keyword dai Markdown in normalized/, genera/aggiorna tags_raw.csv e lo stub (DB). "
         "Poi puoi rivedere il CSV e abilitare lo YAML."
         if prerequisites_ok
         else (
-            "Disponibile solo quando raw/ contiene PDF e il servizio di estrazione è attivo "
-            "(puoi usare TAGS_MODE=stub per bypassare il servizio, ma servono comunque PDF)."
+            "Disponibile solo quando normalized/ contiene Markdown e il servizio di estrazione è attivo "
+            "(puoi usare TAGS_MODE=stub per bypassare il servizio, ma servono comunque Markdown)."
         )
     )
 
@@ -591,8 +591,11 @@ if slug:
             disabled=semantic_disabled,
             help=semantic_help,
         ):
-            if not has_pdfs:
-                st.error(f"Nessun PDF rilevato in `{raw_dir}`. Allinea i documenti da Drive o carica PDF manualmente.")
+            if not has_markdown:
+                st.error(
+                    f"Nessun Markdown rilevato in `{normalized_dir}`. "
+                    "Esegui raw_ingest o rigenera normalized/ prima di procedere."
+                )
             else:
                 backend = os.getenv("TAGS_NLP_BACKEND", "spacy").strip().lower() or "spacy"
                 backend_label = "SpaCy" if backend == "spacy" else backend.capitalize()
@@ -621,4 +624,4 @@ if slug:
         # Sostituisce anchor HTML interno con API native di navigazione
         link_label = "📌 Prosegui con l'arricchimento semantico"
         st.page_link(PagePaths.SEMANTICS, label=link_label)
-    _render_status_block(pdf_count=pdf_count, service_ok=service_ok, semantic_dir=semantic_dir)
+    _render_status_block(md_count=md_count, service_ok=service_ok, semantic_dir=semantic_dir)

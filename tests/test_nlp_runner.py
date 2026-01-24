@@ -18,26 +18,26 @@ class _NoopLogger:
 
 def test_collect_doc_tasks_skips_existing_doc_terms(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base_dir = tmp_path / "kb"
-    raw_dir = base_dir / "raw"
-    nested_raw = raw_dir / "section"
-    nested_raw.mkdir(parents=True, exist_ok=True)
-    pdf_existing = nested_raw / "existing.pdf"
-    pdf_missing = nested_raw / "missing.pdf"
-    pdf_existing.write_bytes(b"%PDF-1.4\n%")
-    pdf_missing.write_bytes(b"%PDF-1.4\n%")
+    normalized_dir = base_dir / "normalized"
+    nested_dir = normalized_dir / "section"
+    nested_dir.mkdir(parents=True, exist_ok=True)
+    md_existing = nested_dir / "existing.md"
+    md_missing = nested_dir / "missing.md"
+    md_existing.write_text("# Existing\n", encoding="utf-8")
+    md_missing.write_text("# Missing\n", encoding="utf-8")
 
     db_path = base_dir / "semantic" / "tags.db"
     ensure_schema_v2(str(db_path))
 
     with get_conn(str(db_path)) as conn:
-        folder_id = upsert_folder(conn, "raw/section", "raw")
-        doc_existing = upsert_document(conn, folder_id, pdf_existing.name, sha256="aaa", pages=1)
-        doc_missing = upsert_document(conn, folder_id, pdf_missing.name, sha256="bbb", pages=2)
+        folder_id = upsert_folder(conn, "normalized/section", "normalized")
+        doc_existing = upsert_document(conn, folder_id, md_existing.name, sha256="aaa", pages=1)
+        doc_missing = upsert_document(conn, folder_id, md_missing.name, sha256="bbb", pages=2)
         save_doc_terms(conn, doc_existing, [("alpha", 0.9, "ensemble")])
 
         tasks, total_docs, cache = nlp_runner.collect_doc_tasks(
             conn,
-            raw_dir_path=raw_dir,
+            normalized_dir_path=normalized_dir,
             only_missing=True,
             rebuild=False,
             logger=_NoopLogger(),
@@ -45,28 +45,28 @@ def test_collect_doc_tasks_skips_existing_doc_terms(tmp_path: Path, monkeypatch:
 
     assert total_docs == 2
     assert [task.doc_id for task in tasks] == [doc_missing]
-    assert cache.paths_by_id[folder_id].as_posix().endswith("raw/section")
-    assert tasks[0].pdf_path == pdf_missing.resolve()
+    assert cache.paths_by_id[folder_id].as_posix().endswith("normalized/section")
+    assert tasks[0].md_path == md_missing.resolve()
 
 
 def test_persist_sections_clusters_and_upserts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base_dir = tmp_path / "kb"
-    raw_dir = base_dir / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = raw_dir / "alpha.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4\n%")
+    normalized_dir = base_dir / "normalized"
+    normalized_dir.mkdir(parents=True, exist_ok=True)
+    md_path = normalized_dir / "alpha.md"
+    md_path.write_text("# Alpha\n", encoding="utf-8")
 
     db_path = base_dir / "semantic" / "tags.db"
     ensure_schema_v2(str(db_path))
 
     with get_conn(str(db_path)) as conn:
-        folder_id = upsert_folder(conn, "raw", None)
-        doc_id = upsert_document(conn, folder_id, pdf_path.name, sha256="ccc", pages=3)
+        folder_id = upsert_folder(conn, "normalized", None)
+        doc_id = upsert_document(conn, folder_id, md_path.name, sha256="ccc", pages=3)
         save_doc_terms(conn, doc_id, [("gamma", 0.8, "ensemble"), ("beta", 0.5, "ensemble")])
 
         _, _, cache = nlp_runner.collect_doc_tasks(
             conn,
-            raw_dir_path=raw_dir,
+            normalized_dir_path=normalized_dir,
             only_missing=False,
             rebuild=False,
             logger=_NoopLogger(),
@@ -104,17 +104,17 @@ def test_persist_sections_clusters_and_upserts(tmp_path: Path, monkeypatch: pyte
 
 def test_run_doc_terms_pipeline_processes_and_returns_stats(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base_dir = tmp_path / "kb"
-    raw_dir = base_dir / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = raw_dir / "doc.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4\n%")
+    normalized_dir = base_dir / "normalized"
+    normalized_dir.mkdir(parents=True, exist_ok=True)
+    md_path = normalized_dir / "doc.md"
+    md_path.write_text("# Doc\n", encoding="utf-8")
 
     db_path = base_dir / "semantic" / "tags.db"
     ensure_schema_v2(str(db_path))
 
     with get_conn(str(db_path)) as conn:
-        folder_id = upsert_folder(conn, "raw", None)
-        doc_id = upsert_document(conn, folder_id, pdf_path.name, sha256="ddd", pages=1)
+        folder_id = upsert_folder(conn, "normalized", None)
+        doc_id = upsert_document(conn, folder_id, md_path.name, sha256="ddd", pages=1)
 
         processed: list[int] = []
 
@@ -137,7 +137,7 @@ def test_run_doc_terms_pipeline_processes_and_returns_stats(tmp_path: Path, monk
 
         stats = nlp_runner.run_doc_terms_pipeline(
             conn,
-            raw_dir_path=raw_dir,
+            normalized_dir_path=normalized_dir,
             lang="it",
             topn_doc=5,
             topk_folder=3,

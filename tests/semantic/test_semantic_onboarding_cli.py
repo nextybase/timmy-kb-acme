@@ -28,6 +28,7 @@ def _ctx(base_dir: Path) -> TestClientCtx:
 def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     args = argparse.Namespace(slug="dummy", no_preview=False, non_interactive=False)
     monkeypatch.setattr(cli, "_parse_args", lambda: args)
+    monkeypatch.setattr(cli, "_require_normalize_raw_gate", lambda *_a, **_k: None)
 
     ctx = _ctx(tmp_path / "output" / "dummy")
     monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))
@@ -63,6 +64,7 @@ def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_
 def test_main_bubbles_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     args = argparse.Namespace(slug="dummy", no_preview=False, non_interactive=True)
     monkeypatch.setattr(cli, "_parse_args", lambda: args)
+    monkeypatch.setattr(cli, "_require_normalize_raw_gate", lambda *_a, **_k: None)
 
     ctx = _ctx(tmp_path / "output" / "dummy")
     monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))
@@ -89,6 +91,7 @@ def test_main_bubbles_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     args = argparse.Namespace(slug="dummy", no_preview=False, non_interactive=True)
     monkeypatch.setattr(cli, "_parse_args", lambda: args)
+    monkeypatch.setattr(cli, "_require_normalize_raw_gate", lambda *_a, **_k: None)
 
     ctx = _ctx(tmp_path / "output" / "dummy")
     monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))

@@ -127,6 +127,34 @@ def _summarize_error(exc: BaseException) -> str:
     return f"{name}: {first_line}"
 
 
+def _require_normalize_raw_gate(
+    conn,
+    *,
+    slug: str,
+    layout: WorkspaceLayout,
+) -> None:
+    row = conn.execute(
+        """
+        SELECT d.decision_id, d.decided_at
+        FROM decisions d
+        JOIN runs r ON r.run_id = d.run_id
+        WHERE r.slug = ?
+          AND d.gate_name = ?
+          AND d.verdict = ?
+        ORDER BY d.decided_at DESC
+        LIMIT 1
+        """,
+        (slug, "normalize_raw", decision_ledger.DECISION_ALLOW),
+    ).fetchone()
+    if row is not None:
+        return
+    raise ConfigError(
+        "Gate normalize_raw mancante: esegui raw_ingest prima di semantic_onboarding.",
+        slug=slug,
+        file_path=layout.normalized_dir,
+    )
+
+
 def main() -> int:
     # ENTRYPOINT BOOTSTRAP - consentito: CLI standalone usa la repo root per il workspace.
     get_repo_root()
@@ -185,6 +213,7 @@ def main() -> int:
             try:
                 tag_kg_effective: str | None = None
 
+                _require_normalize_raw_gate(ledger_conn, slug=slug, layout=layout)
                 repo_root_dir, _mds, touched = run_semantic_pipeline(
                     ctx,
                     logger,

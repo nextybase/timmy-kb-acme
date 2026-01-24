@@ -5,8 +5,8 @@ FORBIDDEN IN RUNTIME-CORE (src/)
 Fallback behavior is intentional and confined to this perimeter
 
 Smoke test per il gating della pagina Semantica.
-- Scenario A: workspace dummy SENZA PDF -> Semantica nascosta.
-- Scenario B: workspace dummy CON PDF minimo -> Semantica visibile.
+- Scenario A: workspace dummy SENZA Markdown in normalized/ -> Semantica nascosta.
+- Scenario B: workspace dummy CON Markdown minimo in normalized/ -> Semantica visibile.
 Il test usa tools/ci_dump_nav.py per interrogare la navigazione effettiva.
 """
 
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 from typing import Iterable, Mapping
 
-from pipeline.file_utils import safe_write_bytes
+from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.workspace_bootstrap import bootstrap_dummy_workspace
 
@@ -69,6 +69,11 @@ def _has_semantics(nav: dict) -> bool:
     return False
 
 
+def _write_vision_hash(layout) -> None:
+    path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / ".vision_hash")
+    safe_write_text(path, "dummy", encoding="utf-8", atomic=True)
+
+
 def run_smoke(verbose: bool = False) -> None:
     repo_root = _repo_root()
     clients_dir = repo_root / "clients_db" / "semantics_smoke"
@@ -96,27 +101,31 @@ def run_smoke(verbose: bool = False) -> None:
         (clients_dir / "ui_state.json").write_text(json.dumps(payload), encoding="utf-8")
 
     try:
-        # Scenario A: workspace SENZA PDF
+        # Scenario A: workspace SENZA Markdown in normalized/
         layout_a = bootstrap_dummy_workspace(slug_a)
+        layout_a.normalized_dir.mkdir(parents=True, exist_ok=True)
+        _write_vision_hash(layout_a)
         _write_ui_state(slug_a)
         nav_without = _ci_dump_nav(env_base)
         if verbose:
-            print("Scenario A (senza PDF):")
+            print("Scenario A (senza Markdown):")
             print(json.dumps(nav_without, indent=2))
         if _has_semantics(nav_without):
-            raise RuntimeError("Semantica non dovrebbe essere visibile senza PDF in raw/")
+            raise RuntimeError("Semantica non dovrebbe essere visibile senza Markdown in normalized/")
 
-        # Scenario B: workspace CON PDF
+        # Scenario B: workspace CON Markdown
         layout_b = bootstrap_dummy_workspace(slug_b)
-        pdf_path = ensure_within_and_resolve(layout_b.raw_dir, layout_b.raw_dir / "sample.pdf")
-        safe_write_bytes(pdf_path, b"%PDF-1.4\n%%EOF\n", atomic=True)
+        layout_b.normalized_dir.mkdir(parents=True, exist_ok=True)
+        _write_vision_hash(layout_b)
+        md_path = ensure_within_and_resolve(layout_b.normalized_dir, layout_b.normalized_dir / "sample.md")
+        safe_write_text(md_path, "# Sample\n", encoding="utf-8", atomic=True)
         _write_ui_state(slug_b)
         nav_with = _ci_dump_nav(env_base)
         if verbose:
-            print("Scenario B (con PDF):")
+            print("Scenario B (con Markdown):")
             print(json.dumps(nav_with, indent=2))
         if not _has_semantics(nav_with):
-            raise RuntimeError("Semantica deve essere visibile quando raw/ contiene PDF")
+            raise RuntimeError("Semantica deve essere visibile quando normalized/ contiene Markdown")
 
         if verbose:
             print("Smoke semantics gating: OK")

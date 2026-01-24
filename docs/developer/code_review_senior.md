@@ -11,7 +11,7 @@
 
 ## Checklist per il Reviewer
 1. **Artefatti / gate:** i riferimenti a Evidence Gate / Skeptic Gate / QA Gate sono coerenti con instructions/05-08?
-2. **State visibility:** le transizioni (`bootstrap`, `raw_ready`, `tagging_ready`, `pronto`, `arricchito`, `finito`) hanno predicate chiari?
+2. **State visibility:** le transizioni (`bootstrap`, `normalized_ready`, `tagging_ready`, `pronto`, `arricchito`, `finito`) hanno predicate chiari?
 3. **Scope safety:** ogni cambiamento documenta i path (`raw/`, `semantic/`, `book/`, `config/`) e l'OCP-plane?
 4. **Observability:** vengono citati log/signals (`ui.semantics.gating_allowed`, `context.step.status`, ecc.) per confermare i passaggi?
 5. **Evidence:** i gate specificano artefatti o log "PASS" o li marcano come "non formalizzato"?

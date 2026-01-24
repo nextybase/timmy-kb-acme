@@ -45,7 +45,7 @@ def _mk_semantics_ctx(monkeypatch, sem, *, tmp_path: Path, log_dir: Path) -> lis
     monkeypatch.setattr(sem.st, "error", lambda *a, **k: None, raising=False)
     monkeypatch.setattr(sem.st, "caption", lambda *a, **k: None, raising=False)
     monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (True, tmp_path / "normalized"))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
     events: list[tuple[str, dict | None]] = []
     monkeypatch.setattr(
@@ -113,15 +113,15 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
     ready_calls: list[bool] = []
     reset_flag = {"pending": False}
 
-    def _raw_ready(slug: str):
+    def _normalized_ready(slug: str):
         if not reset_flag["pending"] and ready_calls:
-            raise AssertionError("raw_ready chiamato senza reset gating precedente")
+            raise AssertionError("normalized_ready chiamato senza reset gating precedente")
         reset_flag["pending"] = False
         value = readiness.pop(0)
         ready_calls.append(value)
-        return value, tmp_path / "raw"
+        return value, tmp_path / "normalized"
 
-    monkeypatch.setattr(sem, "raw_ready", _raw_ready)
+    monkeypatch.setattr(sem, "normalized_ready", _normalized_ready)
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
 
     log_records: list[tuple[str, dict]] = []
@@ -169,14 +169,14 @@ def test_semantics_flow_convert_enrich_summary(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "_reset_gating_cache", _counting_reset)
 
     sem._client_state = "pronto"  # type: ignore[attr-defined]
-    sem._raw_ready = True  # type: ignore[attr-defined]
+    sem._normalized_ready = True  # type: ignore[attr-defined]
 
-    sem.raw_ready("dummy")
+    sem.normalized_ready("dummy")
 
     for runner in (sem._run_convert, sem._run_enrich, sem._run_summary):
         reset_flag["pending"] = True
         runner("dummy")
-        sem.raw_ready("dummy")
+        sem.normalized_ready("dummy")
 
     assert state["value"] == "finito"
     assert reset_calls == ["dummy", "dummy", "dummy"]
@@ -197,11 +197,11 @@ def test_semantics_message_string_matches_docs():
     assert SEMANTIC_GATING_MESSAGE in docs_text, SEMANTIC_GATING_MESSAGE
 
 
-def test_semantic_gating_helper_blocks_without_raw(monkeypatch):
+def test_semantic_gating_helper_blocks_without_normalized(monkeypatch):
     import ui.pages.semantics as sem
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (False, None))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (False, None))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, None))
 
     with pytest.raises(ConfigError, match="Semantica non disponibile"):
@@ -212,7 +212,7 @@ def test_run_actions_honor_headless_gating(monkeypatch):
     import ui.pages.semantics as sem
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "nuovo")
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (False, None))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (False, None))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, None))
 
     for runner in (sem._run_convert, sem._run_enrich, sem._run_summary):
@@ -239,12 +239,12 @@ def test_gate_cache_reuses_result(monkeypatch):
 
     calls = {"count": 0}
 
-    def _raw_ready(slug: str):
+    def _normalized_ready(slug: str):
         calls["count"] += 1
-        return True, Path("raw")
+        return True, Path("normalized")
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "raw_ready", _raw_ready)
+    monkeypatch.setattr(sem, "normalized_ready", _normalized_ready)
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, Path("semantic")))
     sem._GATE_CACHE.clear()
 
@@ -256,16 +256,16 @@ def test_gate_cache_reuses_result(monkeypatch):
     sem._GATE_CACHE.clear()
 
 
-def test_gate_cache_rechecks_raw_if_removed(monkeypatch, tmp_path):
+def test_gate_cache_rechecks_normalized_if_removed(monkeypatch, tmp_path):
     import ui.pages.semantics as sem
 
-    states: list[tuple[bool, Path | None]] = [(True, tmp_path / "raw"), (False, None)]
+    states: list[tuple[bool, Path | None]] = [(True, tmp_path / "normalized"), (False, None)]
 
     def _raw(slug: str):
         return states.pop(0)
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "raw_ready", _raw)
+    monkeypatch.setattr(sem, "normalized_ready", _raw)
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
     sem._GATE_CACHE.clear()
 
@@ -275,19 +275,19 @@ def test_gate_cache_rechecks_raw_if_removed(monkeypatch, tmp_path):
     sem._GATE_CACHE.clear()
 
 
-def test_gate_cache_updates_raw_path(monkeypatch, tmp_path):
+def test_gate_cache_updates_normalized_path(monkeypatch, tmp_path):
     import ui.pages.semantics as sem
 
     responses: list[tuple[bool, Path | None]] = [
-        (True, Path("raw")),
-        (True, tmp_path / "raw-v2"),
+        (True, Path("normalized")),
+        (True, tmp_path / "normalized-v2"),
     ]
 
     def _raw(slug: str):
         return responses.pop(0)
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "raw_ready", _raw)
+    monkeypatch.setattr(sem, "normalized_ready", _raw)
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
     sem._GATE_CACHE.clear()
 
@@ -296,7 +296,7 @@ def test_gate_cache_updates_raw_path(monkeypatch, tmp_path):
 
     cache_key = "dummy"
     assert cache_key in sem._GATE_CACHE
-    assert sem._GATE_CACHE[cache_key][3] == tmp_path / "raw-v2"
+    assert sem._GATE_CACHE[cache_key][3] == tmp_path / "normalized-v2"
     sem._GATE_CACHE.clear()
 
 
@@ -314,7 +314,7 @@ def test_run_enrich_promotes_state_to_arricchito(monkeypatch, tmp_path):
 
     # gating helper
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (True, tmp_path / "normalized"))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
 
     # ctx/logger minimi
@@ -390,7 +390,7 @@ def test_run_enrich_errors_when_vocab_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
     monkeypatch.setattr(sem, "get_paths", lambda slug: {"base": tmp_path})
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (True, tmp_path / "normalized"))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
     monkeypatch.setattr(
         sem,
@@ -433,7 +433,7 @@ def test_run_summary_promotes_state_to_finito(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx_and_logger)
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (True, tmp_path / "normalized"))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
 
     # writer simulato
@@ -458,7 +458,7 @@ def test_run_enrich_blocks_when_tagging_not_ready(monkeypatch, tmp_path):
     monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
 
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (False, tmp_path / "semantic"))
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (True, tmp_path / "normalized"))
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
 
     sem._run_enrich("dummy")
@@ -478,7 +478,7 @@ def test_run_summary_blocks_without_prerequisites(monkeypatch, tmp_path):
     state_calls: list[tuple[str, str]] = []
     monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
 
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (False, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (False, tmp_path / "normalized"))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (False, tmp_path / "semantic"))
     monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
 
@@ -536,7 +536,7 @@ def test_run_summary_requires_qa_marker(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sem, "_make_ctx_and_logger", _mk_ctx)
     monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (True, tmp_path / "normalized"))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
 
     called: list[str] = []
@@ -661,14 +661,14 @@ def test_retry_logged_and_gates_checked(monkeypatch, tmp_path):
     _patch_streamlit_semantics(monkeypatch, sem)
     sem._ACTION_RUNS.clear()
 
-    gate_calls = {"raw": 0}
+    gate_calls = {"normalized": 0}
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
 
-    def _raw_ready(slug: str):
-        gate_calls["raw"] += 1
-        return True, tmp_path / "raw"
+    def _normalized_ready(slug: str):
+        gate_calls["normalized"] += 1
+        return True, tmp_path / "normalized"
 
-    monkeypatch.setattr(sem, "raw_ready", _raw_ready)
+    monkeypatch.setattr(sem, "normalized_ready", _normalized_ready)
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
 
     events: list[tuple[str, dict | None]] = []
@@ -695,7 +695,7 @@ def test_retry_logged_and_gates_checked(monkeypatch, tmp_path):
     sem._run_enrich("dummy")
     sem._run_enrich("dummy")
 
-    assert gate_calls["raw"] == 2
+    assert gate_calls["normalized"] == 2
     assert any(evt[0] == "qa_gate_retry" and evt[1].get("action_id") == "enrich" for evt in events if evt[1])
 
 
@@ -709,13 +709,15 @@ def test_gating_failure_reasons_are_deterministic(monkeypatch, tmp_path):
     )
 
     monkeypatch.setattr(sem, "get_state", lambda slug: "pronto")
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (False, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (False, tmp_path / "normalized"))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
 
     with pytest.raises(ConfigError):
         sem._require_semantic_gating("dummy")
 
-    assert any(evt[0] == "evidence_gate_blocked" and evt[1].get("reason") == "raw_missing" for evt in events if evt[1])
+    assert any(
+        evt[0] == "evidence_gate_blocked" and evt[1].get("reason") == "normalized_missing" for evt in events if evt[1]
+    )
 
     events.clear()
 
@@ -723,7 +725,7 @@ def test_gating_failure_reasons_are_deterministic(monkeypatch, tmp_path):
     qa_dir = tmp_path / "logs"
     qa_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(sem, "_qa_evidence_path", lambda layout: qa_dir / sem.QA_EVIDENCE_FILENAME)
-    monkeypatch.setattr(sem, "raw_ready", lambda slug: (True, tmp_path / "raw"))
+    monkeypatch.setattr(sem, "normalized_ready", lambda slug: (True, tmp_path / "normalized"))
     monkeypatch.setattr(sem, "tagging_ready", lambda slug: (True, tmp_path / "semantic"))
     monkeypatch.setattr(sem, "get_state", lambda slug: "arricchito")
 

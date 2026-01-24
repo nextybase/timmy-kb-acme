@@ -14,9 +14,16 @@ from semantic.convert_service import _call_convert_md
 def _ctx(
     base: Path = Path("."),
     raw: Path = Path("."),
+    normalized: Path = Path("normalized"),
     md: Path = Path("book"),
 ) -> ContextPaths:
-    return ContextPaths(repo_root_dir=base, raw_dir=raw, book_dir=md, slug="x")
+    return ContextPaths(
+        repo_root_dir=base,
+        raw_dir=raw,
+        normalized_dir=normalized,
+        book_dir=md,
+        slug="x",
+    )
 
 
 def test_call_convert_md_raises_on_non_callable() -> None:

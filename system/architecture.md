@@ -55,7 +55,7 @@ These layers are intentionally asymmetric in behavior and guarantees.
 The **Epistemic Envelope** is implemented through the Foundation Pipeline
 and the deterministic runtime core.
 
-Its responsibility is to transform raw inputs into structured, observable
+Its responsibility is to transform raw inputs into normalized markdown and structured, observable
 and explainable informational artifacts:
 
 - normalized and chunked markdown
@@ -320,7 +320,7 @@ Runtime boundary modules (strict guard):
 The following patterns are explicitly forbidden in the production runtime.
 They are banned because they already occur in legacy paths and break determinism:
 
-FORBIDDEN: Deriving paths via `context.base_dir`, `context.md_dir`, `context.raw_dir`
+FORBIDDEN: Deriving paths via `context.base_dir`, `context.md_dir`, `context.raw_dir`, `context.normalized_dir`
 ALLOWED: Use `WorkspaceLayout.from_context(context)`
 
 FORBIDDEN: Reconstructing paths via manual joins
@@ -433,7 +433,7 @@ Any violation of these rules introduces entropy and breaks determinism.
 
 | Rule type   | Forbidden pattern                                           | Required alternative                      |
 |------------|--------------------------------------------------------------|-------------------------------------------|
-| Paths       | Use `context.base_dir` / `context.md_dir` / `context.raw_dir` | `WorkspaceLayout.from_context(context)`   |
+| Paths       | Use `context.base_dir` / `context.md_dir` / `context.raw_dir` / `context.normalized_dir` | `WorkspaceLayout.from_context(context)`   |
 | Paths       | Manual path joins                                            | Layout-provided paths + `ensure_within`   |
 | Roots       | Heuristic workspace root inference                           | Resolve via context + layout              |
 | Fallbacks   | Silent or non-deterministic fallback in runtime code          | Explicit, logged, deterministic fallback  |

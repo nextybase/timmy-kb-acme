@@ -22,6 +22,7 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
     (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
     (base / "book").mkdir(parents=True, exist_ok=True)
     (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")

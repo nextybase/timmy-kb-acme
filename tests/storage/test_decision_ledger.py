@@ -13,6 +13,7 @@ from storage import decision_ledger
 def _prepare_workspace(root: Path) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     (root / "raw").mkdir()
+    (root / "normalized").mkdir()
     (root / "book").mkdir()
     (root / "semantic").mkdir()
     (root / "logs").mkdir()

@@ -51,11 +51,13 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
     raw = base / "raw"
     book = base / "book"
     semantic_dir = base / "semantic"
+    normalized_dir = base / "normalized"
     config_dir = base / "config"
     logs_dir = base / "logs"
     (raw / "cat").mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir.mkdir(parents=True, exist_ok=True)
+    normalized_dir.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
     (book / "README.md").write_text("# README\n", encoding="utf-8")

@@ -24,9 +24,8 @@ class TaggingPayload(TypedDict):
     """Descrive i dati principali del payload usato da Tag Onboarding."""
 
     workspace_slug: str
-    raw_dir: Path
+    normalized_dir: Path
     semantic_dir: Path
-    source: str
     run_id: Optional[str]
     extra: dict[str, object] | None
 

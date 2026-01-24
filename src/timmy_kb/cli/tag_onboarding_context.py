@@ -20,7 +20,7 @@ class ContextResources:
 
     context: ClientContext
     repo_root_dir: Path
-    raw_dir: Path
+    normalized_dir: Path
     semantic_dir: Path
     logger: logging.Logger
     log_file: Path
@@ -43,7 +43,7 @@ def prepare_context(
 
     layout = WorkspaceLayout.from_context(context)
     repo_root_dir = layout.repo_root_dir
-    raw_dir = layout.raw_dir
+    normalized_dir = layout.normalized_dir
     semantic_dir = layout.semantic_dir
     layout.logs_dir.mkdir(parents=True, exist_ok=True)
     log_file = layout.log_file
@@ -53,7 +53,7 @@ def prepare_context(
     return ContextResources(
         context=context,
         repo_root_dir=repo_root_dir,
-        raw_dir=raw_dir,
+        normalized_dir=normalized_dir,
         semantic_dir=semantic_dir,
         logger=logger,
         log_file=log_file,

@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Sequence, cast
 
 import storage.tags_store as tags_store
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from storage.tags_store import clear_doc_terms, list_documents, upsert_folder_term, upsert_term
 
 __all__ = [
@@ -29,7 +30,7 @@ __all__ = [
 @dataclass(frozen=True)
 class DocTask:
     doc_id: int
-    pdf_path: Path
+    md_path: Path
 
 
 @dataclass(frozen=True)
@@ -38,10 +39,17 @@ class FolderCache:
     doc_ids_by_folder: dict[Optional[int], list[int]]
 
 
+def _read_markdown_text(md_path: Path) -> str:
+    text = read_text_safe(md_path.parent, md_path, encoding="utf-8")
+    if not text.strip():
+        raise ConfigError("normalized markdown empty", file_path=str(md_path))
+    return text
+
+
 def collect_doc_tasks(
     conn: Any,
     *,
-    raw_dir_path: Path,
+    normalized_dir_path: Path,
     only_missing: bool,
     rebuild: bool,
     logger: Optional[logging.Logger] = None,
@@ -67,7 +75,7 @@ def collect_doc_tasks(
         except (TypeError, ValueError):
             continue
         folder_path_str = row[1]
-        folder_path = Path(str(folder_path_str)) if folder_path_str else Path("raw")
+        folder_path = Path(str(folder_path_str)) if folder_path_str else Path("normalized")
         paths_by_id[folder_id] = folder_path
 
     def _abs_path_for(doc: dict[str, Any]) -> Optional[Path]:
@@ -77,14 +85,14 @@ def collect_doc_tasks(
         except (TypeError, ValueError):
             folder_id = None
 
-        folder_db_path = Path("raw")
+        folder_db_path = Path("normalized")
         if folder_id is not None:
-            folder_db_path = paths_by_id.get(folder_id, Path("raw"))
+            folder_db_path = paths_by_id.get(folder_id, Path("normalized"))
 
         parts: Sequence[str] = folder_db_path.parts
-        if parts and parts[0] == "raw":
+        if parts and parts[0] == "normalized":
             parts = parts[1:]
-        folder_fs_path = raw_dir_path.joinpath(*parts)
+        folder_fs_path = normalized_dir_path.joinpath(*parts)
 
         filename_val = doc.get("filename")
         if not isinstance(filename_val, str) or not filename_val.strip():
@@ -93,7 +101,7 @@ def collect_doc_tasks(
 
         candidate = folder_fs_path / filename_val
         try:
-            return cast(Path, ensure_within_and_resolve(raw_dir_path, candidate))
+            return cast(Path, ensure_within_and_resolve(normalized_dir_path, candidate))
         except Exception as exc:  # pragma: no cover - defensive guard
             log.warning(
                 "nlp.skip.unsafe_path",
@@ -124,14 +132,14 @@ def collect_doc_tasks(
         elif rebuild:
             clear_doc_terms(conn, doc_id)
 
-        pdf_path = _abs_path_for(doc)
-        if pdf_path is None:
+        md_path = _abs_path_for(doc)
+        if md_path is None:
             continue
-        if not pdf_path.exists():
-            log.warning("nlp.skip.file_missing", extra={"file_path": str(pdf_path), "doc": doc})
+        if not md_path.exists():
+            log.warning("nlp.skip.file_missing", extra={"file_path": str(md_path), "doc": doc})
             continue
 
-        tasks.append(DocTask(doc_id=doc_id, pdf_path=pdf_path))
+        tasks.append(DocTask(doc_id=doc_id, md_path=md_path))
 
     cache = FolderCache(
         paths_by_id=paths_by_id,
@@ -147,10 +155,10 @@ def process_document(
     topn_doc: int,
     model: str,
 ) -> list[tuple[str, float, str]]:
-    """Estrae keyword da un singolo documento PDF."""
-    from nlp.nlp_keywords import extract_text_from_pdf, fuse_and_dedup, keybert_scores, spacy_candidates, yake_scores
+    """Estrae keyword da un singolo documento Markdown normalizzato."""
+    from nlp.nlp_keywords import fuse_and_dedup, keybert_scores, spacy_candidates, yake_scores
 
-    text = extract_text_from_pdf(str(task.pdf_path))
+    text = _read_markdown_text(task.md_path)
     cand_spa = spacy_candidates(text, lang=lang)
     sc_y = yake_scores(text, top_k=int(topn_doc) * 2, lang=lang)
     sc_kb = keybert_scores(text, set(cand_spa), model_name=model, top_k=int(topn_doc) * 2)
@@ -330,7 +338,7 @@ def persist_sections(
 def run_doc_terms_pipeline(
     conn: Any,
     *,
-    raw_dir_path: Path,
+    normalized_dir_path: Path,
     lang: str,
     topn_doc: int,
     topk_folder: int,
@@ -342,11 +350,11 @@ def run_doc_terms_pipeline(
     worker_batch_size: int,
     logger: Optional[logging.Logger] = None,
 ) -> dict[str, Any]:
-    """Esegue l'intera pipeline NLP (doc_terms + clustering) e restituisce statistiche."""
+    """Esegue l'intera pipeline NLP (doc_terms + clustering) su normalized/ e restituisce statistiche."""
     log = logger or get_structured_logger("semantic.nlp.runner")
     tasks, total_docs, folder_cache = collect_doc_tasks(
         conn,
-        raw_dir_path=raw_dir_path,
+        normalized_dir_path=normalized_dir_path,
         only_missing=only_missing,
         rebuild=rebuild,
         logger=log,

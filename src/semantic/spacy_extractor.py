@@ -16,7 +16,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, iter_safe_pdfs
+from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths
 from pipeline.workspace_layout import WorkspaceLayout
 
 from .config import SemanticConfig
@@ -36,22 +36,9 @@ def _read_markdown_text(md_path: Path, *, layout: WorkspaceLayout) -> str:
     md_path = md_path.expanduser().resolve()
     if not md_path.is_file():
         raise FileNotFoundError(f"Markdown non trovato: {md_path}")
-    safe_md = cast(Path, ensure_within_and_resolve(layout.book_dir, md_path))
+    safe_md = cast(Path, ensure_within_and_resolve(layout.normalized_dir, md_path))
     with safe_md.open("r", encoding="utf-8") as handle:
         return handle.read()
-
-
-def _resolve_markdown_path_from_raw(raw_path: Path, *, layout: WorkspaceLayout) -> Path:
-    """
-    Dato un path raw (PDF), calcola il path al corrispondente Markdown in book/.
-
-    Convenzione: raw/<categoria>/file.pdf -> book/<categoria>/file.md
-    """
-    raw_root = layout.raw_dir
-    safe_raw = cast(Path, ensure_within_and_resolve(raw_root, raw_path.resolve()))
-    rel = safe_raw.relative_to(raw_root)
-    md_root = layout.book_dir
-    return cast(Path, md_root / rel.with_suffix(".md"))
 
 
 def _load_spacy(model_name: str) -> Any:
@@ -174,7 +161,7 @@ def _prune(
 
 
 def extract_spacy_tags(
-    raw_dir: Path,
+    normalized_dir: Path,
     cfg: SemanticConfig,
     *,
     model_name: str = "it_core_news_sm",
@@ -186,7 +173,7 @@ def extract_spacy_tags(
     Ritorna un dict: relative_path -> {tags, entities, keyphrases, score, sources}
     """
     layout = WorkspaceLayout.from_workspace(cfg.repo_root_dir)
-    raw_dir = layout.raw_dir
+    normalized_dir = layout.normalized_dir
     lexicon = build_lexicon(cfg.mapping)
     if not lexicon:
         return {}
@@ -200,25 +187,29 @@ def extract_spacy_tags(
         raise ConfigError(f"SpaCy fallito (model={model_name}): {err_type}: {err_line}") from exc
 
     candidates: Dict[str, Dict[str, Any]] = {}
-    for pdf_path in iter_safe_pdfs(raw_dir):
+    for md_path in iter_safe_paths(
+        normalized_dir,
+        include_dirs=False,
+        include_files=True,
+        suffixes=(".md",),
+    ):
         try:
-            rel_path = pdf_path.relative_to(raw_dir).as_posix()
+            rel_path = md_path.relative_to(normalized_dir).as_posix()
         except Exception:
             continue
         try:
-            md_path = _resolve_markdown_path_from_raw(pdf_path, layout=layout)
             text = _read_markdown_text(md_path, layout=layout)
         except FileNotFoundError as exc:
             raise ConfigError(
-                f"Markdown non trovato per il documento {pdf_path.name}: esegui prima la conversione PDF→Markdown.",
-                file_path=str(pdf_path),
+                f"Markdown non trovato per il documento {md_path.name}: esegui raw_ingest.",
+                file_path=str(md_path),
             ) from exc
         except Exception as exc:
             err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
             err_type = type(exc).__name__
             raise ConfigError(
-                f"Markdown non leggibile per {pdf_path.name}: {err_type}: {err_line}",
-                file_path=str(pdf_path),
+                f"Markdown non leggibile per {md_path.name}: {err_type}: {err_line}",
+                file_path=str(md_path),
             ) from exc
         if not text:
             continue

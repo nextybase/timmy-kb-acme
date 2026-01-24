@@ -54,3 +54,4 @@ dei due domini epistemici canonici del sistema:
 - [0004: Ottimizzazione performance pipeline NLP e cache RAW](0004-nlp-performance-tuning.md)
 - [0005: Refactor tagging con build_tags_csv in semantic.tagging_service](0005-refactor-tagging-build-tags-csv.md)
 - [0006: Smoke test - Cliente Dummy](0006-dummy-kb-e2e-smoke-test.md)
+- [0007: Separazione RAW / NORMALIZED / SEMANTIC](0007-raw-normalized-semantic-separation.md)

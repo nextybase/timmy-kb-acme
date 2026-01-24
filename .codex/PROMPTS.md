@@ -282,7 +282,7 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 
 ## Router and onboarding gating
 - Enforce native routing (`st.navigation(pages).run()`), using internal links through `st.page_link`.
-- Semantics gating: enable the Semantica tab only after `raw/` exists; keep user messages short and log details.
+- Semantics gating: enable the Semantica tab only after `normalized/` exists; keep user messages short and log details.
 - Manage state and slug with `ui.utils.route_state` and `ui.utils.slug`; avoid query tricks.
 
 ## Deprecation sweep and layout

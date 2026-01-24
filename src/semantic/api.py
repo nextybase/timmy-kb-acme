@@ -82,6 +82,7 @@ def get_paths(slug: str) -> Dict[str, Path]:
     return {
         "base": layout.repo_root_dir,
         "raw": layout.raw_dir,
+        "normalized": layout.normalized_dir,
         "book": layout.book_dir,
         "semantic": layout.semantic_dir,
     }

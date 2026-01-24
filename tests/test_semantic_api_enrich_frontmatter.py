@@ -27,6 +27,7 @@ def _write(p: Path, text: str) -> None:
 def _write_minimal_layout(base: Path) -> None:
     _write(base / "config" / "config.yaml", "meta:\n  client_name: test\n")
     (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
     (base / "logs").mkdir(parents=True, exist_ok=True)
     _write(base / "book" / "README.md", "# KB\n")
     _write(base / "book" / "SUMMARY.md", "# Summary\n")

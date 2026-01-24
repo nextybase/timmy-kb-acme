@@ -10,6 +10,7 @@ from pipeline.workspace_layout import WorkspaceLayout
 
 def _write_minimal_workspace(root: Path) -> None:
     (root / "raw").mkdir(parents=True)
+    (root / "normalized").mkdir(parents=True)
     (root / "semantic").mkdir(parents=True)
     (root / "logs").mkdir(parents=True)
     (root / "config").mkdir(parents=True)

@@ -2,7 +2,6 @@
 # tests/test_convert_markdown_rerun_processes_new_pdfs.py
 from pathlib import Path
 
-import pipeline.content_utils as cu
 from semantic.convert_service import convert_markdown
 
 
@@ -10,7 +9,7 @@ class _Ctx:
     def __init__(self, base: Path, slug: str = "dummy"):
         self.repo_root_dir = base
         self.base_dir = base
-        self.raw_dir = base / "raw"
+        self.normalized_dir = base / "normalized"
         self.book_dir = base / "book"
         self.slug = slug
 
@@ -33,9 +32,9 @@ class _NoopLogger:
         pass
 
 
-def _touch(pdf_path: Path) -> None:
-    pdf_path.parent.mkdir(parents=True, exist_ok=True)
-    pdf_path.write_bytes(b"%PDF-1.4\n%dummy\n")  # contenuto minimale
+def _touch(md_path: Path) -> None:
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+    md_path.write_text("# Dummy\n", encoding="utf-8")
 
 
 def test_convert_markdown_rerun_processes_new_pdfs(monkeypatch, tmp_path: Path):
@@ -48,20 +47,19 @@ def test_convert_markdown_rerun_processes_new_pdfs(monkeypatch, tmp_path: Path):
     (base / "config" / "config.yaml").write_text("meta:\n  client_name: dummy\n", encoding="utf-8")
     (base / "semantic").mkdir(parents=True, exist_ok=True)
     (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (base / "raw").mkdir(parents=True, exist_ok=True)
     (base / "logs").mkdir(parents=True, exist_ok=True)
     (base / "book").mkdir(parents=True, exist_ok=True)
     (base / "book" / "README.md").write_text("# Placeholder\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Placeholder\n", encoding="utf-8")
-    monkeypatch.setattr(cu, "_extract_pdf_text", lambda *args, **kwargs: "contenuto pdf")
-
-    # Primo run: un PDF in raw/foo -> deve produrre book/foo/a.md
-    _touch(ctx.raw_dir / "foo" / "a.pdf")
+    # Primo run: un Markdown in normalized/foo -> deve produrre book/foo/a.md
+    _touch(ctx.normalized_dir / "foo" / "a.md")
     mds_first = convert_markdown(ctx, logger=logger, slug="dummy")
     assert (ctx.book_dir / "foo" / "a.md").exists()
     assert any(p.relative_to(ctx.book_dir).as_posix() == "foo/a.md" for p in mds_first)
 
-    # Secondo run: aggiungo un nuovo PDF in raw/bar -> deve produrre anche book/bar/b.md
-    _touch(ctx.raw_dir / "bar" / "b.pdf")
+    # Secondo run: aggiungo un nuovo Markdown in normalized/bar -> deve produrre anche book/bar/b.md
+    _touch(ctx.normalized_dir / "bar" / "b.md")
     mds_second = convert_markdown(ctx, logger=logger, slug="dummy")
     assert (ctx.book_dir / "bar" / "b.md").exists()
 

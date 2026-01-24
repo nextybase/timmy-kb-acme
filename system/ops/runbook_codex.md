@@ -149,12 +149,13 @@ References: [Developer Guide → Configuration](../../docs/developer/developer_g
 
 ### Standard workflow
 1. **pre_onboarding:** create the workspace (`output/timmy-kb-<slug>/...`), optionally provision Drive, and upload `config.yaml`.
-2. **tag_onboarding:** produce `semantic/tags_raw.csv` and the HiTL checkpoint `tags_reviewed.yaml`.
-3. **semantic_onboarding (via `semantic.api`):** convert PDFs to Markdown in `book/`, arricchire il frontmatter usando `semantic/tags.db` e ricostruire README/SUMMARY.
+2. **raw_ingest:** normalize RAW PDFs into `normalized/` + `normalized/INDEX.json` and record `normalize_raw` in the Decision Ledger.
+3. **tag_onboarding:** produce `semantic/tags_raw.csv` and the HiTL checkpoint `tags_reviewed.yaml`.
+4. **semantic_onboarding (via `semantic.api`):** convert normalized Markdown into `book/`, arricchire il frontmatter usando `semantic/tags.db` e ricostruire README/SUMMARY.
 4. **honkit_preview (HonKit preview locale):** avvia la preview Docker su `book/`.
 
 ### UI gating
-- Enable the Semantica tab only once local RAW data exists.
+- Enable the Semantica tab only once `normalized/` exists locally.
 - Docker preview needs safe port validation and container naming.
 - Telemetry event `semantic.book.frontmatter` tracks enriched file counts.
 
@@ -260,7 +261,7 @@ References highlighted area AGENTS as needed.
 ## 12) Streamlit operations
 
 - Enforce native routing (`st.Page` + `st.navigation`) with `ui.utils.route_state`/`ui.utils.slug`.
-- Gate Semantica on `raw/` presence and keep messages short while logging details.
+- Gate Semantica on `normalized/` presence and keep messages short while logging details.
 - Perform all I/O via SSoT utilities; avoid manual writes.
 
 References: (src/ui/AGENTS.md not present under src/ui), (src/ui/pages/AGENTS.md not present under src/ui/pages), [User Guide → UI](../../docs/user/user_guide.md).
@@ -317,7 +318,7 @@ References: [docs/adr/README.md](../../docs/adr/README.md).
 1. **SSoT & Safety:** enforce utility-based I/O; never write outside the workspace.
 2. **Micro-PR:** keep diffs small and grounded; update dependent docs/tests when touching an area.
 3. **UI import-safe:** avoid import-time side effects.
-4. **Gating UX:** state-driven actions (Semantica only with RAW).
+4. **Gating UX:** state-driven actions (Semantica only with normalized).
 5. **Docs & Versioning:** keep README/docs/frontmatter aligned with `v1.0 Beta`.
 6. **AGENTS matrix:** always current; run `agents-matrix-check` when editing AGENTS files.
 
@@ -330,6 +331,7 @@ streamlit run src/timmy_kb/ui/onboarding_ui.py
 
 # CLI orchestrators
 python -m timmy_kb.cli.pre_onboarding --slug <slug> --name "<Cliente>" --non-interactive
+python -m timmy_kb.cli.raw_ingest --slug <slug>
 python -m timmy_kb.cli.tag_onboarding --slug <slug> --non-interactive --proceed
 python -m timmy_kb.cli.tag_onboarding --slug <slug> --nlp --nlp-workers 6 --nlp-batch-size 8
 python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive

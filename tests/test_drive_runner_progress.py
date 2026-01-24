@@ -11,13 +11,14 @@ def _prepare_workspace(slug: str, workspace_root: Path) -> WorkspaceLayout:
     semantic_dir = workspace_root / "semantic"
     config_dir = workspace_root / "config"
     logs_dir = workspace_root / "logs"
+    normalized_dir = workspace_root / "normalized"
     raw_dir = workspace_root / "raw"
-    for path in (book_dir, semantic_dir, config_dir, logs_dir, raw_dir):
+    for path in (book_dir, semantic_dir, config_dir, logs_dir, normalized_dir, raw_dir):
         path.mkdir(parents=True, exist_ok=True)
     (book_dir / "README.md").write_text("README", encoding="utf-8")
     (book_dir / "SUMMARY.md").write_text("SUMMARY", encoding="utf-8")
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
-    (semantic_dir / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (semantic_dir / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     return WorkspaceLayout.from_workspace(workspace_root, slug=slug)
 
 

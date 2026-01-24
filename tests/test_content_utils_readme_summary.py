@@ -20,12 +20,14 @@ def test_readme_and_summary_respect_mapping(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     book = base / "book"
     raw = base / "raw"
+    normalized_dir = base / "normalized"
     config_dir = base / "config"
     semantic_dir = base / "semantic"
     logs_dir = base / "logs"
 
     book.mkdir(parents=True, exist_ok=True)
     raw.mkdir(parents=True, exist_ok=True)
+    normalized_dir.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
     semantic_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -58,12 +60,14 @@ def test_readme_omits_entity_table_without_mapping(tmp_path: Path) -> None:
     base = tmp_path / "kb"
     book = base / "book"
     raw = base / "raw"
+    normalized_dir = base / "normalized"
     config_dir = base / "config"
     semantic_dir = base / "semantic"
     logs_dir = base / "logs"
 
     book.mkdir(parents=True, exist_ok=True)
     raw.mkdir(parents=True, exist_ok=True)
+    normalized_dir.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
     semantic_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)

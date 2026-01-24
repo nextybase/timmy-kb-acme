@@ -17,13 +17,15 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
     slug = "dummy"
     base_root = tmp_path / "output"
     base_dir = base_root / f"timmy-kb-{slug}"
-    raw = base_dir / "raw"
+    normalized = base_dir / "normalized"
+    raw_dir = base_dir / "raw"
     sem = base_dir / "semantic"
     book = base_dir / "book"
     config_dir = base_dir / "config"
     logs_dir = base_dir / "logs"
 
-    raw.mkdir(parents=True, exist_ok=True)
+    normalized.mkdir(parents=True, exist_ok=True)
+    raw_dir.mkdir(parents=True, exist_ok=True)
     sem.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -35,10 +37,10 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
     ensure_schema_v2(str(sem / "tags.db"))
 
-    nested = raw / "HR" / "Policies"
+    nested = normalized / "HR" / "Policies"
     nested.mkdir(parents=True, exist_ok=True)
-    (nested / "Welcome Packet 2024.pdf").write_bytes(b"%PDF-1.4\n")
-    (raw / "Security-Guide_v2.pdf").write_bytes(b"%PDF-1.4\n")
+    (nested / "Welcome Packet 2024.md").write_text("# Welcome\n", encoding="utf-8")
+    (normalized / "Security-Guide_v2.md").write_text("# Security\n", encoding="utf-8")
 
     context = TestClientCtx(
         slug=slug,
@@ -69,21 +71,23 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
     assert len(rows) == 2
 
     rel_paths = {r["relative_path"] for r in rows}
-    assert "raw/HR/Policies/Welcome Packet 2024.pdf" in rel_paths
-    assert "raw/Security-Guide_v2.pdf" in rel_paths
+    assert "normalized/HR/Policies/Welcome Packet 2024.md" in rel_paths
+    assert "normalized/Security-Guide_v2.md" in rel_paths
 
 
 def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     slug = "dummy"
     base_root = tmp_path / "output"
     base_dir = base_root / f"timmy-kb-{slug}"
-    raw = base_dir / "raw"
+    normalized = base_dir / "normalized"
+    raw_dir = base_dir / "raw"
     sem = base_dir / "semantic"
     book = base_dir / "book"
     config_dir = base_dir / "config"
     logs_dir = base_dir / "logs"
 
-    raw.mkdir(parents=True, exist_ok=True)
+    normalized.mkdir(parents=True, exist_ok=True)
+    raw_dir.mkdir(parents=True, exist_ok=True)
     sem.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -95,7 +99,7 @@ def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeyp
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
     ensure_schema_v2(str(sem / "tags.db"))
 
-    (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n")
+    (normalized / "dummy.md").write_text("# Dummy\n", encoding="utf-8")
 
     context = TestClientCtx(
         slug=slug,
@@ -117,13 +121,15 @@ def test_build_tags_csv_writes_doc_entities_db(tmp_path: Path, monkeypatch: pyte
     slug = "dummy"
     base_root = tmp_path / "output"
     base_dir = base_root / f"timmy-kb-{slug}"
-    raw = base_dir / "raw"
+    normalized = base_dir / "normalized"
+    raw_dir = base_dir / "raw"
     sem = base_dir / "semantic"
     book = base_dir / "book"
     config_dir = base_dir / "config"
     logs_dir = base_dir / "logs"
 
-    raw.mkdir(parents=True, exist_ok=True)
+    normalized.mkdir(parents=True, exist_ok=True)
+    raw_dir.mkdir(parents=True, exist_ok=True)
     sem.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -135,9 +141,9 @@ def test_build_tags_csv_writes_doc_entities_db(tmp_path: Path, monkeypatch: pyte
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
     ensure_schema_v2(str(sem / "tags.db"))
 
-    def _fake_candidates(_raw_dir: Path, _cfg: object) -> dict[str, dict[str, object]]:
+    def _fake_candidates(_normalized_dir: Path, _cfg: object) -> dict[str, dict[str, object]]:
         return {
-            "raw/Doc.pdf": {
+            "normalized/Doc.md": {
                 "tags": ["policy"],
                 "sources": {"spacy": {"areas": {"compliance": ["GDPR"]}}},
                 "score": {"compliance:GDPR": 0.9},

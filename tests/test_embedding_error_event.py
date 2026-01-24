@@ -20,11 +20,13 @@ class _BoomEmb:
 
 def _prepare_workspace(base: Path, *, slug: str) -> SimpleNamespace:
     raw_dir = base / "raw"
+    normalized_dir = base / "normalized"
     book_dir = base / "book"
     semantic_dir = base / "semantic"
     logs_dir = base / "logs"
     config_dir = base / "config"
     raw_dir.mkdir(parents=True, exist_ok=True)
+    normalized_dir.mkdir(parents=True, exist_ok=True)
     book_dir.mkdir(parents=True, exist_ok=True)
     semantic_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)

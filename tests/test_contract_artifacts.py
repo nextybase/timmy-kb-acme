@@ -21,6 +21,7 @@ def _make_context(tmp_path: Path, slug: str):
         book_dir,
         semantic_dir,
         raw_dir,
+        base_dir / "normalized",
         base_dir / "logs",
         base_dir / "config",
     ):

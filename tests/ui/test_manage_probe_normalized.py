@@ -61,7 +61,7 @@ def _load_manage_module(
     monkeypatch: pytest.MonkeyPatch,
     st_stub: StreamlitStub,
     slug: str,
-    has_raw_result: Tuple[bool, str | None],
+    has_normalized_result: Tuple[bool, str | None],
 ) -> None:
     monkeypatch.setitem(sys.modules, "streamlit", st_stub)
     register_streamlit_runtime(monkeypatch, st_stub)
@@ -71,11 +71,13 @@ def _load_manage_module(
     monkeypatch.setattr(ui.chrome, "render_chrome_then_require", lambda allow_without_slug: slug)
     base_dir = Path("output") / f"timmy-kb-{slug}"
     layout = WorkspaceLayout.from_workspace(workspace=base_dir, slug=slug)
-    raw_result_path = Path(has_raw_result[1]) if has_raw_result[1] is not None else layout.raw_dir
+    normalized_result_path = (
+        Path(has_normalized_result[1]) if has_normalized_result[1] is not None else layout.normalized_dir
+    )
     monkeypatch.setattr(
         ui.utils.workspace,
-        "raw_ready",
-        lambda _slug: (has_raw_result[0], raw_result_path),
+        "normalized_ready",
+        lambda _slug: (has_normalized_result[0], normalized_result_path),
     )
     monkeypatch.setattr(
         ui.utils.workspace,
@@ -91,8 +93,8 @@ def _load_manage_module(
 
 def test_manage_semantic_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
     st_stub = StreamlitStub()
-    raw_path = str(Path("output") / "timmy-kb-dummy" / "raw")
-    _load_manage_module(monkeypatch, st_stub, slug="dummy", has_raw_result=(True, raw_path))
+    normalized_path = str(Path("output") / "timmy-kb-dummy" / "normalized")
+    _load_manage_module(monkeypatch, st_stub, slug="dummy", has_normalized_result=(True, normalized_path))
 
     assert any(label in st_stub.button_calls for label in ("Arricchimento semantico",))
     # Placeholder informativi disabilitati: nessun messaggio info/warning aggiuntivo

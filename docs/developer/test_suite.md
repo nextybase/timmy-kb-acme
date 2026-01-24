@@ -189,7 +189,7 @@ Quando usare cosa (regola pratica)
 
 Strumenti CLI che fungono da estensioni e smoke manuali della suite:
 - **Smoke E2E rapidi:** `tools/smoke/smoke_e2e.py`, `tools/smoke/e2e_smoke_test.py`.
-- **Gating Semantica:** `tools/smoke/smoke_semantics_gating.py` (verifica che la pagina Semantica compaia solo con PDF in `raw/`).
+- **Gating Semantica:** `tools/smoke/smoke_semantics_gating.py` (verifica che la pagina Semantica compaia solo con Markdown in `normalized/`).
 - **Benchmark retriever/semantic:** `tools/bench_embeddings_normalization.py` (output opzionale in JSON con metrica `pdf_scan` per il costo di iterazione dei PDF, utile a monitorare la cache opportunistica introdotta in `iter_safe_pdfs`).
 - **SBOM:** `tools/sbom.sh` (genera `sbom.json`).
 - **Migrazioni operative:** `tools/migrate_yaml_to_db.py` (conversioni YAML  SQLite per i tag).

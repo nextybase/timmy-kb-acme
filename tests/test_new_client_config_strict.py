@@ -26,6 +26,7 @@ def _make_workspace(tmp_path: Path, slug: str) -> Path:
     (workspace_root / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     (workspace_root / "logs").mkdir(parents=True, exist_ok=True)
     (workspace_root / "raw").mkdir(parents=True, exist_ok=True)
+    (workspace_root / "normalized").mkdir(parents=True, exist_ok=True)
     (workspace_root / "semantic").mkdir(parents=True, exist_ok=True)
     return workspace_root
 

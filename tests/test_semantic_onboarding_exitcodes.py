@@ -65,6 +65,7 @@ def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -
         SimpleNamespace(load=lambda **_: _make_ctx(tmp_path, "dummy")),
         raising=True,
     )
+    monkeypatch.setattr(mod, "_require_normalize_raw_gate", lambda *_a, **_k: None, raising=True)
 
     # convert ok
     monkeypatch.setattr(mod, "convert_markdown", lambda *_a, **_k: None, raising=True)
@@ -132,6 +133,7 @@ def test_cli_summary_log_excludes_readme_summary(tmp_path: Path, monkeypatch: An
         SimpleNamespace(load=lambda **_: ctx),
         raising=True,
     )
+    monkeypatch.setattr(mod, "_require_normalize_raw_gate", lambda *_a, **_k: None, raising=True)
 
     def _fake_convert(ctx_, logger, slug):
         (ctx_.book_dir / "README.md").write_text("# r\n", encoding="utf-8")

@@ -18,6 +18,7 @@ OUTPUT_DIR_NAME = "output"
 LOGS_DIR_NAME = "logs"
 CONFIG_DIR_NAME = "config"
 RAW_DIR_NAME = "raw"
+NORMALIZED_DIR_NAME = "normalized"
 BOOK_DIR_NAME = "book"
 SEMANTIC_DIR_NAME = "semantic"  # aggiunto per completezza (molti moduli usano 'semantic/')
 
@@ -69,6 +70,7 @@ __all__ = [
     "LOGS_DIR_NAME",
     "CONFIG_DIR_NAME",
     "RAW_DIR_NAME",
+    "NORMALIZED_DIR_NAME",
     "BOOK_DIR_NAME",
     "SEMANTIC_DIR_NAME",
     "CONFIG_FILE_NAME",

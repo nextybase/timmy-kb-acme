@@ -44,6 +44,8 @@ def bootstrap_client_workspace(context: ClientContext) -> WorkspaceLayout:
 
     raw_dir = _assert_within(workspace_root, workspace_root / "raw")
     raw_dir.mkdir(parents=True, exist_ok=True)
+    normalized_dir = _assert_within(workspace_root, workspace_root / "normalized")
+    normalized_dir.mkdir(parents=True, exist_ok=True)
     semantic_dir = _assert_within(workspace_root, workspace_root / "semantic")
     semantic_dir.mkdir(parents=True, exist_ok=True)
     book_dir = _assert_within(workspace_root, workspace_root / "book")
@@ -117,6 +119,8 @@ def bootstrap_dummy_workspace(slug: str) -> WorkspaceLayout:
 
     raw_dir = _assert_within(workspace_dir, workspace_dir / "raw")
     raw_dir.mkdir(parents=True, exist_ok=True)
+    normalized_dir = _assert_within(workspace_dir, workspace_dir / "normalized")
+    normalized_dir.mkdir(parents=True, exist_ok=True)
     semantic_dir = _assert_within(workspace_dir, workspace_dir / "semantic")
     semantic_dir.mkdir(parents=True, exist_ok=True)
     book_dir = _assert_within(workspace_dir, workspace_dir / "book")
@@ -151,6 +155,7 @@ def migrate_or_repair_workspace(context: ClientContext) -> WorkspaceLayout:
 
     dirs = {
         "raw": workspace_root / "raw",
+        "normalized": workspace_root / "normalized",
         "semantic": workspace_root / "semantic",
         "book": workspace_root / "book",
         "logs": workspace_root / LOGS_DIR_NAME,

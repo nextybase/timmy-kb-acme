@@ -55,6 +55,7 @@ class WorkspaceLayout:
     slug: str
     repo_root_dir: Path
     raw_dir: Path
+    normalized_dir: Path
     semantic_dir: Path
     book_dir: Path
     logs_dir: Path
@@ -80,6 +81,7 @@ class WorkspaceLayout:
         root = Path(context.repo_root_dir).resolve()
 
         raw_dir = root / "raw"
+        normalized_dir = root / "normalized"
         book_dir = root / "book"
         semantic_dir = root / "semantic"
         logs_dir = root / LOGS_DIR_NAME
@@ -88,6 +90,7 @@ class WorkspaceLayout:
         config_dir = config_path.parent
 
         raw_dir = ensure_within_and_resolve(root, raw_dir)
+        normalized_dir = ensure_within_and_resolve(root, normalized_dir)
         semantic_dir = ensure_within_and_resolve(root, semantic_dir)
         book_dir = ensure_within_and_resolve(root, book_dir)
         logs_dir = ensure_within_and_resolve(root, logs_dir)
@@ -99,6 +102,7 @@ class WorkspaceLayout:
             slug=context.slug,
             workspace_root=root,
             raw_dir=raw_dir,
+            normalized_dir=normalized_dir,
             book_dir=book_dir,
             logs_dir=logs_dir,
             config_path=config_path,
@@ -117,6 +121,7 @@ class WorkspaceLayout:
             slug=context.slug,
             repo_root_dir=root,
             raw_dir=raw_dir,
+            normalized_dir=normalized_dir,
             semantic_dir=semantic_dir,
             book_dir=book_dir,
             logs_dir=logs_dir,
@@ -162,6 +167,7 @@ class WorkspaceLayout:
         validate_slug(resolved_slug)
 
         raw_dir = repo_root / "raw"
+        normalized_dir = repo_root / "normalized"
         book_dir = repo_root / "book"
         semantic_dir = repo_root / "semantic"
         logs_dir = repo_root / LOGS_DIR_NAME
@@ -169,6 +175,7 @@ class WorkspaceLayout:
         mapping_path = semantic_dir / "semantic_mapping.yaml"
 
         raw_dir = ensure_within_and_resolve(repo_root, raw_dir)
+        normalized_dir = ensure_within_and_resolve(repo_root, normalized_dir)
         semantic_dir = ensure_within_and_resolve(repo_root, semantic_dir)
         book_dir = ensure_within_and_resolve(repo_root, book_dir)
         logs_dir = ensure_within_and_resolve(repo_root, logs_dir)
@@ -181,6 +188,7 @@ class WorkspaceLayout:
             slug=resolved_slug,
             workspace_root=repo_root,
             raw_dir=raw_dir,
+            normalized_dir=normalized_dir,
             book_dir=book_dir,
             logs_dir=logs_dir,
             config_path=config_path,
@@ -197,6 +205,7 @@ class WorkspaceLayout:
             slug=resolved_slug,
             repo_root_dir=repo_root,
             raw_dir=raw_dir,
+            normalized_dir=normalized_dir,
             semantic_dir=semantic_dir,
             book_dir=book_dir,
             logs_dir=logs_dir,
@@ -241,6 +250,7 @@ def _validate_layout_assets(
     slug: str,
     workspace_root: Path,
     raw_dir: Path,
+    normalized_dir: Path,
     book_dir: Path,
     logs_dir: Path,
     config_path: Path,
@@ -259,6 +269,7 @@ def _validate_layout_assets(
     _ensure_directory(workspace_root, slug, description="workspace root")
     _ensure_file(config_path, slug, description="config/config.yaml")
     _ensure_directory(raw_dir, slug, description="raw directory")
+    _ensure_directory(normalized_dir, slug, description="normalized directory")
     _ensure_directory(book_dir, slug, description="book directory")
     _ensure_file(book_dir / "README.md", slug, description="book/README.md")
     _ensure_file(book_dir / "SUMMARY.md", slug, description="book/SUMMARY.md")
@@ -268,6 +279,7 @@ def _validate_layout_assets(
         slug=slug,
         workspace_root=workspace_root,
         raw_dir=raw_dir,
+        normalized_dir=normalized_dir,
         config_path=config_path,
         book_dir=book_dir,
         logs_dir=logs_dir,
@@ -299,6 +311,7 @@ def _ensure_layout_consistency(
     slug: str,
     workspace_root: Path,
     raw_dir: Path,
+    normalized_dir: Path,
     config_path: Path,
     book_dir: Path,
     logs_dir: Path,
@@ -308,6 +321,7 @@ def _ensure_layout_consistency(
     """Fail-fast se il layout contiene path fuori perimetro o incoerenti."""
     try:
         ensure_within(workspace_root, raw_dir)
+        ensure_within(workspace_root, normalized_dir)
         ensure_within(workspace_root, book_dir)
         ensure_within(workspace_root, semantic_dir)
         ensure_within(workspace_root, logs_dir)

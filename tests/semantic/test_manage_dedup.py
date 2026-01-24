@@ -18,7 +18,7 @@ def test_manage_shows_single_caption(monkeypatch):
     monkeypatch.setattr(manage, "st", st, raising=True)
     # setup dir & flags
     semantic_dir = Path(".")  # senza tags.db
-    manage._render_status_block(pdf_count=0, service_ok=True, semantic_dir=semantic_dir)
+    manage._render_status_block(md_count=0, service_ok=True, semantic_dir=semantic_dir)
     # Status block disabilitato: nessuna caption/warning deve essere mostrata
     assert calls["caption"] == 0
     assert calls["warning"] == 0

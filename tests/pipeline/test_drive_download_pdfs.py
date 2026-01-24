@@ -41,6 +41,7 @@ def test_download_drive_pdfs_to_local_downloads_new_and_skips_existing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "normalized").mkdir(parents=True, exist_ok=True)
     (tmp_path / "book").mkdir(parents=True, exist_ok=True)
     (tmp_path / "semantic").mkdir(parents=True, exist_ok=True)
     (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
@@ -109,6 +110,7 @@ def test_download_drive_pdfs_to_local_overwrite_rewrites_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "normalized").mkdir(parents=True, exist_ok=True)
     (tmp_path / "book").mkdir(parents=True, exist_ok=True)
     (tmp_path / "semantic").mkdir(parents=True, exist_ok=True)
     (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
@@ -160,6 +162,7 @@ def test_download_drive_pdfs_to_local_overwrite_rewrites_file(
 
 def test_download_drive_pdfs_to_local_aggregates_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "normalized").mkdir(parents=True, exist_ok=True)
     (tmp_path / "book").mkdir(parents=True, exist_ok=True)
     (tmp_path / "semantic").mkdir(parents=True, exist_ok=True)
     (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
@@ -209,6 +212,7 @@ def test_download_drive_pdfs_to_local_aggregates_failures(tmp_path: Path, monkey
 
 def test_download_drive_pdfs_refreshes_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "normalized").mkdir(parents=True, exist_ok=True)
     (tmp_path / "book").mkdir(parents=True, exist_ok=True)
     (tmp_path / "semantic").mkdir(parents=True, exist_ok=True)
     (tmp_path / "logs").mkdir(parents=True, exist_ok=True)

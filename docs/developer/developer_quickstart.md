@@ -29,7 +29,7 @@ Note: in locale il workspace vive di default in `output/timmy-kb-<slug>/` (deriv
 python -m streamlit run onboarding_ui.py
 ```
 - Seleziona/crea lo slug dal pannello iniziale (registry UI).
-- Gating: la tab **Semantica** si attiva solo con `raw/` presente; i percorsi sono validati via path-safety.
+- Gating: la tab **Semantica** si attiva solo con `normalized/` presente; i percorsi sono validati via path-safety.
 - Il modello Vision ? letto da `ui.config_store.get_vision_model()` ? SSoT `config/config.yaml`.
 - Diagnostica runtime (opt-in): `set DEBUG_RUNTIME=1` e `python tools/smoke/kb_healthcheck.py --slug dummy --force`.
 - Diagnostica offline: `python tools/smoke/kb_healthcheck.py --slug dummy --offline` (valida artefatti Vision senza chiamate rete).

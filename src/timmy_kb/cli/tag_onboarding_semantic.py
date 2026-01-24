@@ -18,7 +18,6 @@ def emit_csv_phase(
     logger: logging.Logger,
     *,
     slug: str,
-    raw_dir: Path,
     semantic_dir: Path,
 ) -> Path:
     """Genera il CSV dei tag grezzi e restituisce il percorso al file prodotto."""

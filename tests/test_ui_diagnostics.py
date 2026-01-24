@@ -15,7 +15,7 @@ TAIL_BYTES = 4000
 
 
 def _render_counts(base_dir: Path | None) -> None:
-    """Mostra un riepilogo minimale del workspace (raw/book/semantic)."""
+    """Mostra un riepilogo minimale del workspace (raw/normalized/book/semantic)."""
     with st.expander("Workspace", expanded=False):
         if not base_dir:
             st.info("Seleziona un cliente per mostrare i dettagli.")
@@ -33,9 +33,10 @@ def _render_counts(base_dir: Path | None) -> None:
                 return f">={count}" if truncated else str(count)
 
             raw = _fmt(summaries.get("raw", (0, False)))
+            normalized = _fmt(summaries.get("normalized", (0, False)))
             book = _fmt(summaries.get("book", (0, False)))
             semantic = _fmt(summaries.get("semantic", (0, False)))
-            st.write(f"raw/: **{raw}** · book/: **{book}** · semantic/: **{semantic}**")
+            st.write(f"raw/: **{raw}** · normalized/: **{normalized}** · book/: **{book}** · semantic/: **{semantic}**")
         else:
             st.info("Nessun dato disponibile.")
 

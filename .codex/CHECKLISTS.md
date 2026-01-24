@@ -41,7 +41,7 @@
 
 ## UI / Workflow (Beta 1.0 governance)
 - UI gating must remain a **UX affordance**, not a state machine:
-  presence of `raw/` may enable tabs, but **does not attest** `raw_ready`.
+  presence of `normalized/` may enable tabs, but **does not attest** `normalized_ready`.
 - Any workflow state advancement requires a Decision Record emitted by Gatekeepers/Timmy.
 - Validate Docker preview port numbers (1-65535) and use safe container names.
 - `semantic/tags.db` is an **artefact/evidence store**, not the runtime SSoT.

@@ -19,6 +19,7 @@ def _create_minimal_workspace(tmp_path: Path) -> Path:
     (workspace / "semantic").mkdir(parents=True, exist_ok=True)
     (workspace / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
     (workspace / "raw").mkdir(parents=True, exist_ok=True)
+    (workspace / "normalized").mkdir(parents=True, exist_ok=True)
     (workspace / "logs").mkdir(parents=True, exist_ok=True)
     return workspace
 

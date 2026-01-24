@@ -35,8 +35,10 @@ def _prepare_layout(base: Path, book_dir: Path, *, strict: bool) -> None:
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
     (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
     (base / "logs").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
+    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (book_dir / "README.md").write_text("README", encoding="utf-8")
     (book_dir / "SUMMARY.md").write_text("SUMMARY", encoding="utf-8")
 

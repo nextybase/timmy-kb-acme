@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.exceptions import ConfigError, ConversionError
+from pipeline.exceptions import ConfigError
 from semantic import convert_service
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig
@@ -39,11 +39,12 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
     (base / "raw").mkdir(parents=True, exist_ok=True)
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
     (base / "book").mkdir(parents=True, exist_ok=True)
     (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     (base / "semantic").mkdir(parents=True, exist_ok=True)
-    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (base / "logs").mkdir(parents=True, exist_ok=True)
 
 
@@ -71,22 +72,22 @@ def test_convert_markdown_treats_only_symlinks_as_no_pdfs(tmp_path: Path):
     ctx = _Ctx(base)
     logger = _NoopLogger()
 
-    raw = ctx.raw_dir
+    normalized = base / "normalized"
     book = ctx.book_dir
-    raw.mkdir(parents=True, exist_ok=True)
+    normalized.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
 
     outside = tmp_path / "outside2"
     outside.mkdir(parents=True, exist_ok=True)
     target_pdf = outside / "evil2.pdf"
     target_pdf.write_bytes(b"%PDF-1.4\n%\n")
-    link = raw / "evil2.pdf"
+    link = normalized / "evil2.md"
     make_symlink(target_pdf, link)
 
     with pytest.raises(ConfigError) as ei:
         convert_service.convert_markdown(ctx, logger=logger, slug=ctx.slug)
     err = ei.value
-    assert Path(getattr(err, "file_path", "")) == raw
+    assert Path(getattr(err, "file_path", "")) == normalized
 
 
 def test_convert_markdown_raises_when_only_readme_summary_with_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -95,16 +96,10 @@ def test_convert_markdown_raises_when_only_readme_summary_with_pdfs(tmp_path: Pa
     ctx = _Ctx(base)
     logger = _NoopLogger()
 
-    # RAW con vero PDF
-    ctx.raw_dir.mkdir(parents=True, exist_ok=True)
-    (ctx.raw_dir / "doc.pdf").write_bytes(b"%PDF-1.4\n%\n")
     # BOOK con soli README/SUMMARY
     ctx.book_dir.mkdir(parents=True, exist_ok=True)
     (ctx.book_dir / "README.md").write_text("# R\n", encoding="utf-8")
     (ctx.book_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
 
-    # Falsifica converter a no-op
-    monkeypatch.setattr(convert_service, "_call_convert_md", lambda *a, **k: None)
-
-    with pytest.raises(ConversionError):
+    with pytest.raises(ConfigError):
         convert_service.convert_markdown(ctx, logger=logger, slug=ctx.slug)

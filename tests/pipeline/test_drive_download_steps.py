@@ -17,7 +17,8 @@ def _prepare_workspace(slug: str, workspace_root: Path) -> WorkspaceLayout:
     config_dir = workspace_root / "config"
     logs_dir = workspace_root / "logs"
     raw_dir = workspace_root / "raw"
-    for path in (book_dir, semantic_dir, config_dir, logs_dir, raw_dir):
+    normalized_dir = workspace_root / "normalized"
+    for path in (book_dir, semantic_dir, config_dir, logs_dir, raw_dir, normalized_dir):
         path.mkdir(parents=True, exist_ok=True)
     (book_dir / "README.md").write_text("README", encoding="utf-8")
     (book_dir / "SUMMARY.md").write_text("SUMMARY", encoding="utf-8")

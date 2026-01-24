@@ -34,9 +34,11 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
     raw = base / "raw"
     book = base / "book"
     semantic_dir = base / "semantic"
+    normalized_dir = base / "normalized"
     config_dir = base / "config"
     logs_dir = base / "logs"
     semantic_dir.mkdir(parents=True, exist_ok=True)
+    normalized_dir.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)

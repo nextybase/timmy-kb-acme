@@ -34,7 +34,7 @@ from ui.gating import reset_gating_cache as _reset_gating_cache
 from ui.pages.registry import PagePaths
 from ui.utils.context_cache import get_client_context
 from ui.utils.status import status_guard  # helper condiviso (con degradazione)
-from ui.utils.workspace import get_ui_workspace_layout, raw_ready, tagging_ready
+from ui.utils.workspace import get_ui_workspace_layout, normalized_ready, tagging_ready
 
 LOGGER = get_structured_logger("ui.semantics")
 
@@ -102,32 +102,32 @@ def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[st
     cache_key = (slug or "<none>").strip().lower()
     state = (get_state(slug) or "").strip().lower()
     if reuse_last and cache_key in _GATE_CACHE:
-        cached_state, raw_cached, tags_cached, cached_dir = _GATE_CACHE[cache_key]
+        cached_state, _normalized_cached, tags_cached, cached_dir = _GATE_CACHE[cache_key]
         if cached_state in ALLOWED_STATES:
-            ready_now, raw_dir_now = raw_ready(slug)
+            ready_now, normalized_dir_now = normalized_ready(slug)
             tags_now, _ = tagging_ready(slug)
             if ready_now and tags_now:
-                result = (cached_state, ready_now, raw_dir_now or cached_dir)
-                _GATE_CACHE[cache_key] = (cached_state, ready_now, tags_now, raw_dir_now or cached_dir)
+                result = (cached_state, ready_now, normalized_dir_now or cached_dir)
+                _GATE_CACHE[cache_key] = (cached_state, ready_now, tags_now, normalized_dir_now or cached_dir)
                 return result
             _GATE_CACHE.pop(cache_key, None)
-            _raise_semantic_unavailable(slug, state, ready_now, raw_dir_now)
+            _raise_semantic_unavailable(slug, state, ready_now, normalized_dir_now)
             return
         _GATE_CACHE.pop(cache_key, None)
-    ready, raw_dir = raw_ready(slug)
+    ready, normalized_dir = normalized_ready(slug)
     tags_ok, _ = tagging_ready(slug)
     if state not in ALLOWED_STATES or not ready or not tags_ok:
-        _raise_semantic_unavailable(slug, state, ready, raw_dir)
-    result = (state, ready, raw_dir)
-    _GATE_CACHE[cache_key] = (state, ready, tags_ok, raw_dir)
+        _raise_semantic_unavailable(slug, state, ready, normalized_dir)
+    result = (state, ready, normalized_dir)
+    _GATE_CACHE[cache_key] = (state, ready, tags_ok, normalized_dir)
     try:
         _GATING_LOG.info(
             "ui.semantics.gating_allowed",
             extra={
                 "slug": slug or "",
                 "state": state or "n/d",
-                "raw_ready": bool(ready),
-                "raw_path": tail_path(raw_dir) if raw_dir else "",
+                "normalized_ready": bool(ready),
+                "normalized_path": tail_path(normalized_dir) if normalized_dir else "",
                 "tagging_ready": bool(tags_ok),
             },
         )
@@ -161,7 +161,7 @@ def _run_convert(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             extra={"slug": slug, "action_id": "convert", "status": "start", "retry": bool(is_retry)},
         )
     with status_guard(
-        "Converto PDF in Markdown...",
+        "Converto Markdown normalizzati in book...",
         expanded=True,
         error_label="Errore durante la conversione",
     ) as status:
@@ -203,7 +203,8 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
     except ConfigError:
         tags_ok, sem_dir = tagging_ready(slug)
         if not tags_ok:
-            _log_gating_block(slug, get_state(slug) or "", False, sem_dir)
+            _, normalized_dir = normalized_ready(slug)
+            _log_gating_block(slug, get_state(slug) or "", False, normalized_dir)
             log_gate_event(
                 _GATING_LOG,
                 "evidence_gate_blocked",
@@ -280,8 +281,8 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
                     "reason": "summary_prerequisites_missing",
                 },
             )
-            st.error("Generazione SUMMARY/README bloccata: prerequisiti RAW/TAG mancanti.")
-            st.caption("Verifica presenza PDF in raw/ e semantic/tags.db + tags_reviewed.yaml.")
+            st.error("Generazione SUMMARY/README bloccata: prerequisiti normalized/tag mancanti.")
+            st.caption("Verifica la presenza di Markdown in normalized/ e semantic/tags.db + tags_reviewed.yaml.")
             return
         raise
     ctx, logger, layout = _make_ctx_and_logger(slug)
@@ -377,7 +378,7 @@ def _go_preview() -> None:
 
 
 _client_state: str | None = None
-_raw_ready: bool = False
+_normalized_ready: bool = False
 _tagging_ready: bool = False
 _book_ready: bool = False
 _book_dir: Path | None = None
@@ -398,7 +399,7 @@ def _mark_retry(slug: str, action: str) -> bool:
 
 
 def _log_gating_block(
-    slug: str | None, state: str, raw_ready: bool, raw_dir: Path | None, *, reason: str | None = None
+    slug: str | None, state: str, normalized_ready: bool, normalized_dir: Path | None, *, reason: str | None = None
 ) -> None:
     try:
         _GATING_LOG.info(
@@ -406,8 +407,8 @@ def _log_gating_block(
             extra={
                 "slug": slug or "",
                 "state": state or "n/d",
-                "raw_ready": bool(raw_ready),
-                "raw_path": tail_path(raw_dir) if raw_dir else "",
+                "normalized_ready": bool(normalized_ready),
+                "normalized_path": tail_path(normalized_dir) if normalized_dir else "",
                 "reason": reason or "",
             },
         )
@@ -429,16 +430,20 @@ def _log_gating_block(
         )
 
 
-def _raise_semantic_unavailable(slug: str | None, state: str, raw_ready: bool, raw_dir: Path | None) -> None:
+def _raise_semantic_unavailable(
+    slug: str | None, state: str, normalized_ready: bool, normalized_dir: Path | None
+) -> None:
     reason = (
-        "invalid_state" if state not in ALLOWED_STATES else ("raw_missing" if not raw_ready else "tagging_not_ready")
+        "invalid_state"
+        if state not in ALLOWED_STATES
+        else ("normalized_missing" if not normalized_ready else "tagging_not_ready")
     )
-    _log_gating_block(slug, state, raw_ready, raw_dir, reason=reason)
-    raw_display = tail_path(raw_dir) if raw_dir else "n/d"
+    _log_gating_block(slug, state, normalized_ready, normalized_dir, reason=reason)
+    normalized_display = tail_path(normalized_dir) if normalized_dir else "n/d"
     raise ConfigError(
-        f"Semantica non disponibile ({reason}; state={state or 'n/d'}, raw={raw_display})",
+        f"Semantica non disponibile ({reason}; state={state or 'n/d'}, normalized={normalized_display})",
         slug=slug,
-        file_path=raw_dir,
+        file_path=normalized_dir,
         code=reason,
     )
 
@@ -474,20 +479,20 @@ def main() -> None:
     else:  # pragma: no cover
         has_ctx = get_script_run_ctx() is not None
 
-    global _client_state, _raw_ready, _tagging_ready, _book_ready, _book_dir
+    global _client_state, _normalized_ready, _tagging_ready, _book_ready, _book_dir
 
     if has_ctx:
-        _client_state, _raw_ready, _ = _require_semantic_gating(slug)
+        _client_state, _normalized_ready, _ = _require_semantic_gating(slug)
         _tagging_ready, _ = tagging_ready(slug)
         _book_dir = layout.book_dir
         _book_ready = is_book_ready(_book_dir)
 
-    if _column_button(st, "Rileva PDF in raw", key="btn_rescan_raw", width="stretch"):
+    if _column_button(st, "Rileva Markdown in normalized", key="btn_rescan_normalized", width="stretch"):
         cache_key = (slug or "<none>").strip().lower()
         _GATE_CACHE.pop(cache_key, None)
         _reset_gating_cache(slug)
-        raw_ready(slug)
-        st.toast("Stato raw aggiornato.")
+        normalized_ready(slug)
+        st.toast("Stato normalized aggiornato.")
 
     client_state_ok = (_client_state in SEMANTIC_ENTRY_STATES) and bool(_tagging_ready)
 

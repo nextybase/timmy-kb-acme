@@ -93,7 +93,7 @@ def _load_folder_terms(tags_db_path: Path, *, slug: str | None = None) -> Dict[s
         canonical = str(row["term"] or "").strip()
         if not canonical:
             continue
-        rel_folder = folder_path[4:] if folder_path.startswith("raw/") else folder_path
+        rel_folder = folder_path[11:] if folder_path.startswith("normalized/") else folder_path
         rel_folder = rel_folder.strip("/")
         folder_terms.setdefault(rel_folder, []).append(canonical)
     return folder_terms
@@ -146,18 +146,18 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         layout = WorkspaceLayout.from_context(cast(Any, context))
     repo_root_dir = layout.repo_root_dir
     perimeter_root = repo_root_dir
-    raw_dir = layout.raw_dir
+    normalized_dir = layout.normalized_dir
     semantic_dir = layout.semantic_dir
     csv_path = semantic_dir / "tags_raw.csv"
 
-    ensure_within(perimeter_root, raw_dir)
+    ensure_within(perimeter_root, normalized_dir)
     ensure_within(perimeter_root, semantic_dir)
     ensure_within(semantic_dir, csv_path)
 
     with phase_scope(logger, stage="build_tags_csv", customer=slug) as m:
         semantic_dir.mkdir(parents=True, exist_ok=True)
         cfg = _load_semantic_config(repo_root_dir)
-        candidates = extract_semantic_candidates(raw_dir, cfg)
+        candidates = extract_semantic_candidates(normalized_dir, cfg)
         candidates = _normalize_tags(candidates, cfg.mapping)
         doc_entities = _collect_doc_entities(candidates)
 

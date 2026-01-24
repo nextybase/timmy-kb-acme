@@ -11,12 +11,12 @@ from semantic.auto_tagger import render_tags_csv
 
 def _candidates_min() -> dict[str, dict[str, object]]:
     return {
-        "raw/a.pdf": {
+        "normalized/a.md": {
             "tags": ["alpha", "beta"],
             "entities": [],
             "keyphrases": [],
             "score": {"alpha": 1.0, "beta": 0.6},
-            "sources": {"path": ["raw"], "filename": ["a"]},
+            "sources": {"path": ["normalized"], "filename": ["a"]},
         }
     }
 
@@ -31,7 +31,7 @@ def test_render_tags_csv_happy_path(dummy_workspace):
     assert csv_path.exists()
     text = csv_path.read_text(encoding="utf-8")
     assert "relative_path" in text.splitlines()[0]
-    assert "raw/a.pdf" in text
+    assert "normalized/a.md" in text
 
 
 def test_render_tags_csv_blocks_outside_base(dummy_workspace):

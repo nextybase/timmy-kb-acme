@@ -12,9 +12,9 @@ Orchestratore: Tag Onboarding (HiTL)
 
 
 
-Step intermedio tra `pre_onboarding` e `onboarding_full`.
+Step intermedio tra `raw_ingest` e `semantic_onboarding`.
 
-A partire dai PDF grezzi in `raw/`, produce un CSV con i tag suggeriti e
+A partire dai file normalizzati in `normalized/`, produce un CSV con i tag suggeriti e
 
 (dopo conferma) genera gli stub per la revisione semantica.
 
@@ -28,7 +28,7 @@ Punti chiave:
 
 - Scritture atomiche centralizzate con `safe_write_text`.
 
-- Integrazione Google Drive supportata (default: Drive).
+- Nessuna ingestione: la fase di acquisizione/normalizzazione e' separata.
 
 - Checkpoint HiTL tra CSV e generazione stub semantici.
 
@@ -52,6 +52,7 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PathTraversalError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.metrics import start_metrics_server_once
+from pipeline.normalized_index import validate_index as validate_normalized_index
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import (  # STRONG guard SSoT
     ensure_valid_slug,
@@ -73,7 +74,6 @@ from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
 from storage.tags_store import upsert_document, upsert_folder
 from timmy_kb.versioning import build_env_fingerprint
 
-from . import tag_onboarding_raw as tag_onboarding_raw_module
 from .tag_onboarding_context import ContextResources, prepare_context
 from .tag_onboarding_semantic import emit_csv_phase, emit_stub_phase
 
@@ -149,26 +149,13 @@ def _resolve_modes(*, dummy_mode: bool, strict_mode: bool, force_dummy: bool) ->
     return requested_mode, effective_mode, rationale
 
 
-def copy_from_local(*args: Any, **kwargs: Any) -> None:
-    return tag_onboarding_raw_module.copy_from_local(*args, **kwargs)
-
-
-def download_from_drive(*args: Any, **kwargs: Any) -> None:
-    return tag_onboarding_raw_module.download_from_drive(*args, **kwargs)
-
-
-def _ensure_drive_utils_available() -> None:
-    missing: list[str] = []
-    for attr in ("get_drive_service", "download_drive_pdfs_to_local"):
-        func = getattr(tag_onboarding_raw_module, attr, None)
-        if not callable(func):
-            missing.append(attr)
-    if missing:
-        raise ConfigError(
-            "Sorgente Drive selezionata ma dipendenze non installate. "
-            f"Funzioni mancanti: {', '.join(missing)}.\n"
-            "Installa gli extra: pip install .[drive]"
-        )
+def _require_normalized_index(layout: WorkspaceLayout, *, normalized_dir: Path) -> None:
+    index_path = ensure_within_and_resolve(normalized_dir, normalized_dir / "INDEX.json")
+    validate_normalized_index(
+        repo_root_dir=layout.repo_root_dir,
+        normalized_dir=normalized_dir,
+        index_path=index_path,
+    )
 
 
 # ───────────────────────────── Core: ingest locale ───────────────────────────────────
@@ -188,38 +175,8 @@ def compute_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def get_pdf_pages(path: Path) -> int | None:
-    """Prova a contare le pagine PDF usando pypdf, se disponibile."""
-
-    try:
-
-        import importlib
-
-        module = importlib.import_module("pypdf")
-
-        pdf_reader = getattr(module, "PdfReader", None)
-
-    except Exception:  # pragma: no cover
-
-        return None
-
-    if pdf_reader is None:
-
-        return None
-
-    try:
-
-        reader = cast(Any, pdf_reader)(str(path))
-
-        return len(getattr(reader, "pages", []) or [])
-
-    except Exception:
-
-        return None
-
-
-def upsert_folder_chain(conn: Any, raw_dir: Path, folder_path: Path) -> int:
-    """Crea (se mancano) tutte le cartelle da 'raw' fino a `folder_path`.
+def upsert_folder_chain(conn: Any, normalized_dir: Path, folder_path: Path) -> int:
+    """Crea (se mancano) tutte le cartelle da 'normalized' fino a `folder_path`.
 
 
 
@@ -227,23 +184,23 @@ def upsert_folder_chain(conn: Any, raw_dir: Path, folder_path: Path) -> int:
 
     """
 
-    # Normalizza e verifica che folder_path sia sotto raw_dir (guard forte)
+    # Normalizza e verifica che folder_path sia sotto normalized_dir (guard forte)
 
-    raw_dir = Path(raw_dir).resolve()
+    normalized_dir = Path(normalized_dir).resolve()
 
     folder_path = Path(folder_path).resolve()
 
-    ensure_within(raw_dir, folder_path)
+    ensure_within(normalized_dir, folder_path)
 
-    rel = folder_path.relative_to(raw_dir)
+    rel = folder_path.relative_to(normalized_dir)
 
-    # Inserisci/aggiorna la root logica 'raw'
+    # Inserisci/aggiorna la root logica 'normalized'
 
-    parent_id: Optional[int] = upsert_folder(conn, "raw", None)
+    parent_id: Optional[int] = upsert_folder(conn, "normalized", None)
 
-    current_db_path = "raw"
+    current_db_path = "normalized"
 
-    # Crea la catena discendente: raw/part1[/part2...]
+    # Crea la catena discendente: normalized/part1[/part2...]
 
     for part in rel.parts:
 
@@ -253,7 +210,7 @@ def upsert_folder_chain(conn: Any, raw_dir: Path, folder_path: Path) -> int:
 
         if parent_db_path == ".":
 
-            parent_db_path = "raw"
+            parent_db_path = "normalized"
 
         parent_id = upsert_folder(conn, current_db_path, parent_db_path)
 
@@ -264,19 +221,21 @@ def upsert_folder_chain(conn: Any, raw_dir: Path, folder_path: Path) -> int:
     return parent_id
 
 
-def scan_raw_to_db(
-    raw_dir: str | Path,
+def scan_normalized_to_db(
+    normalized_dir: str | Path,
     db_path: str | Path,
     *,
     repo_root_dir: Path | None = None,
 ) -> dict[str, int]:
-    """Indicizza cartelle e PDF di `raw/` dentro il DB (schema v2)."""
+    """Indicizza cartelle e markdown di `normalized/` dentro il DB (schema v2)."""
 
     # Fallback is CLI/tooling only; avoid heuristics, prefer ClientContext/WorkspaceLayout when available.
-    repo_root_dir_path = Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(raw_dir).resolve().parent
+    repo_root_dir_path = (
+        Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(normalized_dir).resolve().parent
+    )
     perimeter_root = repo_root_dir_path
 
-    raw_dir_path = ensure_within_and_resolve(perimeter_root, raw_dir)
+    normalized_dir_path = ensure_within_and_resolve(perimeter_root, normalized_dir)
 
     db_path_path = ensure_within_and_resolve(perimeter_root, db_path)
 
@@ -290,27 +249,27 @@ def scan_raw_to_db(
 
     with get_conn(str(db_path_path)) as conn:
 
-        # registra root 'raw'
+        # registra root 'normalized'
 
-        upsert_folder(conn, "raw", None)
+        upsert_folder(conn, "normalized", None)
 
-        for path in iter_safe_paths(raw_dir_path, include_dirs=True, include_files=True):
+        for path in iter_safe_paths(normalized_dir_path, include_dirs=True, include_files=True):
 
             if path.is_dir():
 
-                upsert_folder_chain(conn, raw_dir_path, path)
+                upsert_folder_chain(conn, normalized_dir_path, path)
 
                 folders_count += 1
 
                 continue
 
-            if path.is_file() and path.suffix.lower() == ".pdf":
+            if path.is_file() and path.suffix.lower() == ".md":
 
-                folder_id = upsert_folder_chain(conn, raw_dir_path, path.parent)
+                folder_id = upsert_folder_chain(conn, normalized_dir_path, path.parent)
 
                 sha256_new = compute_sha256(path)
 
-                pages = get_pdf_pages(path)
+                pages = None
 
                 row = conn.execute(
                     "SELECT id, sha256 FROM documents WHERE folder_id=? AND filename=?",
@@ -346,7 +305,7 @@ def scan_raw_to_db(
 
 def run_nlp_to_db(
     slug: str,
-    raw_dir: Path | str,
+    normalized_dir: Path | str,
     db_path: str | Path,
     *,
     repo_root_dir: Path | None = None,
@@ -364,10 +323,12 @@ def run_nlp_to_db(
     """Esegue estrazione keyword, clustering e aggregazione per cartella."""
 
     # Fallback is CLI/tooling only; avoid heuristics, prefer ClientContext/WorkspaceLayout when available.
-    repo_root_dir_path = Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(raw_dir).resolve().parent
+    repo_root_dir_path = (
+        Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(normalized_dir).resolve().parent
+    )
     perimeter_root = repo_root_dir_path
 
-    raw_dir_path = ensure_within_and_resolve(perimeter_root, raw_dir)
+    normalized_dir_path = ensure_within_and_resolve(perimeter_root, normalized_dir)
 
     db_path_path = ensure_within_and_resolve(perimeter_root, db_path)
 
@@ -398,7 +359,7 @@ def run_nlp_to_db(
 
         stats = nlp_runner.run_doc_terms_pipeline(
             conn,
-            raw_dir_path=raw_dir_path,
+            normalized_dir_path=normalized_dir_path,
             lang=lang,
             topn_doc=topn_doc,
             topk_folder=topk_folder,
@@ -418,7 +379,7 @@ def run_nlp_to_db(
             # repo_root_dir here is workspace root, not the system REPO_ROOT_DIR.
             ent_stats = run_doc_entities_pipeline(
                 repo_root_dir=repo_root_dir_path,
-                raw_dir=raw_dir_path,
+                raw_dir=normalized_dir_path,
                 semantic_dir=repo_root_dir_path / "semantic",
                 db_path=db_path_path,
                 logger=log,
@@ -577,8 +538,6 @@ def _require_layout(context: ClientContextProtocol | ClientContext) -> Workspace
 def tag_onboarding_main(
     slug: str,
     *,
-    source: str = "drive",  # default Drive (puoi passare --source=local)
-    local_path: Optional[str] = None,
     non_interactive: bool = False,
     proceed_after_csv: bool = False,
     dummy_mode: bool = False,
@@ -600,7 +559,7 @@ def tag_onboarding_main(
         slug=slug,
         non_interactive=non_interactive,
         run_id=run_id,
-        require_env=(source == "drive"),
+        require_env=False,
     )
 
     context = resources.context
@@ -630,14 +589,13 @@ def tag_onboarding_main(
 
     payload: TaggingPayload = {
         "workspace_slug": slug,
-        "raw_dir": resources.raw_dir,
+        "normalized_dir": resources.normalized_dir,
         "semantic_dir": resources.semantic_dir,
-        "source": source,
         "run_id": run_id,
         "extra": {"proceed_after_csv": bool(proceed_after_csv)},
     }
 
-    raw_dir = payload["raw_dir"]
+    normalized_dir = payload["normalized_dir"]
 
     semantic_dir = payload["semantic_dir"]
 
@@ -645,31 +603,17 @@ def tag_onboarding_main(
 
     logger.info(
         "cli.tag_onboarding.started",
-        extra={"slug": payload["workspace_slug"], "source": payload["source"]},
+        extra={"slug": payload["workspace_slug"]},
     )
-    current_stage = "source"
+    current_stage = "normalized_check"
 
     # Sorgente di PDF
 
     try:
-        if source == "drive":
-            current_stage = "source_drive"
-            _ensure_drive_utils_available()
-            download_from_drive(context, logger, raw_dir=raw_dir, non_interactive=non_interactive)
-        elif source == "local":
-            current_stage = "source_local"
-            copy_from_local(
-                logger,
-                raw_dir=raw_dir,
-                local_path=local_path,
-                non_interactive=non_interactive,
-                context=context,
-            )
-        else:
-            raise ConfigError(f"Sorgente non valida: {source}. Usa 'drive' o 'local'.")
+        _require_normalized_index(layout, normalized_dir=normalized_dir)
 
         current_stage = "csv_phase"
-        csv_path = emit_csv_phase(context, logger, slug=slug, raw_dir=raw_dir, semantic_dir=semantic_dir)
+        csv_path = emit_csv_phase(context, logger, slug=slug, semantic_dir=semantic_dir)
 
         current_stage = "checkpoint"
         if not _should_proceed(non_interactive=non_interactive, proceed_after_csv=proceed_after_csv, logger=logger):
@@ -713,7 +657,6 @@ def tag_onboarding_main(
             "cli.tag_onboarding.completed",
             extra={
                 "slug": payload["workspace_slug"],
-                "source": payload["source"],
                 "proceed_after_csv": proceed_after_csv_flag,
             },
         )
@@ -780,7 +723,7 @@ def tag_onboarding_main(
 def _resolve_cli_paths(
     context: ClientContextProtocol | ClientContext,
     *,
-    raw_override: str | None,
+    normalized_override: str | None,
     db_override: str | None,
 ) -> tuple[Path, Path, Path, Path]:
     """Calcola i percorsi CLI garantendo path-safety rispetto al contesto cliente."""
@@ -788,14 +731,14 @@ def _resolve_cli_paths(
     layout = _require_layout(context)
     repo_root_dir = layout.repo_root_dir
     perimeter_root = repo_root_dir
-    raw_candidate = Path(raw_override) if raw_override else layout.raw_dir
-    raw_dir = ensure_within_and_resolve(perimeter_root, raw_candidate)
+    normalized_candidate = Path(normalized_override) if normalized_override else layout.normalized_dir
+    normalized_dir = ensure_within_and_resolve(perimeter_root, normalized_candidate)
     semantic_dir = ensure_within_and_resolve(perimeter_root, layout.semantic_dir)
 
     db_candidate = Path(db_override) if db_override else (semantic_dir / "tags.db")
     db_path = ensure_within_and_resolve(perimeter_root, db_candidate)
 
-    return repo_root_dir, raw_dir, db_path, semantic_dir
+    return repo_root_dir, normalized_dir, db_path, semantic_dir
 
 
 def _parse_args() -> argparse.Namespace:
@@ -806,21 +749,6 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("slug_pos", nargs="?", help="Slug cliente (posizionale)")
 
     p.add_argument("--slug", type=str, help="Slug cliente (es. acme-srl)")
-
-    p.add_argument(
-        "--source",
-        choices=("drive", "local"),
-        default="drive",
-        help=("Sorgente PDF (default: drive). Usa --source=local per lavorare da una " "cartella locale."),
-    )
-
-    p.add_argument(
-        "--local-path",
-        type=str,
-        help=(
-            "Percorso locale sorgente dei PDF. Se omesso con --source=local, userà " "direttamente output/<slug>/raw."
-        ),
-    )
 
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
 
@@ -861,15 +789,15 @@ def _parse_args() -> argparse.Namespace:
         help="Esegue solo la validazione di tags_reviewed.yaml",
     )
 
-    # Scansione RAW -> DB (opzionale)
+    # Scansione NORMALIZED -> DB (opzionale)
 
     p.add_argument(
-        "--scan-raw",
+        "--scan-normalized",
         action="store_true",
-        help="Indicizza cartelle e PDF di raw/ nel DB",
+        help="Indicizza cartelle e Markdown di normalized/ nel DB",
     )
 
-    p.add_argument("--raw-dir", type=str, help="Percorso della cartella raw/")
+    p.add_argument("--normalized-dir", type=str, help="Percorso della cartella normalized/")
 
     p.add_argument("--db", type=str, help="Percorso del DB SQLite (tags.db)")
 
@@ -972,20 +900,20 @@ def main(args: argparse.Namespace) -> int | None:
         if args.validate_only:
             return validate_tags_reviewed(slug, run_id=run_id)
 
-        if getattr(args, "scan_raw", False):
+        if getattr(args, "scan_normalized", False):
             ctx = ClientContext.load(
                 slug=slug,
                 require_env=False,
                 run_id=run_id,
-                stage="scan_raw",
+                stage="scan_normalized",
                 bootstrap_config=False,
             )
-            repo_root_dir, raw_dir, db_path, _ = _resolve_cli_paths(
+            repo_root_dir, normalized_dir, db_path, _ = _resolve_cli_paths(
                 ctx,
-                raw_override=args.raw_dir,
+                normalized_override=args.normalized_dir,
                 db_override=args.db,
             )
-            stats = scan_raw_to_db(raw_dir, db_path, repo_root_dir=repo_root_dir)
+            stats = scan_normalized_to_db(normalized_dir, db_path, repo_root_dir=repo_root_dir)
             log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
             log.info("cli.tag_onboarding.scan_completed", extra=stats)
             return 0
@@ -998,16 +926,16 @@ def main(args: argparse.Namespace) -> int | None:
                 stage="nlp",
                 bootstrap_config=False,
             )
-            repo_root_dir, raw_dir, db_path, _ = _resolve_cli_paths(
+            repo_root_dir, normalized_dir, db_path, _ = _resolve_cli_paths(
                 ctx,
-                raw_override=args.raw_dir,
+                normalized_override=args.normalized_dir,
                 db_override=args.db,
             )
             lang = args.lang if args.lang != "auto" else "it"
             worker_override = 1 if args.nlp_no_parallel else args.nlp_workers
             stats = run_nlp_to_db(
                 slug,
-                raw_dir,
+                normalized_dir,
                 db_path,
                 repo_root_dir=repo_root_dir,
                 lang=lang,
@@ -1027,8 +955,6 @@ def main(args: argparse.Namespace) -> int | None:
         try:
             tag_onboarding_main(
                 slug=slug,
-                source=args.source,
-                local_path=args.local_path,
                 non_interactive=args.non_interactive,
                 proceed_after_csv=bool(args.proceed),
                 dummy_mode=bool(args.dummy),

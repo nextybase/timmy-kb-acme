@@ -8,6 +8,7 @@ from typing import Any, cast
 import pytest
 
 from pipeline.exceptions import ConfigError, ConversionError
+from pipeline.file_utils import safe_write_text
 from semantic import convert_service
 
 
@@ -34,37 +35,29 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "config" / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
     (base / "logs").mkdir(parents=True, exist_ok=True)
+    (base / "normalized").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
-    (base / "semantic" / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
 
 
-def test_convert_markdown_raises_when_only_readme_summary_and_pdfs_present(tmp_path: Path, monkeypatch):
+def test_convert_markdown_raises_when_normalized_markdown_is_empty(tmp_path: Path):
     base = tmp_path / "base"
     raw = base / "raw"
     book = base / "book"
     for d in (base, raw, book):
         d.mkdir(parents=True, exist_ok=True)
     _write_minimal_layout(base)
-    # Presenza di almeno un PDF in RAW
-    (raw / "cat").mkdir(parents=True, exist_ok=True)
-    (raw / "cat" / "doc.pdf").write_bytes(b"%PDF-1.4\n%Fake\n")
+    safe_write_text(base / "normalized" / "empty.md", "\n", encoding="utf-8", atomic=True)
 
     ctx = _Ctx(base, raw, book)
-
-    # Converter che scrive solo README/SUMMARY (nessun contenuto)
-    def _fake_convert_md(ctxlike, book_dir: Path):
-        (book_dir / "README.md").write_text("# R\n", encoding="utf-8")
-        (book_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
-
-    monkeypatch.setattr(convert_service, "_convert_md", _fake_convert_md, raising=True)
 
     with pytest.raises(ConversionError):
         convert_service.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
 
 
-def test_convert_markdown_raises_configerror_when_no_pdfs_and_only_readme_summary(tmp_path: Path, monkeypatch):
+def test_convert_markdown_raises_configerror_when_only_readme_summary(tmp_path: Path):
     base = tmp_path / "base"
     raw = base / "raw"
     book = base / "book"
@@ -72,12 +65,6 @@ def test_convert_markdown_raises_configerror_when_no_pdfs_and_only_readme_summar
         d.mkdir(parents=True, exist_ok=True)
     _write_minimal_layout(base)
     ctx = _Ctx(base, raw, book)
-
-    def _fake_convert_md(ctxlike, book_dir: Path):
-        (book_dir / "README.md").write_text("# R\n", encoding="utf-8")
-        (book_dir / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
-
-    monkeypatch.setattr(convert_service, "_convert_md", _fake_convert_md, raising=True)
 
     with pytest.raises(ConfigError):
         convert_service.convert_markdown(cast(Any, ctx), _logger(), slug=ctx.slug)
