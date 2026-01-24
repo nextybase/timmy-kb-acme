@@ -94,19 +94,19 @@ Test risks and preserving green suite:
 ## 5) Proposed micro-PR sequence (C1..Cn)
 1) C1: "Extract throttling helpers"
    - Scope: isolate `_ThrottleState/_ThrottleRegistry/_throttle_guard` into a helper module.
-   - Tests: `pytest -q -k "retriever and not slow"`.
+   - Tests: `python tools/test_runner.py fast -- -k "retriever"`.
 2) C2: "Extract validation + params"
    - Scope: move `QueryParams` + `_validate_params` + config coercion helpers.
-   - Tests: `pytest -q -k "retriever and not slow"`.
+   - Tests: `python tools/test_runner.py fast -- -k "retriever"`.
 3) C3: "Extract embedding and candidate normalization"
    - Scope: move `_materialize_query_vector` + `_coerce_candidate_vector`.
-   - Tests: `pytest -q -k "retriever and not slow"`.
+   - Tests: `python tools/test_runner.py fast -- -k "retriever"`.
 4) C4: "Extract ranking + metrics"
    - Scope: move `_rank_candidates` + `_log_retriever_metrics` + `cosine`.
-   - Tests: `pytest -q -k "retriever and not slow"`.
+   - Tests: `python tools/test_runner.py fast -- -k "retriever"`.
 5) C5: "Extract manifest/evidence packaging"
    - Scope: isolate manifest build and `retriever.evidence.selected` payload assembly.
-   - Tests: `pytest -q -k "explainability or retriever"`.
+   - Tests: `python tools/test_runner.py fast -- -k "explainability or retriever"`.
 6) C6: "Finalize facade-only retriever module"
    - Scope: leave `search/search_with_config` as thin orchestration over extracted pieces.
-   - Tests: `pytest -q -k "retriever and not slow"`.
+   - Tests: `python tools/test_runner.py fast -- -k "retriever"`.

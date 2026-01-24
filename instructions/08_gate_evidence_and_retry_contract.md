@@ -165,7 +165,7 @@ In questi casi:
 - Il QA Gate è **necessario ma non sufficiente** per completare la pipeline.
 - Requisiti minimi QA:
   - `pre-commit run --all-files` → PASS
-  - `pytest -q` → PASS
+  - `pre-commit run --hook-stage pre-push --all-files` → PASS
   - report QA disponibili come evidenza
 
 Solo dopo:

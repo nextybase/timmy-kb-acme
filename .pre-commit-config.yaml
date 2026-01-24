@@ -86,7 +86,7 @@ repos:
         additional_dependencies: ["mypy", "types-PyYAML", "types-requests==2.32.4.20250809"]
         files: ^src/(config_ui/|pipeline/drive/)|^src/pipeline/drive_utils\.py$
         pass_filenames: false
-        args: ["--config-file", "mypy.ini"]
+        args: ["--config-file", "mypy.ini", "src/pipeline/drive", "src/pipeline/drive_utils.py"]
         stages: [pre-push]
 
       - id: forbid-unsafe-file-reads

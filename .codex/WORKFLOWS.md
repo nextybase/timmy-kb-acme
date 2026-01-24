@@ -20,14 +20,14 @@ and is **not** the system-level Epistemic Envelope.
 - The recommended entrypoint is the Onboarding Task Codex (see `.codex/PROMPTS.md`), which enforces a preliminary plan, idempotent micro-PRs, explicit QA, and AGENTS matrix updates.
 - Workflows in this file must honor path safety, atomic writes, structured logging, and import-time safety even when driven by Codex.
 - Every Prompt Chain follows `system/specs/promptchain_spec.md` as the single source of truth: Planner ? OCP ? Codex ? OCP ? Planner, Phase 0 (analytical/read-only), Phase 1..N (operational micro-PRs with intermediate QA), and Prompt N+1 (final QA plus narrative summary and an Italian one-line commit message).
-- The Active Rules memo opens each operational prompt to remind teams about path safety ON, micro-PR discipline, zero side effects, documentation updates, the mandatory pre-check, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Italian-only response policy; this memo enforces the template described in `.codex/PROMPTS.md`.
+- The Active Rules memo opens each operational prompt to remind teams about path safety ON, micro-PR discipline, zero side effects, documentation updates, the mandatory pre-check, intermediate QA (`python tools/test_runner.py fast`; ARCH only if invariants/contract/manifest change), final QA (`pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files`, fallback: `python tools/test_runner.py full`), and the Italian-only response policy; this memo enforces the template described in `.codex/PROMPTS.md`.
 - Governance forbids skipping phases, executing multiple prompts per turn, or chaining prompts without Codex responses; after two failed autocorrections the agent must stop and ask the OCP for guidance.
 - Operational prompts may touch only the files declared by the OCP, reference the SSoT documents in their reports, and document every QA attempt; the closing prompt runs the full QA stack before confirming completion.
 
 ### Static Patch Pre-Check
 - Each Codex workflow starts with a static diff pre-check: forbid raw `open`, `Path` usage without path-utils, `_private` imports or forbidden wrappers, hardcoded paths, unstructured logging, REPO_ROOT/SSoT mutations, and non-atomic multi-topic patches; confirm the Active Rules memo is honored.
 - The pre-check must complete before running QA; if it fails, do not launch tests, rewrite the patch using safe utilities, and repeat up to two attempts. After the third failure, pause and ask the OCP for guidance.
-- Every intermediate Prompt Chain step must execute the filtered QA `pytest -q -k "not slow"` plus the mandated formatter/linter suite; the final prompt runs the full `pytest -q` and `pre-commit run --all-files` for closure.
+- Every intermediate Prompt Chain step must execute `python tools/test_runner.py fast` plus the mandated formatter/linter suite (ARCH only if invariants/contract/manifest change); the final prompt runs `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files` for closure (fallback: `python tools/test_runner.py full`).
 
 ### Language Policy
 - All conversational interactions between Codex, the OCP, and the user proceed in Italian by default; when the OCP dichiara control-mode, OCP ↔ Codex switches to English while Timmy/ProtoTimmy ↔ User stays Italian. Technical files and documentation may remain in English as required.
@@ -38,7 +38,7 @@ and is **not** the system-level Epistemic Envelope.
   - S0: OCP issues a minimal prompt; Codex acknowledges the Active Rules memo.
   - S1: Codex describes the Pre-Check validation it would apply to a mock patch (no files created).
   - S2: OCP sends a sample operational prompt; Codex replies with a conceptual micro-PR narrative only.
-  - S3: Codex states it would run `pytest -q -k "not slow"` and explains how it would interpret pass/fail results without executing the command.
+  - S3: Codex states it would run `python tools/test_runner.py fast` and explains how it would interpret pass/fail results without executing the command.
   - S4: Codex spells out the escalation/retry plan (two autocorrections max) and reconfirms Italian-language compliance.
 - **Rules:** no real patch, no disk I/O, no QA commands executed; treat it as a fast diagnostic after changing the Prompt Chain documentation.
 - **Use cases:** governance health-check, post-update validation, and HiTL evidence that Codex and the OCP stay aligned.

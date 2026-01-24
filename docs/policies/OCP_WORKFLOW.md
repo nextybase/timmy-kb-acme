@@ -4,19 +4,20 @@
 2. **Regola base**: `main` riceve modifiche solo via PR; vedere docs/security.md per richieste di branch protection (`CI`, `Secret Scan`, approval). Nessuna scrittura diretta su `main`.
 3. **Mapping Prompt → Commit**:
    - Prompt 0: analisi read-only, nessun file modificato.
-   - Prompt 1..N: ogni prompt genera un micro-PR mirato (1 diff, 1 report, `pytest -q -k "not slow"`).
-   - Prompt N+1: finale con `pre-commit run --all-files` + `pytest -q`, riepilogo in italiano e commit conclusivo.
+   - Prompt 1..N: ogni prompt genera un micro-PR mirato (1 diff, 1 report, `python tools/test_runner.py fast`).
+   - Prompt N+1: finale con `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`), riepilogo in italiano e commit conclusivo.
 4. **Comandi standard**:
-   - `pytest -q -k "not slow"` (intermedio su ogni prompt operativo).
-   - `pre-commit run --all-files` e `pytest -q` al prompt finale.
+   - `python tools/test_runner.py fast` (intermedio su ogni prompt operativo).
+   - `python tools/test_runner.py arch` solo se cambiano invarianti/contract/manifest.
+   - `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files` al prompt finale (fallback: `python tools/test_runner.py full`).
 5. **Regole NO**:
    - NO file fuori dallo scope dichiarato.
    - NO refactor non richiesti.
    - NO bypass degli hook o della QA; se fallano, correggere e ripetere fino a max 10 tentativi.
    - NO merge diretto su `main` senza autorizzazione OCP/Senior Reviewer.
 6. **Checklist merge**:
-   - QA intermedi eseguiti (`pytest -q -k "not slow"`).
-   - QA finale completata (`pre-commit run --all-files`, `pytest -q`).
+   - QA intermedi eseguiti (`python tools/test_runner.py fast`).
+   - QA finale completata (`pre-commit run --all-files`, `pre-commit run --hook-stage pre-push --all-files`).
    - Skeptic Gate documentato (Evidence/Scope/Rischi/Decisione).
    - Note HiTL compilate (reviewer, domande aperte, verifiche rimaste).
 7. **Flusso operativo**:

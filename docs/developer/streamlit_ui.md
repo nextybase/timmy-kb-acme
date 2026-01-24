@@ -149,7 +149,7 @@ Checklist minima per una pagina nuova:
 2. Richiamare header/sidebar coerenti con il tipo di pagina (Admin -> `None`, Tools -> slug richiesto).
 3. Aggiornare `ui/navigation_spec.py` (coppia `PagePaths` + `NAVIGATION_GROUPS`) cosi da riflettere titolo/gruppo/url-path della nuova pagina; rigenerare gli snapshot con `python tools/ci_dump_nav.py` se cambiano i gruppi.
 4. Aggiungere/aggiornare i test UI (`tests/ui/...`) sfruttando gli stub Streamlit.
-5. Validare con `pytest -q` per riallineare la suite e i contratti di navigazione.
+5. Validare con `python tools/test_runner.py full` per riallineare la suite e i contratti di navigazione.
 
 ---
 

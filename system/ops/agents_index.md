@@ -54,7 +54,7 @@ Core principles:
 - **Lint & Typecheck:** apply configured formatters/linters (`Ruff`, `Black`, `isort`) and typecheckers (`mypy`/`pyright`) when present. Respect the project's existing standards.
 - **Path-safety & I/O:** every read/write must flow through the SSoT helpers (`ensure_within*`, `safe_write_*`). Never create/delete files outside the customer perimeter.
 - **Documentation & QA:** update documentation when UX/flow changes occur. Keep cSpell clean on tracked paths; only expand dictionaries for domain-specific terms.
- - **Prompt Chain etiquette:** Planner → OCP → Codex → OCP → Planner is mandatory; Phase 0 stays analytical, phases 1..N implement micro-PRs with `pytest -q -k "not slow"`, and Prompt N+1 executes `pytest -q` + `pre-commit run --all-files`, ending with an Italian one-line closing commit. SSoT documentation remains in English, while Codex always responds in Italian. Reference: `system/specs/promptchain_spec.md`, `system/ops/runbook_codex.md`, `.codex/PROMPTS.md`.
+ - **Prompt Chain etiquette:** Planner → OCP → Codex → OCP → Planner is mandatory; Phase 0 stays analytical, phases 1..N implement micro-PRs with `python tools/test_runner.py fast`, and Prompt N+1 executes `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full` if pre-commit is unavailable), ending with an Italian one-line closing commit. SSoT documentation remains in English, while Codex always responds in Italian. Reference: `system/specs/promptchain_spec.md`, `system/ops/runbook_codex.md`, `.codex/PROMPTS.md`.
 
 
 ## Anti-duplication note

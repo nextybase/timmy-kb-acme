@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """
 Esegue QA locale in modo "safe" (auto-rimeditivo) con una smoke suite:
-1) isort (write-mode)        → riordina import
-2) black (write-mode)        → format definitivo
-3) ruff check --fix          → lint + fix non distruttivi
-4) mypy                      → type-check mirato (solo su target esistenti)
-5) pytest                    → smoke ui/retriever/smoke
+1) isort (write-mode)        -> riordina import
+2) black (write-mode)        -> format definitivo
+3) ruff check --fix          -> lint + fix non distruttivi
+4) mypy                      -> type-check mirato (solo su target esistenti)
+5) pytest (opzionale)         -> smoke ui/retriever/smoke (QA_SAFE_RUN_TESTS=1)
 
 Exit code:
 - 0 se tutto ok o tool assenti (skip)
@@ -16,6 +16,7 @@ Exit code:
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,7 +34,7 @@ def run(cmd: List[str]) -> int:
 
 def run_module_if_available(module: str, args: List[str]) -> Tuple[str, int | None]:
     """
-    Esegue `python -m <module> <args>` se il modulo è importabile; altrimenti skip.
+    Esegue `python -m <module> <args>` se il modulo e importabile; altrimenti skip.
     Ritorna (nome_modulo, rc | None).
     """
     if importlib.util.find_spec(module) is None:
@@ -78,17 +79,21 @@ def main(argv: List[str] | None = None) -> int:
         if rc not in (0, None):
             failures.append(mod)
     else:
-        print("[qa-safe] mypy: nessun target esistente tra " f"{mypy_candidates} → skip", flush=True)
+        print("[qa-safe] mypy: nessun target esistente tra " f"{mypy_candidates} -> skip", flush=True)
 
-    # 5) pytest (smoke UI/retriever)
-    smoke_targets = ["tests/ui", "tests/retriever", "tests/smoke"]
-    existing_smoke = _existing_targets(smoke_targets)
-    if existing_smoke:
-        mod, rc = run_module_if_available("pytest", ["-q", *existing_smoke])
-        if rc not in (0, None):
-            failures.append(mod)
+    # 5) pytest (opzionale, default OFF)
+    run_tests = os.getenv("QA_SAFE_RUN_TESTS", "").strip().lower() in ("1", "true", "yes")
+    if run_tests:
+        smoke_targets = ["tests/ui", "tests/retriever", "tests/smoke"]
+        existing_smoke = _existing_targets(smoke_targets)
+        if existing_smoke:
+            mod, rc = run_module_if_available("pytest", ["-q", *existing_smoke])
+            if rc not in (0, None):
+                failures.append(mod)
+        else:
+            print(f"[qa-safe] pytest: nessun target esistente tra {smoke_targets} -> skip", flush=True)
     else:
-        print(f"[qa-safe] pytest: nessun target esistente tra {smoke_targets} → skip", flush=True)
+        print("[qa-safe] pytest: skip (QA_SAFE_RUN_TESTS=1 per abilitarlo)", flush=True)
 
     if failures:
         print(f"[qa-safe] Falliti: {', '.join(failures)}", flush=True)

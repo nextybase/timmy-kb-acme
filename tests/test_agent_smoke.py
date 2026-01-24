@@ -33,18 +33,28 @@ def test_qa_safe_executes_toolchain_in_order(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(qa_safe, "_existing_targets", lambda candidates: list(candidates))
     monkeypatch.setattr(qa_safe.subprocess, "run", fake_run)
 
+    monkeypatch.delenv("QA_SAFE_RUN_TESTS", raising=False)
     rc = qa_safe.main([])
     assert rc == 0
 
-    # Verifica sequenza: isort -> black -> ruff -> mypy -> pytest
+    # Sequenza default: isort -> black -> ruff -> mypy (pytest OFF)
     modules = [cmd[2] for cmd in executed]
-    assert modules == ["isort", "black", "ruff", "mypy", "pytest"]
+    assert modules == ["isort", "black", "ruff", "mypy"]
 
     # mypy deve rispettare la configurazione condivisa
     assert "--config-file" in executed[3]
     assert "mypy.ini" in executed[3]
 
-    # pytest deve essere eseguito in modalità smoke (-q) sui target documentati
+    executed.clear()
+    monkeypatch.setenv("QA_SAFE_RUN_TESTS", "1")
+    rc = qa_safe.main([])
+    assert rc == 0
+
+    # Sequenza con pytest abilitato
+    modules = [cmd[2] for cmd in executed]
+    assert modules == ["isort", "black", "ruff", "mypy", "pytest"]
+
+    # pytest deve essere eseguito in modalita smoke (-q) sui target documentati
     assert "-q" in executed[4]
     assert any(part.startswith("tests/ui") for part in executed[4])
 

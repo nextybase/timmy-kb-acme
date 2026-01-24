@@ -261,9 +261,11 @@ invarianti vedi [Architecture Overview](../../system/architecture.md).
 - Tooling: `ruff`, `black`, `isort`; type-check con `mypy`/`pyright`.
 - Hook:
 ```
-pre-commit install --hook-type pre-commit
-make qa-safe
-make ci-safe
+pre-commit install --hook-type pre-commit --hook-type pre-push
+python tools/test_runner.py fast
+python tools/test_runner.py arch
+pre-commit run --all-files
+pre-commit run --hook-stage pre-push --all-files
 ```
 
 ### Prompt Chain e QA

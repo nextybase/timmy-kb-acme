@@ -44,9 +44,9 @@ Timmy-KB adotta un namespace unico top-level. Questo contratto blocca definitiva
   - `rg 'legacy_ns\\.tools'`
 
 ## Test da eseguire
-- Suite rapida: `pytest -q -k "not slow"`
-- Se tocchi Streamlit/UI: aggiungi `-m "not slow"` con filtri di pagina se servono.
-- Prima della chiusura finale della Prompt Chain: `pre-commit run --all-files` + `pytest -q`.
+- Suite rapida: `python tools/test_runner.py fast`
+- Se tocchi Streamlit/UI: usa FAST e filtra con `-- -k "<pattern>"` se serve.
+- Prima della chiusura finale della Prompt Chain: `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`).
 
 ## Note operative
 - Runner/entrypoint (es. CLI Streamlit/pytest) possono toccare `sys.path` solo se non c'è alternativa e devono documentare il motivo; i moduli di libreria non possono farlo.

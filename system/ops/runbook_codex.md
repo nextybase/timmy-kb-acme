@@ -28,7 +28,7 @@ This repository blends the shared policies (`system/ops/agents_index.md`), area 
 ### Minimal tooling
 - Python **>= 3.11**, pip, pip-tools; optional Docker for HonKit preview.
 - Required credentials: `OPENAI_API_KEY`. Drive access also needs `SERVICE_ACCOUNT_FILE` and `DRIVE_ID`. <!-- pragma: allowlist secret -->
-- Install pre-commit hooks: `pre-commit install --hook-type pre-commit`.
+- Install pre-commit hooks: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
 - Ensure the pipeline modules import from the same repo root as the UI; activate the correct venv and run `pip install -e .` at the repo root if necessary.
 
 ### Environment setup
@@ -36,8 +36,10 @@ This repository blends the shared policies (`system/ops/agents_index.md`), area 
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
 pip install -r requirements-optional.txt   # for Drive integration
-make qa-safe
-pytest -q
+python tools/test_runner.py fast
+python tools/test_runner.py arch
+pre-commit run --all-files
+pre-commit run --hook-stage pre-push --all-files
 ```
 
 References: [README](../README.md), [Developer Guide → Dependencies & QA](../../docs/developer/developer_guide.md).
@@ -203,7 +205,7 @@ References: [AGENTS Index](agents_index.md), [.codex/AGENTS.md](../../.codex/AGE
 
 - Test pyramid: units → contract/middle → smoke E2E (dummy datasets, no network).
 - Pre-commit hooks run formatters/linters (`isort`, `black`, `ruff --fix`), typechecks (`mypy`/`pyright`), spell-check (`cspell`), and guard rails (`forbid-*`).
-- Rapid local CI: `make qa-safe` → `make ci-safe` → `pytest -q`.
+- Rapid local CI: `python tools/test_runner.py fast` -> `python tools/test_runner.py arch` -> `pre-commit run --all-files` -> `pre-commit run --hook-stage pre-push --all-files`.
 
 ### Required checks
 - Reject invalid slugs or normalize them.
@@ -339,9 +341,10 @@ python -m timmy_kb.cli.semantic_onboarding --slug <slug> --non-interactive
 # La preview è gestita via adapter/UI (vedi `src/adapters/preview.py`); il modulo esiste ma non è previsto/supportato come entrypoint pubblico `python -m pipeline.honkit_preview`.
 
 # QA
-make qa-safe
-pytest -q
+python tools/test_runner.py fast
+python tools/test_runner.py arch
 pre-commit run --all-files
+pre-commit run --hook-stage pre-push --all-files
 
 # Spell & encoding
 pre-commit run cspell --all-files

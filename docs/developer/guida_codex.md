@@ -25,12 +25,12 @@ L'idea di base:
 
 3. **Prompt operativi (1..N) - Phase 1..N**
    - Ogni prompt ha uno scope ristretto: una modifica singola, un refactor piccolo, un fix mirato.
-   - I prompt operativi iniziano con il memo Active Rules (path safety, micro-PR, zero side effects, QA intermedia `pytest -q -k "not slow"`, lingua italiana) definito in `.codex/PROMPTS.md`.
+  - I prompt operativi iniziano con il memo Active Rules (path safety, micro-PR, zero side effects, QA intermedia `python tools/test_runner.py fast`, lingua italiana) definito in `.codex/PROMPTS.md`.
    - Prima di qualsiasi altra sezione, ogni prompt - anche quelli di Phase 0 o di finalizzazione - deve presentare il blocco canonico (`ROLE: Codex`, `PHASE`, `SCOPE`, `ACTIVE RULES MEMO`, `EXPECTED OUTPUTS`, `TESTS`, `CONSTRAINTS`, `STOP RULE`): il `ROLE` deve essere il primo elemento e indicare espressamente `Codex`, così da evitare confusione di ruolo.
    - In ciascuno step Codex prepara la patch, applica il pre-check statico (no I/O raw/import privati/path hardcoded/patch non atomiche), esegue QA intermedia, e fornisce diff/report/risultato in italiano.
 
 4. **Prompt finale di QA (Prompt N+1)**
-   - Esegue la QA completa: `pre-commit run --all-files` e `pytest -q`, documenta eventuali retry (fino a 10) e termina con una one-line commit summary in italiano.
+  - Esegue la QA completa: `pre-commit run --all-files` e `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`), documenta eventuali retry (fino a 10) e termina con una one-line commit summary in italiano.
    - Dopo due tentativi falliti Codex chiede istruzioni (HiTL).
 
 5. **Codex Smoke Chain**
@@ -125,11 +125,11 @@ Per ottenere il massimo da Codex (sia in Chat che in Agent), alcune tecniche di 
 ### 3.3 Prompt con QA esplicita
 
 - Integra sempre una richiesta di QA mirata:
-  - *"Dopo la modifica esegui `pytest -q -k test_nome_relativo` e riportami l'esito."*
+  - *"Dopo la modifica esegui `python tools/test_runner.py fast -- -k test_nome_relativo` e riportami l'esito."*
   - *"Se i test falliscono, prova una sola volta a correggere; se fallisce ancora, fermati e chiedi indicazioni."*
 
 - Per task più grossi, agganciati al workflow standard:
-  - *"Usa la pipeline QA standard del repo (ruff/black/typecheck/pytest mirati o `qa-safe` se disponibile)."*
+  - *"Usa la pipeline QA standard del repo (ruff/black/typecheck; `qa-safe` se disponibile; test via `python tools/test_runner.py fast|arch|full`)."*
 
 ### 3.4 Prompt per spiegazioni e revisione
 
@@ -158,7 +158,7 @@ Un flusso "sano" e ripetibile può essere:
    - Tu controlli gli step chiave, specialmente quando cambiano API o comportamento visibile.
 
 4. **QA finale e riepilogo**
-   - La Prompt Chain chiude con QA completa (`pre-commit` + `pytest -q`).
+  - La Prompt Chain chiude con QA completa (`pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files`).
    - Codex produce un riepilogo delle modifiche: contesto, file coinvolti, coerenza con Constitution e AGENTS.
 
 5. **Coinvolgi un Senior Reviewer quando serve**

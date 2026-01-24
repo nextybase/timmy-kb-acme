@@ -26,7 +26,7 @@ the system-level Epistemic Envelope.
 
 ## Prompt Template Requirements
 - Templates below are the only structures permitted; every prompt must state its purpose, phase, allowed files, Active Rules memo, and expected outputs.
-- Operational prompts (1..N) exclusively produce diffs, touch files, and run intermediate QA (`pytest -q -k "not slow"`). Phase 0 prompts stay analytical and perform no edits, while prompt N+1 runs the full QA suite plus final narration.
+- Operational prompts (1..N) exclusively produce diffs, touch files, and run intermediate QA (`python tools/test_runner.py fast`; ARCH only if invariants/contract/manifest change). Phase 0 prompts stay analytical and perform no edits, while prompt N+1 runs final QA (`pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files`, fallback: `python tools/test_runner.py full`) plus final narration.
 - Every prompt must be supplied as a single copyable block listing Role, Phase, Scope (allowed/prohibited files), Active Rules memo, Expected Outputs (diff + structured report + QA), Tests executed, Constraints, and Stop Rules to keep instructions unambiguous.
 - **If a prompt expects any file change, it must explicitly request a unified diff and a structured report in the "Expected Outputs" section.** Codex must not treat a change as "done" without those artifacts.
 - **Skeptic Gate MUST:** the OCP documents immediately after each operational Codex response that it conducted the mandatory gate (Evidence/Scope/Risk/Decision), and only Decision=PASS enables the next prompt. PASS WITH CONDITIONS imposes constraints to respect and BLOCK stops the chain (see `system/specs/promptchain_spec.md`).
@@ -84,7 +84,7 @@ STOP RULE: <fermo dopo la risposta>
 ### Template: Prompt 1..N
 - Purpose: deliver operational micro-PRs that implement the scoped changes declared by the OCP.
 - Mandatory sections: purpose statement, phase identifier, allowed/prohibited files, Active Rules memo (with path safety, micro-PR scope, intermediate QA requirements, Italian language reminder), expected outputs (diff + structured report + intermediate QA results), dependencies, DoD checklist, and tests executed.
-- Action: apply a diff, document the behavior change in the report, run `pytest -q -k "not slow"` (or a justified substitute) and describe the result; mention whether additional linters/types were run.
+- Action: apply a diff, document the behavior change in the report, run `python tools/test_runner.py fast` (ARCH only if invariants/contract/manifest change) (or a justified substitute) and describe the result; mention whether additional linters/types were run.
 - **Tests coupling rule:** modifiche sotto `tests/**` sono ammesse solo come conseguenza di cambi nello scope extra-`tests/**`; ogni modifica ai test richiede nel report una Test Impact Map.
 - **DoD iteration rule:** if the DoD is not met, subsequent prompts must be numbered as sub-iterations (1a/1b/1c or Na/Nb/Nc) until satisfied.
 - **Skeptic Gate reminder:** after an operational Codex response the OCP runs the Skeptic Gate, evaluates risks/limits, and decides whether to advance; Codex may mention problems but does not authorize progression.
@@ -98,11 +98,11 @@ STOP RULE: <fermo dopo la risposta>
 
 ### Template: Prompt N+1
 - Purpose: conclude the chain via final QA and a closing narrative.
-- Mandatory content: QA results for `pre-commit run --all-files` and `pytest -q`, documentation of retries/micro-fixes (up to ten attempts), full summary of the chain's work, the one-line closing commit message in Italian (unless otherwise specified), and the Retrospective outcome (always PASS, with optional note/TODO) logged after the N+1 Gate.
+- Mandatory content: QA results for `pre-commit run --all-files` and `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`), documentation of retries/micro-fixes (up to ten attempts), full summary of the chain's work, the one-line closing commit message in Italian (unless otherwise specified), and the Retrospective outcome (always PASS, with optional note/TODO) logged after the N+1 Gate.
 - Action: only after both QA commands succeed and the Retrospective PASS is recorded may the chain be considered complete; Codex must report any remaining issues before ending.
 
 ## Active Rules Memo
-- Begin every operational response (Prompt 1..N) with the Active Rules memo that reminds the team about path safety ON, micro-PR focus, zero side effects, documentation updates, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Italian language policy referenced in `system/specs/promptchain_spec.md`.
+- Begin every operational response (Prompt 1..N) with the Active Rules memo that reminds the team about path safety ON, micro-PR focus, zero side effects, documentation updates, intermediate QA (`python tools/test_runner.py fast`; ARCH only if invariants/contract/manifest change), final QA (`pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files`, fallback: `python tools/test_runner.py full`), and the Italian language policy referenced in `system/specs/promptchain_spec.md`.
 - Confirm compliance with the turn-based protocol inside each memo.
 
 ## Prompt Chain Operational Contract
@@ -127,8 +127,8 @@ Title: <brief, imperative>
 Motivation: <bugfix/security/robustness; impact>
 Scope: <files touched and why; single change set>
 Rules honored: path safety / atomicity / no import-time side effects
-Tests: <new/updated; e.g., pytest -k ...>
-QA: isort  black  ruff --fix  mypy  pytest
+Tests: <new/updated; e.g., python tools/test_runner.py fast -- -k ...>
+QA: isort  black  ruff --fix  mypy  pre-commit run --all-files; pre-commit run --hook-stage pre-push --all-files
 Docs notes: <if you touch X, update Y/Z>
 
 ## Work Order Envelope (Agent → Micro-agent)
@@ -210,10 +210,10 @@ Before returning OK, verify:
 Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 
 ## Active Rules for Operational Prompts
-- Active Rules: path safety ON, micro-PR discipline, zero side effects, documentation updates when functionality changes, intermediate QA (`pytest -q -k "not slow"`), final QA (`pytest -q` + `pre-commit run --all-files`), and the Language Policy for Italian conversations.
+- Active Rules: path safety ON, micro-PR discipline, zero side effects, documentation updates when functionality changes, intermediate QA (`python tools/test_runner.py fast`; ARCH only if invariants/contract/manifest change), final QA (`pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files`, fallback: `python tools/test_runner.py full`), and the Language Policy for Italian conversations.
 - After Prompt 0/1, OCP issues one prompt at a time, Codex responds with diff/report/QA, OCP evaluates, and only then emits the next prompt; never stack multiple OCP prompts without a Codex reply.
 - Include this memo at the start of every operational response to reinforce the OCP⇄Codex turn cycle and remind that each step is a narrow micro-PR with mandatory intermediate QA.
-- Micro-PR + QA: apply focused changes, run `pytest -q -k "not slow"` before moving on, document tests and retries, and perform the full final QA run plus `pre-commit run --all-files` at the concluding prompt.
+- Micro-PR + QA: apply focused changes, run `python tools/test_runner.py fast` before moving on, document tests and retries, and perform the full final QA run plus `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`) at the concluding prompt.
 - Escalation: after two failed correction attempts during intermediate or final QA, ask the OCP/user for instructions before proceeding.
 
 ## Patch Pre-Check Validation
@@ -226,14 +226,14 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 - Always report the current state, outputs, and steps already attempted so the OCP can make informed decisions.
 - If the same issue (test or stack trace) repeats more than twice in a single step, stop, log the attempts, and confirm the next action with the OCP.
 - Do not proceed until the following prompt arrives; disclose how many iterations you have exhausted.
-- Every operational prompt (except the final one) must state that it ran `pytest -q -k "not slow"` (plus any additional tests requested); record retries and outcomes before continuing.
-- The final QA cycle (`pytest -q` + `pre-commit run --all-files`) follows the thresholds in `system/specs/promptchain_spec.md`; avoid divergent retry counts, keep retries reasonable, and describe each rerun explicitly.
+- Every operational prompt (except the final one) must state that it ran `python tools/test_runner.py fast` (plus any additional tests requested); record retries and outcomes before continuing.
+- The final QA cycle (`pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files`, fallback: `python tools/test_runner.py full`) follows the thresholds in `system/specs/promptchain_spec.md`; avoid divergent retry counts, keep retries reasonable, and describe each rerun explicitly.
 
 ## Using Tests in the Prompt Chain
 - Test execution is scoped per prompt, with two distinct phases: optional tests when requested and mandatory closing QA.
 - Run only the commands explicitly enumerated in the prompt, and explain which tests were executed and why.
-- Each intermediate prompt must include the standard QA `pytest -q -k "not slow"` (and any additional targeted tests); the final prompt executes the full suite without filtering.
-- The closing prompt always runs `pytest -q` and `pre-commit run --all-files` (per `system/specs/promptchain_spec.md` and `system/ops/runbook_codex.md`); if they fail, apply minimal fixes and rerun until both succeed.
+- Each intermediate prompt must include the standard QA `python tools/test_runner.py fast` (ARCH only if invariants/contract/manifest change) (and any additional targeted tests); the final prompt executes `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`).
+- The closing prompt always runs `pre-commit run --all-files` and `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`) (per `system/specs/promptchain_spec.md` and `system/ops/runbook_codex.md`); if they fail, apply minimal fixes and rerun until both succeed.
 - Document failed tests or repeated retries in your final reply, specifying the fixes and the number of attempts.
 
 ## Commits in the Prompt Chain
@@ -255,7 +255,7 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 
 ## Codex Smoke Chain - Diagnostic Test
 - **Goal:** verify that the Prompt Chain respects turn-taking, memo recognition, QA rules, escalation limits, the Italian Language Policy, and the Pre-Check validation without editing the repository.
-- **Structure:** S0: OCP issues a minimal prompt; Codex confirms that the Active Rules memo is recognized. S1: Codex describes how it would run the Pre-Check validation on a mock diff (no files created). S2: OCP simulates an operational prompt; Codex replies with a conceptual micro-PR description. S3: Codex articulates the intermediate QA (`pytest -q -k "not slow"`) it would run and explains how it would interpret outcomes (without executing anything). S4: Codex summarizes the escalation/retry plan, final QA (`pytest -q` + `pre-commit run --all-files`), and reconfirms Italian-language compliance.
+- **Structure:** S0: OCP issues a minimal prompt; Codex confirms that the Active Rules memo is recognized. S1: Codex describes how it would run the Pre-Check validation on a mock diff (no files created). S2: OCP simulates an operational prompt; Codex replies with a conceptual micro-PR description. S3: Codex articulates the intermediate QA (`python tools/test_runner.py fast`) it would run and explains how it would interpret outcomes (without executing anything). S4: Codex summarizes the escalation/retry plan, final QA (`pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files`, fallback: `python tools/test_runner.py full`), and reconfirms Italian-language compliance.
 - **Rules:** no actual patches, no disk writes, no QA commands executed; perform the entire chain conceptually as a fast diagnostic after modifying Prompt Chain metadata.
 - **Use cases:** diagnose governance issues, validate Prompt Chain updates, and provide HiTL evidence that the OCP→Codex cycle, QA policies, Pre-Check validation, and Italian-language policy remain synchronized.
 
@@ -297,8 +297,8 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 - Prepare dummy datasets; avoid network dependencies by mocking Drive/Git.
 
 ## QA pipeline
-- Run `isort`, `black`, `ruff --fix`, `mypy`, and `pytest -q -k 'not slow'` (for intermediate prompts).
-- The final QA prompt instead runs `pytest -q` (without filters) and `pre-commit run --all-files`.
+- Run `isort`, `black`, `ruff --fix`, `mypy`, and `python tools/test_runner.py fast` (ARCH only if invariants/contract/manifest change) (for intermediate prompts).
+- The final QA prompt instead runs `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`).
 - Include contract tests for the `book/` guard (only `.md`, ignore `.md.fp`) and smoke E2E runs on dummy slugs.
 
 # Docs & Runbook

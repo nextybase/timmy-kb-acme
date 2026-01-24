@@ -19,8 +19,8 @@
 
 ## Prompt Chain Governance
 - All Codex work flows through the numbered Prompt Chain (Phase 0 analytical/read-only, Phase 1..N operational micro-PRs, Prompt N+1 final QA) defined in `system/specs/promptchain_spec.md` and `.codex/PROMPTS.md`; never skip or merge phases.
-- Each operational prompt must honor the Active Rules memo (scope, path safety, documentation updates, intermediate `pytest -q -k "not slow"`, Italian response policy) before touching files.
-- Prompt N+1 must run `pre-commit run --all-files` and `pytest -q` before closing the chain with an Italian one-line commit summary; replay retries up to ten times and log each attempt.
+- Each operational prompt must honor the Active Rules memo (scope, path safety, documentation updates, intermediate `python tools/test_runner.py fast`, Italian response policy) before touching files.
+- Prompt N+1 must run `pre-commit run --all-files` and `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`) before closing the chain with an Italian one-line commit summary; replay retries up to ten times and log each attempt.
 - Codex replies are always in Italian, even when describing tooling or QA details, while the referred SSoT documentation remains in English.
 
 ## Module API and typing

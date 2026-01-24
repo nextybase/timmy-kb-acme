@@ -117,7 +117,7 @@ pip-audit -r requirements.txt -r requirements-dev.txt
 - Installazione locale:
 ```bash
 pip install pre-commit
-pre-commit install --hook-type pre-commit
+pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 - Rigenerazione baseline:
 ```bash

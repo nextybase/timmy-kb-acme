@@ -93,7 +93,7 @@ Debug pre-push:
 ```bash
 pre-commit run --hook-stage pre-push --all-files
 ```
-Serve a riprodurre localmente FULL senza pushare.
+Serve a riprodurre localmente FULL senza fare il push.
 Comportamento:
 - pre-commit: `python tools/test_runner.py fast`
 - pre-push: `python tools/test_runner.py full`

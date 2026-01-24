@@ -47,9 +47,9 @@ python -m streamlit run onboarding_ui.py
 - La configurazione cliente viene creata nel workspace cliente (default locale: `output/timmy-kb-<slug>/config/config.yaml`) e letta via `pipeline.config_utils.get_client_config(context)`.
 
 ## QA rapidi consigliati
-- `make qa-safe` (isort/black/ruff/mypy).
-- `make type` (mypy) o `make ci-safe` (qa + pytest) prima di aprire una PR.
-- cSpell su docs: `pre-commit run cspell --files docs/developer/developer_quickstart.md`.
+- `python tools/test_runner.py fast` (inner loop).
+- `python tools/test_runner.py arch` solo se tocchi invarianti/contract/manifest.
+- Prima della PR: `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files`.
 
 ## Link utili
 - Developer Guide: contesto e onboarding (non normativo).

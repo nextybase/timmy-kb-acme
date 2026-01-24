@@ -6,8 +6,8 @@
 - When touching signatures or flows, update the relevant docs. **Beta 1.0: no migration steps, no retrocompatibility notes**.
 - Zero cSpell warnings in `docs/`.
 - Respect the turn-based OCP → Codex model defined in `system/specs/promptchain_spec.md`: process prompts in order, cite the specification as the SSoT, and never skip or reorder prompts.
-- Document final QA in the closing prompt: `pytest -q` plus `pre-commit run --all-files`.
-- Prompt Chain checklist: confirm Phase 0 stayed analytical/read-only with no diff/QA, each prompt 1..N produced a diff, included the Active Rules memo, executed (or justified) `pytest -q -k "not slow"`, and responded in Italian; Prompt N+1 must run `pytest -q` + `pre-commit run --all-files` and finish with an Italian one-line closing summary.
+- Document final QA in the closing prompt: `pre-commit run --all-files` plus `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`).
+- Prompt Chain checklist: confirm Phase 0 stayed analytical/read-only with no diff/QA, each prompt 1..N produced a diff, included the Active Rules memo, executed (or justified) `python tools/test_runner.py fast`, and responded in Italian; Prompt N+1 must run `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`) and finish with an Italian one-line closing summary.
   - Prompt 0 contains **OPS AUTHORIZATION (READ-ONLY)** (whitelist + explicit forbidden actions) and **DELIVERY STRATEGY (PLANNING DECISION)** (target).
   - Prompt N+1 contains commit subject (ITA) + commit id corto + commit SHA completo.
 - Skeptic Gate MUST be present (Evidence/Scope/Risk/Decision with Decision=PASS) before advancing to the next prompt; PASS WITH CONDITIONS requires constraints, BLOCK stops the chain (SSoT: `system/specs/promptchain_spec.md`).
