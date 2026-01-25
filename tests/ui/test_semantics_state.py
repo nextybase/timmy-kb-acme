@@ -31,7 +31,7 @@ def _write_qa_evidence(path: Path, *, status: str = "pass") -> None:
         "schema_version": 1,
         "qa_status": status,
         "checks_executed": ["pre-commit run --all-files", "pytest -q"],
-        "timestamp": "2025-01-01T00:00:00+00:00",
+        "telemetry": {"timestamp": "2025-01-01T00:00:00+00:00"},
     }
     path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
@@ -614,7 +614,7 @@ def test_run_summary_blocks_on_schema_version_mismatch(monkeypatch, tmp_path):
             "schema_version": 2,
             "qa_status": "pass",
             "checks_executed": ["pytest -q"],
-            "timestamp": "2025-01-01T00:00:00+00:00",
+            "telemetry": {"timestamp": "2025-01-01T00:00:00+00:00"},
         },
     )
     events = _mk_semantics_ctx(monkeypatch, sem, tmp_path=tmp_path, log_dir=qa_dir)
@@ -640,7 +640,7 @@ def test_run_summary_blocks_on_empty_checks(monkeypatch, tmp_path):
             "schema_version": 1,
             "qa_status": "pass",
             "checks_executed": [],
-            "timestamp": "2025-01-01T00:00:00+00:00",
+            "telemetry": {"timestamp": "2025-01-01T00:00:00+00:00"},
         },
     )
     events = _mk_semantics_ctx(monkeypatch, sem, tmp_path=tmp_path, log_dir=qa_dir)

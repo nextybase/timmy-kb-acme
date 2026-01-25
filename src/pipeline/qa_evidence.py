@@ -82,10 +82,11 @@ def validate_qa_evidence_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(telemetry_raw, Mapping):
         telemetry = dict(telemetry_raw)
 
-    # Backward compatibility: accept legacy top-level timestamp without requiring it.
-    legacy_timestamp = payload.get("timestamp")
-    if isinstance(legacy_timestamp, str) and legacy_timestamp.strip() and "timestamp" not in telemetry:
-        telemetry["timestamp"] = legacy_timestamp
+    if "timestamp" in payload:
+        raise ConfigError(
+            "Legacy field 'timestamp' at top-level is not allowed in Beta strict mode; use telemetry.timestamp.",
+            code="qa_evidence_invalid",
+        )
     if "timestamp" in telemetry and not (
         isinstance(telemetry["timestamp"], str) and str(telemetry["timestamp"]).strip()
     ):

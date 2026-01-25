@@ -58,7 +58,7 @@ Source: `instructions/13_artifacts_policy.md:17-82`
 Source: `instructions/13_artifacts_policy.md:180-186`
 ```
  180: ### A.7 Log, diagnostica, stato UI
- 185: | `src/pipeline/qa_evidence.py:write_qa_evidence` | `output/timmy-kb-<slug>/logs/qa_passed.json` | JSON QA | QA gate → README/SUMMARY | CORE-GATE | JSON serialization | No |
+ 185: | `src/pipeline/qa_evidence.py:write_qa_evidence` | `output/timmy-kb-<slug>/logs/qa_passed.json` | JSON QA | QA gate -> README/SUMMARY | CORE-GATE | JSON serialization | No |
 ```
 
 ### Phase appendix: QA core-gate prerequisite for README/SUMMARY
@@ -71,7 +71,7 @@ Source: `instructions/13_artifacts_policy.md:206-212`
 ### Gate checklist and contract update (QA gate + stop_code)
 Source: `instructions/07_gate_checklists.md:137-154`
 ```
- 137: ## Modulo 5 - `PREVIEW_READY → COMPLETE`
+ 137: ## Modulo 5 - `PREVIEW_READY -> COMPLETE`
  139: **Gate richiesti:**
  140: - QA Gate
  145: **Evidence anchors:**
@@ -249,10 +249,10 @@ Source: `tests/architecture/test_determinism_low_entropy_gate.py:66-82`
 ```
 Source: `tests/fixtures/determinism_manifest.json:1`
 ```
-   1: {"artifacts":[{"bytes":10,"path":"book/README.md","sha256":"c78da9afd9b3979501854652b088aacb299d9e601a07efb9f476ca98c7262c59"},{"bytes":9,"path":"book/SUMMARY.md","sha256":"d472979042ac41639fc5e45fc55464aaeefa9ec20e264099ebb7ebed728e9487"},{"bytes":1748,"path":"config/config.yaml","sha256":"ecbf5c4570215f42892b56c66b200d918a7bd895da7f0bfcaf73213c0970b5b3"}],"schema_version":1}
+   1: {"artifacts":[{"bytes":10,"path":"book/README.md","sha256":"c78da9afd9b3979501854652b088aacb299d9e601a07efb9f476ca98c7262c59"},{"bytes":9,"path":"book/SUMMARY.md","sha256":"d472979042ac41639fc5e45fc55464aaeefa9ec20e264099ebb7ebed728e9487"},{"bytes":1748,"path":"config/config.yaml","sha256":"ecbf5c4570215f42892b56c66b200d918a7bd895da7f0bfcaf73213c0970b5b3"}],"schema_version":1} # pragma: allowlist secret
 ```
 
-## Evidence map (concern → file → implication)
+## Evidence map (concern -> file -> implication)
 
 | Concern | File (linee) | Snippet | Implicazione |
 | --- | --- | --- | --- |

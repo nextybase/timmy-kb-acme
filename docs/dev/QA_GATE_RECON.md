@@ -4,7 +4,7 @@
 - Ricognizione di writer/reader QA evidence, generatori README/SUMMARY, ArtifactPolicyViolation/Decision Record, e presenza di manifest deterministico.
 - Solo evidenze oggettive con file+linee+snippet.
 
-## 1) QA evidence (`qa_passed.json`) — writer/reader
+## 1) QA evidence (`qa_passed.json`) - writer/reader
 
 ### Writer (runtime)
 - `src/pipeline/qa_evidence.py:107-126`
@@ -16,7 +16,7 @@
 
 ### Reader (runtime)
 - `src/pipeline/qa_gate.py:24-63`
-  - `require_qa_gate_pass(log_dir)` è la fonte unica: carica/valida evidence e decide PASS/FAIL.
+  - `require_qa_gate_pass(log_dir)` e' la fonte unica: carica/valida evidence e decide PASS/FAIL.
 - `src/ui/pages/semantics.py:289-326`
   - UI chiama `require_qa_gate_pass(...)` prima di `write_summary_and_readme`.
 
@@ -33,10 +33,10 @@
 
 ### Generatori base (writer effettivi)
 - `src/pipeline/content_utils.py:579-658`
-  - `generate_readme_markdown(...)` → scrive `book/README.md`.
+  - `generate_readme_markdown(...)` -> scrive `book/README.md`.
   - Snippet: `readme = target / "README.md"` + `safe_write_text(readme, ...)`
 - `src/pipeline/content_utils.py:662-697`
-  - `generate_summary_markdown(...)` → scrive `book/SUMMARY.md`.
+  - `generate_summary_markdown(...)` -> scrive `book/SUMMARY.md`.
   - Snippet: `summary = target / "SUMMARY.md"` + `safe_write_text(summary, ...)`
 - `src/semantic/frontmatter_service.py:433-491`
   - `write_summary_and_readme(...)` richiama `_gen_summary` + `_gen_readme`.
@@ -50,7 +50,7 @@
 - `src/semantic/frontmatter_service.py:433-491`
   - `write_summary_and_readme(...)` chiama `require_qa_gate_pass(...)`.
 - `src/semantic/api.py:234-265`
-  - `run_semantic_pipeline` → `_run_build_workflow` → `write_summary_and_readme`.
+  - `run_semantic_pipeline` -> `_run_build_workflow` -> `write_summary_and_readme`.
 - `src/timmy_kb/cli/semantic_onboarding.py:231-238`
   - `run_semantic_pipeline(...)` in CLI semantic onboarding.
 - `src/timmy_kb/cli/semantic_headless.py:42-74`
@@ -81,16 +81,16 @@
 - `src/pipeline/artifact_policy.py:46-129`
   - `enforce_core_artifacts` include `book/README.md` + `book/SUMMARY.md`.
 - `src/timmy_kb/cli/raw_ingest.py:186-217`
-  - `enforce_core_artifacts("raw_ingest")` → `ArtifactPolicyViolation` → `record_normative_decision(... STOP_CODE_ARTIFACT_POLICY_VIOLATION)`
+  - `enforce_core_artifacts("raw_ingest")` -> `ArtifactPolicyViolation` -> `record_normative_decision(... STOP_CODE_ARTIFACT_POLICY_VIOLATION)`
 
 ### Mapping stop_code in CLI
 - `src/timmy_kb/cli/pre_onboarding.py:207-214`
-  - `_normative_verdict_for_error` mappa `ArtifactPolicyViolation` → `STOP_CODE_ARTIFACT_POLICY_VIOLATION`.
+  - `_normative_verdict_for_error` mappa `ArtifactPolicyViolation` -> `STOP_CODE_ARTIFACT_POLICY_VIOLATION`.
 - `src/timmy_kb/cli/tag_onboarding.py:131-138`
-  - `_normative_verdict_for_error` mappa `ArtifactPolicyViolation` → `STOP_CODE_ARTIFACT_POLICY_VIOLATION`.
+  - `_normative_verdict_for_error` mappa `ArtifactPolicyViolation` -> `STOP_CODE_ARTIFACT_POLICY_VIOLATION`.
 - `src/timmy_kb/cli/semantic_onboarding.py:110-117`
-  - `_normative_verdict_for_error` mappa `ArtifactPolicyViolation` → `STOP_CODE_ARTIFACT_POLICY_VIOLATION`.
-  - `_normative_verdict_for_error` mappa `QaGateViolation` → `STOP_CODE_QA_GATE_FAILED`.
+  - `_normative_verdict_for_error` mappa `ArtifactPolicyViolation` -> `STOP_CODE_ARTIFACT_POLICY_VIOLATION`.
+  - `_normative_verdict_for_error` mappa `QaGateViolation` -> `STOP_CODE_QA_GATE_FAILED`.
 
 ### Decision Record (ledger) emissione
 - `src/storage/decision_ledger.py:198-231`
@@ -109,17 +109,17 @@
 - `tests/fixtures/determinism_manifest.json:1`
   - Fixture golden manifest.
 
-## 5) Mappa “UI path” e “CLI path”
+## 5) Mappa "UI path" e "CLI path"
 
-### UI path (QA gate → README/SUMMARY)
-- `ui.pages.semantics._run_summary` → `require_qa_gate_pass` → `write_summary_and_readme`.
+### UI path (QA gate -> README/SUMMARY)
+- `ui.pages.semantics._run_summary` -> `require_qa_gate_pass` -> `write_summary_and_readme`.
   - Evidenze: `src/ui/pages/semantics.py:289-350`, `src/pipeline/qa_gate.py:24-63`.
 
 ### CLI path (README/SUMMARY)
-- `semantic_onboarding` → `run_semantic_pipeline` → `write_summary_and_readme` (chiama `require_qa_gate_pass`) → `generate_*`.
+- `semantic_onboarding` -> `run_semantic_pipeline` -> `write_summary_and_readme` (chiama `require_qa_gate_pass`) -> `generate_*`.
   - Evidenze: `src/timmy_kb/cli/semantic_onboarding.py:231-238`, `src/semantic/api.py:234-265`,
     `src/semantic/frontmatter_service.py:433-491`, `src/pipeline/qa_gate.py:24-63`.
-- `semantic_headless` → `write_summary_and_readme` (chiama `require_qa_gate_pass`) → `generate_*`.
+- `semantic_headless` -> `write_summary_and_readme` (chiama `require_qa_gate_pass`) -> `generate_*`.
   - Evidenze: `src/timmy_kb/cli/semantic_headless.py:42-74`, `src/semantic/frontmatter_service.py:433-491`.
 
 ## 6) Punti di divergenza attuali (osservazioni oggettive)
