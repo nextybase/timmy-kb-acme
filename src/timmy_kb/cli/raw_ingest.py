@@ -11,8 +11,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
+from pipeline.artifact_policy import enforce_core_artifacts
 from pipeline.context import ClientContext
-from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
+from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, exit_code_for
 from pipeline.ingest.provider import build_ingest_provider
 from pipeline.logging_utils import get_structured_logger
 from pipeline.normalized_index import NormalizedIndexRecord, write_index
@@ -183,6 +184,37 @@ def run_raw_ingest(
     write_index(index_path, records)
 
     stats = {"ok": ok_count, "skip": skip_count, "fail": fail_count}
+    try:
+        enforce_core_artifacts("raw_ingest", layout=layout)
+    except ArtifactPolicyViolation as exc:
+        decision_ledger.record_normative_decision(
+            ledger_conn,
+            decision_ledger.NormativeDecisionRecord(
+                decision_id=uuid.uuid4().hex,
+                run_id=run_id,
+                slug=slug,
+                gate_name="normalize_raw",
+                from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
+                to_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
+                verdict=decision_ledger.NORMATIVE_BLOCK,
+                subject="raw_ingest",
+                decided_at=_utc_now_iso(),
+                actor="cli.raw_ingest",
+                evidence_refs=[
+                    *_build_evidence_refs(
+                        layout,
+                        transformer_name=getattr(transform, "transformer_name", "unknown"),
+                        transformer_version=getattr(transform, "transformer_version", "unknown"),
+                        ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
+                        stats=stats,
+                    ),
+                    *exc.evidence_refs,
+                ],
+                stop_code=decision_ledger.STOP_CODE_ARTIFACT_POLICY_VIOLATION,
+                rationale="deny_artifact_policy_violation",
+            ),
+        )
+        raise
     decision_ledger.record_normative_decision(
         ledger_conn,
         decision_ledger.NormativeDecisionRecord(

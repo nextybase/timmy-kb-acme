@@ -34,6 +34,12 @@ def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_
 
     ctx = _ctx(tmp_path / "output" / "dummy")
     monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))
+    book_dir = ctx.repo_root_dir / "book"
+    book_dir.mkdir(parents=True, exist_ok=True)
+    (book_dir / "README.md").write_text("# Dummy\n", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (book_dir / "doc.md").write_text("content", encoding="utf-8")
+    (ctx.config_dir / "ledger.db").write_text("", encoding="utf-8")
 
     calls: list[object] = []
     monkeypatch.setattr(cli, "convert_markdown", lambda *_, **__: calls.append("convert"))
@@ -110,6 +116,11 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
     monkeypatch.setattr(cli.WorkspaceLayout, "from_context", classmethod(lambda cls, c: layout))
 
     layout.semantic_dir.mkdir(parents=True, exist_ok=True)
+    layout.book_dir.mkdir(parents=True, exist_ok=True)
+    (layout.book_dir / "README.md").write_text("# Dummy\n", encoding="utf-8")
+    (layout.book_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
+    (layout.book_dir / "doc.md").write_text("content", encoding="utf-8")
+    (ctx.config_dir / "ledger.db").write_text("", encoding="utf-8")
     (layout.semantic_dir / "tags_raw.json").write_text("{}", encoding="utf-8")
 
     called: list[Path] = []

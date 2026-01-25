@@ -32,6 +32,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from pipeline.artifact_policy import enforce_core_artifacts
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.config_utils import (
     ensure_config_migrated,
@@ -42,7 +43,7 @@ from pipeline.config_utils import (
 )
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var
-from pipeline.exceptions import ConfigError, PipelineError
+from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError
 from pipeline.file_utils import safe_write_bytes, safe_write_text  # SSoT scritture atomiche
 from pipeline.logging_utils import (
     get_structured_logger,
@@ -204,6 +205,8 @@ def _build_evidence_refs(layout: WorkspaceLayout) -> list[str]:
 
 
 def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
+    if isinstance(exc, ArtifactPolicyViolation):
+        return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_ARTIFACT_POLICY_VIOLATION
     if isinstance(exc, ConfigError):
         return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_CONFIG_ERROR
     if isinstance(exc, PipelineError):
@@ -212,6 +215,8 @@ def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
 
 
 def _deny_rationale(exc: BaseException) -> str:
+    if isinstance(exc, ArtifactPolicyViolation):
+        return "deny_artifact_policy_violation"
     if isinstance(exc, ConfigError):
         return "deny_config_error"
     if isinstance(exc, PipelineError):
@@ -262,6 +267,12 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     )
 
     return cfg_path
+
+
+def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
+    if isinstance(exc, ArtifactPolicyViolation):
+        return [*base, *exc.evidence_refs]
+    return base
 
 
 # ---- Entry point minimale per la UI (landing solo slug) ----------------------
@@ -520,6 +531,7 @@ def pre_onboarding_main(
         config_path = _create_local_structure(context, logger, client_name=client_name)
 
         if dry_run:
+            enforce_core_artifacts("pre_onboarding", layout=layout)
             logger.info("cli.pre_onboarding.dry_run", extra={"slug": context.slug, "mode": "dry-run"})
             logger.info(
                 "cli.pre_onboarding.completed",
@@ -559,6 +571,7 @@ def pre_onboarding_main(
             client_name=client_name,
             require_env=require_env,
         )
+        enforce_core_artifacts("pre_onboarding", layout=layout)
         logger.info("cli.pre_onboarding.completed", extra={"slug": context.slug, "artifacts": 1})
         decision_ledger.record_normative_decision(
             ledger_conn,
@@ -594,7 +607,7 @@ def pre_onboarding_main(
                     subject="workspace_bootstrap",
                     decided_at=_utc_now_iso(),
                     actor="cli.pre_onboarding",
-                    evidence_refs=_build_evidence_refs(layout),
+                    evidence_refs=_merge_evidence_refs(_build_evidence_refs(layout), exc),
                     stop_code=stop_code,
                     rationale=_deny_rationale(exc),
                 ),

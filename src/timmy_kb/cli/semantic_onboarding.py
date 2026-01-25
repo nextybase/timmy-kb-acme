@@ -19,10 +19,11 @@ from pipeline.paths import get_repo_root
 _T = TypeVar("_T")
 
 
+from pipeline.artifact_policy import enforce_core_artifacts
 from pipeline.config_utils import ensure_config_migrated, get_client_config, get_drive_id
 from pipeline.context import ClientContext
 from pipeline.drive.upload import create_drive_structure_from_names
-from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
+from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_within_and_resolve
@@ -107,6 +108,8 @@ def _build_evidence_refs(
 
 
 def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
+    if isinstance(exc, ArtifactPolicyViolation):
+        return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_ARTIFACT_POLICY_VIOLATION
     if isinstance(exc, ConfigError):
         return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_CONFIG_ERROR
     if isinstance(exc, PipelineError):
@@ -116,6 +119,8 @@ def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
 
 def _deny_rationale(exc: BaseException) -> str:
     # Rationale *deterministica* (bassa entropia): non dipende dal messaggio d'errore.
+    if isinstance(exc, ArtifactPolicyViolation):
+        return "deny_artifact_policy_violation"
     if isinstance(exc, ConfigError):
         return "deny_config_error"
     if isinstance(exc, PipelineError):
@@ -156,6 +161,12 @@ def _require_normalize_raw_gate(
         slug=slug,
         file_path=layout.normalized_dir,
     )
+
+
+def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
+    if isinstance(exc, ArtifactPolicyViolation):
+        return [*base, *exc.evidence_refs]
+    return base
 
 
 def main() -> int:
@@ -223,6 +234,7 @@ def main() -> int:
                     logger,
                     slug=slug,
                 )
+                enforce_core_artifacts("semantic_onboarding", layout=layout)
                 cfg = get_client_config(ctx) or {}
                 drive_raw_id = get_drive_id(cfg, "raw_folder_id")
                 if drive_raw_id:
@@ -328,12 +340,15 @@ def main() -> int:
                             subject="semantic_onboarding",
                             decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                             actor="cli.semantic_onboarding",
-                            evidence_refs=_build_evidence_refs(
-                                layout=layout,
-                                requested=requested,
-                                effective=effective,
-                                outcome=_deny_rationale(exc),
-                                exit_code=code,
+                            evidence_refs=_merge_evidence_refs(
+                                _build_evidence_refs(
+                                    layout=layout,
+                                    requested=requested,
+                                    effective=effective,
+                                    outcome=_deny_rationale(exc),
+                                    exit_code=code,
+                                ),
+                                exc,
                             ),
                             stop_code=stop_code,
                             rationale=_deny_rationale(exc),

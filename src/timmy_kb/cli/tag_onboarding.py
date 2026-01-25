@@ -47,10 +47,11 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional, cast
 
+from pipeline.artifact_policy import enforce_core_artifacts
 from pipeline.beta_flags import is_beta_strict
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.context import ClientContext
-from pipeline.exceptions import ConfigError, PathTraversalError, PipelineError, exit_code_for
+from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PathTraversalError, PipelineError, exit_code_for
 from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.metrics import start_metrics_server_once
 from pipeline.normalized_index import validate_index as validate_normalized_index
@@ -128,6 +129,8 @@ def _build_evidence_refs(
 
 
 def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
+    if isinstance(exc, ArtifactPolicyViolation):
+        return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_ARTIFACT_POLICY_VIOLATION
     if isinstance(exc, ConfigError):
         return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_CONFIG_ERROR
     if isinstance(exc, PipelineError):
@@ -136,6 +139,8 @@ def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
 
 
 def _deny_rationale(exc: BaseException) -> str:
+    if isinstance(exc, ArtifactPolicyViolation):
+        return "deny_artifact_policy_violation"
     if isinstance(exc, ConfigError):
         return "deny_config_error"
     if isinstance(exc, PipelineError):
@@ -592,6 +597,12 @@ def _require_layout(context: ClientContextProtocol | ClientContext) -> Workspace
         return WorkspaceLayout.from_context(cast(Any, context))
 
 
+def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
+    if isinstance(exc, ArtifactPolicyViolation):
+        return [*base, *exc.evidence_refs]
+    return base
+
+
 def tag_onboarding_main(
     slug: str,
     *,
@@ -704,6 +715,7 @@ def tag_onboarding_main(
 
         current_stage = "csv_phase"
         csv_path = emit_csv_phase(context, logger, slug=slug, semantic_dir=semantic_dir)
+        enforce_core_artifacts("tag_onboarding", layout=layout, stub_expected=False)
 
         current_stage = "checkpoint"
         if not _should_proceed(non_interactive=non_interactive, proceed_after_csv=proceed_after_csv, logger=logger):
@@ -748,6 +760,7 @@ def tag_onboarding_main(
 
         current_stage = "stub_phase"
         emit_stub_phase(semantic_dir, csv_path, logger, context=context)
+        enforce_core_artifacts("tag_onboarding", layout=layout, stub_expected=True)
         proceed_after_csv_flag = bool(payload["extra"]["proceed_after_csv"]) if payload["extra"] else False
         logger.info(
             "cli.tag_onboarding.completed",
@@ -792,7 +805,7 @@ def tag_onboarding_main(
                     subject="tag_onboarding",
                     decided_at=_utc_now_iso(),
                     actor="cli.tag_onboarding",
-                    evidence_refs=evidence_refs,
+                    evidence_refs=_merge_evidence_refs(evidence_refs, exc),
                     stop_code=stop_code,
                     rationale=_deny_rationale(exc),
                 ),

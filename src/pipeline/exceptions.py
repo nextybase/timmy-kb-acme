@@ -212,6 +212,20 @@ class PreOnboardingValidationError(PipelineError):
     pass
 
 
+class ArtifactPolicyViolation(PipelineError):
+    """Violazione della policy sugli artefatti (core/service, format, path)."""
+
+    def __init__(
+        self,
+        message: Optional[str] = None,
+        *,
+        evidence_refs: Optional[list[str]] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(message, code="artifact_policy_violation", **kwargs)
+        self.evidence_refs: list[str] = list(evidence_refs or [])
+
+
 # --- Quick win: I/O input e slug ---------------------------------------------
 
 
@@ -286,6 +300,7 @@ __all__ = [
     "EnrichmentError",
     "SemanticMappingError",
     "PreOnboardingValidationError",
+    "ArtifactPolicyViolation",
     "InputDirectoryMissing",
     "InputFileMissing",
     "InvalidSlug",

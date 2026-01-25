@@ -99,3 +99,18 @@ def test_safe_write_pdf_refreshes_cache(tmp_path: Path) -> None:
     assert pdf_one.resolve() in resolved_listing
     assert pdf_two.resolve() in resolved_listing
     assert len(resolved_listing) == 2
+
+
+def test_iter_safe_pdfs_cache_invariant_set(tmp_path: Path) -> None:
+    workspace = tmp_path / "client"
+    raw_dir = workspace / "raw"
+    raw_dir.mkdir(parents=True)
+
+    pdfs = [raw_dir / f"doc{idx}.pdf" for idx in range(3)]
+    for pdf in pdfs:
+        safe_write_bytes(pdf, b"%PDF-1.4\n", atomic=True)
+
+    no_cache = {p.resolve() for p in iter_safe_pdfs(raw_dir, use_cache=False)}
+    with_cache = {p.resolve() for p in iter_safe_pdfs(raw_dir, use_cache=True)}
+
+    assert no_cache == with_cache

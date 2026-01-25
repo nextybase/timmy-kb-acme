@@ -277,17 +277,27 @@ def _drive_find_child_by_name(service: Any, parent_id: str, name: str) -> Option
     return files[0]["id"] if files else None
 
 
-def _drive_upload_or_update_bytes(service: Any, parent_id: str, name: str, data: bytes, mime: str) -> str:
+def _drive_upload_or_update_bytes(
+    service: Any,
+    parent_id: str,
+    name: str,
+    data: bytes,
+    mime: str,
+    *,
+    app_properties: Optional[Dict[str, str]] = None,
+) -> str:
     """Crea o aggiorna un file (bytes) in una cartella Drive in modo idempotente."""
     from googleapiclient.http import MediaIoBaseUpload
 
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=False)
     existing_id = _drive_find_child_by_name(service, parent_id, name)
     if existing_id:
+        body = {"appProperties": app_properties} if app_properties else None
         file = (
             service.files()
             .update(
                 fileId=existing_id,
+                body=body,
                 media_body=media,
                 supportsAllDrives=True,
                 fields="id",
@@ -297,6 +307,8 @@ def _drive_upload_or_update_bytes(service: Any, parent_id: str, name: str, data:
         return str(file.get("id"))
     else:
         body = {"name": name, "parents": [parent_id], "mimeType": mime}
+        if app_properties:
+            body["appProperties"] = app_properties
         file = (
             service.files()
             .create(
@@ -384,48 +396,74 @@ def plan_raw_download(
     return sorted(conflicts), sorted(labels)
 
 
-def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> Tuple[bytes, str]:
-    """Tenta PDF via reportlab, altrimenti TXT (degradazione)."""
+def _render_readme_text_bytes(title: str, descr: str, examples: List[str]) -> bytes:
+    lines = [f"README - {title}", "", "Ambito:", descr or "", "", "Esempi:"]
+    lines += [f"- {ex}" for ex in (examples or [])]
+    return ("\n".join(lines)).encode("utf-8")
+
+
+def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.pdfgen import canvas
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    height = A4[1]
+    x, y = 2 * cm, height - 2 * cm
+
+    def draw_line(t: str, font: str = "Helvetica", size: int = 11, leading: int = 14) -> None:
+        nonlocal y
+        c.setFont(font, size)
+        for line in (t or "").splitlines() or [""]:
+            c.drawString(x, y, line[:120])
+            y -= leading
+            if y < 2 * cm:
+                c.showPage()
+                y = height - 2 * cm
+
+    c.setTitle(f"README - {title}")
+    draw_line(f"README - {title}", font="Helvetica-Bold", size=14, leading=18)
+    y -= 4
+    draw_line("")
+    draw_line("Ambito:", font="Helvetica-Bold", size=12, leading=16)
+    draw_line(descr or "")
+    draw_line("")
+    draw_line("Esempi:", font="Helvetica-Bold", size=12, leading=16)
+    for ex in examples or []:
+        draw_line(f"- {ex}")
+    c.showPage()
+    c.save()
+    data = buf.getvalue()
+    buf.close()
+    return data
+
+
+def _render_readme_payload(title: str, descr: str, examples: List[str]) -> Tuple[bytes, str, bool, str | None]:
+    """Render README come PDF; fallback TXT con label service-only."""
     try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.units import cm
-        from reportlab.pdfgen import canvas
+        data = _render_readme_pdf_bytes(title, descr, examples)
+        return data, "application/pdf", False, None
+    except ImportError:
+        data = _render_readme_text_bytes(title, descr, examples)
+        return data, "text/plain", True, "capability_missing:reportlab"
+    except Exception as exc:
+        data = _render_readme_text_bytes(title, descr, examples)
+        return data, "text/plain", True, f"render_failed:{type(exc).__name__}"
 
-        buf = io.BytesIO()
-        c = canvas.Canvas(buf, pagesize=A4)
-        width, height = A4
-        x, y = 2 * cm, height - 2 * cm
 
-        def draw_line(t: str, font: str = "Helvetica", size: int = 11, leading: int = 14) -> None:
-            nonlocal y
-            c.setFont(font, size)
-            for line in (t or "").splitlines() or [""]:
-                c.drawString(x, y, line[:120])
-                y -= leading
-                if y < 2 * cm:
-                    c.showPage()
-                    y = height - 2 * cm
+def _service_only_drive_properties(reason: str | None) -> Dict[str, str]:
+    return {
+        "SERVICE_ONLY": "true",
+        "service_only": "true",
+        "service_reason": reason or "unknown",
+    }
 
-        c.setTitle(f"README - {title}")
-        draw_line(f"README - {title}", font="Helvetica-Bold", size=14, leading=18)
-        y -= 4
-        draw_line("")
-        draw_line("Ambito:", font="Helvetica-Bold", size=12, leading=16)
-        draw_line(descr or "")
-        draw_line("")
-        draw_line("Esempi:", font="Helvetica-Bold", size=12, leading=16)
-        for ex in examples or []:
-            draw_line(f"- {ex}")
-        c.showPage()
-        c.save()
-        data = buf.getvalue()
-        buf.close()
-        return data, "application/pdf"
-    except Exception:
-        lines = [f"README - {title}", "", "Ambito:", descr or "", "", "Esempi:"]
-        lines += [f"- {ex}" for ex in (examples or [])]
-        data = ("\n".join(lines)).encode("utf-8")
-        return data, "text/plain"
+
+def _assert_service_only_not_core_folder(folder_name: str) -> None:
+    core_names = {"book", "config", "normalized", "semantic"}
+    if folder_name in core_names:
+        raise RuntimeError(f"SERVICE_ONLY non consentito in directory CORE: {folder_name}")
 
 
 # ===== Estrattori Mapping (Vision only) =======================================
@@ -558,17 +596,35 @@ def emit_readmes_for_raw(
         if not isinstance(raw_examples, list):
             raw_examples = [raw_examples]
         examples = [str(x).strip() for x in raw_examples if str(x).strip()]
-        data, mime = _render_readme_pdf_bytes(
+        data, mime, service_only, reason = _render_readme_payload(
             title=meta.get("ambito") or folder_k,
             descr=meta.get("descrizione") or "",
             examples=examples,
         )
+        if service_only:
+            _assert_service_only_not_core_folder(folder_k)
+            log.warning(
+                "ui.drive.readme.service_only",
+                extra={
+                    "slug": slug,
+                    "category": folder_k,
+                    "artifact": "README.txt",
+                    "service_only": True,
+                    "reason": reason or "unknown",
+                    "evidence_refs": [
+                        f"drive_path:raw/{folder_k}/README.txt",
+                        "service_only:true",
+                        f"reason:{reason or 'unknown'}",
+                    ],
+                },
+            )
         file_id = _drive_upload_or_update_bytes(
             svc,
             folder_id,
             "README.pdf" if mime == "application/pdf" else "README.txt",
             data,
             mime,
+            app_properties=_service_only_drive_properties(reason) if service_only else None,
         )
         uploaded[folder_k] = file_id
 

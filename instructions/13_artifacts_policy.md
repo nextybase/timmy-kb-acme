@@ -81,6 +81,15 @@ In dubbio: CORE.
   qualsiasi produzione "alternativa" non autorizzata di core artifacts.
 - Un "OK" non è valido se i core artifacts attesi non sono stati prodotti nella forma prevista.
 
+## Allowed exceptions (strictness/caching)
+Nessuna eccezione attiva (2026-01-25).
+
+Qualsiasi uso in core di:
+- `sanitize_filename(..., strict=False)` o `allow_fallback=True`
+- `iter_safe_pdfs(..., use_cache=True)` o TTL cache per selezione/ordering
+
+deve essere elencato qui con motivazione e test dedicato.
+
 ## Appendice A - Inventario runtime (src/)
 Metodo: scansione statica dei producer in `src/` (runtime UI/CLI/pipeline). Esclusi `tools/` e `tests/`.
 Include scritture file/DB/log/zip individuate tramite `safe_write_*`, sqlite3, handler log e zip.
@@ -178,7 +187,7 @@ Legenda: CORE = artefatto deterministico della pipeline; SERVICE = supporto/UX/d
 | `src/pipeline/drive/upload.py:create_drive_minimal_structure` | `Drive/<client_folder>/{raw,contrattualistica}/` | Cartelle Drive | Ingest/contratti | CORE (cond.) | Drive API + creds | No |
 | `src/pipeline/drive/upload.py:upload_config_to_drive_folder` | `Drive/<client_folder>/config.yaml` | YAML (Drive) | Sync/operatore | CORE (cond.) | Drive API + creds | No |
 | `src/pipeline/drive/upload.py:create_drive_structure_from_names` | `Drive/<client_folder>/raw/<area>/` | Cartelle Drive | Raw ingest (Drive) | CORE (cond.) | Drive API + mapping | No (fail-fast se mapping invalido) |
-| `src/ui/services/drive_runner.py:emit_readmes_for_raw` | `Drive/<client_folder>/raw/<area>/README.pdf`<br>`Drive/<client_folder>/raw/<area>/README.txt` | PDF/TXT | UX/operatore | SERVICE | ReportLab (opz.) | Yes (PDF->TXT) |
+| `src/ui/services/drive_runner.py:emit_readmes_for_raw` | `Drive/<client_folder>/raw/<area>/README.pdf`<br>`Drive/<client_folder>/raw/<area>/README.txt` | PDF/TXT | UX/operatore | SERVICE | ReportLab (opz.) | Yes (SERVICE_ONLY + structured log + Drive appProperties) |
 
 ## Appendice B - CORE artifacts attesi per fase
 | Fase (runbook) | CORE artifacts attesi | Note/condizioni |
