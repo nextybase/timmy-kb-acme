@@ -29,7 +29,7 @@ Esempi tipici (non esaustivi): `normalized/`, `book/README.md`, `book/SUMMARY.md
 - non è prerequisito per la pipeline deterministica;
 - non deve cambiare la semantica dei core artifacts né sostituirli.
 
-Esempi: zip log, workspace summary, cache in-memory, preview, report “di servizio”.
+Esempi: zip log, workspace summary, cache in-memory, preview, report "di servizio".
 
 ## Beta invariants (strict)
 
@@ -81,7 +81,7 @@ In dubbio: CORE.
   qualsiasi produzione "alternativa" non autorizzata di core artifacts.
 - Un "OK" non è valido se i core artifacts attesi non sono stati prodotti nella forma prevista.
 
-## Appendice A — Inventario runtime (src/)
+## Appendice A - Inventario runtime (src/)
 Metodo: scansione statica dei producer in `src/` (runtime UI/CLI/pipeline). Esclusi `tools/` e `tests/`.
 Include scritture file/DB/log/zip individuate tramite `safe_write_*`, sqlite3, handler log e zip.
 Limite: scritture dinamiche via plugin/ENV potrebbero non risultare dalla scansione.
@@ -180,7 +180,7 @@ Legenda: CORE = artefatto deterministico della pipeline; SERVICE = supporto/UX/d
 | `src/pipeline/drive/upload.py:create_drive_structure_from_names` | `Drive/<client_folder>/raw/<area>/` | Cartelle Drive | Raw ingest (Drive) | CORE (cond.) | Drive API + mapping | No (fail-fast se mapping invalido) |
 | `src/ui/services/drive_runner.py:emit_readmes_for_raw` | `Drive/<client_folder>/raw/<area>/README.pdf`<br>`Drive/<client_folder>/raw/<area>/README.txt` | PDF/TXT | UX/operatore | SERVICE | ReportLab (opz.) | Yes (PDF->TXT) |
 
-## Appendice B — CORE artifacts attesi per fase
+## Appendice B - CORE artifacts attesi per fase
 | Fase (runbook) | CORE artifacts attesi | Note/condizioni |
 | --- | --- | --- |
 | pre_onboarding | `output/timmy-kb-<slug>/config/config.yaml`<br>`output/timmy-kb-<slug>/book/README.md`<br>`output/timmy-kb-<slug>/book/SUMMARY.md` | Bootstrap idempotente; se Vision attiva: `config/VisionStatement.pdf`, `config/visionstatement.yaml`, `semantic/semantic_mapping.yaml`. |
