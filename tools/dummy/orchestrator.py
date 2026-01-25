@@ -386,7 +386,7 @@ def build_dummy_payload(
                     extra={"slug": slug, "path": str(yaml_target)},
                 )
             except Exception as exc:
-                msg = f"Vision YAML generation failed: {exc}"
+                msg = f"visionstatement.yaml generation failed in workspace: {exc}"
                 if vision_mode == "deep":
                     logger.error(
                         "tools.gen_dummy_kb.vision_yaml.failed",
@@ -509,7 +509,7 @@ def build_dummy_payload(
                         "tools.gen_dummy_kb.vision_yaml_generation_failed",
                         extra={"slug": slug, "error": str(exc), "pdf": str(pdf_path_resolved)},
                     )
-                    msg = f"Vision YAML generation failed: {exc}"
+                    msg = f"visionstatement.yaml generation failed in workspace: {exc}"
                     raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg)) from exc
     elif not vision_already_completed and enable_semantic:
         categories_for_readmes = load_mapping_categories_fn(base_dir)
