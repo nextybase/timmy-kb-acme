@@ -24,6 +24,7 @@ Questo progetto adotta una separazione intenzionale tra:
 Le guide in `docs/` descrivono *come* utilizzare ed estendere il sistema.
 I vincoli su *cosa è consentito o vietato*, i ruoli, i gate decisionali e le
 macchine a stati sono definiti esclusivamente nelle fonti normative.
+Vedi anche: `instructions/13_artifacts_policy.md` (core vs service artifacts, fallback e determinismo).
 
 ---
 

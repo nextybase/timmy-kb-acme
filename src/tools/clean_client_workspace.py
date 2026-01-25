@@ -22,6 +22,7 @@ except Exception:  # pragma: no cover - dipendenze Drive opzionali
     delete_drive_file = None
     get_drive_service = None
 
+
 def _resolve_workspace_root(slug: str) -> Path:
     """Risoluzione deterministica della root workspace (<repo_root>/output/timmy-kb-<slug>)."""
     env_root = os.environ.get("REPO_ROOT_DIR")

@@ -19,6 +19,7 @@ Questo progetto adotta una separazione intenzionale tra:
 Le guide in `docs/` descrivono *come* utilizzare ed estendere il sistema.
 I vincoli su *cosa è consentito o vietato*, i ruoli, i gate decisionali e le
 macchine a stati sono definiti esclusivamente nelle fonti normative.
+Vedi anche: `instructions/13_artifacts_policy.md` (core vs service artifacts, fallback e determinismo).
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
 > Avvio interfaccia: `streamlit run onboarding_ui.py` (la UI risolve il repo root via SSoT e non si affida a `REPO_ROOT_DIR`).
@@ -341,7 +342,7 @@ Prerequisito: `normalized/` deve essere pronta (generata da `raw_ingest`).
 - **DRIVE\_ID o SERVICE\_ACCOUNT\_FILE mancanti** -> configura variabili e installa \`.[drive]\`.
 - **"Cartella raw non trovata/creata"** -> esegui **Apri workspace** (Step 2).
 - **Nessun PDF rilevato** -> carica su Drive e **Scarica**, oppure copia in locale e **Rileva PDF**.
-- **README non in PDF** -> manca ReportLab -> viene caricato **README.txt** (comunque ok).
+- **README non in PDF** -> manca ReportLab -> in Beta strict la generazione PDF viene bloccata: installa la dipendenza opzionale prevista e riprova.
 - **Tag strani o mancanti** -> rivedi mapping (aree/keywords/sinonimi), poi **Arricchisci**.
 ### 11) Best practice
 

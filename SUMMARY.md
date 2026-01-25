@@ -25,6 +25,7 @@
   * [OCP Workflow](docs/policies/OCP_WORKFLOW.md)
 * System & governance
   * [MANIFEST](MANIFEST.md)
+  * [Artifacts Policy (Core vs Service)](instructions/13_artifacts_policy.md)
   * [Architecture Overview](system/architecture.md)
   * [Runbook Codex](system/ops/runbook_codex.md)
   * [AGENTS index](system/ops/agents_index.md)
