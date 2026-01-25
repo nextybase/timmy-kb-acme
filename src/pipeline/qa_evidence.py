@@ -14,6 +14,7 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 QA_EVIDENCE_FILENAME = "qa_passed.json"
 QA_SCHEMA_VERSION = 1
 QA_STATUS_VALUES = {"pass", "fail"}
+_TELEMETRY_KEY = "telemetry"
 
 __all__ = [
     "QA_EVIDENCE_FILENAME",
@@ -44,14 +45,15 @@ def build_qa_evidence_payload(
     status = str(qa_status or "").strip().lower()
     if status not in QA_STATUS_VALUES:
         raise ConfigError("qa_status must be 'pass' or 'fail'.", code="qa_evidence_invalid")
+    telemetry: dict[str, Any] = {}
     ts = timestamp or datetime.now(timezone.utc).isoformat()
-    if not isinstance(ts, str) or not ts.strip():
-        raise ConfigError("timestamp is required for QA evidence.", code="qa_evidence_invalid")
+    if isinstance(ts, str) and ts.strip():
+        telemetry["timestamp"] = ts
     return {
         "schema_version": QA_SCHEMA_VERSION,
         "qa_status": status,
         "checks_executed": normalized_checks,
-        "timestamp": ts,
+        _TELEMETRY_KEY: telemetry,
     }
 
 
@@ -75,15 +77,25 @@ def validate_qa_evidence_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     if not checks:
         raise ConfigError("QA evidence checks_executed cannot be empty.", code="qa_evidence_invalid")
 
-    timestamp = payload.get("timestamp")
-    if not isinstance(timestamp, str) or not timestamp.strip():
-        raise ConfigError("QA evidence timestamp invalid.", code="qa_evidence_invalid")
+    telemetry_raw = payload.get(_TELEMETRY_KEY)
+    telemetry: dict[str, Any] = {}
+    if isinstance(telemetry_raw, Mapping):
+        telemetry = dict(telemetry_raw)
+
+    # Backward compatibility: accept legacy top-level timestamp without requiring it.
+    legacy_timestamp = payload.get("timestamp")
+    if isinstance(legacy_timestamp, str) and legacy_timestamp.strip() and "timestamp" not in telemetry:
+        telemetry["timestamp"] = legacy_timestamp
+    if "timestamp" in telemetry and not (
+        isinstance(telemetry["timestamp"], str) and str(telemetry["timestamp"]).strip()
+    ):
+        raise ConfigError("QA evidence telemetry timestamp invalid.", code="qa_evidence_invalid")
 
     return {
         "schema_version": QA_SCHEMA_VERSION,
         "qa_status": qa_status,
         "checks_executed": checks,
-        "timestamp": timestamp,
+        _TELEMETRY_KEY: telemetry,
     }
 
 

@@ -2,6 +2,7 @@
 # tests/test_observability_smoke.py
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +12,7 @@ import semantic.api as sapi
 import semantic.convert_service as conv
 import semantic.embedding_service as semb
 import semantic.frontmatter_service as front
+from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
 
 
 @dataclass
@@ -39,6 +41,12 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "semantic").mkdir(parents=True, exist_ok=True)
     (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (base / "logs").mkdir(parents=True, exist_ok=True)
+    qa_payload = {
+        "schema_version": 1,
+        "qa_status": "pass",
+        "checks_executed": ["pre-commit run --all-files", "pytest -q"],
+    }
+    (base / "logs" / QA_EVIDENCE_FILENAME).write_text(json.dumps(qa_payload) + "\n", encoding="utf-8")
 
 
 def test_observability_indexing_success(monkeypatch, tmp_path, caplog):

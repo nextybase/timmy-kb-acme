@@ -144,12 +144,14 @@ Riferimenti normativi:
 **Evidence anchors:**
 - Artefatti finali in `book/` e `semantic/`
 - Report QA
+- `logs/qa_passed.json` (CORE-GATE)
 
 **Checklist:**
 1. **Artefatti finali**
    Markdown e KG presenti e path-safe?
 2. **QA results**
    QA Gate ha prodotto verdict PASS?
+   Se FAIL: `stop_code = QA_GATE_FAILED`
 3. **Consistency**
    Nessuna discrepanza tra preview e output finale?
 4. **Observability**

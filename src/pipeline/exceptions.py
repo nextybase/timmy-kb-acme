@@ -226,6 +226,22 @@ class ArtifactPolicyViolation(PipelineError):
         self.evidence_refs: list[str] = list(evidence_refs or [])
 
 
+class QaGateViolation(PipelineError):
+    """Violazione del QA gate (evidence assente/invalid/fail)."""
+
+    def __init__(
+        self,
+        message: Optional[str] = None,
+        *,
+        reason: str,
+        evidence_refs: Optional[list[str]] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(message, code="qa_gate_failed", **kwargs)
+        self.reason: str = reason
+        self.evidence_refs: list[str] = list(evidence_refs or [])
+
+
 # --- Quick win: I/O input e slug ---------------------------------------------
 
 
@@ -301,6 +317,7 @@ __all__ = [
     "SemanticMappingError",
     "PreOnboardingValidationError",
     "ArtifactPolicyViolation",
+    "QaGateViolation",
     "InputDirectoryMissing",
     "InputFileMissing",
     "InvalidSlug",

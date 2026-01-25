@@ -31,6 +31,12 @@ Esempi tipici (non esaustivi): `normalized/`, `book/README.md`, `book/SUMMARY.md
 
 Esempi: zip log, workspace summary, cache in-memory, preview, report "di servizio".
 
+### Core-Gate Artifact (Gate prerequisite)
+È un artefatto:
+- usato come prerequisito normativo per sbloccare la produzione di core artifacts;
+- può vivere in `logs/`, ma è trattato come CORE ai fini dei gate;
+- non introduce fallback o downgrade: se manca, il gate blocca.
+
 ## Beta invariants (strict)
 
 ### 1) Core artifacts MUST be deterministic
@@ -67,10 +73,18 @@ Qualsiasi cache time-based (TTL, timestamp wall-clock) è considerata *entropia 
 Se una cache time-based viene "prewarmata" automaticamente, deve restare
 non osservabile ai fini della semantica e non può diventare requisito implicito.
 
+### 6) QA evidence è CORE-GATE (README/SUMMARY)
+`logs/qa_passed.json` è un **core-gate artifact**: è prerequisito normativo
+per generare i core artifacts `book/README.md` e `book/SUMMARY.md`.
+La sua assenza o invalidità blocca il gate.
+
+Il campo `timestamp` può esistere come telemetria, ma **non** deve entrare
+nel confronto deterministico/manifest dei core artifacts.
+
 ## Classification rule (practical)
 Quando un modulo produce un file:
 - se finisce in directory della pipeline (workspace layout) o viene citato come prerequisito:
-  trattalo come CORE.
+  trattalo come CORE (o CORE-GATE se è un prerequisito di gate).
 - se è diagnostica, packaging, preview, export UI:
   trattalo come SERVICE.
 
@@ -96,7 +110,7 @@ Include scritture file/DB/log/zip individuate tramite `safe_write_*`, sqlite3, h
 Limite: scritture dinamiche via plugin/ENV potrebbero non risultare dalla scansione.
 Nota: la Vision YAML esiste con due naming (`visionstatement.yaml` in workspace, `vision_statement.yaml` in repo root); l'inventario le tratta separatamente.
 
-Legenda: CORE = artefatto deterministico della pipeline; SERVICE = supporto/UX/diagnostica.
+Legenda: CORE = artefatto deterministico della pipeline; CORE-GATE = prerequisito normativo per sbloccare core; SERVICE = supporto/UX/diagnostica.
 
 ### A.1 Workspace & config
 | Producer (file:funzione) | Path target | Tipo output | Consumer | Class | Dipendenze/capability | Fallback |
@@ -168,7 +182,7 @@ Legenda: CORE = artefatto deterministico della pipeline; SERVICE = supporto/UX/d
 | --- | --- | --- | --- | --- | --- | --- |
 | `src/pipeline/logging_utils.py:get_structured_logger` | `output/timmy-kb-<slug>/logs/onboarding.log`<br>`.timmy_kb/logs/ui.log` | Log file | Operatore/diagnostica | SERVICE | FS write | Yes (console fallback) |
 | `src/ui/pages/preview.py:_write_stub_log` | `logs/preview/<slug>.log` (o `PREVIEW_LOG_DIR`) | Log stub | UX preview | SERVICE | FS write | Yes (stub only) |
-| `src/pipeline/qa_evidence.py:write_qa_evidence` | `output/timmy-kb-<slug>/logs/qa_passed.json` | JSON QA | QA gate | SERVICE | JSON serialization | No |
+| `src/pipeline/qa_evidence.py:write_qa_evidence` | `output/timmy-kb-<slug>/logs/qa_passed.json` | JSON QA | QA gate → README/SUMMARY | CORE-GATE | JSON serialization | No |
 | `src/ui/gating.py:write_gate_capability_manifest` | `output/timmy-kb-<slug>/logs/gate_capabilities.json` | JSON capability | UI gating | SERVICE | FS write | No |
 | `src/explainability/serialization.py:safe_write_manifest`<br>`src/timmy_kb/cli/retriever_manifest.py:_write_manifest_if_configured` | `output/timmy-kb-<slug>/semantic/explainability/<response_id>.json` (base dir configurata) | JSON manifest | Audit/lineage | SERVICE | retriever + `explain_base_dir` configurato | Yes (skip se base dir non impostata) |
 | `src/ui/utils/diagnostics.py:build_logs_archive` | ZIP bytes (in-memory) + `workspace_summary.json` | ZIP report | Supporto | SERVICE | zipfile | Yes (best-effort, None su failure) |
@@ -195,6 +209,6 @@ Legenda: CORE = artefatto deterministico della pipeline; SERVICE = supporto/UX/d
 | pre_onboarding | `output/timmy-kb-<slug>/config/config.yaml`<br>`output/timmy-kb-<slug>/book/README.md`<br>`output/timmy-kb-<slug>/book/SUMMARY.md` | Bootstrap idempotente; se Vision attiva: `config/VisionStatement.pdf`, `config/visionstatement.yaml`, `semantic/semantic_mapping.yaml`. |
 | raw_ingest | `output/timmy-kb-<slug>/normalized/<rel>.md`<br>`output/timmy-kb-<slug>/normalized/INDEX.json` | Qualsiasi file `OK` in INDEX deve esistere su disco. |
 | tag_onboarding | `output/timmy-kb-<slug>/semantic/tags_raw.csv`<br>`output/timmy-kb-<slug>/semantic/tags_reviewed.yaml` | `tags.db` è CORE quando la revisione viene applicata (fase di sync/abilitazione semantica). |
-| semantic_onboarding | `output/timmy-kb-<slug>/book/<rel>.md`<br>`output/timmy-kb-<slug>/book/README.md`<br>`output/timmy-kb-<slug>/book/SUMMARY.md` | Enrichment richiede `semantic/tags.db` presente e valido. |
+| semantic_onboarding | `output/timmy-kb-<slug>/book/<rel>.md`<br>`output/timmy-kb-<slug>/book/README.md`<br>`output/timmy-kb-<slug>/book/SUMMARY.md` | Enrichment richiede `semantic/tags.db` presente e valido. `logs/qa_passed.json` è prerequisito CORE-GATE per README/SUMMARY. |
 | honkit_preview | Nessun CORE artifact nuovo | Preview = SERVICE-only (`book.json`, `package.json`, log preview). |
 | cross-phase (ledger) | `output/timmy-kb-<slug>/config/ledger.db` | CORE evidence: se il ledger è attivo, deve essere scritto in modo deterministico. |

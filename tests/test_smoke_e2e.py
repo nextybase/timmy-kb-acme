@@ -45,6 +45,10 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         (repo_root / "config" / "config.yaml").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+    (logs_dir / "qa_passed.json").write_text(
+        '{"schema_version":1,"qa_status":"pass","checks_executed":["pytest -q"]}\n',
+        encoding="utf-8",
+    )
 
     # Forza la root repo al workspace temporaneo
     monkeypatch.delenv("REPO_ROOT_DIR", raising=False)

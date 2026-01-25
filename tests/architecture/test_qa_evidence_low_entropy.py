@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: GPL-3.0-only
+"""QA evidence: parte normativa deterministica e telemetria non vincolante."""
+
+from __future__ import annotations
+
+from pipeline.qa_evidence import build_qa_evidence_payload, validate_qa_evidence_payload
+
+
+def _normative(payload: dict) -> dict:
+    return {
+        "schema_version": payload.get("schema_version"),
+        "qa_status": payload.get("qa_status"),
+        "checks_executed": payload.get("checks_executed"),
+    }
+
+
+def test_normative_payload_is_deterministic_across_timestamps() -> None:
+    payload_a = build_qa_evidence_payload(
+        checks_executed=["pre-commit run --all-files", "pytest -q"],
+        qa_status="pass",
+        timestamp="2025-01-01T00:00:00Z",
+    )
+    payload_b = build_qa_evidence_payload(
+        checks_executed=["pre-commit run --all-files", "pytest -q"],
+        qa_status="pass",
+        timestamp="2025-02-01T00:00:00Z",
+    )
+    assert _normative(payload_a) == _normative(payload_b)
+
+
+def test_validator_accepts_missing_or_legacy_timestamp() -> None:
+    minimal = {
+        "schema_version": 1,
+        "qa_status": "pass",
+        "checks_executed": ["pytest -q"],
+    }
+    normalized_min = validate_qa_evidence_payload(minimal)
+    assert _normative(normalized_min) == _normative(minimal)
+    assert normalized_min.get("telemetry") == {}
+
+    legacy = {
+        "schema_version": 1,
+        "qa_status": "pass",
+        "checks_executed": ["pytest -q"],
+        "timestamp": "2025-01-01T00:00:00Z",
+    }
+    normalized_legacy = validate_qa_evidence_payload(legacy)
+    assert _normative(normalized_legacy) == _normative(legacy)
+    assert normalized_legacy.get("telemetry", {}).get("timestamp") == "2025-01-01T00:00:00Z"

@@ -167,6 +167,9 @@ In questi casi:
   - `pre-commit run --all-files` → PASS
   - `pre-commit run --hook-stage pre-push --all-files` → PASS
   - report QA disponibili come evidenza
+- `logs/qa_passed.json` è il **core-gate artifact** del QA Gate.
+- Il campo `timestamp` è telemetria: non entra nel confronto deterministico/manifest dei core artifacts.
+- In caso di FAIL: verdict = `BLOCK`, `stop_code = QA_GATE_FAILED`.
 
 Solo dopo:
 1. QA Gate produce Decision Record PASS

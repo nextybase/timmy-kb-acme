@@ -19,6 +19,7 @@ from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmat
 from pipeline.frontmatter_utils import parse_frontmatter as _shared_parse_frontmatter
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
+from pipeline.qa_gate import require_qa_gate_pass
 from pipeline.vision_paths import vision_yaml_repo_path
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.config import load_semantic_config
@@ -436,6 +437,10 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
     paths = resolve_context_paths(layout)
     repo_root_dir = paths.repo_root_dir
     book_dir = paths.book_dir
+    logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
+    if logs_dir is None:
+        raise ConfigError("Directory log mancante per QA evidence.")
+    require_qa_gate_pass(logs_dir, slug=slug)
     summary_func = _gen_summary
     readme_func = _gen_readme
     validate_func = _validate_md

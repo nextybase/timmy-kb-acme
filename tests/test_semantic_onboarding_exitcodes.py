@@ -2,6 +2,7 @@
 # tests/test_semantic_onboarding_exitcodes.py
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,6 +10,7 @@ from typing import Any
 
 import semantic.api as sapi
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
+from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
 from timmy_kb.cli import semantic_onboarding as mod
 
 
@@ -23,10 +25,18 @@ def _make_ctx(tmp_path: Path, slug: str = "dummy") -> _DummyCtx:
     base = tmp_path / "output" / f"timmy-kb-{slug}"
     book = base / "book"
     config_dir = base / "config"
+    logs_dir = base / "logs"
     base.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
+    qa_payload = {
+        "schema_version": 1,
+        "qa_status": "pass",
+        "checks_executed": ["pre-commit run --all-files", "pytest -q"],
+    }
+    (logs_dir / QA_EVIDENCE_FILENAME).write_text(json.dumps(qa_payload) + "\n", encoding="utf-8")
     ctx = _DummyCtx(base_dir=base, book_dir=book, repo_root_dir=base, slug=slug)
     setattr(ctx, "config_path", config_dir / "config.yaml")
     return ctx

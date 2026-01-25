@@ -10,6 +10,7 @@ from typing import Any, cast
 import pytest
 
 from pipeline.exceptions import ConversionError
+from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
 from semantic import frontmatter_service as front
 
 
@@ -35,6 +36,10 @@ def _write_minimal_layout(base: Path) -> None:
     _write(base / "book" / "README.md", "# KB\n")
     _write(base / "book" / "SUMMARY.md", "# Summary\n")
     _write(base / "semantic" / "semantic_mapping.yaml", "{}")
+    (base / "logs" / QA_EVIDENCE_FILENAME).write_text(
+        '{"schema_version":1,"qa_status":"pass","checks_executed":["pytest -q"]}\n',
+        encoding="utf-8",
+    )
 
 
 def test_write_summary_and_readme_happy_path(monkeypatch, tmp_path: Path) -> None:

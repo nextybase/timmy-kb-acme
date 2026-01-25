@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 
 from pipeline.artifact_policy import enforce_core_artifacts
-from pipeline.exceptions import ArtifactPolicyViolation
+from pipeline.exceptions import ArtifactPolicyViolation, QaGateViolation
+from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
 from pipeline.workspace_bootstrap import bootstrap_dummy_workspace
 from storage import decision_ledger
 from timmy_kb.cli import pre_onboarding, semantic_onboarding, tag_onboarding
@@ -79,3 +80,29 @@ def test_golden_manifest_matches_fixture(tmp_path: Path, monkeypatch: pytest.Mon
 
     manifest = {"schema_version": 1, "artifacts": artifacts}
     assert manifest == expected
+
+
+def _write_qa_evidence(log_dir: Path, *, qa_status: str) -> None:
+    payload = {
+        "schema_version": 1,
+        "qa_status": qa_status,
+        "checks_executed": ["pre-commit run --all-files", "pytest -q"],
+    }
+    (log_dir / QA_EVIDENCE_FILENAME).write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+
+def test_semantic_onboarding_requires_qa_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    layout = _bootstrap_dummy_layout(tmp_path, monkeypatch)
+    (layout.book_dir / "content.md").write_text("# Content\n", encoding="utf-8")
+    with pytest.raises(QaGateViolation) as exc:
+        enforce_core_artifacts("semantic_onboarding", layout=layout)
+    assert any("qa_gate" in ref for ref in exc.value.evidence_refs)
+
+
+def test_semantic_onboarding_blocks_on_qa_fail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    layout = _bootstrap_dummy_layout(tmp_path, monkeypatch)
+    (layout.book_dir / "content.md").write_text("# Content\n", encoding="utf-8")
+    _write_qa_evidence(layout.logs_dir, qa_status="fail")
+    with pytest.raises(QaGateViolation) as exc:
+        enforce_core_artifacts("semantic_onboarding", layout=layout)
+    assert any("qa_evidence_failed" in ref for ref in exc.value.evidence_refs)

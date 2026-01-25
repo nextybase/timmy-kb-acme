@@ -18,7 +18,7 @@ st: StreamlitLike = get_streamlit()
 from pipeline.exceptions import ConfigError, ConversionError
 from pipeline.logging_utils import get_structured_logger, log_gate_event, tail_path
 from pipeline.qa_evidence import QA_EVIDENCE_FILENAME as PIPELINE_QA_EVIDENCE_FILENAME
-from pipeline.qa_evidence import load_qa_evidence
+from pipeline.qa_gate import require_qa_gate_pass
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.api import get_paths  # noqa: F401 - usato dai test tramite monkeypatch
 from semantic.api import require_reviewed_vocab
@@ -291,9 +291,11 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
         logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
         if logs_dir is None:
             raise ConfigError("Directory log mancante per QA evidence.")
-        evidence = load_qa_evidence(logs_dir)
-    except ConfigError as exc:
-        reason = "qa_evidence_missing" if exc.code == "qa_evidence_missing" else "qa_evidence_invalid"
+        require_qa_gate_pass(logs_dir, slug=slug)
+    except Exception as exc:
+        reason = getattr(exc, "reason", None)
+        if reason not in {"qa_evidence_missing", "qa_evidence_invalid", "qa_evidence_failed"}:
+            reason = "qa_evidence_invalid"
         log_gate_event(
             _GATING_LOG,
             "qa_gate_failed",
@@ -306,23 +308,6 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
         )
         st.error("QA Gate mancante: esegui `python -m timmy_kb.cli.qa_evidence --slug <slug>` per generare l'evidenza.")
         st.caption("Il comando produce `qa_passed.json` in logs/ e fallisce se la QA non passa.")
-        return
-    if evidence.get("qa_status") != "pass":
-        log_gate_event(
-            _GATING_LOG,
-            "qa_gate_failed",
-            fields={
-                "slug": slug or "",
-                "state_id": get_state(slug) or "",
-                "reason": "qa_evidence_failed",
-                "evidence_path": tail_path(qa_marker),
-            },
-        )
-        st.error(
-            "QA Gate fallito: evidenza QA non in stato 'pass'. "
-            "Riesegui `python -m timmy_kb.cli.qa_evidence --slug <slug>`."
-        )
-        st.caption("Correggi la QA e ripeti l'azione SUMMARY.")
         return
     is_retry = _mark_retry(slug, "summary")
     try:

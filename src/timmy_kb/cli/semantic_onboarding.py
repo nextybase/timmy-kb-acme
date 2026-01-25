@@ -23,7 +23,7 @@ from pipeline.artifact_policy import enforce_core_artifacts
 from pipeline.config_utils import ensure_config_migrated, get_client_config, get_drive_id
 from pipeline.context import ClientContext
 from pipeline.drive.upload import create_drive_structure_from_names
-from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, exit_code_for
+from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, QaGateViolation, exit_code_for
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_within_and_resolve
@@ -110,6 +110,8 @@ def _build_evidence_refs(
 def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
     if isinstance(exc, ArtifactPolicyViolation):
         return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_ARTIFACT_POLICY_VIOLATION
+    if isinstance(exc, QaGateViolation):
+        return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_QA_GATE_FAILED
     if isinstance(exc, ConfigError):
         return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_CONFIG_ERROR
     if isinstance(exc, PipelineError):
@@ -121,6 +123,8 @@ def _deny_rationale(exc: BaseException) -> str:
     # Rationale *deterministica* (bassa entropia): non dipende dal messaggio d'errore.
     if isinstance(exc, ArtifactPolicyViolation):
         return "deny_artifact_policy_violation"
+    if isinstance(exc, QaGateViolation):
+        return "deny_qa_gate_failed"
     if isinstance(exc, ConfigError):
         return "deny_config_error"
     if isinstance(exc, PipelineError):
@@ -165,6 +169,8 @@ def _require_normalize_raw_gate(
 
 def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
     if isinstance(exc, ArtifactPolicyViolation):
+        return [*base, *exc.evidence_refs]
+    if isinstance(exc, QaGateViolation):
         return [*base, *exc.evidence_refs]
     return base
 

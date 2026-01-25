@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,6 +10,7 @@ import pytest
 
 import semantic.api as sapi
 from pipeline.exceptions import ConfigError, exit_code_for
+from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
 from tests.support.contexts import TestClientCtx
 from timmy_kb.cli import semantic_onboarding as cli
 
@@ -40,6 +42,14 @@ def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_
     (book_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     (book_dir / "doc.md").write_text("content", encoding="utf-8")
     (ctx.config_dir / "ledger.db").write_text("", encoding="utf-8")
+    logs_dir = ctx.repo_root_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    qa_payload = {
+        "schema_version": 1,
+        "qa_status": "pass",
+        "checks_executed": ["pre-commit run --all-files", "pytest -q"],
+    }
+    (logs_dir / QA_EVIDENCE_FILENAME).write_text(json.dumps(qa_payload) + "\n", encoding="utf-8")
 
     calls: list[object] = []
     monkeypatch.setattr(cli, "convert_markdown", lambda *_, **__: calls.append("convert"))
@@ -111,6 +121,7 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
         base_dir=ctx.repo_root_dir,
         repo_root_dir=ctx.repo_root_dir,
         config_path=ctx.config_dir / "config.yaml",
+        logs_dir=ctx.repo_root_dir / "logs",
         slug=ctx.slug,
     )
     monkeypatch.setattr(cli.WorkspaceLayout, "from_context", classmethod(lambda cls, c: layout))
@@ -122,6 +133,13 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
     (layout.book_dir / "doc.md").write_text("content", encoding="utf-8")
     (ctx.config_dir / "ledger.db").write_text("", encoding="utf-8")
     (layout.semantic_dir / "tags_raw.json").write_text("{}", encoding="utf-8")
+    layout.logs_dir.mkdir(parents=True, exist_ok=True)
+    qa_payload = {
+        "schema_version": 1,
+        "qa_status": "pass",
+        "checks_executed": ["pre-commit run --all-files", "pytest -q"],
+    }
+    (layout.logs_dir / QA_EVIDENCE_FILENAME).write_text(json.dumps(qa_payload) + "\n", encoding="utf-8")
 
     called: list[Path] = []
 

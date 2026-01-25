@@ -8,6 +8,7 @@ import pytest
 
 from pipeline.content_utils import generate_readme_markdown, generate_summary_markdown
 from pipeline.logging_utils import get_structured_logger
+from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
 from semantic.frontmatter_service import write_summary_and_readme
 
 
@@ -29,6 +30,10 @@ def _make_context(tmp_path: Path, slug: str):
     (book_dir / "README.md").write_text("# Placeholder\n", encoding="utf-8")
     (book_dir / "SUMMARY.md").write_text("# Placeholder\n", encoding="utf-8")
     (semantic_dir / "semantic_mapping.yaml").write_text("{}", encoding="utf-8")
+    (base_dir / "logs" / QA_EVIDENCE_FILENAME).write_text(
+        '{"schema_version":1,"qa_status":"pass","checks_executed":["pytest -q"]}\n',
+        encoding="utf-8",
+    )
 
     (base_dir / "config" / "config.yaml").write_text(
         """
