@@ -23,6 +23,7 @@ from pipeline.ownership import ensure_ownership_file
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.settings import Settings
 from pipeline.system_self_check import run_system_self_check
+from pipeline.vision_paths import vision_yaml_workspace_path
 from pipeline.workspace_bootstrap import bootstrap_client_workspace
 from pipeline.workspace_layout import WorkspaceLayout
 from pipeline.yaml_utils import yaml_read
@@ -164,7 +165,7 @@ def _client_pdf_path(slug: str, layout: WorkspaceLayout | None = None) -> Path:
 
 def _client_vision_yaml_path(slug: str, layout: WorkspaceLayout | None = None) -> Path:
     layout = _require_layout(slug, layout)
-    return cast(Path, layout.config_path.parent / "visionstatement.yaml")
+    return vision_yaml_workspace_path(layout.repo_root_dir, pdf_path=_client_pdf_path(slug, layout=layout))
 
 
 def _has_drive_ids(slug: str) -> bool:

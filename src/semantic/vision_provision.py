@@ -26,6 +26,7 @@ from pipeline.file_utils import safe_append_text, safe_write_text
 from pipeline.import_utils import import_from_candidates
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.vision_paths import vision_yaml_workspace_path
 from pipeline.vision_template import load_vision_template_sections
 from semantic.core import compile_document_to_vision_yaml
 from semantic.pdf_utils import PdfExtractError, extract_text_from_pdf
@@ -658,7 +659,7 @@ def _ensure_vision_yaml_and_prompt_from_pdf(ctx: Any, slug: str, pdf_path: Path,
         safe_pdf = ensure_within_and_resolve(repo_root_dir, pdf_path)
     except ConfigError as exc:
         raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
-    yaml_path = Path(safe_pdf).with_name("visionstatement.yaml")
+    yaml_path = vision_yaml_workspace_path(Path(repo_root_dir), pdf_path=Path(safe_pdf))
     if not yaml_path.exists():
         try:
             snapshot = _extract_pdf_text(safe_pdf, slug=slug, logger=logger)

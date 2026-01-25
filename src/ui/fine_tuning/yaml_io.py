@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, cast
+from typing import Any, Dict
 
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import read_text_safe
+from pipeline.vision_paths import vision_yaml_repo_path
 from ui.utils.repo_root import get_repo_root
 
 try:
@@ -22,7 +23,7 @@ def repo_root() -> Path:
 
 def root_yaml_path() -> Path:
     repo = repo_root()
-    return cast(Path, ensure_within_and_resolve(repo, repo / "config" / "vision_statement.yaml"))
+    return vision_yaml_repo_path(repo)
 
 
 def load_root_yaml() -> Dict[str, Any]:

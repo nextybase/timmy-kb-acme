@@ -19,6 +19,7 @@ from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmat
 from pipeline.frontmatter_utils import parse_frontmatter as _shared_parse_frontmatter
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
+from pipeline.vision_paths import vision_yaml_repo_path
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.config import load_semantic_config
 from semantic.context_paths import resolve_context_paths
@@ -44,7 +45,7 @@ __all__ = [
 
 
 def _get_vision_statement_path(repo_root_dir: Path) -> Path:
-    return repo_root_dir / "config" / "vision_statement.yaml"
+    return vision_yaml_repo_path(repo_root_dir)
 
 
 def _load_vision_text(repo_root_dir: Path) -> str:

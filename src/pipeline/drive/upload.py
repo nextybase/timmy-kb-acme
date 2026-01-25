@@ -29,6 +29,23 @@ def _maybe_redact(text: str, redact: bool) -> str:
     return f"{t[:3]}***{t[-3:]}"
 
 
+def _drive_log_extra(
+    *,
+    parent_id: Optional[str] = None,
+    folder_id: Optional[str] = None,
+    file_id: Optional[str] = None,
+    redact_logs: bool = False,
+) -> Dict[str, str]:
+    extra: Dict[str, str] = {}
+    if parent_id is not None:
+        extra["parent"] = _maybe_redact(parent_id, redact_logs)
+    if folder_id is not None:
+        extra["folder_id"] = _maybe_redact(folder_id, redact_logs)
+    if file_id is not None:
+        extra["file_id"] = _maybe_redact(file_id, redact_logs)
+    return extra
+
+
 def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
@@ -159,7 +176,10 @@ def upload_config_to_drive_folder(
     if existing_id:
         local_logger.info(
             "drive.upload.config.replace",
-            extra={"parent": _maybe_redact(parent_id, redact_logs), "old_id": _maybe_redact(existing_id, redact_logs)},
+            extra={
+                **_drive_log_extra(parent_id=parent_id, redact_logs=redact_logs),
+                "old_id": _maybe_redact(existing_id, redact_logs),
+            },
         )
         _delete_file_hard(service, existing_id)
 
@@ -184,7 +204,7 @@ def upload_config_to_drive_folder(
         local_logger.error(
             "drive.upload.config.error",
             extra={
-                "parent": _maybe_redact(parent_id, redact_logs),
+                **_drive_log_extra(parent_id=parent_id, redact_logs=redact_logs),
                 "local": str(local_config),
                 "error_message": str(e)[:300],
             },
@@ -195,8 +215,7 @@ def upload_config_to_drive_folder(
     local_logger.info(
         "drive.upload.config.done",
         extra={
-            "parent": _maybe_redact(parent_id, redact_logs),
-            "file_id": _maybe_redact(file_id, redact_logs),
+            **_drive_log_extra(parent_id=parent_id, file_id=file_id, redact_logs=redact_logs),
             "local": str(local_config),
         },
     )
@@ -222,9 +241,8 @@ def create_drive_folder(
         logger.info(
             "drive.upload.folder.reuse",
             extra={
-                "parent": _maybe_redact(parent_id or "root", redact_logs),
+                **_drive_log_extra(parent_id=parent_id or "root", folder_id=existing, redact_logs=redact_logs),
                 "folder_name": name,
-                "folder_id": _maybe_redact(existing, redact_logs),
             },
         )
         return existing
@@ -234,7 +252,7 @@ def create_drive_folder(
         logger.error(
             "drive.upload.folder.create_error",
             extra={
-                "parent": _maybe_redact(parent_id or "root", redact_logs),
+                **_drive_log_extra(parent_id=parent_id or "root", redact_logs=redact_logs),
                 "folder_name": name,
                 "error_message": str(e)[:300],
             },
@@ -244,9 +262,8 @@ def create_drive_folder(
     logger.info(
         "drive.upload.folder.created",
         extra={
-            "parent": _maybe_redact(parent_id or "root", redact_logs),
+            **_drive_log_extra(parent_id=parent_id or "root", folder_id=new_id, redact_logs=redact_logs),
             "folder_name": name,
-            "folder_id": _maybe_redact(new_id, redact_logs),
         },
     )
     return new_id
@@ -270,6 +287,7 @@ def create_drive_minimal_structure(
         "drive.upload.structure.minimal",
         extra={
             "client_folder": _maybe_redact(client_folder_id, redact_logs),
+            **_drive_log_extra(folder_id=client_folder_id, redact_logs=redact_logs),
             "folders": list(structure.keys()),
         },
     )
@@ -334,7 +352,7 @@ def create_drive_structure_from_names(
     local_logger.info(
         "drive.upload.structure.names",
         extra={
-            "parent": _maybe_redact(parent_folder_id, redact_logs),
+            **_drive_log_extra(parent_id=parent_folder_id, redact_logs=redact_logs),
             "folders": list(created.keys()),
         },
     )
@@ -358,5 +376,5 @@ def delete_drive_file(
 
     logger.info(
         "drive.upload.file.deleted",
-        extra={"file_id": _maybe_redact(file_id, redact_logs)},
+        extra=_drive_log_extra(file_id=file_id, redact_logs=redact_logs),
     )

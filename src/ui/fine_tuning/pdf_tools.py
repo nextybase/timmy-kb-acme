@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.vision_paths import vision_yaml_repo_path
 from semantic.core import compile_document_to_vision_yaml
 from ui.utils.stubs import get_streamlit
 
@@ -20,7 +21,7 @@ def run_pdf_to_yaml_config() -> None:
     repo_root = _repo_root()
     cfg_dir = repo_root / "config"
     pdf_path = ensure_within_and_resolve(repo_root, cfg_dir / "VisionStatement.pdf")
-    yaml_path = ensure_within_and_resolve(repo_root, cfg_dir / "vision_statement.yaml")
+    yaml_path = vision_yaml_repo_path(repo_root)
 
     if not pdf_path.exists():
         st.error(f"PDF non trovato: {pdf_path}")

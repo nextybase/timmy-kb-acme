@@ -17,6 +17,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.vision_paths import vision_yaml_workspace_path
 from pipeline.vision_runner import run_vision_with_gating
 from ui.imports import get_streamlit
 
@@ -108,18 +109,6 @@ def _artifacts_paths(repo_root_dir: Path) -> VisionArtifacts:
     sdir = _semantic_dir(repo_root_dir)
     mapping = ensure_within_and_resolve(sdir, sdir / "semantic_mapping.yaml")
     return VisionArtifacts(mapping_yaml=cast(Path, mapping))
-
-
-def _vision_yaml_path(repo_root_dir: Path, *, pdf_path: Optional[Path] = None) -> Path:
-    perimeter_root = repo_root_dir
-    base = Path(repo_root_dir)
-    candidate = (
-        (pdf_path.parent / "visionstatement.yaml")
-        if pdf_path is not None
-        else (base / "config" / "visionstatement.yaml")
-    )
-    resolved = ensure_within_and_resolve(perimeter_root, candidate)
-    return cast(Path, resolved)
 
 
 def _artifacts_exist(repo_root_dir: Path) -> bool:
@@ -267,7 +256,7 @@ def run_vision(
             slug=slug,
         )
     safe_pdf = cast(Path, ensure_within_and_resolve(repo_root_dir, pdf_path))
-    safe_yaml = ensure_within_and_resolve(repo_root_dir, _vision_yaml_path(repo_root_dir, pdf_path=safe_pdf))
+    safe_yaml = ensure_within_and_resolve(repo_root_dir, vision_yaml_workspace_path(repo_root_dir, pdf_path=safe_pdf))
     if safe_yaml is not None and not safe_yaml.exists():
         raise ConfigError(
             "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",

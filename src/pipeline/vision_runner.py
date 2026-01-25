@@ -28,6 +28,7 @@ from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.semantic_mapping_utils import raw_categories_from_semantic_mapping
+from pipeline.vision_paths import vision_yaml_workspace_path
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.vision_provision import HaltError
 from semantic.vision_provision import provision_from_vision_with_config as _provision_from_pdf
@@ -67,17 +68,6 @@ def _artifacts_paths(repo_root_dir: Path) -> Dict[str, Path]:
     sdir = _semantic_dir(repo_root_dir)
     mapping = ensure_within_and_resolve(sdir, sdir / "semantic_mapping.yaml")
     return {"mapping": cast(Path, mapping)}
-
-
-def _vision_yaml_path(repo_root_dir: Path, *, pdf_path: Optional[Path] = None) -> Path:
-    base = Path(repo_root_dir)
-    candidate = (
-        (pdf_path.parent / "visionstatement.yaml")
-        if pdf_path is not None
-        else (base / "config" / "visionstatement.yaml")
-    )
-    resolved = ensure_within_and_resolve(base, candidate)
-    return cast(Path, resolved)
 
 
 def _sha256_of_file(repo_root_dir: Path, path: Path, chunk_size: int = 8192) -> str:
@@ -297,7 +287,7 @@ def run_vision_with_gating(
     safe_pdf = cast(Path, ensure_within_and_resolve(repo_root_dir, pdf_path))
     if not safe_pdf.exists():
         raise ConfigError(f"PDF non trovato: {safe_pdf}", slug=slug, file_path=str(safe_pdf))
-    yaml_path = _vision_yaml_path(repo_root_dir, pdf_path=safe_pdf)
+    yaml_path = vision_yaml_workspace_path(Path(repo_root_dir), pdf_path=safe_pdf)
 
     digest = _sha256_of_file(repo_root_dir, safe_pdf)
     last = _load_last_hash(repo_root_dir)
