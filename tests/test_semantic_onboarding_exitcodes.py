@@ -27,7 +27,9 @@ def _make_ctx(tmp_path: Path, slug: str = "dummy") -> _DummyCtx:
     book.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
-    return _DummyCtx(base_dir=base, book_dir=book, repo_root_dir=base, slug=slug)
+    ctx = _DummyCtx(base_dir=base, book_dir=book, repo_root_dir=base, slug=slug)
+    setattr(ctx, "config_path", config_dir / "config.yaml")
+    return ctx
 
 
 def _set_argv(slug: str = "dummy") -> None:

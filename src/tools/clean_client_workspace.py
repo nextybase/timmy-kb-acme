@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from pipeline.config_utils import get_drive_id
 from pipeline.context import ClientContext, validate_slug
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
@@ -20,9 +21,6 @@ try:
 except Exception:  # pragma: no cover - dipendenze Drive opzionali
     delete_drive_file = None
     get_drive_service = None
-
-_DRIVE_ROOT_KEY = "drive_folder_id"
-
 
 def _resolve_workspace_root(slug: str) -> Path:
     """Risoluzione deterministica della root workspace (<repo_root>/output/timmy-kb-<slug>)."""
@@ -50,10 +48,10 @@ def _load_config_payload(config_path: Path, *, workspace_root: Path, slug: str) 
 
 
 def _require_drive_root_id(config: Dict[str, Any], *, slug: str, config_path: Path) -> str:
-    value = str(config.get(_DRIVE_ROOT_KEY) or "").strip()
+    value = get_drive_id(config, "folder_id")
     if not value:
         raise ConfigError(
-            f"ID Drive mancante in config.yaml: {_DRIVE_ROOT_KEY}",
+            "ID Drive mancante in config.yaml: integrations.drive.folder_id",
             slug=slug,
             file_path=str(config_path),
         )
@@ -194,7 +192,7 @@ def perform_cleanup(slug: str, *, client_name: Optional[str] = None) -> Dict[str
         "client_name": client_name,
         "drive_deleted": drive_deleted,
         "drive_error": drive_error,
-        "drive_folder_id": drive_root_id,
+        "drive_root_id": drive_root_id,
         "registry_removed": registry_removed,
         "ui_state_cleared": ui_state_cleared,
         "semantic_progress_removed": semantic_progress_removed,

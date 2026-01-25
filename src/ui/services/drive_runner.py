@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
-from pipeline.config_utils import get_client_config
+from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.constants import GDRIVE_FOLDER_MIME as MIME_FOLDER
 from pipeline.drive.download_steps import compute_created, discover_candidates, emit_progress, snapshot_existing
 from pipeline.exceptions import CapabilityUnavailableError, WorkspaceLayoutInvalid
@@ -534,7 +534,7 @@ def emit_readmes_for_raw(
         parent_id=parent_id,
         redact_logs=bool(getattr(ctx, "redact_logs", False)),
     )
-    raw_id = cfg.get("drive_raw_folder_id")
+    raw_id = get_drive_id(cfg, "raw_folder_id")
     if not raw_id:
         sub = _drive_list_folders(svc, client_folder_id)
         name_to_id = {d["name"]: d["id"] for d in sub}

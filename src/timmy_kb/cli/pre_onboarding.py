@@ -34,6 +34,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.config_utils import (
+    ensure_config_migrated,
     get_client_config,
     merge_client_config_from_template,
     update_config_with_drive_ids,
@@ -278,7 +279,7 @@ def ensure_local_workspace_for_ui(
       - Riusa la creazione struttura locale e config tramite `_create_local_structure`.
       - Se `vision_statement_pdf` è fornito, lo salva in `config/VisionStatement.pdf`
         (scrittura atomica) e aggiorna `config.yaml` con:
-          * `vision_statement_pdf: 'config/VisionStatement.pdf'`
+          * `ai.vision.vision_statement_pdf: 'config/VisionStatement.pdf'`
           * `client_name: <client_name>` (se fornito)
       - Ritorna il path al config.yaml locale.
 
@@ -317,7 +318,7 @@ def ensure_local_workspace_for_ui(
         )
 
         # Aggiorna config con percorso PDF e nome cliente
-        updates: Dict[str, Any] = {"vision_statement_pdf": "config/VisionStatement.pdf"}
+        updates: Dict[str, Any] = {"ai": {"vision": {"vision_statement_pdf": "config/VisionStatement.pdf"}}}
         if resolved_name:
             updates["client_name"] = resolved_name
         update_config_with_drive_ids(context, updates, logger=logger)
@@ -434,15 +435,15 @@ def _drive_phase(
         },
     )
 
-    drive_raw_folder_id = created_map.get("raw")
-    if not drive_raw_folder_id:
+    raw_folder_id = created_map.get("raw")
+    if not raw_folder_id:
         raise ConfigError(
             f"Cartella RAW non trovata su Drive per slug '{context.slug}'.",
             drive_id=client_folder_id,
             slug=context.slug,
         )
-    drive_contrattualistica_folder_id = created_map.get("contrattualistica")
-    if not drive_contrattualistica_folder_id:
+    contrattualistica_folder_id = created_map.get("contrattualistica")
+    if not contrattualistica_folder_id:
         raise ConfigError(
             f"Cartella contrattualistica non trovata su Drive per slug '{context.slug}'.",
             drive_id=client_folder_id,
@@ -459,10 +460,14 @@ def _drive_phase(
     )
 
     updates = {
-        "drive_folder_id": client_folder_id,
-        "drive_raw_folder_id": drive_raw_folder_id,
-        "drive_contrattualistica_folder_id": drive_contrattualistica_folder_id,
-        "drive_config_folder_id": client_folder_id,
+        "integrations": {
+            "drive": {
+                "folder_id": client_folder_id,
+                "raw_folder_id": raw_folder_id,
+                "contrattualistica_folder_id": contrattualistica_folder_id,
+                "config_folder_id": client_folder_id,
+            }
+        },
         "client_name": client_name,
     }
     update_config_with_drive_ids(context, updates=updates, logger=logger)
@@ -499,6 +504,7 @@ def pre_onboarding_main(
         run_id=run_id,
         client_name=client_name,
     )
+    ensure_config_migrated(context, logger=logger)
     layout = WorkspaceLayout.from_context(context)
     ledger_conn = None
     ledger_conn = decision_ledger.open_ledger(layout)

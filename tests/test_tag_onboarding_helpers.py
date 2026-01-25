@@ -60,11 +60,16 @@ def test_download_from_drive_invokes_download(tmp_path: Path, monkeypatch) -> No
     raw.mkdir(parents=True, exist_ok=True)
     ctx = type("Ctx", (), {"slug": "x"})()
 
-    monkeypatch.setattr(raw_ingest, "get_client_config", lambda _c: {"drive_raw_folder_id": "fid123"}, raising=True)
+    monkeypatch.setattr(
+        raw_ingest,
+        "get_client_config",
+        lambda _c: {"integrations": {"drive": {"raw_folder_id": "fid123"}}},
+        raising=True,
+    )
     monkeypatch.setattr(
         ingest_provider,
         "get_client_config",
-        lambda _c: {"drive_raw_folder_id": "fid123"},
+        lambda _c: {"integrations": {"drive": {"raw_folder_id": "fid123"}}},
         raising=True,
     )
     monkeypatch.setattr(raw_ingest, "get_drive_service", lambda _c: object(), raising=True)

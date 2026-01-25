@@ -19,6 +19,7 @@ from pipeline.paths import get_repo_root
 _T = TypeVar("_T")
 
 
+from pipeline.config_utils import ensure_config_migrated, get_client_config, get_drive_id
 from pipeline.context import ClientContext
 from pipeline.drive.upload import create_drive_structure_from_names
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
@@ -184,6 +185,7 @@ def main() -> int:
         run_id=run_id,
         bootstrap_config=True,
     )
+    ensure_config_migrated(ctx, logger=logger)
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(ctx)
     requested, effective = _resolve_requested_effective(args)
@@ -221,7 +223,9 @@ def main() -> int:
                     logger,
                     slug=slug,
                 )
-                if getattr(ctx, "drive_raw_folder_id", None):
+                cfg = get_client_config(ctx) or {}
+                drive_raw_id = get_drive_id(cfg, "raw_folder_id")
+                if drive_raw_id:
                     layout = WorkspaceLayout.from_context(ctx)
                     mapping_path = ensure_within_and_resolve(
                         layout.semantic_dir,
@@ -238,7 +242,7 @@ def main() -> int:
                     create_drive_structure_from_names(
                         ctx=ctx,
                         folder_names=categories,
-                        parent_folder_id=ctx.drive_raw_folder_id,
+                        parent_folder_id=drive_raw_id,
                         log=logger,
                     )
                 decision_ledger.record_normative_decision(

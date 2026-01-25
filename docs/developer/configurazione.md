@@ -7,9 +7,9 @@ Si applica sia all'ambiente locale sia all'esecuzione CI (GitHub Actions).
 
 | Ambito | `config/config.yaml` (SSoT non segreto) | `.env` (segreti/processo) |
 |--------|-----------------------------------------|---------------------------|
-| **Meta** | `meta.client_name`, `meta.vision_statement_pdf`, `meta.N_VER`, `meta.DATA_VER` |  |
+| **Meta** | `meta.client_name`, `meta.N_VER`, `meta.DATA_VER` |  |
 | **OpenAI** | `ai.openai.timeout: 120`<br>`ai.openai.max_retries: 2`<br>`ai.openai.http2_enabled: false` | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_PROJECT` |
-| **Vision** | `ai.vision.model: gpt-4o-mini-2024-07-18`<br>`ai.vision.engine: assistants`<br>`ai.vision.snapshot_retention_days: 30`<br>`ai.vision.assistant_id_env: OBNEXT_ASSISTANT_ID` (solo il nome ENV) | `OBNEXT_ASSISTANT_ID` |
+| **Vision** | `ai.vision.model: gpt-4o-mini-2024-07-18`<br>`ai.vision.engine: assistants`<br>`ai.vision.snapshot_retention_days: 30`<br>`ai.vision.assistant_id_env: OBNEXT_ASSISTANT_ID` (solo il nome ENV)<br>`ai.vision.vision_statement_pdf: config/VisionStatement.pdf` | `OBNEXT_ASSISTANT_ID` |
 | **UI** | `ui.skip_preflight`, `ui.allow_local_only`, `ui.admin_local_mode` |  |
 | **Retriever** | `pipeline.retriever.auto_by_budget`, `pipeline.retriever.throttle.latency_budget_ms`, `candidate_limit`, `parallelism`, `sleep_ms_between_calls` |  |
 | **Cache RAW** | `pipeline.raw_cache.ttl_seconds`, `pipeline.raw_cache.max_entries` |  |
@@ -52,7 +52,7 @@ ai:
 
 `config/config.yaml` è la SSoT applicativa strutturata per macro-sezioni:
 
-- `meta`: nome cliente, riferimenti SSoT (`vision_statement_pdf`), versioning (`N_VER`, `DATA_VER`).
+- `meta`: nome cliente e versioning (`N_VER`, `DATA_VER`).
 - `ui`: `skip_preflight`, `allow_local_only`, `admin_local_mode`.
 - `ai.openai`: timeout (s), max_retries, `http2_enabled`.
 - `ai.vision`: modello, engine (enum `assistants|responses|...`), `snapshot_retention_days`, `use_kb`, `strict_output`, riferimenti *_env ai segreti.

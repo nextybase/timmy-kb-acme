@@ -21,7 +21,7 @@ def test_tag_onboarding_main_raises_capability_error_when_drive_utils_missing(tm
 
     fake_ctx = SimpleNamespace(
         slug="dummy",
-        settings={"drive_raw_folder_id": "RAW_FOLDER_ID"},
+        settings={"integrations": {"drive": {"raw_folder_id": "RAW_FOLDER_ID"}}},
     )
 
     monkeypatch.setattr(ingest_provider, "get_drive_service", None)

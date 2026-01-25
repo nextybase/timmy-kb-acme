@@ -19,6 +19,7 @@ ai:
     use_kb: false
     snapshot_retention_days: 30
     strict_output: true
+    vision_statement_pdf: ''
   prototimmy:
     engine: assistants
     model: gpt-4.1

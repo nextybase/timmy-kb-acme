@@ -68,8 +68,7 @@ class _PayloadPaths(TypedDict):
 
 
 class _PayloadConfigIds(TypedDict, total=False):
-    drive_folder_id: Optional[str]
-    drive_raw_folder_id: Optional[str]
+    drive: Dict[str, Optional[str]]
 
 
 class _DummyPayload(TypedDict):
@@ -340,7 +339,12 @@ def _ensure_local_workspace_for_tooling(*, slug: str, client_name: str, vision_s
             text = read_text_safe(template.parent, template, encoding="utf-8")
             _safe_write_text(config_path, text, encoding="utf-8", atomic=True)
         else:
-            _safe_write_text(config_path, "vision_statement_pdf: config/VisionStatement.pdf\n", encoding="utf-8", atomic=True)
+            _safe_write_text(
+                config_path,
+                "ai:\n  vision:\n    vision_statement_pdf: config/VisionStatement.pdf\n",
+                encoding="utf-8",
+                atomic=True,
+            )
 
     pdf_path = ensure_within_and_resolve(workspace_root, workspace_root / "config" / "VisionStatement.pdf")
     if not pdf_path.exists():

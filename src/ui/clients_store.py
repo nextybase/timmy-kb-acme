@@ -26,7 +26,6 @@ DEFAULT_DB_FILE: Path = Path("clients.yaml")
 DB_DIR: Path = DEFAULT_DB_DIR
 DB_FILE: Path = DEFAULT_DB_FILE
 PATH_ENV = "CLIENTS_DB_PATH"
-ALLOW_CLIENT_DB_ENV = "ALLOW_CLIENTS_DB_IN_CLIENT"
 LOG = get_structured_logger("ui.clients_store")
 
 
@@ -53,56 +52,11 @@ def _optional_env(name: str) -> Optional[str]:
     return value.strip() if isinstance(value, str) else value
 
 
-def _is_client_workspace(path: Path) -> bool:
-    # Workspace cliente: output/timmy-kb-<slug>
-    try:
-        parent = path.parent
-    except Exception:
-        return False
-    return path.name.startswith("timmy-kb-") or parent.name == "output"
-
-
-def _coerce_allow_client_db() -> bool:
-    raw = _optional_env(ALLOW_CLIENT_DB_ENV)
-    if raw is None:
-        return False
-    return str(raw).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
-
-
 def _base_repo_root() -> Path:
+    # WORKSPACE_ROOT_DIR resta valido per altre parti UI, ma non influenza il registry.
     workspace_root = _optional_env(WORKSPACE_ROOT_ENV)
     if workspace_root:
-        raw = str(workspace_root)
-        uses_template = "<slug>" in raw
-        if uses_template:
-            try:
-                from ui.utils.slug import get_runtime_slug
-            except Exception:
-                slug = None
-            else:
-                slug = get_runtime_slug()
-            if not slug:
-                raise ConfigError(
-                    "Slug mancante: impossibile risolvere WORKSPACE_ROOT_DIR con template.",
-                    code="clients_store.slug.missing",
-                    component="clients_store",
-                )
-            raw = raw.replace("<slug>", slug)
-        try:
-            resolved = Path(raw).expanduser().resolve()
-        except Exception as exc:
-            raise ConfigError(
-                f"{WORKSPACE_ROOT_ENV} non valido: {workspace_root}",
-                code="clients_store.workspace_root.invalid",
-                component="clients_store",
-            ) from exc
-        if not uses_template and _is_client_workspace(resolved) and not _coerce_allow_client_db():
-            raise ConfigError(
-                f"{WORKSPACE_ROOT_ENV} non ammesso in workspace cliente.",
-                code="clients_store.workspace_root.invalid",
-                component="clients_store",
-            )
-        return resolved
+        LOG.info("clients_store.workspace_root_ignored", extra={"env": WORKSPACE_ROOT_ENV})
 
     override = os.environ.get(REPO_ROOT_ENV)
     if override:
@@ -114,12 +68,6 @@ def _base_repo_root() -> Path:
                 code="clients_store.repo_root.invalid",
                 component="clients_store",
             ) from exc
-        if _is_client_workspace(resolved) and not _coerce_allow_client_db():
-            raise ConfigError(
-                f"{REPO_ROOT_ENV} non ammesso in workspace cliente.",
-                code="clients_store.repo_root.invalid",
-                component="clients_store",
-            )
         return resolved
     return REPO_ROOT
 

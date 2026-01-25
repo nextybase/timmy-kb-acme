@@ -370,7 +370,7 @@ def sandbox_workspace(tmp_path_factory):
 
     cfg = base / "config" / "config.yaml"
     if not cfg.exists():
-        safe_write_text(cfg, "vision_statement_pdf: config/VisionStatement.pdf\n")
+        safe_write_text(cfg, "ai:\n  vision:\n    vision_statement_pdf: config/VisionStatement.pdf\n")
 
     return {
         "base": base,
@@ -433,7 +433,10 @@ def dummy_workspace(tmp_path_factory):
         if source_cfg.exists():
             cfg.write_text(source_cfg.read_text(encoding="utf-8"), encoding="utf-8")
         else:
-            cfg.write_text("vision_statement_pdf: config/VisionStatement.pdf\n", encoding="utf-8")
+            cfg.write_text(
+                "ai:\n  vision:\n    vision_statement_pdf: config/VisionStatement.pdf\n",
+                encoding="utf-8",
+            )
 
     pdf.parent.mkdir(parents=True, exist_ok=True)
     if not pdf.exists():
@@ -514,6 +517,9 @@ def dummy_ctx(dummy_workspace):
     class Ctx:
         base_dir: Path = dummy_workspace["base"]
         client_name: str = dummy_workspace["client_name"]
+        repo_root_dir: Path = dummy_workspace["base"]
+        config_path: Path = dummy_workspace["config"]
+        slug: str = dummy_workspace["slug"]
 
     return Ctx()
 

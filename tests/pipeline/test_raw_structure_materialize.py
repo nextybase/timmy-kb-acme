@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from pipeline import vision_runner
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within_and_resolve
@@ -42,17 +43,30 @@ def _logger() -> logging.Logger:
 class _Ctx:
     def __init__(self, repo_root_dir: Path) -> None:
         self.repo_root_dir = repo_root_dir
-        self.drive_raw_folder_id = None
+        self.settings = {}
 
 
-def test_materialize_raw_structure_creates_local_dirs(tmp_path: Path) -> None:
+def test_materialize_raw_structure_creates_local_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = _setup_workspace(tmp_path, "acme", "areas:\n  - key: A\n  - key: B\n")
     ctx = _Ctx(base)
+    monkeypatch.setattr(
+        vision_runner,
+        "get_client_config",
+        lambda _ctx: {"integrations": {"drive": {"raw_folder_id": "raw-id"}}},
+        raising=True,
+    )
+    monkeypatch.setattr(
+        vision_runner,
+        "create_drive_structure_from_names",
+        lambda **kwargs: list(kwargs.get("folder_names") or []),
+        raising=True,
+    )
 
-    materialize_raw_structure(ctx, _logger(), repo_root_dir=base, slug="acme")
+    result = materialize_raw_structure(ctx, _logger(), repo_root_dir=base, slug="acme")
 
     assert (base / "raw" / "a").is_dir()
     assert (base / "raw" / "b").is_dir()
+    assert result.get("drive_status") == "created"
 
 
 def test_materialize_raw_structure_missing_areas_raises(tmp_path: Path) -> None:

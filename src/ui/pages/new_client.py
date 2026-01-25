@@ -14,7 +14,7 @@ st = get_streamlit()
 import yaml
 
 from pipeline.beta_flags import is_beta_strict
-from pipeline.config_utils import get_client_config, update_config_with_drive_ids
+from pipeline.config_utils import ensure_config_migrated, get_client_config, get_drive_id, update_config_with_drive_ids
 from pipeline.context import validate_slug
 from pipeline.exceptions import ConfigError, WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.file_utils import safe_write_bytes, safe_write_text
@@ -182,7 +182,17 @@ def _has_drive_ids(slug: str) -> bool:
         cfg = get_client_config(ctx) or {}
     except Exception:
         return False
-    return bool(cfg.get("drive_raw_folder_id")) and bool(cfg.get("drive_folder_id"))
+    return bool(get_drive_id(cfg, "raw_folder_id")) and bool(get_drive_id(cfg, "folder_id"))
+
+
+def _ensure_config_migrated_once(slug: str, ctx: Any) -> None:
+    key = f"config_migrated_{(slug or '').strip().lower()}"
+    if st.session_state.get(key):
+        return
+    if ensure_config_migrated(ctx, logger=LOGGER):
+        LOGGER.info("ui.new_client.config_migrated", extra={"slug": slug})
+        invalidate_client_context(slug)
+    st.session_state[key] = True
 
 
 def _exists_semantic_files(slug: str, layout: WorkspaceLayout | None = None) -> bool:
@@ -564,6 +574,7 @@ if current_phase == UI_PHASE_INIT:
                 layout = bootstrap_client_workspace(ctx)
                 invalidate_client_context(s)
                 ctx = get_client_context(s, require_env=False, force_reload=True)
+                _ensure_config_migrated_once(s, ctx)
                 if getattr(ctx, "repo_root_dir", None) is None:
                     raise ConfigError(
                         "Context privo di repo_root_dir dopo il bootstrap del workspace.",
@@ -596,7 +607,7 @@ if current_phase == UI_PHASE_INIT:
                         Path, ensure_within_and_resolve(layout.repo_root_dir, cfg_dir / "VisionStatement.pdf")
                     )
                     safe_write_bytes(vision_target, pdf_bytes, atomic=True)
-                    updates = {"vision_statement_pdf": "config/VisionStatement.pdf"}
+                    updates = {"ai": {"vision": {"vision_statement_pdf": "config/VisionStatement.pdf"}}}
                     client_name_value = (name or s).strip()
                     if client_name_value:
                         updates["client_name"] = client_name_value
@@ -677,7 +688,7 @@ if current_phase == UI_PHASE_INIT:
 
                         # NOTA IMPORTANTE:
                         # La fase di provisioning Drive aggiorna il file config.yaml del cliente su disco
-                        # inserendo gli ID drive_* (drive_folder_id, drive_raw_folder_id).
+                        # inserendo gli ID drive (integrations.drive.folder_id/raw_folder_id).
                         # Tuttavia Streamlit e il layer di contesto possono mantenere una versione
                         # cache-ata della configurazione in memoria.
                         #
@@ -915,7 +926,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         )
     if not has_drive_ids and not local_only_mode:
         st.warning(
-            "Config privo degli ID Drive (drive_folder_id/drive_raw_folder_id). "
+            "Config privo degli ID Drive (integrations.drive.folder_id/raw_folder_id). "
             "Ripeti 'Inizializza Workspace' dopo aver configurato le variabili .env e i permessi Drive."
         )
 

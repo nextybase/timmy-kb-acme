@@ -17,12 +17,14 @@ def _ctx(base_dir: Path) -> TestClientCtx:
     config_dir = base_dir / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
-    return TestClientCtx(
+    ctx = TestClientCtx(
         slug="dummy",
         repo_root_dir=base_dir,
         semantic_dir=base_dir / "semantic",
         config_dir=config_dir,
     )
+    setattr(ctx, "config_path", config_dir / "config.yaml")
+    return ctx
 
 
 def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -611,9 +611,12 @@ def build_dummy_payload(
                 bootstrap_config=False,
             )  # type: ignore[misc]
             cfg = get_client_config(ctx_cfg) or {}
+            drive_cfg = cfg.get("integrations", {}).get("drive", {})
             cfg_out = {
-                "drive_folder_id": cfg.get("drive_folder_id"),
-                "drive_raw_folder_id": cfg.get("drive_raw_folder_id"),
+                "drive": {
+                    "folder_id": drive_cfg.get("folder_id"),
+                    "raw_folder_id": drive_cfg.get("raw_folder_id"),
+                }
             }
         except Exception:
             cfg_out = {}

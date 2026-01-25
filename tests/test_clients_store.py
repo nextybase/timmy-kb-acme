@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 import importlib
+import logging
 import os
 from pathlib import Path
 
@@ -14,7 +15,6 @@ def _reset_store(tmp_path):
     module.REPO_ROOT = tmp_path
     module.DB_DIR = Path("clients_db")
     module.DB_FILE = Path("clients.yaml")
-    os.environ[module.WORKSPACE_ROOT_ENV] = str(tmp_path)
     os.environ["CLIENTS_DB_DIR"] = "clients_db"
     os.environ["CLIENTS_DB_FILE"] = "clients.yaml"
     return module
@@ -157,29 +157,15 @@ def test_parse_entries_rejects_missing_slug(store):
     assert excinfo.value.code == "clients_store.yaml.invalid"
 
 
-def test_base_repo_root_template_resolves_with_slug(store, monkeypatch, tmp_path):
-    root_template = tmp_path / "output" / "timmy-kb-<slug>"
-    monkeypatch.setenv(store.WORKSPACE_ROOT_ENV, root_template.as_posix())
-    monkeypatch.setattr("ui.utils.slug.get_runtime_slug", lambda: "dummy")
-    resolved = store._base_repo_root()
-    assert resolved.name == "timmy-kb-dummy"
+def test_base_repo_root_ignores_workspace_root_dir(tmp_path, monkeypatch, caplog):
+    module = _reset_store(tmp_path)
+    workspace_root = tmp_path / "output" / "timmy-kb-prova"
+    monkeypatch.setenv(module.WORKSPACE_ROOT_ENV, workspace_root.as_posix())
+    monkeypatch.delenv(module.REPO_ROOT_ENV, raising=False)
+    module.REPO_ROOT = tmp_path
 
+    with caplog.at_level(logging.INFO):
+        resolved = module._base_repo_root()
 
-def test_base_repo_root_template_raises_without_slug(store, monkeypatch, tmp_path):
-    root_template = tmp_path / "output" / "timmy-kb-<slug>"
-    monkeypatch.setenv(store.WORKSPACE_ROOT_ENV, root_template.as_posix())
-    monkeypatch.setattr("ui.utils.slug.get_runtime_slug", lambda: None)
-    with pytest.raises(ConfigError) as excinfo:
-        store._base_repo_root()
-    assert excinfo.value.code == "clients_store.slug.missing"
-
-
-def test_base_repo_root_rejects_repo_root_in_client(store, monkeypatch, tmp_path):
-    client_root = tmp_path / "output" / "timmy-kb-demo"
-    client_root.mkdir(parents=True, exist_ok=True)
-    monkeypatch.delenv(store.WORKSPACE_ROOT_ENV, raising=False)
-    monkeypatch.setenv(store.REPO_ROOT_ENV, client_root.as_posix())
-    monkeypatch.delenv("ALLOW_CLIENTS_DB_IN_CLIENT", raising=False)
-    with pytest.raises(ConfigError) as excinfo:
-        store._base_repo_root()
-    assert excinfo.value.code == "clients_store.repo_root.invalid"
+    assert resolved == tmp_path
+    assert any(rec.getMessage() == "clients_store.workspace_root_ignored" for rec in caplog.records)

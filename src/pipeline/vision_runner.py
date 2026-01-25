@@ -20,6 +20,7 @@ from typing import Any, Dict, Optional, cast
 
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.beta_flags import is_beta_strict
+from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.drive.upload import create_drive_structure_from_names
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
@@ -148,10 +149,11 @@ def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_di
         extra={"slug": slug, "count": len(categories), "sha256": areas_hash},
     )
 
-    drive_parent = getattr(ctx, "drive_raw_folder_id", None)
+    cfg = get_client_config(ctx) or {}
+    drive_parent = get_drive_id(cfg, "raw_folder_id")
     strict_mode = is_beta_strict()
     if not drive_parent:
-        reason = "drive_raw_folder_id_missing"
+        reason = "drive.raw_folder_id_missing"
         log_payload = {"slug": slug, "reason": reason}
         if strict_mode:
             logger.error("raw_structure_drive_skipped", extra=log_payload)

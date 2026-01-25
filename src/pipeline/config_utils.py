@@ -72,6 +72,128 @@ class ClientConfigPayload(TypedDict, total=False):
     slug: str
 
 
+_LEGACY_DRIVE_KEY_MAP: dict[str, str] = {
+    "drive_folder_id": "folder_id",
+    "drive_raw_folder_id": "raw_folder_id",
+    "drive_contrattualistica_folder_id": "contrattualistica_folder_id",
+    "drive_config_folder_id": "config_folder_id",
+}
+
+
+def _coerce_nonempty_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        candidate = value.strip()
+        return candidate or None
+    return str(value).strip() or None
+
+
+def _ensure_mapping(parent: dict[str, Any], key: str) -> dict[str, Any]:
+    current = parent.get(key)
+    if isinstance(current, Mapping):
+        if isinstance(current, dict):
+            return current
+        current = dict(current)
+        parent[key] = current
+        return current
+    new_map: dict[str, Any] = {}
+    parent[key] = new_map
+    return new_map
+
+
+def _ensure_nested_mapping(parent: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    current = parent
+    for key in keys:
+        current = _ensure_mapping(current, key)
+    return current
+
+
+def _deep_merge_dict(base: dict[str, Any], updates: Mapping[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = dict(base)
+    for key, value in updates.items():
+        if isinstance(value, Mapping) and isinstance(result.get(key), Mapping):
+            merged = _deep_merge_dict(dict(cast(Mapping[str, Any], result[key])), cast(Mapping[str, Any], value))
+            result[key] = merged
+        else:
+            result[key] = value
+    return result
+
+
+def _extract_legacy_vision_value(payload: dict[str, Any]) -> tuple[Optional[str], list[str]]:
+    removed: list[str] = []
+    legacy_value: Optional[str] = None
+
+    if "vision_statement_pdf" in payload:
+        legacy_value = _coerce_nonempty_str(payload.get("vision_statement_pdf")) or legacy_value
+        payload.pop("vision_statement_pdf", None)
+        removed.append("vision_statement_pdf")
+
+    meta = payload.get("meta")
+    if isinstance(meta, Mapping):
+        meta_dict = dict(meta)
+        if "vision_statement_pdf" in meta_dict:
+            legacy_value = _coerce_nonempty_str(meta_dict.get("vision_statement_pdf")) or legacy_value
+            meta_dict.pop("vision_statement_pdf", None)
+            payload["meta"] = meta_dict
+            removed.append("meta.vision_statement_pdf")
+
+    return legacy_value, removed
+
+
+def _migrate_legacy_keys(payload: dict[str, Any]) -> tuple[dict[str, Any], list[str], bool]:
+    migrated_keys: list[str] = []
+    data = dict(payload)
+    drive_section: dict[str, Any] | None = None
+
+    for legacy_key, drive_key in _LEGACY_DRIVE_KEY_MAP.items():
+        if legacy_key not in data:
+            continue
+        if drive_section is None:
+            drive_section = _ensure_nested_mapping(data, ("integrations", "drive"))
+        legacy_value = _coerce_nonempty_str(data.get(legacy_key))
+        data.pop(legacy_key, None)
+        migrated_keys.append(legacy_key)
+        if drive_section is not None and legacy_value and not _coerce_nonempty_str(drive_section.get(drive_key)):
+            drive_section[drive_key] = legacy_value
+
+    legacy_vision, removed_vision_keys = _extract_legacy_vision_value(data)
+    moved_vision = False
+    if legacy_vision:
+        vision_section = _ensure_nested_mapping(data, ("ai", "vision"))
+        if not _coerce_nonempty_str(vision_section.get("vision_statement_pdf")):
+            vision_section["vision_statement_pdf"] = legacy_vision
+            moved_vision = True
+
+    migrated_keys.extend(removed_vision_keys)
+
+    return data, migrated_keys, moved_vision
+
+
+def _has_legacy_config_keys(payload: Mapping[str, Any]) -> bool:
+    if any(key in payload for key in _LEGACY_DRIVE_KEY_MAP):
+        return True
+    if "vision_statement_pdf" in payload:
+        return True
+    meta = payload.get("meta")
+    return isinstance(meta, Mapping) and "vision_statement_pdf" in meta
+
+
+def get_drive_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    integrations = config.get("integrations")
+    if not isinstance(integrations, Mapping):
+        return {}
+    drive = integrations.get("drive")
+    if not isinstance(drive, Mapping):
+        return {}
+    return dict(drive)
+
+
+def get_drive_id(config: Mapping[str, Any], key: str) -> Optional[str]:
+    drive = get_drive_config(config)
+    return _coerce_nonempty_str(drive.get(key))
+
+
 def _extract_context_settings(context: ClientContext) -> tuple[Optional[ContextSettings], dict[str, Any], bool]:
     """Ritorna (wrapper Settings, payload dict, available)."""
     settings_obj = getattr(context, "settings", None)
@@ -280,6 +402,26 @@ def get_client_config(context: ClientContext) -> ClientConfigPayload:
     return cast(ClientConfigPayload, settings.as_dict())
 
 
+def ensure_config_migrated(
+    context: ClientContext,
+    *,
+    logger: logging.Logger | None = None,
+) -> bool:
+    """Esegue la migrazione delle chiavi legacy solo su chiamata esplicita."""
+    _, settings_payload, available = _extract_context_settings(context)
+    if available:
+        payload = dict(settings_payload)
+    else:
+        settings = load_client_settings(context)
+        payload = settings.as_dict()
+
+    if not _has_legacy_config_keys(payload):
+        return False
+
+    update_config_with_drive_ids(context, updates={}, logger=logger)
+    return True
+
+
 # ----------------------------------------------------------
 #  Validazione pre-onboarding (coerenza minima ambiente)
 # ----------------------------------------------------------
@@ -350,7 +492,7 @@ def validate_preonboarding_environment(context: ClientContext, repo_root_dir: Op
 def merge_client_config_from_template(
     context: ClientContext,
     template_path: Path,
-    preserve_keys: tuple[str, ...] = ("client_name", "vision_statement_pdf", "slug"),
+    preserve_keys: tuple[str, ...] = ("client_name", "slug"),
     logger: logging.Logger | None = None,
 ) -> Path:
     """Unisce il config cliente con il template mantenendo chiavi sensibili."""
@@ -444,7 +586,8 @@ def update_config_with_drive_ids(
 
     Comportamento:
       - Esegue backup `.bak` del config esistente.
-      - Aggiorna **solo** le chiavi presenti in `updates`.
+      - Esegue deep merge deterministico (dict ricorsivi, liste sostituiscono).
+      - Migra chiavi legacy drive_* e vision_statement_pdf in place.
       - Scrive via `safe_write_text` in modo atomico.
 
     Raises:
@@ -486,15 +629,51 @@ def update_config_with_drive_ids(
         if not isinstance(config_raw, dict):
             raise ConfigError("Config YAML non valido.")
         config_data = dict(config_raw)
-    config_data.update(updates or {})
+
+    config_data, migrated_keys, moved_vision = _migrate_legacy_keys(config_data)
+    normalized_updates, updates_migrated, updates_moved_vision = _migrate_legacy_keys(dict(updates or {}))
+    drive_migrated = [k for k in (migrated_keys + updates_migrated) if k in _LEGACY_DRIVE_KEY_MAP]
+    vision_moved = moved_vision or updates_moved_vision
+
+    log = logger or globals().get("logger")
+    if drive_migrated and log:
+        log.info(
+            "config.migrated.legacy_flat_drive_keys",
+            extra={"count": len(drive_migrated), "keys": sorted(set(drive_migrated))},
+        )
+    if vision_moved and log:
+        log.info("config.migrated.vision_statement_pdf", extra={"slug": context.slug})
+
+    config_data = _deep_merge_dict(config_data, normalized_updates)
+
+    remaining_drive = [key for key in _LEGACY_DRIVE_KEY_MAP if key in config_data]
+    if remaining_drive:
+        msg = f"Chiavi legacy Drive non rimosse dal config: {', '.join(remaining_drive)}"
+        if is_beta_strict():
+            raise ConfigError(msg, slug=context.slug, file_path=str(config_path))
+        if log:
+            log.warning("config.legacy_drive_keys_remaining", extra={"keys": remaining_drive})
+
+    remaining_vision: list[str] = []
+    if "vision_statement_pdf" in config_data:
+        remaining_vision.append("vision_statement_pdf")
+    meta_section = config_data.get("meta")
+    if isinstance(meta_section, Mapping) and "vision_statement_pdf" in meta_section:
+        remaining_vision.append("meta.vision_statement_pdf")
+    if remaining_vision:
+        msg = f"Chiavi legacy VisionStatement non rimosse dal config: {', '.join(remaining_vision)}"
+        if is_beta_strict():
+            raise ConfigError(msg, slug=context.slug, file_path=str(config_path))
+        if log:
+            log.warning("config.legacy_vision_statement_remaining", extra={"keys": remaining_vision})
 
     # Scrittura sicura (atomica) + path-safety
     ensure_within(repo_root_dir, config_path)
     try:
         yaml_dump = yaml.safe_dump(config_data, sort_keys=False, allow_unicode=True)
         safe_write_text(config_path, yaml_dump, encoding="utf-8", atomic=True)
-        if logger:
-            logger.info(
+        if log:
+            log.info(
                 "pipeline.config_utils.config_written",
                 extra={"config_path": str(config_path)},
             )
@@ -507,10 +686,13 @@ __all__ = [
     "ClientEnvSettings",
     "write_client_config_file",
     "get_client_config",
+    "ensure_config_migrated",
     "load_client_settings",
     "validate_preonboarding_environment",
     "merge_client_config_from_template",
     "update_config_with_drive_ids",
+    "get_drive_config",
+    "get_drive_id",
     "bump_n_ver_if_needed",
     "set_data_ver_today",
 ]

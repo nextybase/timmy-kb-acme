@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Protocol
 
-from pipeline.config_utils import get_client_config
+from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.context import ClientContext
 from pipeline.exceptions import CapabilityUnavailableError, ConfigError
 from pipeline.logging_utils import phase_scope
@@ -42,9 +42,9 @@ class DriveIngestProvider:
         local_path: Optional[Path] = None,
     ) -> int:
         cfg = get_client_config(context) or {}
-        drive_folder_id = cfg.get("drive_raw_folder_id")
-        if not drive_folder_id:
-            raise ConfigError("drive_raw_folder_id mancante in config.yaml.")
+        raw_folder_id = get_drive_id(cfg, "raw_folder_id")
+        if not raw_folder_id:
+            raise ConfigError("integrations.drive.raw_folder_id mancante in config.yaml.")
 
         if not callable(get_drive_service) or not callable(download_drive_pdfs_to_local):
             raise CapabilityUnavailableError(
@@ -56,7 +56,7 @@ class DriveIngestProvider:
         with phase_scope(logger, stage="drive_download", customer=getattr(context, "slug", None)) as phase:
             download_drive_pdfs_to_local(
                 service=service,
-                remote_root_folder_id=drive_folder_id,
+                remote_root_folder_id=raw_folder_id,
                 local_root_dir=raw_dir,
                 progress=not non_interactive,
                 context=context,
@@ -70,7 +70,7 @@ class DriveIngestProvider:
 
         logger.info(
             "ingest_provider.drive_completed",
-            extra={"folder_id": drive_folder_id, "slug": getattr(context, "slug", None)},
+            extra={"folder_id": raw_folder_id, "slug": getattr(context, "slug", None)},
         )
 
         try:

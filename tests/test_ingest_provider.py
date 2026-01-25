@@ -25,7 +25,7 @@ def test_drive_provider_requires_drive_utils(monkeypatch, tmp_path):
     monkeypatch.setattr(
         ingest_module,
         "get_client_config",
-        lambda context: {"drive_raw_folder_id": "folder"},
+        lambda context: {"integrations": {"drive": {"raw_folder_id": "folder"}}},
     )
 
     provider = ingest_module.DriveIngestProvider()

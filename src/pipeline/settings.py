@@ -156,7 +156,6 @@ class MetaSection:
     data_ver: Optional[str]
     client_name: Optional[str]
     semantic_mapping_yaml: Optional[str]
-    vision_statement_pdf: Optional[str]
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "MetaSection":
@@ -185,12 +184,6 @@ class MetaSection:
             semantic_mapping_yaml=_extract_optional_str(
                 data.get("semantic_mapping_yaml"),
                 "meta.semantic_mapping_yaml",
-                config_path=config_path,
-                default=None,
-            ),
-            vision_statement_pdf=_extract_optional_str(
-                data.get("vision_statement_pdf"),
-                "meta.vision_statement_pdf",
                 config_path=config_path,
                 default=None,
             ),
@@ -237,6 +230,7 @@ class VisionSection:
     snapshot_retention_days: int
     strict_output: bool
     use_kb: bool = True
+    vision_statement_pdf: Optional[str] = None
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "VisionSection":
@@ -278,6 +272,13 @@ class VisionSection:
                 "ai.vision.use_kb",
                 config_path=config_path,
                 default=True,
+            ),
+            vision_statement_pdf=_extract_optional_str(
+                data.get("vision_statement_pdf"),
+                "ai.vision.vision_statement_pdf",
+                config_path=config_path,
+                default=None,
+                allow_empty=True,
             ),
         )
 
