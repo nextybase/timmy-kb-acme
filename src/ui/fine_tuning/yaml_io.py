@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict
 
 from pipeline.file_utils import safe_write_text
