@@ -73,12 +73,12 @@ def render_controls(
 
     with col_pdf:
         if st.button(
-            "PDF -> YAML (config/)",
+            "PDF -> YAML (workspace)",
             key="btn_pdf_to_yaml",
-            help="Converte config/VisionStatement.pdf in config/vision_statement.yaml",
+            help="Converte VisionStatement.pdf in output/<workspace>/config/visionstatement.yaml",
         ):
             try:
-                run_pdf_to_yaml_config()
+                run_pdf_to_yaml_config(slug)
             except Exception as exc:  # pragma: no cover
                 if log:
                     log.warning("ui.tools_check.pdf_to_yaml_error", extra={"err": str(exc)})

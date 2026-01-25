@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""SSoT helpers for Vision YAML paths (workspace vs repo root)."""
+"""SSoT helpers for visionstatement.yaml paths (workspace only)."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ from typing import cast
 
 from pipeline.path_utils import ensure_within_and_resolve
 
-__all__ = ["vision_yaml_workspace_path", "vision_yaml_repo_path"]
+__all__ = ["vision_yaml_workspace_path"]
 
 
 def vision_yaml_workspace_path(repo_root_dir: Path, *, pdf_path: Path | None = None) -> Path:
-    """Return the workspace Vision YAML path (visionstatement.yaml).
+    """Return the workspace visionstatement.yaml path.
 
     Uses path-safety to keep the output within repo_root_dir.
     """
@@ -22,11 +22,4 @@ def vision_yaml_workspace_path(repo_root_dir: Path, *, pdf_path: Path | None = N
         if pdf_path is not None
         else (base / "config" / "visionstatement.yaml")
     )
-    return cast(Path, ensure_within_and_resolve(base, candidate))
-
-
-def vision_yaml_repo_path(repo_root_dir: Path) -> Path:
-    """Return the repo Vision YAML path (vision_statement.yaml)."""
-    base = Path(repo_root_dir)
-    candidate = base / "config" / "vision_statement.yaml"
     return cast(Path, ensure_within_and_resolve(base, candidate))

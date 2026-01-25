@@ -443,7 +443,9 @@ def test_parse_required_sections_empty_raises():
 
 
 def test_load_vision_yaml_requires_full_text(tmp_path: Path):
-    yaml_path = tmp_path / "visionstatement.yaml"
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir()
+    yaml_path = cfg_dir / "visionstatement.yaml"
     yaml_path.write_text(
         "version: 1\ncontent:\n  pages:\n    - Solo pagina senza full_text\n",
         encoding="utf-8",

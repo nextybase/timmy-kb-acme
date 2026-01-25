@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Tuple, cast
 
 from pipeline.exceptions import ConfigError
-from pipeline.file_utils import safe_write_bytes
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from ui.config_store import get_vision_model
@@ -14,7 +13,7 @@ from ui.utils.context_cache import get_client_context
 from ui.utils.stubs import get_streamlit
 
 from .styles import apply_modal_css
-from .yaml_io import build_prompt_from_yaml, load_root_yaml, save_root_yaml
+from .yaml_io import build_prompt_from_yaml, load_workspace_yaml, save_workspace_yaml
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext
@@ -68,7 +67,7 @@ def _ensure_workspace_pdf(ctx: ClientContext) -> Path:
         ensure_within_and_resolve(base_path, base_path / "config" / "VisionStatement.pdf"),
     )
     if not pdf_path.exists():
-        safe_write_bytes(pdf_path, b"%PDF-1.3\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n", atomic=True)
+        raise ConfigError(f"VisionStatement.pdf mancante nel workspace: {pdf_path}")
     return pdf_path
 
 
@@ -86,7 +85,7 @@ def open_vision_modal(slug: str = "dummy") -> None:
         apply_modal_css()
 
         try:
-            data = load_root_yaml()
+            data = load_workspace_yaml(slug)
         except Exception as exc:
             st.error(str(exc))
             if st.button("Chiudi", key="ft_modal_vision_close_error"):
@@ -101,7 +100,7 @@ def open_vision_modal(slug: str = "dummy") -> None:
         state = st.session_state.setdefault(_SS_SECTIONS, dict(default_state))
 
         st.subheader("Prompt Vision - editor sezioni")
-        st.caption("Origine: config/vision_statement.yaml")
+        st.caption("Origine: output/<workspace>/config/visionstatement.yaml")
 
         for label, key in _SECTION_MAPPING:
             with st.expander(label, expanded=(label == "Vision")):
@@ -129,8 +128,8 @@ def open_vision_modal(slug: str = "dummy") -> None:
         if col_save.button("Salva", key="ft_modal_vision_save"):
             try:
                 data["sections"] = dict(state)
-                save_root_yaml(data)
-                st.success("Vision statement salvato in config/vision_statement.yaml.")
+                save_workspace_yaml(slug, data)
+                st.success("Vision statement salvato in output/<workspace>/config/visionstatement.yaml.")
             except Exception as exc:
                 st.error(f"Errore durante il salvataggio: {exc}")
 

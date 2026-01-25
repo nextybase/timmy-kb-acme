@@ -9,7 +9,7 @@ from semantic import frontmatter_service as front
 def test_load_vision_text_reads_existing_file(tmp_path: Path) -> None:
     cfg_dir = tmp_path / "config"
     cfg_dir.mkdir()
-    (cfg_dir / "vision_statement.yaml").write_text("testo", encoding="utf-8")
+    (cfg_dir / "visionstatement.yaml").write_text("testo", encoding="utf-8")
 
     assert front._load_vision_text(tmp_path) == "testo"
 

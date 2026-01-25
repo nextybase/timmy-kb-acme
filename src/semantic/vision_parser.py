@@ -276,7 +276,7 @@ def _pdf_to_vision_yaml(pdf_path: Path, out_yaml_path: Path, root_dir: Path | st
     text = _read_pdf_text(pdf_path)
     text = _normalize_text(text)
     if not text:
-        raise RuntimeError("Estrazione PDF vuota: impossibile generare vision_statement.yaml")
+        raise RuntimeError("Estrazione PDF vuota: impossibile generare visionstatement.yaml")
 
     sections = _split_sections(text)
 

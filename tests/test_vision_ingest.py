@@ -58,8 +58,10 @@ def _make_text_pdf(path: Path, text: str = "Hello Vision") -> None:
 
 
 def test_compile_pdf_to_yaml_creates_yaml_file(tmp_path: Path) -> None:
-    pdf_path = tmp_path / "VisionStatement.pdf"
-    yaml_path = tmp_path / "visionstatement.yaml"
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir()
+    pdf_path = cfg_dir / "VisionStatement.pdf"
+    yaml_path = cfg_dir / "visionstatement.yaml"
     _make_text_pdf(pdf_path, text="Vision content")
 
     compile_pdf_to_yaml(pdf_path, yaml_path)
@@ -76,16 +78,20 @@ def test_compile_pdf_to_yaml_creates_yaml_file(tmp_path: Path) -> None:
 
 
 def test_compile_pdf_to_yaml_raises_on_missing_pdf(tmp_path: Path) -> None:
-    pdf_path = tmp_path / "missing.pdf"
-    yaml_path = tmp_path / "visionstatement.yaml"
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir()
+    pdf_path = cfg_dir / "missing.pdf"
+    yaml_path = cfg_dir / "visionstatement.yaml"
 
     with pytest.raises(PdfExtractError):
         compile_pdf_to_yaml(pdf_path, yaml_path)
 
 
 def test_compile_document_to_vision_yaml_creates_yaml_file(tmp_path: Path) -> None:
-    pdf_path = tmp_path / "VisionStatement.pdf"
-    yaml_path = tmp_path / "visionstatement.yaml"
+    cfg_dir = tmp_path / "config"
+    cfg_dir.mkdir()
+    pdf_path = cfg_dir / "VisionStatement.pdf"
+    yaml_path = cfg_dir / "visionstatement.yaml"
     _make_text_pdf(pdf_path, text="Doc content")
 
     compile_document_to_vision_yaml(pdf_path, yaml_path)

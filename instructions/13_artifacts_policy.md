@@ -108,7 +108,6 @@ deve essere elencato qui con motivazione e test dedicato.
 Metodo: scansione statica dei producer in `src/` (runtime UI/CLI/pipeline). Esclusi `tools/` e `tests/`.
 Include scritture file/DB/log/zip individuate tramite `safe_write_*`, sqlite3, handler log e zip.
 Limite: scritture dinamiche via plugin/ENV potrebbero non risultare dalla scansione.
-Nota: la Vision YAML esiste con due naming (`visionstatement.yaml` in workspace, `vision_statement.yaml` in repo root); l'inventario le tratta separatamente.
 
 Legenda: CORE = artefatto deterministico della pipeline; CORE-GATE = prerequisito normativo per sbloccare core; SERVICE = supporto/UX/diagnostica.
 
@@ -123,14 +122,14 @@ Legenda: CORE = artefatto deterministico della pipeline; CORE-GATE = prerequisit
 | `src/ui/config_store.py:_save_repo_config`<br>`_save_config`<br>`src/ui/pages/configurazione.py:_write_config` | `config/config.yaml` | YAML | `Settings.load`, UI/CLI | CORE | PyYAML | No (fail-fast su errori) |
 | `src/ui/pages/new_client.py:_mirror_repo_config_into_client`<br>`src/timmy_kb/cli/pre_onboarding.py:ensure_local_workspace_for_ui` | `output/timmy-kb-<slug>/config/config.yaml` | YAML | Pipeline/CLI/UI | CORE | PyYAML, template config | No (fail-fast su errori) |
 | `src/timmy_kb/cli/pre_onboarding.py:ensure_local_workspace_for_ui` | `output/timmy-kb-<slug>/config/assistant_vision_system_prompt.txt` | TXT prompt | Vision provisioning | CORE (cond.) | Sorgente `config/assistant_vision_system_prompt.txt` | Yes (skip con warning se sorgente assente) |
-| `src/ui/pages/new_client.py`<br>`src/timmy_kb/cli/pre_onboarding.py:ensure_local_workspace_for_ui` | `output/timmy-kb-<slug>/config/VisionStatement.pdf` | PDF | Vision YAML/mapping | CORE (cond.) | Upload utente | No (mancanza blocca Vision) |
-| `src/ui/fine_tuning/vision_modal.py:_ensure_workspace_pdf` | `output/timmy-kb-<slug>/config/VisionStatement.pdf` | PDF stub | UI Vision modal | CORE (cond.) | Nessuna | Yes (crea stub se assente) |
+| `src/ui/pages/new_client.py`<br>`src/timmy_kb/cli/pre_onboarding.py:ensure_local_workspace_for_ui` | `output/timmy-kb-<slug>/config/VisionStatement.pdf` | PDF | `visionstatement.yaml` + mapping | CORE (cond.) | Upload utente | No (mancanza blocca Vision) |
+| `src/ui/fine_tuning/vision_modal.py:_ensure_workspace_pdf` | `output/timmy-kb-<slug>/config/VisionStatement.pdf` | PDF | UI Vision modal | CORE (cond.) | Nessuna | No (mancanza blocca Vision) |
 
 ### A.2 Vision & mapping
+Nota: `visionstatement.yaml` esiste solo nel workspace (`output/timmy-kb-<slug>/config/visionstatement.yaml`); nel repo root resta solo `config/vision_template.yaml` come contract.
 | Producer (file:funzione) | Path target | Tipo output | Consumer | Class | Dipendenze/capability | Fallback |
 | --- | --- | --- | --- | --- | --- | --- |
 | `src/semantic/core.py:compile_document_to_vision_yaml` | `output/timmy-kb-<slug>/config/visionstatement.yaml` | YAML (vision) | `semantic.vision_provision`, `pipeline.vision_runner`, UI Vision | CORE | PyYAML, estrazione PDF | No (fail-fast su errore) |
-| `src/semantic/vision_parser.py:_pdf_to_vision_yaml`<br>`src/ui/fine_tuning/pdf_tools.py:run_pdf_to_yaml_config`<br>`src/ui/fine_tuning/yaml_io.py:save_root_yaml` | `config/vision_statement.yaml` | YAML (vision) | `semantic.frontmatter_service` (layout), UI Vision modal | SERVICE | PyYAML, PDF o edit manuale | No |
 | `src/semantic/vision_provision.py:_persist_outputs` | `output/timmy-kb-<slug>/semantic/semantic_mapping.yaml` | YAML mapping | Tagging/Semantica | CORE | Vision responses, schema valido | No |
 | `src/ui/components/mapping_editor.py:save_semantic_mapping`<br>`src/ui/components/yaml_editors.py:_write_yaml_text` | `output/timmy-kb-<slug>/semantic/semantic_mapping.yaml` | YAML mapping | Tagging/Semantica | CORE | UI + YAML valido | No |
 | `src/ui/components/mapping_editor.py:write_raw_structure_yaml` | `output/timmy-kb-<slug>/semantic/_raw_from_mapping.yaml` | YAML (struttura RAW) | Drive runner (opz.) | SERVICE | Mapping presente | No |
@@ -206,7 +205,7 @@ Legenda: CORE = artefatto deterministico della pipeline; CORE-GATE = prerequisit
 ## Appendice B - CORE artifacts attesi per fase
 | Fase (runbook) | CORE artifacts attesi | Note/condizioni |
 | --- | --- | --- |
-| pre_onboarding | `output/timmy-kb-<slug>/config/config.yaml`<br>`output/timmy-kb-<slug>/book/README.md`<br>`output/timmy-kb-<slug>/book/SUMMARY.md` | Bootstrap idempotente; se Vision attiva: `config/VisionStatement.pdf`, `config/visionstatement.yaml`, `semantic/semantic_mapping.yaml`. |
+| pre_onboarding | `output/timmy-kb-<slug>/config/config.yaml`<br>`output/timmy-kb-<slug>/book/README.md`<br>`output/timmy-kb-<slug>/book/SUMMARY.md` | Bootstrap idempotente; se Vision attiva: `output/timmy-kb-<slug>/config/VisionStatement.pdf`, `output/timmy-kb-<slug>/config/visionstatement.yaml`, `output/timmy-kb-<slug>/semantic/semantic_mapping.yaml`. |
 | raw_ingest | `output/timmy-kb-<slug>/normalized/<rel>.md`<br>`output/timmy-kb-<slug>/normalized/INDEX.json` | Qualsiasi file `OK` in INDEX deve esistere su disco. |
 | tag_onboarding | `output/timmy-kb-<slug>/semantic/tags_raw.csv`<br>`output/timmy-kb-<slug>/semantic/tags_reviewed.yaml` | `tags.db` è CORE quando la revisione viene applicata (fase di sync/abilitazione semantica). |
 | semantic_onboarding | `output/timmy-kb-<slug>/book/<rel>.md`<br>`output/timmy-kb-<slug>/book/README.md`<br>`output/timmy-kb-<slug>/book/SUMMARY.md` | Enrichment richiede `semantic/tags.db` presente e valido. `logs/qa_passed.json` è prerequisito CORE-GATE per README/SUMMARY. |

@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Dict
 
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import read_text_safe
-from pipeline.vision_paths import vision_yaml_repo_path
-from ui.utils.repo_root import get_repo_root
+from pipeline.vision_paths import vision_yaml_workspace_path
+from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from ui.utils.context_cache import get_client_context
 
 try:
     import yaml
@@ -17,22 +17,20 @@ except Exception:  # pragma: no cover
 SECTION_ORDER = ["Vision", "Mission", "Framework Etico", "Goal", "Contesto Operativo"]
 
 
-def repo_root() -> Path:
-    return get_repo_root(allow_env=True)
+def _workspace_layout(slug: str) -> WorkspaceLayout:
+    ctx = get_client_context(slug, require_env=False)
+    with workspace_validation_policy(skip_validation=True):
+        return WorkspaceLayout.from_context(ctx)
 
 
-def root_yaml_path() -> Path:
-    repo = repo_root()
-    return vision_yaml_repo_path(repo)
-
-
-def load_root_yaml() -> Dict[str, Any]:
-    ypath = root_yaml_path()
+def load_workspace_yaml(slug: str) -> Dict[str, Any]:
+    layout = _workspace_layout(slug)
+    ypath = vision_yaml_workspace_path(layout.repo_root_dir, pdf_path=layout.vision_pdf)
     if not ypath.exists():
-        raise FileNotFoundError(f"File YAML non trovato: {ypath}")
+        raise FileNotFoundError(f"visionstatement.yaml nel workspace non trovato: {ypath}")
     if yaml is None:
         raise RuntimeError("PyYAML non disponibile")
-    raw = read_text_safe(repo_root(), ypath)
+    raw = read_text_safe(layout.repo_root_dir, ypath)
     data = yaml.safe_load(raw) or {}
     if not isinstance(data, dict):
         raise RuntimeError("YAML malformato")
@@ -40,10 +38,13 @@ def load_root_yaml() -> Dict[str, Any]:
     return data
 
 
-def save_root_yaml(data: Dict[str, Any]) -> Path:
+def save_workspace_yaml(slug: str, data: Dict[str, Any]) -> Path:
+    layout = _workspace_layout(slug)
+    ypath = vision_yaml_workspace_path(layout.repo_root_dir, pdf_path=layout.vision_pdf)
+    if not ypath.exists():
+        raise FileNotFoundError(f"visionstatement.yaml nel workspace non trovato: {ypath}")
     if yaml is None:
         raise RuntimeError("PyYAML non disponibile")
-    ypath = root_yaml_path()
     payload = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
     safe_write_text(ypath, payload, encoding="utf-8", atomic=True)
     return ypath
