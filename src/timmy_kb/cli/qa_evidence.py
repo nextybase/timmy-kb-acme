@@ -44,6 +44,10 @@ def main() -> int:
     ctx = ClientContext.load(slug=slug, require_env=False, run_id=run_id, bootstrap_config=False)
     with workspace_validation_policy(skip_validation=True):
         layout = WorkspaceLayout.from_context(ctx)
+    # WorkspaceLayout naming can vary across versions: prefer logs_dir, fallback to log_dir.
+    logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
+    if logs_dir is None:
+        raise ConfigError("WorkspaceLayout non espone logs_dir/log_dir: impossibile scrivere qa_passed.json")
 
     checks = [
         ("pre-commit run --all-files", ["pre-commit", "run", "--all-files"]),
@@ -54,11 +58,11 @@ def main() -> int:
         for label, cmd in checks:
             checks_executed.append(label)
             run_cmd(cmd, cwd=repo_root, logger=logger, op=label)
-        write_qa_evidence(layout.log_dir, checks_executed=checks_executed, qa_status="pass", logger=logger)
+        write_qa_evidence(logs_dir, checks_executed=checks_executed, qa_status="pass", logger=logger)
         logger.info("cli.qa_evidence.completed", extra={"slug": slug, "checks": checks_executed})
         return 0
     except CmdError as exc:
-        write_qa_evidence(layout.log_dir, checks_executed=checks_executed, qa_status="fail", logger=logger)
+        write_qa_evidence(logs_dir, checks_executed=checks_executed, qa_status="fail", logger=logger)
         err = PipelineError("QA check failed while generating evidence.", code="qa_evidence_failed")
         logger.error("cli.qa_evidence.failed", extra={"slug": slug, "error": str(err), "op": exc.op})
         return int(exit_code_for(err))
