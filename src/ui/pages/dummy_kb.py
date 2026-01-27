@@ -320,7 +320,6 @@ def main() -> None:
             cmd.append("--no-preview")
         if deep_testing:
             cmd.append("--deep-testing")
-        cmd.append("--skip-spacy-check")
         _run_and_render(slug, cmd)
 
 
