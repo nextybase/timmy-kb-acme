@@ -484,7 +484,11 @@ def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
         type(
             "DummyCtx",
             (),
-            {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": layout.logs_dir, "log_dir": layout.logs_dir})())},
+            {
+                "load": staticmethod(
+                    lambda **__: type("Ctx", (), {"logs_dir": layout.logs_dir, "log_dir": layout.logs_dir})()
+                )
+            },
         ),
     )
     monkeypatch.setattr(

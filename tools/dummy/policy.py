@@ -10,4 +10,3 @@ class DummyPolicy:
     ci: bool  # esecuzione in CI
     allow_downgrade: bool = False
     require_registry: bool = True
-

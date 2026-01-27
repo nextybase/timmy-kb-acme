@@ -23,4 +23,3 @@ def build_hardcheck_health(
         "checks": [code],
         "external_checks": {code: details},
     }
-

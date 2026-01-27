@@ -18,9 +18,7 @@ def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) 
 
     monkeypatch.setattr(dummy_orch, "_ensure_spacy_available", lambda policy: None)
     base_dir = tmp_path / "timmy-kb-dummy"
-    monkeypatch.setattr(
-        gen_dummy_mod, "_pdf_path", lambda slug: base_dir / "config" / "VisionStatement.pdf"
-    )
+    monkeypatch.setattr(gen_dummy_mod, "_pdf_path", lambda slug: base_dir / "config" / "VisionStatement.pdf")
     (base_dir / "config").mkdir(parents=True, exist_ok=True)
     (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
     (base_dir / "semantic").mkdir(parents=True, exist_ok=True)
@@ -155,7 +153,8 @@ def test_logs_namespaced_on_failure(caplog, tmp_path, monkeypatch):
         clear_base_cache()
     assert exit_code == 1
     assert any(
-        rec.message in {
+        rec.message
+        in {
             "tools.gen_dummy_kb.vision_hardcheck.failed",
             "tools.gen_dummy_kb.vision_yaml_compile_failed",
         }

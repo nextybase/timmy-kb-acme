@@ -55,12 +55,24 @@ def test_build_payload_without_vision(monkeypatch: pytest.MonkeyPatch, tmp_path:
     monkeypatch.setattr(
         orchestrator,
         "PipelineClientContext",
-        type("DummyCtx", (), {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})())}),
+        type(
+            "DummyCtx",
+            (),
+            {
+                "load": staticmethod(
+                    lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})()
+                )
+            },
+        ),
     )
     monkeypatch.setattr(
         orchestrator,
         "WorkspaceLayout",
-        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())}),
+        type(
+            "DummyWL",
+            (),
+            {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())},
+        ),
     )
 
     monkeypatch.setattr(
@@ -125,12 +137,24 @@ def test_build_payload_with_drive(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     monkeypatch.setattr(
         orchestrator,
         "PipelineClientContext",
-        type("DummyCtx", (), {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})())}),
+        type(
+            "DummyCtx",
+            (),
+            {
+                "load": staticmethod(
+                    lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})()
+                )
+            },
+        ),
     )
     monkeypatch.setattr(
         orchestrator,
         "WorkspaceLayout",
-        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())}),
+        type(
+            "DummyWL",
+            (),
+            {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())},
+        ),
     )
 
     def _fake_drive_min(*_: Any, **__: Any) -> dict[str, Any]:
@@ -187,12 +211,24 @@ def test_build_payload_skips_vision_if_already_done(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(
         orchestrator,
         "PipelineClientContext",
-        type("DummyCtx", (), {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})())}),
+        type(
+            "DummyCtx",
+            (),
+            {
+                "load": staticmethod(
+                    lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})()
+                )
+            },
+        ),
     )
     monkeypatch.setattr(
         orchestrator,
         "WorkspaceLayout",
-        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())}),
+        type(
+            "DummyWL",
+            (),
+            {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())},
+        ),
     )
     monkeypatch.setattr(
         gen_dummy_kb,
@@ -256,12 +292,24 @@ def test_build_payload_does_not_register_client(monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr(
         orchestrator,
         "PipelineClientContext",
-        type("DummyCtx", (), {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})())}),
+        type(
+            "DummyCtx",
+            (),
+            {
+                "load": staticmethod(
+                    lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})()
+                )
+            },
+        ),
     )
     monkeypatch.setattr(
         orchestrator,
         "WorkspaceLayout",
-        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())}),
+        type(
+            "DummyWL",
+            (),
+            {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())},
+        ),
     )
     monkeypatch.setattr(
         gen_dummy_kb,
@@ -316,12 +364,24 @@ def test_build_payload_smoke_writes_minimal_artifacts(monkeypatch: pytest.Monkey
     monkeypatch.setattr(
         orchestrator,
         "PipelineClientContext",
-        type("DummyCtx", (), {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})())}),
+        type(
+            "DummyCtx",
+            (),
+            {
+                "load": staticmethod(
+                    lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})()
+                )
+            },
+        ),
     )
     monkeypatch.setattr(
         orchestrator,
         "WorkspaceLayout",
-        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())}),
+        type(
+            "DummyWL",
+            (),
+            {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())},
+        ),
     )
     monkeypatch.setattr(
         gen_dummy_kb,
