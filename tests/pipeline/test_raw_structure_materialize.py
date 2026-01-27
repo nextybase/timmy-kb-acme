@@ -79,6 +79,29 @@ def test_materialize_raw_structure_missing_areas_raises(tmp_path: Path) -> None:
     assert "areas" in str(excinfo.value).lower()
 
 
+def test_materialize_raw_structure_dummy_injects_area(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base = _setup_workspace(tmp_path, "dummy", "semantic_tagger: {}\nareas: []\n")
+    ctx = _Ctx(base)
+    monkeypatch.setattr(
+        vision_runner,
+        "get_client_config",
+        lambda _ctx: {"integrations": {"drive": {"raw_folder_id": "raw-id"}}},
+        raising=True,
+    )
+    monkeypatch.setattr(
+        vision_runner,
+        "create_drive_structure_from_names",
+        lambda **kwargs: list(kwargs.get("folder_names") or []),
+        raising=True,
+    )
+
+    result = materialize_raw_structure(ctx, _logger(), repo_root_dir=base, slug="dummy")
+
+    assert (base / "raw" / "dummy").is_dir()
+    assert result["areas"] == ["dummy"]
+    assert result["drive_status"] == "created"
+
+
 def test_materialize_raw_structure_idempotent(tmp_path: Path) -> None:
     base = _setup_workspace(tmp_path, "acme", "areas:\n  - key: Area One\n  - key: Area Two\n")
     ctx = _Ctx(base)

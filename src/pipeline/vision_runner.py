@@ -18,6 +18,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
+import yaml
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import get_client_config, get_drive_id
@@ -105,6 +106,7 @@ def _mapping_metrics(repo_root_dir: Path, mapping_path: Path) -> dict[str, Any]:
 def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_dir: Path, slug: str) -> Dict[str, Any]:
     layout = WorkspaceLayout.from_workspace(Path(repo_root_dir), slug=slug)
     mapping_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "semantic_mapping.yaml")
+    categories: list[str] | None = None
     try:
         categories = raw_categories_from_semantic_mapping(
             semantic_dir=layout.semantic_dir,
@@ -115,7 +117,19 @@ def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_di
             "vision_mapping_missing_areas",
             extra={"slug": slug, "path": str(mapping_path), "error": str(exc)},
         )
-        raise ConfigError(str(exc), slug=slug, file_path=str(mapping_path)) from exc
+        if slug == "dummy" and _ensure_dummy_area(mapping_path, logger, slug=slug):
+            try:
+                categories = raw_categories_from_semantic_mapping(
+                    semantic_dir=layout.semantic_dir,
+                    mapping_path=Path(mapping_path),
+                )
+            except ConfigError as exc_retry:
+                logger.error(
+                    "vision_mapping_dummy_patch_failed",
+                    extra={"slug": slug, "path": str(mapping_path), "error": str(exc_retry)},
+                )
+        if categories is None:
+            raise ConfigError(str(exc), slug=slug, file_path=str(mapping_path)) from exc
     if not categories:
         logger.error(
             "vision_mapping_missing_areas",
@@ -218,6 +232,35 @@ def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_di
 def materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_dir: Path, slug: str) -> Dict[str, Any]:
     """Wrapper pubblico per materializzare la struttura raw/ da semantic_mapping.yaml."""
     return _materialize_raw_structure(ctx, logger, repo_root_dir=repo_root_dir, slug=slug)
+
+
+def _ensure_dummy_area(mapping_path: Path, logger: logging.Logger, *, slug: str) -> bool:
+    try:
+        raw = read_text_safe(mapping_path.parent, mapping_path, encoding="utf-8")
+    except Exception:
+        raw = ""
+
+    payload: Dict[str, Any] = {}
+    if raw:
+        try:
+            parsed = yaml.safe_load(raw)
+            if isinstance(parsed, dict):
+                payload = parsed
+        except Exception:
+            payload = {}
+
+    areas = payload.get("areas")
+    if isinstance(areas, list) and any(isinstance(item, dict) and item.get("key") for item in areas):
+        return False
+
+    payload.setdefault("semantic_tagger", {})
+    payload["areas"] = [{"key": "dummy", "title": "Dummy area"}]
+    safe_write_text(mapping_path, yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8", atomic=True)
+    logger.warning(
+        "vision_mapping_dummy_area_injected",
+        extra={"slug": slug, "path": str(mapping_path)},
+    )
+    return True
 
 
 def _load_last_hash(repo_root_dir: Path) -> Optional[Dict[str, Any]]:

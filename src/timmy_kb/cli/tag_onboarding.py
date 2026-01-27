@@ -627,7 +627,7 @@ def tag_onboarding_main(
         slug=slug,
         non_interactive=non_interactive,
         run_id=run_id,
-        require_env=False,
+        require_env=True,
     )
 
     context = resources.context

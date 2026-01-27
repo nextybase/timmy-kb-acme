@@ -40,10 +40,8 @@ def test_semantic_toggle_skips_artifact_calls(tmp_path: Path) -> None:
     def _raise_if_called(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("semantic step should be skipped")
 
-    called = {"book": False}
-
     def _book_skeleton(_base_dir: Path) -> None:
-        called["book"] = True
+        raise AssertionError("ensure_book_skeleton non dovrebbe essere invocata nel dummy deterministico")
 
     payload = orchestrator.build_dummy_payload(
         slug="dummy",
@@ -81,4 +79,3 @@ def test_semantic_toggle_skips_artifact_calls(tmp_path: Path) -> None:
     )
 
     assert payload["health"]["mode"] == "smoke"
-    assert called["book"] is True

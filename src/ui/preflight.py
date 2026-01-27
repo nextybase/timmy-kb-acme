@@ -12,6 +12,7 @@ try:
 except Exception:  # pragma: no cover
     st = None
 
+import pipeline.env_utils as _env_utils
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
@@ -33,9 +34,7 @@ DEPENDENCY_CHECKS = [
 def _maybe_load_dotenv() -> None:
     """Carica .env solo quando serve (no side-effects a import-time)."""
     env_path = Path(".env")
-    if not env_path.exists():
-        _logger().info("ui.preflight.dotenv_missing", extra={"path": str(env_path)})
-        return
+    _env_utils._ENV_LOADED = False
     try:
         loaded = ensure_dotenv_loaded(strict=True, allow_fallback=False)
     except Exception as exc:

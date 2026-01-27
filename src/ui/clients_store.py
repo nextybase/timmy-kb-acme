@@ -52,11 +52,22 @@ def _optional_env(name: str) -> Optional[str]:
     return value.strip() if isinstance(value, str) else value
 
 
+_WORKSPACE_ROOT_IGNORED_LOGGED = False
+
+
+def _log_workspace_root_ignored_once() -> None:
+    global _WORKSPACE_ROOT_IGNORED_LOGGED
+    if _WORKSPACE_ROOT_IGNORED_LOGGED:
+        return
+    LOG.info("clients_store.workspace_root_ignored", extra={"env": WORKSPACE_ROOT_ENV})
+    _WORKSPACE_ROOT_IGNORED_LOGGED = True
+
+
 def _base_repo_root() -> Path:
     # WORKSPACE_ROOT_DIR resta valido per altre parti UI, ma non influenza il registry.
     workspace_root = _optional_env(WORKSPACE_ROOT_ENV)
     if workspace_root:
-        LOG.info("clients_store.workspace_root_ignored", extra={"env": WORKSPACE_ROOT_ENV})
+        _log_workspace_root_ignored_once()
 
     override = os.environ.get(REPO_ROOT_ENV)
     if override:

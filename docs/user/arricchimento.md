@@ -43,6 +43,12 @@ Le decisioni di stato sono sempre demandate a:
   - viene prodotto evento strutturato,
   - il Gatekeeper decide se BLOCK o FAIL.
 
+### Requisiti del modello SpaCy
+- Il backend `spacy` richiede il modello linguistico preinstallato `it_core_news_sm` (o quello configurato in `SPACY_MODEL`).
+- Per ambienti di sviluppo e CI: dopo aver installato `spacy`, esegui `python -m spacy download it_core_news_sm` per scaricare il pacchetto e `python -m spacy validate` per verificarne la disponibilità.
+- Lo script `scripts/cleanup_env.ps1` (Windows) contiene i comandi necessari per reinstallare `spacy` e scaricare `it_core_news_sm`; usalo come riferimento se la pipeline segnala `SpaCy fallito (model=it_core_news_sm)` durante `tools/gen_dummy_kb` o il tagging semantico.
+- L'assenza del modello produce un errore bloccante (`ConfigError: SpaCy fallito (model=it_core_news_sm)`) perché il contratto Beta 1.0 non consente fallback silenziosi quando `nlp_backend` è impostato su `spacy`.
+
 ---
 
 ## 3) Pipeline di estrazione (produzione evidenze)

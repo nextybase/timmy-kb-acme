@@ -21,6 +21,7 @@ class _Ctx:
 
     def __init__(self, base_dir: Path, *, slug: str) -> None:
         self.base_dir = base_dir
+        self.repo_root_dir = base_dir
         self.slug = slug
         try:
             self.settings = Settings.load(base_dir)

@@ -19,7 +19,10 @@ def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) 
     (base_dir / "semantic").mkdir(parents=True, exist_ok=True)
     (base_dir / "book").mkdir(parents=True, exist_ok=True)
     (base_dir / "raw").mkdir(parents=True, exist_ok=True)
-    (base_dir / "config" / "config.yaml").write_text("dummy: true\n", encoding="utf-8")
+    (base_dir / "config" / "config.yaml").write_text(
+        "meta:\n  client_name: Dummy\nops:\n  log_level: INFO\n",
+        encoding="utf-8",
+    )
     (base_dir / "semantic" / "semantic_mapping.yaml").write_text("", encoding="utf-8")
     (base_dir / "semantic" / "tags.db").write_bytes(b"")
     (base_dir / "book" / "README.md").write_text("# Dummy\n", encoding="utf-8")

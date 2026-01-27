@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
+# cspell:ignore defaul
 from __future__ import annotations
 
 import logging
@@ -8,6 +9,7 @@ from typing import Any
 import pytest
 
 from pipeline.context import ClientContext
+from pipeline.file_utils import safe_write_text
 from pipeline.workspace_bootstrap import bootstrap_client_workspace
 from tools.dummy import orchestrator
 from tools.dummy.orchestrator import validate_dummy_structure
@@ -295,3 +297,95 @@ def test_deep_testing_non_quota_vision_failure_still_raises(
             call_drive_min_fn=lambda *_args, **_kwargs: None,
             call_drive_emit_readmes_fn=lambda *_args, **_kwargs: None,
         )
+
+
+def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
+    tmp_path: Path,
+    logger: logging.Logger,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    slug = "dummy-pipeline"
+    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
+    context = ClientContext(
+        slug=slug,
+        repo_root_dir=workspace_root,
+        config_path=workspace_root / "config" / "config.yaml",
+    )
+    layout = bootstrap_client_workspace(context)
+
+    base_dir = layout.repo_root_dir
+    (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+    safe_write_text(
+        base_dir / "config" / "config.yaml",
+        "meta:\n  client_name: Dummy Pipeline\n",
+        encoding="utf-8",
+        atomic=True,
+    )
+    safe_write_text(
+        base_dir / "semantic" / "semantic_mapping.yaml",
+        "default:\n  - dummy\n",
+        encoding="utf-8",
+        atomic=True,
+    )
+    (base_dir / "semantic" / "tags.db").write_bytes(b"")
+    (base_dir / "raw").mkdir(parents=True, exist_ok=True)
+    (base_dir / "raw" / "sample.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    def _vision_stub(**_: Any) -> tuple[bool, None]:
+        return True, None
+
+    payload = orchestrator.build_dummy_payload(
+        slug=slug,
+        client_name="Pipeline Dummy",
+        enable_drive=False,
+        enable_vision=True,
+        enable_semantic=True,
+        enable_enrichment=False,
+        enable_preview=False,
+        records_hint=None,
+        deep_testing=False,
+        logger=logger,
+        repo_root=repo_root,
+        ensure_local_workspace_for_ui=lambda **_: None,
+        run_vision=lambda **_: None,
+        get_env_var=lambda *_: None,
+        ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
+        open_for_read_bytes_selfguard=lambda path: path.open("rb"),
+        load_vision_template_sections=lambda: [],
+        client_base=lambda _: base_dir,
+        pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
+        register_client_fn=lambda *_: None,
+        ClientContext=None,
+        get_client_config=None,
+        ensure_drive_minimal_and_upload_config=None,
+        emit_readmes_for_raw=None,
+        run_vision_with_timeout_fn=_vision_stub,
+        load_mapping_categories_fn=lambda _: {},
+        ensure_minimal_tags_db_fn=lambda *_args, **_kwargs: None,
+        ensure_raw_pdfs_fn=lambda *_args, **_kwargs: None,
+        ensure_local_readmes_fn=lambda *_args, **_kwargs: [],
+        ensure_book_skeleton_fn=lambda *_args, **_kwargs: None,
+        write_basic_semantic_yaml_fn=None,
+        write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
+        validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
+        call_drive_min_fn=lambda *_args, **_kwargs: None,
+        call_drive_emit_readmes_fn=lambda *_args, **_kwargs: None,
+    )
+
+    normalized_index = layout.normalized_dir / "INDEX.json"
+    normalized_md_files = [p for p in layout.normalized_dir.rglob("*.md") if p.is_file()]
+    qa_passed = layout.logs_dir / "qa_passed.json"
+    summary_path = layout.book_dir / "SUMMARY.md"
+    readme_path = layout.book_dir / "README.md"
+    book_pages = [
+        p for p in layout.book_dir.iterdir() if p.suffix.lower() == ".md" and p.name not in {"README.md", "SUMMARY.md"}
+    ]
+
+    assert payload["health"]["status"] == "ok"
+    assert normalized_index.exists()
+    assert summary_path.exists()
+    assert readme_path.exists()
+    assert book_pages, "Almeno un file diverso da README/SUMMARY deve esistere in book/"
+    assert normalized_md_files, "La pipeline deve produrre almeno un file Markdown in normalized/"
+    assert qa_passed.exists(), "Il gate QA deve produrre logs/qa_passed.json"

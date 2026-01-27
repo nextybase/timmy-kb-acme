@@ -26,6 +26,9 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, List, Optional, TextIO, TypedDict
 
+import yaml
+
+
 def _strict_optional_import(
     module_name: str,
     *,
@@ -48,12 +51,6 @@ def _strict_optional_import(
                     f"Errore import {feature_name}: attributo mancante {attr_name} in {module_name}"
                 ) from exc
     return module, values, None
-
-
-_yaml_mod, _yaml_attrs, _yaml_import_error = _strict_optional_import("yaml", feature_name="yaml")
-if _yaml_mod is None:
-    raise SystemExit(f"yaml mancante: {_yaml_import_error}")
-yaml = _yaml_mod  # type: ignore
 
 from pipeline.paths import get_repo_root
 
@@ -86,6 +83,7 @@ class _DummyPayload(TypedDict):
 
 
 from pipeline.capabilities import dummy_kb as dummy_kb_capabilities
+from tools.dummy import bootstrap as dummy_bootstrap
 
 # ------------------------------------------------------------
 # Path bootstrap (repo root + src)
@@ -486,6 +484,16 @@ def _format_mode_summary(mode: RuntimeMode) -> str:
     return "; ".join(parts)
 
 
+def _load_vision_statement_pdf_bytes() -> bytes:
+    candidate = REPO_ROOT / "config" / "VisionStatement.pdf"
+    if candidate.exists():
+        try:
+            return candidate.read_bytes()
+        except Exception as exc:
+            raise SystemExit(f"VisionStatement.pdf non leggibile: {exc}") from exc
+    return dummy_bootstrap.DEFAULT_VISION_PDF
+
+
 def build_payload(
     *,
     slug: str,
@@ -499,6 +507,20 @@ def build_payload(
     deep_testing: bool = False,
     logger: logging.Logger,
 ) -> _DummyPayload:
+    vision_statement_pdf_bytes = _load_vision_statement_pdf_bytes()
+
+    def _ensure_workspace(
+        *,
+        slug: str,
+        client_name: str,
+        vision_statement_pdf: bytes | None,
+    ) -> None:
+        ensure_local_workspace_for_ui(
+            slug=slug,
+            client_name=client_name,
+            vision_statement_pdf=vision_statement_pdf_bytes,
+        )
+
     return _build_dummy_payload(
         slug=slug,
         client_name=client_name,
@@ -511,7 +533,7 @@ def build_payload(
         deep_testing=deep_testing,
         logger=logger,
         repo_root=REPO_ROOT,
-        ensure_local_workspace_for_ui=ensure_local_workspace_for_ui,
+        ensure_local_workspace_for_ui=_ensure_workspace,
         run_vision=run_vision,
         get_env_var=get_env_var,
         ensure_within_and_resolve_fn=ensure_within_and_resolve,

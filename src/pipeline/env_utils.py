@@ -19,7 +19,6 @@ from typing import Any, Dict, Optional
 from pipeline.logging_utils import get_structured_logger
 
 from .exceptions import ConfigError
-from .path_utils import read_text_safe
 
 __all__ = [
     "ensure_dotenv_loaded",
@@ -42,30 +41,6 @@ def ensure_dotenv_loaded(*, strict: bool = True, allow_fallback: bool = False) -
     global _ENV_LOADED
     env_path = Path(".env")
     if _ENV_LOADED:
-        try:
-            from dotenv import load_dotenv
-        except Exception:
-            return False
-        if not callable(load_dotenv):
-            return False
-        if getattr(load_dotenv, "__module__", "").startswith("dotenv"):
-            return False
-        try:
-            loaded: Optional[bool] = load_dotenv(override=False)
-        except Exception as exc:
-            if allow_fallback:
-                _LOGGER.warning(
-                    "env.load_failed_fallback",
-                    extra={"error": str(exc), "path": str(env_path)},
-                )
-                return False
-            raise ConfigError("Caricamento .env fallito.", file_path=str(env_path)) from exc
-        _LOGGER.info(
-            "env.loaded",
-            extra={"loaded": bool(loaded), "path": str(env_path)},
-        )
-        if not env_path.exists():
-            _LOGGER.info("env.dotenv_missing", extra={"path": str(env_path)})
         return False
     _ENV_LOADED = True
     try:
@@ -87,33 +62,19 @@ def ensure_dotenv_loaded(*, strict: bool = True, allow_fallback: bool = False) -
             _LOGGER.info("env.dotenv_missing", extra={"path": str(env_path)})
         return False
     try:
-        if getattr(load_dotenv, "__module__", "").startswith("dotenv"):
-            loaded: Optional[bool] = load_dotenv(
-                dotenv_path=str(env_path),
-                override=False,
-            )  # carica da CWD; non forza override
-        else:
-            loaded = load_dotenv(override=False)
+        try:
+            loaded = load_dotenv(dotenv_path=str(env_path), override=False)
+        except TypeError as exc:
+            if "dotenv_path" in str(exc):
+                loaded = load_dotenv(override=False)
+            else:
+                raise
         _LOGGER.info(
             "env.loaded",
             extra={"loaded": bool(loaded), "path": str(env_path)},
         )
         if not env_path.exists():
             _LOGGER.info("env.dotenv_missing", extra={"path": str(env_path)})
-        # Caricamento deterministico da .env (senza override) per garantire le variabili.
-        if env_path.exists():
-            text = read_text_safe(Path.cwd(), env_path, encoding="utf-8")
-            for line in text.splitlines():
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" not in line:
-                    continue
-                k, v = line.split("=", 1)
-                k = k.strip()
-                v = v.strip().strip('"').strip("'")
-                if k and os.environ.get(k) is None:
-                    os.environ[k] = v
         return True
     except Exception as exc:
         if allow_fallback:
@@ -123,10 +84,6 @@ def ensure_dotenv_loaded(*, strict: bool = True, allow_fallback: bool = False) -
             )
             return False
         raise ConfigError("Caricamento .env fallito.", file_path=str(env_path)) from exc
-    finally:
-        # Non ripristiniamo le variabili mancanti: se .env le fornisce, sono necessarie
-        # per i flussi reali (Drive/GitHub) e devono rimanere disponibili nel processo.
-        pass
 
 
 def get_env_var(
@@ -142,8 +99,6 @@ def get_env_var(
     - Trimma spazi; se vuota, tratta come non impostata.
     - Se ``required`` e non presente, solleva ``ConfigError`` solo in strict.
     """
-    strict_load = strict and bool(required)
-    ensure_dotenv_loaded(strict=strict_load, allow_fallback=allow_fallback)
     val = os.environ.get(name)
     if val is None:
         if required and strict:
@@ -181,7 +136,6 @@ def get_bool(
     else:
         if strict is None:
             strict = True
-        ensure_dotenv_loaded(strict=False, allow_fallback=allow_fallback)
         source = os.environ
     val = source.get(name)
     if val is None:
@@ -204,7 +158,6 @@ def get_int(name: str, default: int = 0, *, strict: bool = True, allow_fallback:
     Valore presente ma non valido: solleva `ConfigError` in strict (default),
     oppure ritorna `default` se `allow_fallback=True` o `strict=False`.
     """
-    ensure_dotenv_loaded(strict=False, allow_fallback=allow_fallback)
     val = os.environ.get(name)
     if val is None:
         return int(default)

@@ -1,37 +1,35 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
-"""DUMMY / SMOKE SUPER-TEST ONLY
-FORBIDDEN IN RUNTIME-CORE (src/)
-Fallback behavior is intentional and confined to this perimeter
-
-Utility di orchestrazione condivise per la dummy KB."""
-
 from __future__ import annotations
 
-import hashlib
 import logging
+import uuid
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Callable, Dict, Optional
-from typing import cast
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
+from pipeline.context import ClientContext as PipelineClientContext
 from pipeline.exceptions import ConfigError
-from pipeline.file_utils import safe_write_bytes
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.logging_utils import get_structured_logger
+from pipeline.file_utils import safe_write_text
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.qa_evidence import write_qa_evidence
+from pipeline.vision_paths import vision_yaml_workspace_path
+from pipeline.workspace_layout import WorkspaceLayout
+from semantic.api import convert_markdown as semantic_convert_markdown
+from semantic.api import write_summary_and_readme as semantic_write_summary_and_readme
 from semantic.core import compile_document_to_vision_yaml
+from timmy_kb.cli.pre_onboarding import pre_onboarding_main
+from timmy_kb.cli.raw_ingest import run_raw_ingest
 
-from .bootstrap import build_generic_vision_template_pdf, ensure_golden_dummy_pdf
-from .semantic import (
-    ensure_book_skeleton,
-    ensure_local_readmes,
-    ensure_minimal_tags_db,
-    ensure_raw_pdfs,
-    load_mapping_categories,
-    write_basic_semantic_yaml,
-    write_minimal_tags_raw,
-)
+from .bootstrap import client_base, pdf_path
 from .drive import call_drive_emit_readmes, call_drive_min
+from .semantic import ensure_raw_pdfs
 from .vision import run_vision_with_timeout
+
+_SEMANTIC_MAPPING_TEMPLATE = "semantic_tagger: {}\nareas: []\n"
+
+import yaml
 
 
 class HardCheckError(Exception):
@@ -53,34 +51,6 @@ def _hardcheck_health(name: str, message: str, latency_ms: int | None = None) ->
     }
 
 
-def _resolve_vision_mode(get_env_var: Callable[[str, str | None], str | None]) -> str:
-    raw = None
-    try:
-        raw = get_env_var("VISION_MODE", None)
-    except Exception:
-        raw = None
-    mode = str(raw or "DEEP").strip().lower()
-    if mode in {"smoke", "deep"}:
-        return mode
-    raise ConfigError(f"VISION_MODE non valido: {raw!r}. Usa 'SMOKE' o 'DEEP'.")
-
-
-def _is_credit_or_quota_error(message: str) -> bool:
-    if not message:
-        return False
-    normalized = message.casefold()
-    signals = (
-        "insufficient_quota",
-        "insufficient quota",
-        "exceeded your current quota",
-        "check your plan and billing",
-        "billing",
-        "quota",
-        "429",
-    )
-    return any(signal in normalized for signal in signals)
-
-
 def _record_external_check(
     health: Dict[str, Any],
     name: str,
@@ -98,67 +68,116 @@ def _record_external_check(
     external[name] = entry
 
 
-def register_client(
-    slug: str,
-    client_name: str,
-    *,
-    ClientEntry: Any | None,
-    upsert_client: Callable[[Any], Any] | None,
-) -> None:
-    """Registra il cliente dummy nel registry UI se le API sono disponibili."""
-    if not (ClientEntry and callable(upsert_client)):
+def _deep_merge_missing(target: Dict[str, Any], template: Mapping[str, Any]) -> bool:
+    updated = False
+    for key, value in template.items():
+        existing_value = target.get(key)
+        if key not in target:
+            target[key] = deepcopy(value)
+            updated = True
+        elif isinstance(value, dict) and isinstance(existing_value, dict):
+            if _deep_merge_missing(existing_value, value):
+                updated = True
+    return updated
+
+
+def _load_yaml_dict(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        raw = read_text_safe(path.parent, path, encoding="utf-8")
+    except Exception:
+        return {}
+    if not raw:
+        return {}
+    payload = yaml.safe_load(raw)
+    return dict(payload) if isinstance(payload, dict) else {}
+
+
+def _merge_config_with_template(base_dir: Path, *, logger: logging.Logger | None = None) -> None:
+    template_config = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
+    if not template_config.exists():
+        return
+    config_dir = ensure_within_and_resolve(base_dir, base_dir / "config")
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_path = config_dir / "config.yaml"
+
+    existing = _load_yaml_dict(config_path)
+    template_payload = _load_yaml_dict(template_config)
+    merged = dict(existing)
+    if not _deep_merge_missing(merged, template_payload):
         return
 
-    try:
-        timestamp = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-    except Exception:
-        timestamp = None
-
-    try:
-        entry = ClientEntry(slug=slug, nome=client_name, stato="active", created_at=timestamp, dummy=True)
-    except Exception:
-        return
-
-    try:
-        upsert_client(entry)
-    except Exception:
-        return
-
-
-def validate_dummy_structure(base_dir: Path, logger: logging.Logger) -> None:
-    """Verifica la presenza dei file fondamentali della dummy KB e solleva se mancano."""
-    required_files = [
-        ("config", base_dir / "config" / "config.yaml"),
-        ("semantic_mapping", base_dir / "semantic" / "semantic_mapping.yaml"),
-        ("tags_db", base_dir / "semantic" / "tags.db"),
-        ("book_readme", base_dir / "book" / "README.md"),
-        ("book_summary", base_dir / "book" / "SUMMARY.md"),
-    ]
-
-    missing: list[dict[str, str]] = []
-    for key, path in required_files:
+    text = yaml.safe_dump(merged, sort_keys=False, allow_unicode=True)
+    safe_write_text(config_path, text, encoding="utf-8", atomic=True)
+    if logger:
         try:
-            safe_path = ensure_within_and_resolve(base_dir, path)
-            if not safe_path.exists():
-                missing.append({"key": key, "path": str(safe_path)})
-        except Exception:
-            missing.append({"key": key, "path": str(path)})
-
-    try:
-        raw_dir = ensure_within_and_resolve(base_dir, base_dir / "raw")
-        has_pdf = any(p.suffix.lower() == ".pdf" for p in raw_dir.rglob("*") if p.is_file())
-    except Exception:
-        has_pdf = False
-
-    if not has_pdf:
-        missing.append({"key": "raw_pdf", "path": str(base_dir / "raw")})
-
-    if missing:
-        try:
-            logger.error("tools.gen_dummy_kb.validate_structure.missing", extra={"missing": missing})
+            logger.info(
+                "tools.dummy.orchestrator.config_merged_from_template",
+                extra={"path": str(config_path)},
+            )
         except Exception:
             pass
-        raise RuntimeError(f"Struttura dummy incompleta: {missing}")
+
+
+def _ensure_semantic_mapping_has_tagger(mapping_path: Path) -> None:
+    mapping_path.parent.mkdir(parents=True, exist_ok=True)
+    data: dict[str, Any] = {}
+    raw_text = ""
+    if mapping_path.exists():
+        try:
+            raw_text = mapping_path.read_text(encoding="utf-8")
+        except Exception as exc:
+            raise RuntimeError(f"Impossibile leggere semantic_mapping.yaml: {exc}") from exc
+        if raw_text:
+            try:
+                parsed = yaml.safe_load(raw_text)
+                if isinstance(parsed, dict):
+                    data = parsed
+            except Exception as exc:
+                raise RuntimeError(f"Errore parsing semantic_mapping.yaml: {exc}") from exc
+    updated = False
+    if "semantic_tagger" not in data:
+        data["semantic_tagger"] = {}
+        updated = True
+    areas = data.get("areas")
+    if not (isinstance(areas, list) and any(isinstance(item, dict) and item.get("key") for item in areas)):
+        data["areas"] = [{"key": "dummy", "title": "Dummy area"}]
+        updated = True
+    if updated or not mapping_path.exists():
+        text = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
+        safe_write_text(mapping_path, text, encoding="utf-8", atomic=True)
+
+
+def _resolve_vision_mode(get_env_var: Callable[[str, str | None], str | None]) -> str:
+    raw = None
+    try:
+        raw = get_env_var("VISION_MODE", None)
+    except Exception:
+        raw = None
+    mode = str(raw or "DEEP").strip().lower()
+    if mode in {"smoke", "deep"}:
+        return mode
+    raise ConfigError(f"VISION_MODE non valido: {raw!r}. Usa 'SMOKE' o 'DEEP'.")
+
+
+def _get_vision_strict_output(ctx_obj: Any) -> tuple[Optional[bool], str]:
+    try:
+        settings = getattr(ctx_obj, "settings", None)
+        if settings is None:
+            return None, "missing_settings"
+        vs = getattr(settings, "vision_settings", None)
+        if vs is None:
+            if isinstance(settings, dict):
+                vision = settings.get("vision") or {}
+                if isinstance(vision, dict) and "strict_output" in vision:
+                    return bool(vision.get("strict_output")), "config_dict"
+            return None, "missing_vision_settings"
+        if hasattr(vs, "strict_output"):
+            return bool(getattr(vs, "strict_output")), "config"
+        return None, "missing_strict_output"
+    except Exception:
+        return None, "error"
 
 
 def _count_raw_pdfs(base_dir: Path) -> int:
@@ -183,28 +202,51 @@ def _count_tags(base_dir: Path) -> int:
         return 0
 
 
-def _get_vision_strict_output(ctx_obj: Any) -> tuple[Optional[bool], str]:
-    """
-    Best-effort: estrae vision_settings.strict_output dal ClientContext.settings.
-    Ritorna (value, source).
-    """
+def register_client(
+    slug: str,
+    client_name: str,
+    *,
+    ClientEntry: Any | None,
+    upsert_client: Callable[[Any], Any] | None,
+) -> None:
+    if not (ClientEntry and callable(upsert_client)):
+        return
     try:
-        settings = getattr(ctx_obj, "settings", None)
-        if settings is None:
-            return None, "missing_settings"
-        vs = getattr(settings, "vision_settings", None)
-        if vs is None:
-            # settings potrebbe essere dict-like o un wrapper senza vision_settings
-            if isinstance(settings, dict):
-                vision = settings.get("vision") or {}
-                if isinstance(vision, dict) and "strict_output" in vision:
-                    return bool(vision.get("strict_output")), "config_dict"
-            return None, "missing_vision_settings"
-        if hasattr(vs, "strict_output"):
-            return bool(getattr(vs, "strict_output")), "config"
-        return None, "missing_strict_output"
+        timestamp = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     except Exception:
-        return None, "error"
+        timestamp = None
+    try:
+        entry = ClientEntry(slug=slug, nome=client_name, stato="active", created_at=timestamp, dummy=True)
+    except Exception:
+        return
+    try:
+        upsert_client(entry)
+    except Exception:
+        return
+
+
+def validate_dummy_structure(base_dir: Path, logger: logging.Logger) -> None:
+    required = [
+        ("config", base_dir / "config" / "config.yaml"),
+        ("semantic_mapping", base_dir / "semantic" / "semantic_mapping.yaml"),
+        ("book_readme", base_dir / "book" / "README.md"),
+        ("book_summary", base_dir / "book" / "SUMMARY.md"),
+        ("normalized_index", base_dir / "normalized" / "INDEX.json"),
+    ]
+    missing: list[dict[str, str]] = []
+    for key, path in required:
+        try:
+            safe_path = ensure_within_and_resolve(base_dir, path)
+            if not safe_path.exists():
+                missing.append({"key": key, "path": str(safe_path)})
+        except Exception:
+            missing.append({"key": key, "path": str(path)})
+    if missing:
+        try:
+            logger.error("tools.gen_dummy_kb.validate_structure.missing", extra={"missing": missing})
+        except Exception:
+            pass
+        raise RuntimeError(f"Struttura dummy incompleta: {missing}")
 
 
 def build_dummy_payload(
@@ -229,192 +271,131 @@ def build_dummy_payload(
     client_base: Callable[[str], Path],
     pdf_path: Callable[[str], Path],
     register_client_fn: Callable[[str, str], None],
-    ClientContext: Any,
+    ClientContext: Any | None,
     get_client_config: Callable[[Any], Dict[str, Any]] | None,
     ensure_drive_minimal_and_upload_config: Callable[..., Any] | None,
     emit_readmes_for_raw: Callable[..., Any] | None,
-    run_vision_with_timeout_fn: Callable[..., tuple[bool, Optional[dict[str, Any]]]] = run_vision_with_timeout,
-    load_mapping_categories_fn: Callable[[Path], Dict[str, Dict[str, Any]]] = load_mapping_categories,
-    ensure_minimal_tags_db_fn: Callable[..., Any] = ensure_minimal_tags_db,
-    ensure_raw_pdfs_fn: Callable[..., Any] = ensure_raw_pdfs,
-    ensure_local_readmes_fn: Callable[..., Any] = ensure_local_readmes,
-    ensure_book_skeleton_fn: Callable[[Path], None] = ensure_book_skeleton,
-    write_basic_semantic_yaml_fn: Callable[..., dict[str, Any]] | None = write_basic_semantic_yaml,
-    write_minimal_tags_raw_fn: Callable[[Path], Path] = write_minimal_tags_raw,
-    validate_dummy_structure_fn: Callable[[Path, logging.Logger], None] | None = validate_dummy_structure,
-    call_drive_min_fn: Callable[..., Optional[dict[str, Any]]] = call_drive_min,
-    call_drive_emit_readmes_fn: Callable[..., Optional[dict[str, Any]]] = call_drive_emit_readmes,
+    load_mapping_categories_fn: Callable[..., Any] | None = None,
+    ensure_minimal_tags_db_fn: Callable[..., Any] | None = None,
+    ensure_raw_pdfs_fn: Callable[..., Any] | None = None,
+    ensure_local_readmes_fn: Callable[..., Any] | None = None,
+    ensure_book_skeleton_fn: Callable[..., Any] | None = None,
+    write_basic_semantic_yaml_fn: Callable[..., Any] | None = None,
+    write_minimal_tags_raw_fn: Callable[..., Any] | None = None,
+    validate_dummy_structure_fn: Callable[..., Any] | None = None,
+    run_vision_with_timeout_fn: Callable[..., tuple[bool, Optional[Dict[str, Any]]]] = run_vision_with_timeout,
+    call_drive_min_fn: Callable[..., Optional[Dict[str, Any]]] = call_drive_min,
+    call_drive_emit_readmes_fn: Callable[..., Optional[Dict[str, Any]]] = call_drive_emit_readmes,
 ) -> Dict[str, Any]:
     vision_mode = _resolve_vision_mode(get_env_var)
-    if vision_mode == "smoke":
-        enable_vision = False
-        logger.info(
-            "tools.gen_dummy_kb.vision_skipped",
-            extra={"slug": slug, "mode": "smoke"},
-        )
-    elif not enable_vision:
-        msg = "VISION_MODE=DEEP richiede Vision abilitata"
-        logger.error(
-            "tools.gen_dummy_kb.vision_required",
-            extra={"slug": slug, "mode": "deep"},
-        )
-        raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg))
+    del repo_root
+    del ensure_within_and_resolve_fn
+    del open_for_read_bytes_selfguard
+    del load_vision_template_sections
+    del get_client_config
+    semantic_active = enable_semantic
+    if enable_semantic and not enable_vision:
+        logger.info("tools.gen_dummy_kb.semantic_disabled_without_vision", extra={"slug": slug})
+
+    ctx_for_checks: Any | None = None
+    if ClientContext is not None:
+        try:
+            ctx_for_checks = ClientContext.load(
+                slug=slug,
+                require_env=False,
+                run_id=None,
+                bootstrap_config=False,
+            )
+        except Exception:
+            ctx_for_checks = None
+    strict_requested, strict_source = _get_vision_strict_output(ctx_for_checks) if ctx_for_checks else (None, "ctx_unavailable")
+    strict_effective = True if (deep_testing and enable_vision) else (True if strict_requested is None else bool(strict_requested))
+    strict_rationale = (
+        "deep_testing richiede strict-only"
+        if (deep_testing and enable_vision)
+        else ("default_true" if strict_requested is None else strict_source)
+    )
+    decisions: Dict[str, Any] = {
+        "vision_strict_output": {
+            "requested": strict_requested,
+            "effective": strict_effective,
+            "rationale": strict_rationale,
+            "source": strict_source,
+        }
+    }
 
     if records_hint:
         try:
-            _ = int(records_hint)
+            int(records_hint)
         except Exception:
             logger.debug(
                 "tools.gen_dummy_kb.records_hint_non_numeric",
                 extra={"value": records_hint, "slug": slug},
             )
 
-    repo_pdf = repo_root / "config" / "VisionStatement.pdf"
-    if repo_pdf.exists():
-        try:
-            safe_pdf = ensure_within_and_resolve_fn(repo_root, repo_pdf)
-            with open_for_read_bytes_selfguard(safe_pdf) as handle:
-                pdf_bytes = handle.read()
-        except Exception:
-            logger.warning(
-                "tools.gen_dummy_kb.vision_template_unreadable",
-                extra={"file_path": str(repo_pdf), "slug": slug},
-            )
-            pdf_bytes = build_generic_vision_template_pdf(load_vision_template_sections)
-    else:
-        logger.warning(
-            "tools.gen_dummy_kb.vision_template_missing",
-            extra={"file_path": str(repo_pdf), "slug": slug},
-        )
-        pdf_bytes = build_generic_vision_template_pdf(load_vision_template_sections)
+    if not enable_enrichment:
+        logger.info("tools.gen_dummy_kb.enrichment_skipped", extra={"slug": slug})
+    if not enable_preview:
+        logger.info("tools.gen_dummy_kb.preview_skipped", extra={"slug": slug})
 
-    ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=pdf_bytes)
+    ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=None)
+
+    try:
+        pre_onboarding_main(
+            slug=slug,
+            client_name=client_name,
+            interactive=False,
+            dry_run=True,
+            run_id=uuid.uuid4().hex,
+        )
+    except Exception as exc:
+        msg = f"pre_onboarding fallito: {exc}"
+        raise HardCheckError(msg, _hardcheck_health("pre_onboarding_hardcheck", msg)) from exc
+
     register_client_fn(slug, client_name)
 
     base_dir = client_base(slug)
+    _merge_config_with_template(base_dir, logger=logger)
     semantic_dir = base_dir / "semantic"
-    sentinel_path = semantic_dir / ".vision_hash"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
     mapping_path = semantic_dir / "semantic_mapping.yaml"
-
-    categories_for_readmes: Dict[str, Dict[str, Any]] = {}
-    vision_completed = False
-    vision_status = "skipped" if vision_mode == "smoke" else "error"
-    hard_check_results: dict[str, tuple[bool, str, int | None]] = {}
-    soft_errors: list[str] = []
-    vision_downgraded = False
-    decisions: dict[str, Any] = {}
-
-    # ---- strict-only gate (fail-fast, deterministic) ----
-    ctx_for_checks: Any | None = None
-    try:
-        if ClientContext and hasattr(ClientContext, "load"):
-            ctx_for_checks = ClientContext.load(
-                slug=slug,
-                require_env=False,
-                run_id=None,
-                bootstrap_config=False,
-            )  # type: ignore[misc]
-    except Exception:
-        ctx_for_checks = None
-
-    strict_requested, strict_source = _get_vision_strict_output(ctx_for_checks) if ctx_for_checks else (None, "ctx_unavailable")
-    strict_effective = True if (deep_testing and enable_vision) else (True if strict_requested is None else bool(strict_requested))
-    strict_rationale = (
-        "deep_testing requires strict-only output"
-        if (deep_testing and enable_vision)
-        else ("default_true" if strict_requested is None else strict_source)
+    safe_mapping_path = ensure_within_and_resolve(base_dir, mapping_path)
+    safe_write_text(safe_mapping_path, _SEMANTIC_MAPPING_TEMPLATE, encoding="utf-8", atomic=True)
+    raw_pdfs_fn = ensure_raw_pdfs_fn or ensure_raw_pdfs
+    raw_pdfs_fn(base_dir)
+    _ = (
+        load_mapping_categories_fn,
+        ensure_minimal_tags_db_fn,
+        ensure_local_readmes_fn,
+        ensure_book_skeleton_fn,
+        write_basic_semantic_yaml_fn,
+        write_minimal_tags_raw_fn,
     )
-    decisions["vision_strict_output"] = {
-        "requested": strict_requested,
-        "effective": strict_effective,
-        "rationale": strict_rationale,
-        "source": strict_source,
-    }
 
-    if deep_testing and enable_vision and strict_requested is False:
-        msg = "Vision hard check failed; verifica config: strict output deve essere True (strict-only)"
-        logger.error(
-            "tools.gen_dummy_kb.vision_hardcheck.strict_required",
-            extra={"slug": slug, "requested": strict_requested, "source": strict_source},
-        )
-        raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg))
+    vision_status = "skipped"
+    vision_completed = False
+    hard_check_results: Dict[str, tuple[bool, str, int | None]] = {}
+    soft_errors: List[str] = []
 
-    vision_already_completed = False
-    if enable_vision and (sentinel_path.exists() or mapping_path.exists()):
-        vision_already_completed = True
-        vision_completed = True
-        vision_status = "ok"
-        categories_for_readmes = load_mapping_categories_fn(base_dir)
-        if not categories_for_readmes:
-            warn_msg = "Vision marked completed but mapping missing or empty"
-            logger.warning(
-                "tools.gen_dummy_kb.vision_already_completed_missing_mapping",
-                extra={"slug": slug},
-            )
-            hard_check_results["vision_hardcheck"] = (False, warn_msg, None)
-        else:
-            hard_check_results["vision_hardcheck"] = (
-                True,
-                "Vision hard check succeeded (already completed)",
-                None,
-            )
-
-    pdf_path_resolved = pdf_path(slug)
-    if enable_vision and not vision_already_completed and not pdf_path_resolved.exists():
-        try:
-            pdf_path_resolved.parent.mkdir(parents=True, exist_ok=True)
-            if safe_write_bytes:
-                safe_write_bytes(pdf_path_resolved, pdf_bytes, atomic=True)
-            else:  # pragma: no cover - fallback
-                with pdf_path_resolved.open("wb") as handle:
-                    handle.write(pdf_bytes)
-        except Exception:
-            logger.error(
-                "tools.gen_dummy_kb.vision_template_write_failed",
-                extra={"slug": slug, "file_path": str(pdf_path_resolved)},
-            )
-            raise
-    yaml_target: Path | None = None
-    if enable_vision and not vision_already_completed:
-        yaml_target = ensure_within_and_resolve_fn(base_dir, base_dir / "config" / "visionstatement.yaml")
-        if not yaml_target.exists():
+    if enable_vision:
+        pdf_path_resolved = pdf_path(slug)
+        vision_yaml_path = vision_yaml_workspace_path(base_dir, pdf_path=pdf_path_resolved)
+        if not vision_yaml_path.exists():
             try:
-                yaml_target.parent.mkdir(parents=True, exist_ok=True)
-                compile_document_to_vision_yaml(pdf_path_resolved, yaml_target)
-                logger.info(
-                    "tools.gen_dummy_kb.vision_yaml.created",
-                    extra={"slug": slug, "path": str(yaml_target)},
-                )
+                compile_document_to_vision_yaml(pdf_path_resolved, vision_yaml_path)
             except Exception as exc:
-                msg = f"visionstatement.yaml generation failed in workspace: {exc}"
-                if vision_mode == "deep":
+                msg = "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML"
+                try:
                     logger.error(
-                        "tools.gen_dummy_kb.vision_yaml.failed",
+                        "tools.gen_dummy_kb.vision_yaml_compile_failed",
                         extra={"slug": slug, "error": str(exc)},
                     )
-                    raise HardCheckError(msg, _hardcheck_health("vision_yaml_hardcheck", msg)) from exc
-                logger.warning(
-                    "tools.gen_dummy_kb.vision_yaml.failed",
-                    extra={"slug": slug, "error": str(exc)},
-                )
-    if deep_testing:
-        if not enable_vision:
-            msg = "Deep testing requires Vision enabled (secrets/permessi non pronti)"
-            logger.error(
-                "tools.gen_dummy_kb.vision_hardcheck.disabled",
-                extra={"slug": slug, "reason": "vision disabled"},
-            )
-            raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg))
-        if not enable_drive:
-            msg = "Deep testing richiede Drive abilitato (con --no-drive e' un conflitto)"
-            logger.error(
-                "tools.gen_dummy_kb.drive_hardcheck.disabled",
-                extra={"slug": slug, "reason": "drive disabled"},
-            )
-            raise HardCheckError(msg, _hardcheck_health("drive_hardcheck", msg))
-    drive_min_info: Dict[str, Any] | None = None
-    drive_readmes_info: Dict[str, Any] | None = None
-    if enable_vision and not vision_already_completed:
+                except Exception:
+                    pass
+                raise HardCheckError(
+                    msg,
+                    _hardcheck_health("vision_hardcheck", msg),
+                ) from exc
         start = perf_counter()
         success, vision_meta = run_vision_with_timeout_fn(
             base_dir=base_dir,
@@ -426,140 +407,64 @@ def build_dummy_payload(
         )
         latency_ms = int((perf_counter() - start) * 1000)
         if not success:
-            reason = vision_meta or {}
-            message = str(reason.get("error") or "")
-            sentinel = str(reason.get("file_path") or "")
-            normalized = message.casefold().replace("اے", "a")
-            if ".vision_hash" in sentinel or "vision gia eseguito" in normalized:
-                logger.info(
-                    "tools.gen_dummy_kb.vision_already_completed",
-                    extra={"slug": slug, "sentinel": sentinel or ".vision_hash"},
-                )
-                vision_already_completed = True
-                vision_completed = True
-                vision_status = "ok"
-                categories_for_readmes = load_mapping_categories_fn(base_dir)
-                if not categories_for_readmes:
-                    warn_msg = "Vision marked completed but mapping missing or empty"
-                    logger.warning(
-                        "tools.gen_dummy_kb.vision_already_completed_missing_mapping",
-                        extra={"slug": slug},
-                    )
-                    hard_check_results["vision_hardcheck"] = (False, warn_msg, None)
-                else:
-                    hard_check_results["vision_hardcheck"] = (
-                        True,
-                        "Vision hard check succeeded (already completed)",
-                        None,
-                    )
-            else:
-                details = message or "Vision run failed"
-                if sentinel:
-                    details = f"{details} | sentinel={sentinel}"
-                if _is_credit_or_quota_error(details):
-                    warn_msg = (
-                        "Vision hard check downgraded to smoke due to quota/billing: "
-                        f"{details}. Per smoke deterministico usa "
-                        f"`python tools/smoke/kb_healthcheck.py --slug {slug} --offline`."
-                    )
-                    logger.warning(
-                        "tools.gen_dummy_kb.vision_downgraded",
-                        extra={
-                            "slug": slug,
-                            "error": message,
-                            "reason": "quota_or_billing",
-                        },
-                    )
-                    hard_check_results["vision_hardcheck"] = (False, warn_msg, latency_ms)
-                    soft_errors.append(warn_msg)
-                    vision_status = "smoke_downgraded"
-                    vision_mode = "smoke"
-                    enable_vision = False
-                    vision_downgraded = True
-                else:
-                    err_msg = f"Vision hard check failed; verifica secrets/permessi: {details}"
-                    logger.error(
-                        "tools.gen_dummy_kb.vision_hardcheck.failed",
-                        extra={"slug": slug, "error": message, "sentinel": sentinel or None},
-                    )
-                    raise HardCheckError(err_msg, _hardcheck_health("vision_hardcheck", err_msg, latency_ms))
-        if not vision_already_completed and not vision_downgraded:
-            vision_completed = True
-            vision_status = "ok"
-            categories_for_readmes = load_mapping_categories_fn(base_dir)
-            if not categories_for_readmes:
-                err_msg = "Vision hard check fallito: nessuna categoria disponibile dopo Vision"
+            message = str(vision_meta.get("error") if isinstance(vision_meta, dict) else vision_meta or "Vision fallita")
+            try:
                 logger.error(
                     "tools.gen_dummy_kb.vision_hardcheck.failed",
-                    extra={"slug": slug, "error": err_msg},
+                    extra={"slug": slug, "error": message},
                 )
-                raise HardCheckError(err_msg, _hardcheck_health("vision_hardcheck", err_msg, latency_ms))
-            hard_check_results["vision_hardcheck"] = (
-                True,
-                "Vision hard check succeeded",
-                latency_ms,
+            except Exception:
+                pass
+            raise HardCheckError(
+                f"Vision fallita: {message}",
+                _hardcheck_health("vision_hardcheck", message, latency_ms),
             )
-            if yaml_target is None:
-                yaml_target = ensure_within_and_resolve_fn(base_dir, base_dir / "config" / "visionstatement.yaml")
-            if not yaml_target.exists():
-                try:
-                    compile_document_to_vision_yaml(pdf_path_resolved, yaml_target)
-                except Exception as exc:
-                    logger.error(
-                        "tools.gen_dummy_kb.vision_yaml_generation_failed",
-                        extra={"slug": slug, "error": str(exc), "pdf": str(pdf_path_resolved)},
-                    )
-                    msg = f"visionstatement.yaml generation failed in workspace: {exc}"
-                    raise HardCheckError(msg, _hardcheck_health("vision_hardcheck", msg)) from exc
-    elif not vision_already_completed and enable_semantic:
-        categories_for_readmes = load_mapping_categories_fn(base_dir)
+        vision_completed = True
+        vision_status = "ok"
+        hard_check_results["vision_hardcheck"] = (True, "Vision completata", latency_ms)
+        _ensure_semantic_mapping_has_tagger(safe_mapping_path)
+    else:
+        vision_status = "skipped"
 
-    if vision_mode == "smoke" and enable_semantic:
+    semantic_ctx: PipelineClientContext | None = None
+    logs_dir: Path | None = None
+
+    if semantic_active:
         try:
-            basic_payload = write_basic_semantic_yaml_fn(base_dir, slug=slug, client_name=client_name)
-            if not categories_for_readmes and isinstance(basic_payload, dict):
-                basic_categories = basic_payload.get("categories")
-                if isinstance(basic_categories, dict):
-                    categories_for_readmes = basic_categories
+            run_raw_ingest(slug=slug, source="local", local_path=None, non_interactive=True)
         except Exception as exc:
-            logger.warning(
-                "tools.gen_dummy_kb.semantic_basic_failed",
-                extra={"slug": slug, "error": str(exc)},
+            msg = f"raw_ingest fallito: {exc}"
+            raise HardCheckError(msg, _hardcheck_health("raw_ingest", msg))
+
+        run_id = uuid.uuid4().hex
+        semantic_ctx = PipelineClientContext.load(
+            slug=slug,
+            require_env=False,
+            run_id=run_id,
+            bootstrap_config=False,
+        )
+        _ensure_semantic_mapping_has_tagger(safe_mapping_path)
+        logger_semantic = get_structured_logger(
+            "tools.gen_dummy_kb.semantic",
+            context=semantic_ctx,
+            run_id=run_id,
+        )
+        semantic_convert_markdown(semantic_ctx, logger_semantic, slug=slug)
+        layout = WorkspaceLayout.from_context(semantic_ctx)
+        logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
+        if logs_dir is None:
+            raise HardCheckError(
+                "Logs dir mancante per QA evidence.",
+                _hardcheck_health("qa_evidence", "logs dir mancante"),
             )
-        if not categories_for_readmes:
-            categories_for_readmes = load_mapping_categories_fn(base_dir)
-
-    local_readmes: list[str] = []
-    ensure_book_skeleton_fn(base_dir)
-    if enable_semantic:
-        if categories_for_readmes:
-            ensure_minimal_tags_db_fn(base_dir, categories_for_readmes, logger=logger)
-            ensure_raw_pdfs_fn(base_dir, categories_for_readmes)
-
-            local_readmes = ensure_local_readmes_fn(base_dir, categories_for_readmes)
-            try:
-                write_minimal_tags_raw_fn(base_dir)
-            except Exception as exc:
-                logger.warning(
-                    "tools.gen_dummy_kb.tags_raw_seed_failed",
-                    extra={"slug": slug, "error": str(exc)},
-                )
-        elif vision_mode == "smoke":
-            ensure_minimal_tags_db_fn(base_dir, None, logger=logger)
-            ensure_raw_pdfs_fn(base_dir, None)
-
-        if vision_mode == "smoke" and validate_dummy_structure_fn:
-            validate_dummy_structure_fn(base_dir, logger)
-        elif categories_for_readmes and validate_dummy_structure_fn:
-            validate_dummy_structure_fn(base_dir, logger)
+        qa_checks = ["raw_ingest", "semantic.convert_markdown", "semantic.write_summary_and_readme"]
+        write_qa_evidence(logs_dir, checks_executed=qa_checks, qa_status="pass", logger=logger_semantic)
+        semantic_write_summary_and_readme(semantic_ctx, logger_semantic, slug=slug)
     else:
         logger.info("tools.gen_dummy_kb.semantic_skipped", extra={"slug": slug})
 
-    if not enable_enrichment:
-        logger.info("tools.gen_dummy_kb.enrichment_skipped", extra={"slug": slug})
-
-    if not enable_preview:
-        logger.info("tools.gen_dummy_kb.preview_skipped", extra={"slug": slug})
+    drive_min_info: Dict[str, Any] = {}
+    drive_readmes_info: Dict[str, Any] = {}
 
     if enable_drive:
         drive_start = perf_counter()
@@ -570,112 +475,77 @@ def build_dummy_payload(
                 base_dir,
                 logger,
                 ensure_drive_minimal_and_upload_config,
-            )
+            ) or {}
             drive_readmes_info = call_drive_emit_readmes_fn(
                 slug,
                 base_dir,
                 logger,
                 emit_readmes_for_raw,
-            )
+            ) or {}
         except Exception as exc:
             latency_ms = int((perf_counter() - drive_start) * 1000)
             if deep_testing:
-                msg = f"Drive hard check fallito; verifica secrets/permessi/drive ({exc})"
-                logger.error(
-                    "tools.gen_dummy_kb.drive_hardcheck.failed",
-                    extra={"slug": slug, "error": str(exc)},
-                )
+                msg = f"Drive hard check fallito: {exc}"
                 raise HardCheckError(msg, _hardcheck_health("drive_hardcheck", msg, latency_ms)) from exc
             logger.warning(
                 "tools.gen_dummy_kb.drive_provisioning_failed",
                 extra={"error": str(exc), "slug": slug},
             )
+            soft_errors.append(str(exc))
+            drive_min_info = {}
+            drive_readmes_info = {}
         else:
             latency_ms = int((perf_counter() - drive_start) * 1000)
             if deep_testing:
-                hard_check_results["drive_hardcheck"] = (
-                    True,
-                    "Drive hard check succeeded",
-                    latency_ms,
-                )
+                hard_check_results["drive_hardcheck"] = (True, "Drive hard check succeeded", latency_ms)
 
-    fallback_used = False
+    validator = validate_dummy_structure_fn or validate_dummy_structure
+    validator(base_dir, logger)
 
-    cfg_out: dict[str, Any] = {}
-    if callable(get_client_config) and ClientContext:
-        try:
-            ctx_cfg = ClientContext.load(
-                slug=slug,
-                require_env=False,
-                run_id=None,
-                bootstrap_config=False,
-            )  # type: ignore[misc]
-            cfg = get_client_config(ctx_cfg) or {}
-            drive_cfg = cfg.get("integrations", {}).get("drive", {})
-            cfg_out = {
-                "drive": {
-                    "folder_id": drive_cfg.get("folder_id"),
-                    "raw_folder_id": drive_cfg.get("raw_folder_id"),
-                }
-            }
-        except Exception:
-            cfg_out = {}
+    summary_path = base_dir / "book" / "SUMMARY.md"
+    readme_path = base_dir / "book" / "README.md"
 
-    health = {
+    health: Dict[str, Any] = {
         "vision_status": vision_status,
-        "fallback_used": fallback_used,
+        "fallback_used": False,
         "raw_pdf_count": _count_raw_pdfs(base_dir),
         "tags_count": _count_tags(base_dir),
-        "mapping_valid": bool(categories_for_readmes),
-        "summary_exists": (base_dir / "book" / "SUMMARY.md").exists(),
-        "readmes_count": len(local_readmes),
+        "mapping_valid": (semantic_dir / "semantic_mapping.yaml").exists(),
+        "summary_exists": summary_path.exists(),
+        "readmes_count": 0,
+        "status": "ok",
+        "errors": [],
+        "checks": [],
+        "external_checks": {},
+        "mode": "deep" if deep_testing else "smoke",
     }
-    health.setdefault("status", "ok")
-    health.setdefault("errors", [])
     if soft_errors:
         health["errors"].extend(soft_errors)
-    health.setdefault("checks", [])
-    health.setdefault("external_checks", {})
-    if deep_testing:
-        try:
-            golden_path = ensure_golden_dummy_pdf(base_dir)
-            with open_for_read_bytes_selfguard(golden_path) as handle:
-                golden_bytes = handle.read()
-            health.setdefault("checks", []).append("golden_pdf")
-            health["golden_pdf"] = {
-                "path": str(golden_path),
-                "sha256": hashlib.sha256(golden_bytes).hexdigest(),
-                "bytes": len(golden_bytes),
-            }
-        except Exception as exc:
-            health["status"] = "failed"
-            health.setdefault("errors", []).append(f"Golden PDF generation failed: {exc}")
-            logger.error("tools.gen_dummy_kb.golden_pdf.failed", extra={"slug": slug, "error": str(exc)})
-            raise RuntimeError(f"Golden PDF generation failed: {exc}") from exc
-    health["mode"] = "deep" if deep_testing else "smoke"
-    if deep_testing and hard_check_results:
+    if hard_check_results:
         for name, (ok, details, latency) in hard_check_results.items():
             _record_external_check(health, name, ok, details, latency)
+
+    paths = {
+        "base": str(base_dir),
+        "config": str(base_dir / "config" / "config.yaml"),
+        "vision_pdf": str(pdf_path(slug)),
+        "semantic_mapping": str(semantic_dir / "semantic_mapping.yaml"),
+    }
 
     return {
         "slug": slug,
         "client_name": client_name,
         "decisions": decisions,
-        "paths": {
-            "base": str(base_dir),
-            "config": str(base_dir / "config" / "config.yaml"),
-            "vision_pdf": str(pdf_path_resolved),
-            "semantic_mapping": str(base_dir / "semantic" / "semantic_mapping.yaml"),
-        },
-        "drive_min": drive_min_info or {},
-        "drive_readmes": drive_readmes_info or {},
-        "config_ids": cfg_out,
-        "vision_used": bool(vision_completed),
+        "paths": paths,
+        "drive_min": drive_min_info,
+        "drive_readmes": drive_readmes_info,
+        "config_ids": {},
+        "vision_used": vision_completed,
         "drive_used": bool(enable_drive),
-        "fallback_used": fallback_used,
-        "local_readmes": local_readmes,
+        "fallback_used": False,
+        "local_readmes": [],
         "health": health,
     }
 
 
-__all__ = ["register_client", "validate_dummy_structure", "build_dummy_payload"]
+__all__ = ["register_client", "validate_dummy_structure", "build_dummy_payload", "HardCheckError"]

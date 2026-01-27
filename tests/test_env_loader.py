@@ -23,8 +23,9 @@ def test_get_env_var_loads_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     # Change CWD to the tmp directory so loader finds .env
     monkeypatch.chdir(tmp_path)
 
-    # Act: reload module to reset loader and load .env from CWD, then call getter
+    # Act: reload module to reset loader, load .env from CWD, then call getter
     _il.reload(envu)
+    envu.ensure_dotenv_loaded()
     drive_id = envu.get_env_var("ZZZ_DRIVE_ID", required=True)
     sa_file = envu.get_env_var("ZZZ_SERVICE_ACCOUNT_FILE", required=True)
 
@@ -42,8 +43,9 @@ def test_client_context_load_reads_dotenv(tmp_path: Path, monkeypatch: pytest.Mo
 
     from pipeline.context import ClientContext
 
-    # Act: reload env_utils to reset lazy loader, then load context (no required env)
+    # Act: reload env_utils to reset lazy loader, explicitly load .env, then create context (no required env)
     _il.reload(envu)
+    envu.ensure_dotenv_loaded()
     ClientContext.load(slug="dummy", require_env=False, run_id=None, repo_root_dir=tmp_path)
 
     # Assert: value is read from current CWD .env via env getter

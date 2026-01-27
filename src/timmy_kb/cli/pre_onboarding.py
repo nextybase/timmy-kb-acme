@@ -42,7 +42,7 @@ from pipeline.config_utils import (
     write_client_config_file,
 )
 from pipeline.context import ClientContext
-from pipeline.env_utils import get_env_var
+from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError
 from pipeline.file_utils import safe_write_bytes, safe_write_text  # SSoT scritture atomiche
 from pipeline.logging_utils import (
@@ -506,6 +506,8 @@ def pre_onboarding_main(
 ) -> None:
     """Esegue la fase di pre-onboarding per il cliente indicato (orchestratore sottile)."""
     require_env = not dry_run
+    if require_env:
+        ensure_dotenv_loaded(strict=True, allow_fallback=False)
     run_id = run_id or uuid.uuid4().hex
 
     context, logger, client_name = _prepare_context_and_logger(

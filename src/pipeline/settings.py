@@ -9,7 +9,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, Mapping, Optional
 
-from .env_utils import ensure_dotenv_loaded, get_env_var
+from .env_utils import get_env_var
 from .exceptions import ConfigError
 from .logging_utils import get_structured_logger
 from .yaml_utils import yaml_read
@@ -631,11 +631,7 @@ class Settings:
             raise ConfigError("Errore lettura segreto da ENV.", file_path=str(self.config_path)) from exc
 
     def get_secret(self, name: str, *, required: bool = False, default: Optional[str] = None) -> Optional[str]:
-        """Recupera un segreto delegando a env_utils con load idempotente del .env."""
-        try:
-            ensure_dotenv_loaded()
-        except Exception:
-            pass
+        """Recupera un segreto delegando a env_utils senza side-effects impliciti."""
         try:
             return get_env_var(name, default=default, required=required)
         except KeyError as exc:

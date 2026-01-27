@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 from pipeline.artifact_policy import enforce_core_artifacts
 from pipeline.context import ClientContext
+from pipeline.env_utils import ensure_dotenv_loaded
 from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, exit_code_for
 from pipeline.ingest.provider import build_ingest_provider
 from pipeline.logging_utils import get_structured_logger
@@ -99,6 +100,9 @@ def run_raw_ingest(
     run_id = uuid.uuid4().hex
     logger = get_structured_logger("raw_ingest", run_id=run_id, **_obs_kwargs())
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=input, logger=logger)
+
+    if source == "drive":
+        ensure_dotenv_loaded(strict=True, allow_fallback=False)
 
     context = ClientContext.load(
         slug=slug,
