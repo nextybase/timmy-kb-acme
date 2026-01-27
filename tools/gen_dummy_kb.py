@@ -24,7 +24,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict, List, Optional, TextIO, TypedDict
+from typing import Any, Callable, Dict, List, Optional, TextIO, TypedDict
 
 import yaml
 
@@ -406,6 +406,11 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Reset manuale: elimina output/timmy-kb-dummy e termina (solo slug dummy).",
     )
+    ap.add_argument(
+        "--skip-spacy-check",
+        action="store_true",
+        help="Non eseguire la verifica di Spacy (usato dalla UI per evitare drop-in incompatibili).",
+    )
     semantic_group = ap.add_mutually_exclusive_group()
     semantic_group.add_argument(
         "--semantic",
@@ -525,6 +530,7 @@ def build_payload(
     deep_testing: bool = False,
     logger: logging.Logger,
     policy: DummyPolicy | None = None,
+    spacy_checker: Callable[[DummyPolicy], None] | None = None,
 ) -> _DummyPayload:
     vision_statement_pdf_bytes = _load_vision_statement_pdf_bytes()
 
@@ -573,6 +579,7 @@ def build_payload(
         ensure_book_skeleton_fn=_ensure_book_skeleton,
         validate_dummy_structure_fn=_validate_dummy_structure,
         policy=policy,
+        ensure_spacy_available_fn=spacy_checker,
         call_drive_min_fn=_call_drive_min,
         call_drive_emit_readmes_fn=_call_drive_emit_readmes,
     )
@@ -698,6 +705,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 workspace_root = workspace_override or _client_base(slug)
                 for child in ("raw", "semantic", "book", "logs", "config"):
                     (workspace_root / child).mkdir(parents=True, exist_ok=True)
+                spacy_checker = (lambda policy: None) if args.skip_spacy_check else None
                 payload = build_payload(
                     slug=slug,
                     client_name=client_name,
@@ -710,6 +718,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                     logger=logger,
                     deep_testing=args.deep_testing,
                     policy=policy,
+                    spacy_checker=spacy_checker,
                 )
             emit_structure(payload)
             logger.info(_format_mode_summary(mode), extra={"mode": mode_label, "runtime_mode": mode.__dict__})
