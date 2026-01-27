@@ -6,7 +6,7 @@
 
 # Librerie principali
 PyMuPDF==1.26.5
-pypdf==6.6.0
+pypdf==6.6.2
 pydantic==2.7.1
 pydantic-settings==2.0.0
 python-dotenv==1.0.1
@@ -15,7 +15,7 @@ PyYAML==6.0.1
 pillow==11.1.0  # Streamlit richiede <12
 streamlit==1.50.0
 requests==2.32.5
-urllib3==2.6.3
+urllib3>=2.6.3
 numpy==2.3.0
 
 # Google/Drive integrazione
@@ -49,3 +49,9 @@ spacy==3.7.4
 typing-extensions==4.12.2
 annotated-types==0.7.0
 hypothesis==6.112.2
+
+# Security overrides
+filelock>=3.20.3
+virtualenv>=20.36.1
+setuptools>=78.1.1
+protobuf>=6.33.4
