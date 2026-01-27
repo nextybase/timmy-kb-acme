@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pytest
 
@@ -13,6 +14,7 @@ from pipeline.file_utils import safe_write_text
 from pipeline.workspace_bootstrap import bootstrap_client_workspace
 from tools.dummy import orchestrator
 from tools.dummy.orchestrator import validate_dummy_structure
+from tools.dummy.policy import DummyPolicy
 
 
 @pytest.fixture
@@ -21,6 +23,13 @@ def logger() -> logging.Logger:
     log.addHandler(logging.NullHandler())
     log.setLevel(logging.INFO)
     return log
+
+
+def _workspace_env_setter(base_dir: Path) -> Callable[..., None]:
+    def _setter(*, slug: str, client_name: str, vision_statement_pdf: bytes | None) -> None:
+        os.environ["WORKSPACE_ROOT_DIR"] = str(base_dir)
+
+    return _setter
 
 
 def _write_required_dummy_files(workspace_root: Path) -> None:
@@ -35,6 +44,9 @@ def _write_required_dummy_files(workspace_root: Path) -> None:
     (workspace_root / "book" / "README.md").write_text("# Dummy\n", encoding="utf-8")
     (workspace_root / "book" / "SUMMARY.md").write_text("* [Dummy](README.md)\n", encoding="utf-8")
     (workspace_root / "raw" / "sample.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+    normalized_dir = workspace_root / "normalized"
+    normalized_dir.mkdir(parents=True, exist_ok=True)
+    (normalized_dir / "INDEX.json").write_text("{}", encoding="utf-8")
 
 
 def test_dummy_validate_structure_passes_when_mapping_present(tmp_path: Path, logger: logging.Logger) -> None:
@@ -74,6 +86,34 @@ def test_dummy_validate_structure_fails_when_mapping_missing(tmp_path: Path, log
     assert "semantic_mapping" in str(exc.value)
 
 
+def test_register_client_requires_registry() -> None:
+    policy = DummyPolicy(mode="smoke", strict=True, ci=False, allow_downgrade=False, require_registry=True)
+    with pytest.raises(orchestrator.HardCheckError) as exc:
+        orchestrator.register_client("dummy", "Dummy SaaS", ClientEntry=None, upsert_client=None, policy=policy)
+    assert exc.value.health["stop_code"] == "DUMMY_REGISTRY_IMPORT_MISSING"
+
+
+def test_register_client_reports_upsert_failure(tmp_path: Path) -> None:
+    policy = DummyPolicy(mode="smoke", strict=True, ci=False, allow_downgrade=False, require_registry=True)
+
+    class ClientEntry:
+        def __init__(self, **kwargs: Any) -> None:
+            self.slug = kwargs.get("slug")
+
+    def failing_upsert(_: Any) -> None:
+        raise RuntimeError("boom")
+
+    with pytest.raises(orchestrator.HardCheckError) as exc:
+        orchestrator.register_client(
+            "dummy",
+            "Dummy SaaS",
+            ClientEntry=ClientEntry,
+            upsert_client=failing_upsert,
+            policy=policy,
+        )
+    assert exc.value.health["stop_code"] == "DUMMY_REGISTRY_UPSERT_FAILED"
+
+
 def test_deep_compiles_yaml_before_vision(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -86,6 +126,8 @@ def test_deep_compiles_yaml_before_vision(
     base_dir = tmp_path / "workspace"
     (base_dir / "config").mkdir(parents=True, exist_ok=True)
     (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
+
+    (base_dir / "raw").mkdir(parents=True, exist_ok=True)
 
     order: list[str] = []
 
@@ -104,6 +146,8 @@ def test_deep_compiles_yaml_before_vision(
         return default
 
     monkeypatch.setattr(orchestrator, "compile_document_to_vision_yaml", _compile)
+    monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
 
     payload = orchestrator.build_dummy_payload(
         slug="dummy",
@@ -117,7 +161,7 @@ def test_deep_compiles_yaml_before_vision(
         deep_testing=False,
         logger=logger,
         repo_root=repo_root,
-        ensure_local_workspace_for_ui=lambda **_: None,
+        ensure_local_workspace_for_ui=_workspace_env_setter(base_dir),
         run_vision=lambda **_: None,
         get_env_var=_get_env_var,
         ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
@@ -125,7 +169,7 @@ def test_deep_compiles_yaml_before_vision(
         load_vision_template_sections=lambda: [],
         client_base=lambda _: base_dir,
         pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
-        register_client_fn=lambda *_: None,
+        register_client_fn=lambda *_args, **_kwargs: None,
         ClientContext=None,
         get_client_config=None,
         ensure_drive_minimal_and_upload_config=None,
@@ -139,6 +183,7 @@ def test_deep_compiles_yaml_before_vision(
         write_basic_semantic_yaml_fn=None,
         write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
         validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
+        ensure_spacy_available_fn=lambda policy: None,
         call_drive_min_fn=lambda *_args, **_kwargs: None,
         call_drive_emit_readmes_fn=lambda *_args, **_kwargs: None,
     )
@@ -185,6 +230,7 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
         return {"ok": True}
 
     monkeypatch.setattr(orchestrator, "compile_document_to_vision_yaml", _compile)
+    policy = DummyPolicy(mode="deep", strict=True, ci=False, allow_downgrade=True, require_registry=True)
 
     payload = orchestrator.build_dummy_payload(
         slug="dummy",
@@ -198,7 +244,7 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
         deep_testing=True,
         logger=logger,
         repo_root=repo_root,
-        ensure_local_workspace_for_ui=lambda **_: None,
+        ensure_local_workspace_for_ui=_workspace_env_setter(base_dir),
         run_vision=lambda **_: None,
         get_env_var=_get_env_var,
         ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
@@ -206,7 +252,7 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
         load_vision_template_sections=lambda: [],
         client_base=lambda _: base_dir,
         pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
-        register_client_fn=lambda *_: None,
+        register_client_fn=lambda *_args, **_kwargs: None,
         ClientContext=None,
         get_client_config=None,
         ensure_drive_minimal_and_upload_config=None,
@@ -220,8 +266,10 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
         write_basic_semantic_yaml_fn=lambda *_args, **_kwargs: {"categories": {"contracts": {}}},
         write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
         validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
+        ensure_spacy_available_fn=lambda policy: None,
         call_drive_min_fn=_call_drive_min_fn,
         call_drive_emit_readmes_fn=_call_drive_emit_readmes_fn,
+        policy=policy,
     )
 
     vision_check = payload["health"]["external_checks"]["vision_hardcheck"]
@@ -231,6 +279,80 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
     assert payload["health"]["external_checks"]["drive_hardcheck"]["ok"] is True
     assert any("downgraded to smoke" in err.lower() for err in payload["health"]["errors"])
     assert drive_calls == {"min": 1, "readmes": 1}
+    assert payload["health"]["status"] == "degraded"
+    assert payload["health"]["stop_code"] == "DUMMY_DEGRADED_TO_SMOKE"
+    assert payload["health"]["fallback_used"] is True
+
+
+def test_deep_testing_vision_quota_without_downgrade_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    logger: logging.Logger,
+) -> None:
+    repo_root = tmp_path / "repo"
+    (repo_root / "config").mkdir(parents=True, exist_ok=True)
+    (repo_root / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
+
+    base_dir = tmp_path / "workspace"
+    (base_dir / "config").mkdir(parents=True, exist_ok=True)
+    (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
+
+    policy = DummyPolicy(mode="deep", strict=True, ci=False, allow_downgrade=False, require_registry=True)
+
+    def _run_vision_with_timeout_fn(**_: object) -> tuple[bool, dict[str, object] | None]:
+        return False, {
+            "error": "Error code: 429 insufficient_quota - check your plan and billing",
+            "file_path": "",
+        }
+
+    def _get_env_var(name: str, default: str | None = None) -> str | None:
+        if name == "VISION_MODE":
+            return "DEEP"
+        return default
+
+    monkeypatch.setattr(orchestrator, "compile_document_to_vision_yaml", lambda *_: None)
+
+    with pytest.raises(orchestrator.HardCheckError) as exc:
+        orchestrator.build_dummy_payload(
+            slug="dummy",
+            client_name="Dummy",
+            enable_drive=False,
+            enable_vision=True,
+            enable_semantic=False,
+            enable_enrichment=False,
+            enable_preview=False,
+            records_hint=None,
+            deep_testing=True,
+            logger=logger,
+            repo_root=repo_root,
+            ensure_local_workspace_for_ui=lambda **_: None,
+            run_vision=lambda **_: None,
+            get_env_var=_get_env_var,
+            ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
+            open_for_read_bytes_selfguard=lambda path: path.open("rb"),
+            load_vision_template_sections=lambda: [],
+            client_base=lambda _: base_dir,
+            pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
+            register_client_fn=lambda *_args, **_kwargs: None,
+            ClientContext=None,
+            get_client_config=None,
+            ensure_drive_minimal_and_upload_config=None,
+            emit_readmes_for_raw=None,
+            run_vision_with_timeout_fn=_run_vision_with_timeout_fn,
+            load_mapping_categories_fn=lambda _: {},
+            ensure_minimal_tags_db_fn=lambda *_args, **_kwargs: None,
+            ensure_raw_pdfs_fn=lambda *_args, **_kwargs: None,
+            ensure_local_readmes_fn=lambda *_args, **_kwargs: [],
+            ensure_book_skeleton_fn=lambda *_args, **_kwargs: None,
+            write_basic_semantic_yaml_fn=None,
+            write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
+            validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
+            ensure_spacy_available_fn=lambda policy: None,
+            call_drive_min_fn=lambda *_args, **_kwargs: None,
+            call_drive_emit_readmes_fn=lambda *_args, **_kwargs: None,
+            policy=policy,
+        )
+    assert exc.value.health["stop_code"] == "DUMMY_VISION_UNAVAILABLE"
 
 
 def test_deep_testing_non_quota_vision_failure_still_raises(
@@ -280,7 +402,7 @@ def test_deep_testing_non_quota_vision_failure_still_raises(
             load_vision_template_sections=lambda: [],
             client_base=lambda _: base_dir,
             pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
-            register_client_fn=lambda *_: None,
+            register_client_fn=lambda *_args, **_kwargs: None,
             ClientContext=None,
             get_client_config=None,
             ensure_drive_minimal_and_upload_config=None,
@@ -347,7 +469,7 @@ def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
         deep_testing=False,
         logger=logger,
         repo_root=repo_root,
-        ensure_local_workspace_for_ui=lambda **_: None,
+        ensure_local_workspace_for_ui=_workspace_env_setter(base_dir),
         run_vision=lambda **_: None,
         get_env_var=lambda *_: None,
         ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
@@ -355,7 +477,7 @@ def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
         load_vision_template_sections=lambda: [],
         client_base=lambda _: base_dir,
         pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
-        register_client_fn=lambda *_: None,
+        register_client_fn=lambda *_args, **_kwargs: None,
         ClientContext=None,
         get_client_config=None,
         ensure_drive_minimal_and_upload_config=None,
@@ -369,6 +491,7 @@ def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
         write_basic_semantic_yaml_fn=None,
         write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
         validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
+        ensure_spacy_available_fn=lambda policy: None,
         call_drive_min_fn=lambda *_args, **_kwargs: None,
         call_drive_emit_readmes_fn=lambda *_args, **_kwargs: None,
     )

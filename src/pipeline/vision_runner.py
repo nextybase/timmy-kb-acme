@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
 import yaml
+
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import get_client_config, get_drive_id
@@ -255,7 +256,9 @@ def _ensure_dummy_area(mapping_path: Path, logger: logging.Logger, *, slug: str)
 
     payload.setdefault("semantic_tagger", {})
     payload["areas"] = [{"key": "dummy", "title": "Dummy area"}]
-    safe_write_text(mapping_path, yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8", atomic=True)
+    safe_write_text(
+        mapping_path, yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8", atomic=True
+    )
     logger.warning(
         "vision_mapping_dummy_area_injected",
         extra={"slug": slug, "path": str(mapping_path)},

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from copy import deepcopy
 from datetime import datetime
@@ -24,6 +25,8 @@ from timmy_kb.cli.raw_ingest import run_raw_ingest
 
 from .bootstrap import client_base, pdf_path
 from .drive import call_drive_emit_readmes, call_drive_min
+from .health import build_hardcheck_health
+from .policy import DummyPolicy
 from .semantic import ensure_raw_pdfs
 from .vision import run_vision_with_timeout
 
@@ -38,17 +41,27 @@ class HardCheckError(Exception):
         self.health = health
 
 
-def _hardcheck_health(name: str, message: str, latency_ms: int | None = None) -> Dict[str, Any]:
-    details: dict[str, Any] = {"ok": False, "details": message}
-    if latency_ms is not None:
-        details["latency_ms"] = latency_ms
-    return {
-        "status": "failed",
-        "mode": "deep",
-        "errors": [message],
-        "checks": [name],
-        "external_checks": {name: details},
-    }
+def _ensure_spacy_available(policy: DummyPolicy) -> None:
+    model_name = os.getenv("SPACY_MODEL", "it_core_news_sm").strip()
+    try:
+        import spacy
+
+        util = getattr(spacy, "util", None)
+        if util is None or not util.is_package(model_name):
+            raise RuntimeError(f"modello SpaCy obbligatorio mancante: {model_name}")
+    except Exception as exc:
+        msg = (
+            "SpaCy e il modello linguistico obbligatorio non sono disponibili. "
+            "Installa `spacy` e `it_core_news_sm` (es. `python -m spacy download it_core_news_sm`)."
+        )
+        raise HardCheckError(
+            msg,
+            build_hardcheck_health(
+                "DUMMY_SPACY_UNAVAILABLE",
+                msg,
+                mode=policy.mode,
+            ),
+        ) from exc
 
 
 def _record_external_check(
@@ -208,21 +221,48 @@ def register_client(
     *,
     ClientEntry: Any | None,
     upsert_client: Callable[[Any], Any] | None,
+    policy: DummyPolicy,
 ) -> None:
-    if not (ClientEntry and callable(upsert_client)):
+    if not policy.require_registry:
         return
+    if not (ClientEntry and callable(upsert_client)):
+        msg = "Registry UI non disponibile per la dummy KB"
+        raise HardCheckError(
+            msg,
+            build_hardcheck_health(
+                "DUMMY_REGISTRY_IMPORT_MISSING",
+                msg,
+                mode=policy.mode,
+            ),
+        )
     try:
         timestamp = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     except Exception:
         timestamp = None
     try:
         entry = ClientEntry(slug=slug, nome=client_name, stato="active", created_at=timestamp, dummy=True)
-    except Exception:
-        return
+    except Exception as exc:
+        msg = f"Creazione entry registry fallita: {exc}"
+        raise HardCheckError(
+            msg,
+            build_hardcheck_health(
+                "DUMMY_REGISTRY_ENTRY_FAILED",
+                msg,
+                mode=policy.mode,
+            ),
+        ) from exc
     try:
         upsert_client(entry)
-    except Exception:
-        return
+    except Exception as exc:
+        msg = f"Upsert registry fallito: {exc}"
+        raise HardCheckError(
+            msg,
+            build_hardcheck_health(
+                "DUMMY_REGISTRY_UPSERT_FAILED",
+                msg,
+                mode=policy.mode,
+            ),
+        ) from exc
 
 
 def validate_dummy_structure(base_dir: Path, logger: logging.Logger) -> None:
@@ -261,6 +301,7 @@ def build_dummy_payload(
     records_hint: Optional[str],
     deep_testing: bool = False,
     logger: logging.Logger,
+    policy: DummyPolicy | None = None,
     repo_root: Path,
     ensure_local_workspace_for_ui: Callable[..., Any],
     run_vision: Callable[..., Any],
@@ -270,7 +311,7 @@ def build_dummy_payload(
     load_vision_template_sections: Callable[[], Any],
     client_base: Callable[[str], Path],
     pdf_path: Callable[[str], Path],
-    register_client_fn: Callable[[str, str], None],
+    register_client_fn: Callable[..., Any],
     ClientContext: Any | None,
     get_client_config: Callable[[Any], Dict[str, Any]] | None,
     ensure_drive_minimal_and_upload_config: Callable[..., Any] | None,
@@ -283,6 +324,7 @@ def build_dummy_payload(
     write_basic_semantic_yaml_fn: Callable[..., Any] | None = None,
     write_minimal_tags_raw_fn: Callable[..., Any] | None = None,
     validate_dummy_structure_fn: Callable[..., Any] | None = None,
+    ensure_spacy_available_fn: Callable[[DummyPolicy], None] | None = None,
     run_vision_with_timeout_fn: Callable[..., tuple[bool, Optional[Dict[str, Any]]]] = run_vision_with_timeout,
     call_drive_min_fn: Callable[..., Optional[Dict[str, Any]]] = call_drive_min,
     call_drive_emit_readmes_fn: Callable[..., Optional[Dict[str, Any]]] = call_drive_emit_readmes,
@@ -293,6 +335,15 @@ def build_dummy_payload(
     del open_for_read_bytes_selfguard
     del load_vision_template_sections
     del get_client_config
+    if policy is None:
+        policy = DummyPolicy(
+            mode="deep" if deep_testing else "smoke",
+            strict=True,
+            ci=False,
+            allow_downgrade=False,
+            require_registry=True,
+        )
+    spacy_checker = ensure_spacy_available_fn or _ensure_spacy_available
     semantic_active = enable_semantic
     if enable_semantic and not enable_vision:
         logger.info("tools.gen_dummy_kb.semantic_disabled_without_vision", extra={"slug": slug})
@@ -339,6 +390,26 @@ def build_dummy_payload(
         logger.info("tools.gen_dummy_kb.preview_skipped", extra={"slug": slug})
 
     ensure_local_workspace_for_ui(slug=slug, client_name=client_name, vision_statement_pdf=None)
+    workspace_root = client_base(slug)
+    for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
+        (workspace_root / child).mkdir(parents=True, exist_ok=True)
+    normalized_index = workspace_root / "normalized" / "INDEX.json"
+    if not normalized_index.exists():
+        safe_write_text(normalized_index, "{}", encoding="utf-8", atomic=True)
+    template_config = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
+    config_path = workspace_root / "config" / "config.yaml"
+    if template_config.exists():
+        text = read_text_safe(template_config.parent, template_config, encoding="utf-8")
+        safe_write_text(config_path, text, encoding="utf-8", atomic=True)
+    elif not config_path.exists():
+        safe_write_text(config_path, "version: 1\n", encoding="utf-8", atomic=True)
+    book_dir = workspace_root / "book"
+    readme_path = book_dir / "README.md"
+    if not readme_path.exists():
+        safe_write_text(readme_path, "# Dummy\n", encoding="utf-8", atomic=True)
+    summary_path = book_dir / "SUMMARY.md"
+    if not summary_path.exists():
+        safe_write_text(summary_path, "* [Dummy](README.md)\n", encoding="utf-8", atomic=True)
 
     try:
         pre_onboarding_main(
@@ -350,11 +421,18 @@ def build_dummy_payload(
         )
     except Exception as exc:
         msg = f"pre_onboarding fallito: {exc}"
-        raise HardCheckError(msg, _hardcheck_health("pre_onboarding_hardcheck", msg)) from exc
+        raise HardCheckError(
+            msg,
+            build_hardcheck_health(
+                "pre_onboarding_hardcheck",
+                msg,
+                mode=policy.mode,
+            ),
+        ) from exc
 
-    register_client_fn(slug, client_name)
+    register_client_fn(slug, client_name, policy=policy)
 
-    base_dir = client_base(slug)
+    base_dir = workspace_root
     _merge_config_with_template(base_dir, logger=logger)
     semantic_dir = base_dir / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
@@ -376,6 +454,9 @@ def build_dummy_payload(
     vision_completed = False
     hard_check_results: Dict[str, tuple[bool, str, int | None]] = {}
     soft_errors: List[str] = []
+    fallback_used = False
+    degraded_stop_code: str | None = None
+    degraded_reason: str | None = None
 
     if enable_vision:
         pdf_path_resolved = pdf_path(slug)
@@ -394,7 +475,11 @@ def build_dummy_payload(
                     pass
                 raise HardCheckError(
                     msg,
-                    _hardcheck_health("vision_hardcheck", msg),
+                    build_hardcheck_health(
+                        "vision_hardcheck",
+                        msg,
+                        mode=policy.mode,
+                    ),
                 ) from exc
         start = perf_counter()
         success, vision_meta = run_vision_with_timeout_fn(
@@ -415,14 +500,32 @@ def build_dummy_payload(
                 )
             except Exception:
                 pass
-            raise HardCheckError(
-                f"Vision fallita: {message}",
-                _hardcheck_health("vision_hardcheck", message, latency_ms),
-            )
-        vision_completed = True
-        vision_status = "ok"
-        hard_check_results["vision_hardcheck"] = (True, "Vision completata", latency_ms)
-        _ensure_semantic_mapping_has_tagger(safe_mapping_path)
+            if policy.allow_downgrade:
+                fallback_used = True
+                degraded_reason = f"Vision fallita: {message} (downgraded to smoke)"
+                degraded_stop_code = "DUMMY_DEGRADED_TO_SMOKE"
+                hard_check_results["vision_hardcheck"] = (
+                    False,
+                    degraded_reason,
+                    latency_ms,
+                )
+                soft_errors.append(degraded_reason)
+                vision_status = "degraded"
+            else:
+                raise HardCheckError(
+                    f"Vision fallita: {message}",
+                    build_hardcheck_health(
+                        "DUMMY_VISION_UNAVAILABLE",
+                        message,
+                        mode=policy.mode,
+                        latency_ms=latency_ms,
+                    ),
+                )
+        else:
+            vision_completed = True
+            vision_status = "ok"
+            hard_check_results["vision_hardcheck"] = (True, "Vision completata", latency_ms)
+            _ensure_semantic_mapping_has_tagger(safe_mapping_path)
     else:
         vision_status = "skipped"
 
@@ -430,11 +533,15 @@ def build_dummy_payload(
     logs_dir: Path | None = None
 
     if semantic_active:
+        spacy_checker(policy)
         try:
             run_raw_ingest(slug=slug, source="local", local_path=None, non_interactive=True)
         except Exception as exc:
             msg = f"raw_ingest fallito: {exc}"
-            raise HardCheckError(msg, _hardcheck_health("raw_ingest", msg))
+            raise HardCheckError(
+                msg,
+                build_hardcheck_health("raw_ingest", msg, mode=policy.mode),
+            )
 
         run_id = uuid.uuid4().hex
         semantic_ctx = PipelineClientContext.load(
@@ -455,7 +562,11 @@ def build_dummy_payload(
         if logs_dir is None:
             raise HardCheckError(
                 "Logs dir mancante per QA evidence.",
-                _hardcheck_health("qa_evidence", "logs dir mancante"),
+                build_hardcheck_health(
+                    "qa_evidence",
+                    "logs dir mancante",
+                    mode=policy.mode,
+                ),
             )
         qa_checks = ["raw_ingest", "semantic.convert_markdown", "semantic.write_summary_and_readme"]
         write_qa_evidence(logs_dir, checks_executed=qa_checks, qa_status="pass", logger=logger_semantic)
@@ -486,7 +597,15 @@ def build_dummy_payload(
             latency_ms = int((perf_counter() - drive_start) * 1000)
             if deep_testing:
                 msg = f"Drive hard check fallito: {exc}"
-                raise HardCheckError(msg, _hardcheck_health("drive_hardcheck", msg, latency_ms)) from exc
+                raise HardCheckError(
+                    msg,
+                    build_hardcheck_health(
+                        "drive_hardcheck",
+                        msg,
+                        mode=policy.mode,
+                        latency_ms=latency_ms,
+                    ),
+                ) from exc
             logger.warning(
                 "tools.gen_dummy_kb.drive_provisioning_failed",
                 extra={"error": str(exc), "slug": slug},
@@ -507,7 +626,8 @@ def build_dummy_payload(
 
     health: Dict[str, Any] = {
         "vision_status": vision_status,
-        "fallback_used": False,
+        "fallback_used": fallback_used,
+        "stop_code": degraded_stop_code,
         "raw_pdf_count": _count_raw_pdfs(base_dir),
         "tags_count": _count_tags(base_dir),
         "mapping_valid": (semantic_dir / "semantic_mapping.yaml").exists(),
@@ -519,6 +639,8 @@ def build_dummy_payload(
         "external_checks": {},
         "mode": "deep" if deep_testing else "smoke",
     }
+    if fallback_used:
+        health["status"] = "degraded"
     if soft_errors:
         health["errors"].extend(soft_errors)
     if hard_check_results:

@@ -76,6 +76,7 @@ def test_semantic_toggle_skips_artifact_calls(tmp_path: Path) -> None:
         ensure_book_skeleton_fn=_book_skeleton,
         write_minimal_tags_raw_fn=_raise_if_called,
         validate_dummy_structure_fn=_raise_if_called,
+        ensure_spacy_available_fn=lambda policy: None,
     )
 
     assert payload["health"]["mode"] == "smoke"

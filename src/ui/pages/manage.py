@@ -158,7 +158,9 @@ def _render_missing_layout(slug: str) -> None:
     stop_fn = getattr(st, "stop", None)
     if callable(stop_fn):
         stop_fn()
-    raise RuntimeError("Workspace dummy mancante o incompleto: genera il dummy con tools/gen_dummy_kb.py prima di aprire la UI.")
+    raise RuntimeError(
+        "Workspace dummy mancante o incompleto: genera il dummy con tools/gen_dummy_kb.py prima di aprire la UI."
+    )
 
 
 # Services (gestiscono cache e bridging verso i component)

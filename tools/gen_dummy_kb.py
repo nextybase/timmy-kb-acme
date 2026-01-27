@@ -84,6 +84,8 @@ class _DummyPayload(TypedDict):
 
 from pipeline.capabilities import dummy_kb as dummy_kb_capabilities
 from tools.dummy import bootstrap as dummy_bootstrap
+from tools.dummy.health import build_hardcheck_health
+from tools.dummy.policy import DummyPolicy
 
 # ------------------------------------------------------------
 # Path bootstrap (repo root + src)
@@ -249,8 +251,14 @@ def _pdf_path(slug: str) -> Path:
     return _pdf_path_helper(slug, REPO_ROOT, get_env_var)
 
 
-def _register_client(slug: str, client_name: str) -> None:
-    _register_client_helper(slug, client_name, ClientEntry=ClientEntry, upsert_client=upsert_client)
+def _register_client(slug: str, client_name: str, *, policy: DummyPolicy) -> None:
+    _register_client_helper(
+        slug,
+        client_name,
+        ClientEntry=ClientEntry,
+        upsert_client=upsert_client,
+        policy=policy,
+    )
 
 
 def _validate_dummy_structure(base_dir: Path, logger: logging.Logger) -> None:
@@ -327,7 +335,7 @@ def _ensure_local_workspace_for_tooling(*, slug: str, client_name: str, vision_s
     else:
         workspace_root = _client_base(slug)
 
-    for child in ("raw", "semantic", "book", "logs", "config"):
+    for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
         (workspace_root / child).mkdir(parents=True, exist_ok=True)
 
     config_path = ensure_within_and_resolve(workspace_root, workspace_root / "config" / "config.yaml")
@@ -382,6 +390,16 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "--deep-testing",
         action="store_true",
         help="Attiva la modalità deep testing (modo log only).",
+    )
+    ap.add_argument(
+        "--ci",
+        action="store_true",
+        help="Segnala che l'esecuzione è parte della pipeline CI (no downgrade).",
+    )
+    ap.add_argument(
+        "--allow-downgrade",
+        action="store_true",
+        help="Permette di degradare a smoke quando Vision non è disponibile (default: off).",
     )
     ap.add_argument(
         "--brute-reset",
@@ -506,6 +524,7 @@ def build_payload(
     records_hint: Optional[str],
     deep_testing: bool = False,
     logger: logging.Logger,
+    policy: DummyPolicy | None = None,
 ) -> _DummyPayload:
     vision_statement_pdf_bytes = _load_vision_statement_pdf_bytes()
 
@@ -553,6 +572,7 @@ def build_payload(
         ensure_local_readmes_fn=_ensure_local_readmes,
         ensure_book_skeleton_fn=_ensure_book_skeleton,
         validate_dummy_structure_fn=_validate_dummy_structure,
+        policy=policy,
         call_drive_min_fn=_call_drive_min,
         call_drive_emit_readmes_fn=_call_drive_emit_readmes,
     )
@@ -657,6 +677,20 @@ def main(argv: Optional[list[str]] = None) -> int:
             for child in ("raw", "semantic", "book", "logs", "config"):
                 (workspace_override / child).mkdir(parents=True, exist_ok=True)
 
+        policy = DummyPolicy(
+            mode=mode_label,
+            strict=True,
+            ci=args.ci,
+            allow_downgrade=args.allow_downgrade,
+            require_registry=True,
+        )
+        if policy.ci and policy.allow_downgrade:
+            msg = "--allow-downgrade non è consentito durante la CI"
+            health = build_hardcheck_health("DUMMY_POLICY_INVALID", msg, mode=policy.mode)
+            if HardCheckError is not None:
+                raise HardCheckError(msg, health)
+            raise SystemExit(msg)
+
         try:
             with workspace_validation_policy(skip_validation=True):
                 import pipeline.workspace_layout as _wl
@@ -675,6 +709,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                     records_hint=records_hint,
                     logger=logger,
                     deep_testing=args.deep_testing,
+                    policy=policy,
                 )
             emit_structure(payload)
             logger.info(_format_mode_summary(mode), extra={"mode": mode_label, "runtime_mode": mode.__dict__})

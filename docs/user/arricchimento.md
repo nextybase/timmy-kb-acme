@@ -42,6 +42,9 @@ Le decisioni di stato sono sempre demandate a:
   - la run tecnica **deve fallire**,
   - viene prodotto evento strutturato,
   - il Gatekeeper decide se BLOCK o FAIL.
+- Nel flusso dummy viene anche sollevato il codice `DUMMY_SPACY_UNAVAILABLE`
+  se SpaCy o il modello `it_core_news_sm` non sono stati installati; non è previsto
+  alcun fallback automatizzato a `heuristic` (la Beta 1.0 richiede la presenza dell'NLP completo).
 
 ### Requisiti del modello SpaCy
 - Il backend `spacy` richiede il modello linguistico preinstallato `it_core_news_sm` (o quello configurato in `SPACY_MODEL`).

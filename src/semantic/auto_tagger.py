@@ -252,42 +252,46 @@ def extract_semantic_candidates(
     candidates = _extract_semantic_candidates_heuristic(normalized_dir, cfg, pdfs=safe_pdfs)
 
     backend_env = os.getenv("TAGS_NLP_BACKEND", cfg.nlp_backend).strip().lower()
-    if backend_env == "spacy":
-        try:
-            from semantic.spacy_extractor import extract_spacy_tags
+    if backend_env != "spacy":
+        raise ConfigError(
+            "Il backend SpaCy è obbligatorio per Beta 1.0; imposta TAGS_NLP_BACKEND=spacy e installa il modello.",
+            file_path=str(normalized_dir),
+        )
+    model_name = os.getenv("SPACY_MODEL", cfg.spacy_model)
+    try:
+        from semantic.spacy_extractor import extract_spacy_tags
 
-            model_name = os.getenv("SPACY_MODEL", cfg.spacy_model)
-            spacy_candidates = extract_spacy_tags(
-                normalized_dir,
-                cfg,
-                model_name=model_name,
-                logger=LOGGER,
-            )
-            candidates = _merge_spacy_candidates(candidates, spacy_candidates)
-            if spacy_candidates:
-                with start_decision_span(
-                    "semantic_classification",
-                    slug=None,
-                    run_id=None,
-                    trace_kind="onboarding",
-                    phase="semantic.auto_tagger",
-                    attributes={
-                        "decision_type": "semantic_classification",
-                        "dataset_area": getattr(cfg.mapping, "name", None),
-                        "model_version": os.getenv("SPACY_MODEL", cfg.spacy_model),
-                        "status": "success",
-                    },
-                ):
-                    LOGGER.info(
-                        "semantic.auto_tagger.spacy_used",
-                        extra={"count": len(spacy_candidates)},
-                    )
-        except Exception as exc:
-            err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
-            err_type = type(exc).__name__
-            raise ConfigError(
-                f"SpaCy fallito (model={model_name}): {err_type}: {err_line}",
-            ) from exc
+        spacy_candidates = extract_spacy_tags(
+            normalized_dir,
+            cfg,
+            model_name=model_name,
+            logger=LOGGER,
+        )
+        candidates = _merge_spacy_candidates(candidates, spacy_candidates)
+        if spacy_candidates:
+            with start_decision_span(
+                "semantic_classification",
+                slug=None,
+                run_id=None,
+                trace_kind="onboarding",
+                phase="semantic.auto_tagger",
+                attributes={
+                    "decision_type": "semantic_classification",
+                    "dataset_area": getattr(cfg.mapping, "name", None),
+                    "model_version": os.getenv("SPACY_MODEL", cfg.spacy_model),
+                    "status": "success",
+                },
+            ):
+                LOGGER.info(
+                    "semantic.auto_tagger.spacy_used",
+                    extra={"count": len(spacy_candidates)},
+                )
+    except Exception as exc:
+        err_line = str(exc).splitlines()[0].strip() if str(exc) else ""
+        err_type = type(exc).__name__
+        raise ConfigError(
+            f"SpaCy fallito (model={model_name}): {err_type}: {err_line}",
+        ) from exc
     return candidates
 
 
