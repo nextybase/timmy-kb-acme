@@ -230,6 +230,7 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
         return {"ok": True}
 
     monkeypatch.setattr(orchestrator, "compile_document_to_vision_yaml", _compile)
+    monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
     policy = DummyPolicy(mode="deep", strict=True, ci=False, allow_downgrade=True, require_registry=True)
 
     payload = orchestrator.build_dummy_payload(
@@ -237,7 +238,7 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
         client_name="Dummy",
         enable_drive=True,
         enable_vision=True,
-        enable_semantic=True,
+        enable_semantic=False,
         enable_enrichment=False,
         enable_preview=False,
         records_hint=None,
@@ -275,7 +276,7 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
     vision_check = payload["health"]["external_checks"]["vision_hardcheck"]
     assert vision_check["ok"] is False
     assert "downgraded to smoke" in vision_check["details"].lower()
-    assert "quota/billing" in vision_check["details"].lower()
+    assert "insufficient_quota" in vision_check["details"].lower()
     assert payload["health"]["external_checks"]["drive_hardcheck"]["ok"] is True
     assert any("downgraded to smoke" in err.lower() for err in payload["health"]["errors"])
     assert drive_calls == {"min": 1, "readmes": 1}
@@ -424,6 +425,7 @@ def test_deep_testing_non_quota_vision_failure_still_raises(
 def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
     tmp_path: Path,
     logger: logging.Logger,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
@@ -438,6 +440,11 @@ def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
 
     base_dir = layout.repo_root_dir
     (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+    vision_yaml_path = orchestrator.vision_yaml_workspace_path(
+        base_dir, pdf_path=base_dir / "config" / "VisionStatement.pdf"
+    )
+    vision_yaml_path.parent.mkdir(parents=True, exist_ok=True)
+    vision_yaml_path.write_text("sections: []\n", encoding="utf-8")
     safe_write_text(
         base_dir / "config" / "config.yaml",
         "meta:\n  client_name: Dummy Pipeline\n",
@@ -453,6 +460,38 @@ def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
     (base_dir / "semantic" / "tags.db").write_bytes(b"")
     (base_dir / "raw").mkdir(parents=True, exist_ok=True)
     (base_dir / "raw" / "sample.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+    monkeypatch.setattr(
+        orchestrator,
+        "run_raw_ingest",
+        lambda **_: safe_write_text(
+            base_dir / "normalized" / "dummy.md",
+            "# dummy\n",
+            encoding="utf-8",
+            atomic=True,
+        )
+        or safe_write_text(
+            base_dir / "book" / "dummy.md",
+            "# dummy book page\n",
+            encoding="utf-8",
+            atomic=True,
+        ),
+    )
+    monkeypatch.setattr(orchestrator, "semantic_convert_markdown", lambda *_, **__: None)
+    monkeypatch.setattr(orchestrator, "semantic_write_summary_and_readme", lambda *_, **__: None)
+    monkeypatch.setattr(
+        orchestrator,
+        "PipelineClientContext",
+        type(
+            "DummyCtx",
+            (),
+            {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": layout.logs_dir, "log_dir": layout.logs_dir})())},
+        ),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "WorkspaceLayout",
+        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: layout)}),
+    )
 
     def _vision_stub(**_: Any) -> tuple[bool, None]:
         return True, None

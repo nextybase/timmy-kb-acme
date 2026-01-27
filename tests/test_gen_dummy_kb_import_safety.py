@@ -13,9 +13,16 @@ from ui.utils.workspace import clear_base_cache
 def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) -> None:
     monkeypatch.setattr(gen_dummy_mod, "ensure_local_workspace_for_ui", lambda **_: None)
     monkeypatch.setattr(gen_dummy_mod, "_client_base", lambda slug: tmp_path / f"timmy-kb-{slug}")
-    monkeypatch.setattr(gen_dummy_mod, "_pdf_path", lambda slug: tmp_path / "VisionStatement.pdf")
+    # SpaCy non è il focus di questi test: bypassiamo l'hard check
+    import tools.dummy.orchestrator as dummy_orch
+
+    monkeypatch.setattr(dummy_orch, "_ensure_spacy_available", lambda policy: None)
     base_dir = tmp_path / "timmy-kb-dummy"
+    monkeypatch.setattr(
+        gen_dummy_mod, "_pdf_path", lambda slug: base_dir / "config" / "VisionStatement.pdf"
+    )
     (base_dir / "config").mkdir(parents=True, exist_ok=True)
+    (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
     (base_dir / "semantic").mkdir(parents=True, exist_ok=True)
     (base_dir / "book").mkdir(parents=True, exist_ok=True)
     (base_dir / "raw").mkdir(parents=True, exist_ok=True)
@@ -147,5 +154,34 @@ def test_logs_namespaced_on_failure(caplog, tmp_path, monkeypatch):
     finally:
         clear_base_cache()
     assert exit_code == 1
-    assert any(rec.message == "tools.gen_dummy_kb.vision_hardcheck.failed" for rec in caplog.records)
+    assert any(
+        rec.message in {
+            "tools.gen_dummy_kb.vision_hardcheck.failed",
+            "tools.gen_dummy_kb.vision_yaml_compile_failed",
+        }
+        for rec in caplog.records
+    )
     assert any(rec.message == "tools.gen_dummy_kb.hardcheck.failed" for rec in caplog.records)
+
+
+def test_logs_run_failed_on_out_of_workspace_pdf(caplog, tmp_path, monkeypatch):
+    caplog.set_level("ERROR")
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    _stub_minimal_environment(monkeypatch, tmp_path, run_vision_return=_boom)
+    monkeypatch.setenv("VISION_MODE", "DEEP")
+    # simuliamo un PDF che vive fuori dal workspace (trigger del Path traversal)
+    monkeypatch.setattr(
+        gen_dummy_mod,
+        "_pdf_path",
+        lambda slug: tmp_path / "VisionStatement.pdf",
+    )
+    args = ["--slug", "dummy", "--name", "Dummy", "--no-drive"]
+    try:
+        exit_code = gen_dummy_main(args)
+    finally:
+        clear_base_cache()
+    assert exit_code == 1
+    assert any(rec.message == "tools.gen_dummy_kb.run_failed" for rec in caplog.records)

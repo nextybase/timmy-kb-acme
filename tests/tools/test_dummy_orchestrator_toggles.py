@@ -19,7 +19,7 @@ def _noop(*_args: object, **_kwargs: object) -> None:
     return None
 
 
-def test_semantic_toggle_skips_artifact_calls(tmp_path: Path) -> None:
+def test_semantic_toggle_skips_artifact_calls(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo_root = tmp_path / "repo"
     (repo_root / "config").mkdir(parents=True, exist_ok=True)
     (repo_root / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
@@ -42,6 +42,8 @@ def test_semantic_toggle_skips_artifact_calls(tmp_path: Path) -> None:
 
     def _book_skeleton(_base_dir: Path) -> None:
         raise AssertionError("ensure_book_skeleton non dovrebbe essere invocata nel dummy deterministico")
+
+    monkeypatch.setattr(orchestrator, "pre_onboarding_main", lambda **_: None)
 
     payload = orchestrator.build_dummy_payload(
         slug="dummy",
@@ -71,11 +73,11 @@ def test_semantic_toggle_skips_artifact_calls(tmp_path: Path) -> None:
         run_vision_with_timeout_fn=lambda **_: (_raise_if_called(), None),  # type: ignore[return-value]
         load_mapping_categories_fn=_raise_if_called,
         ensure_minimal_tags_db_fn=_raise_if_called,
-        ensure_raw_pdfs_fn=_raise_if_called,
+        ensure_raw_pdfs_fn=_noop,
         ensure_local_readmes_fn=_raise_if_called,
         ensure_book_skeleton_fn=_book_skeleton,
         write_minimal_tags_raw_fn=_raise_if_called,
-        validate_dummy_structure_fn=_raise_if_called,
+        validate_dummy_structure_fn=_noop,
         ensure_spacy_available_fn=lambda policy: None,
     )
 

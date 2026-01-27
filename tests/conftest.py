@@ -396,6 +396,11 @@ def dummy_workspace(tmp_path_factory):
     base_parent = tmp_path_factory.mktemp("kbws")
     clients_db_relative = Path("clients_db/clients.yaml")
 
+    # I test UI non verificano la presenza del modello SpaCy: bypassiamo l'hard check
+    import tools.dummy.orchestrator as dummy_orch
+
+    dummy_orch._ensure_spacy_available = lambda policy: None
+
     rc = _gen_dummy_main(
         [
             "--base-dir",
@@ -406,6 +411,8 @@ def dummy_workspace(tmp_path_factory):
             "0",  # niente finanza per i test generici
             "--clients-db",
             clients_db_relative.as_posix(),
+            "--no-semantic",
+            "--no-preview",
         ]
     )
     assert rc == 0, "gen_dummy_kb.py non è riuscito a creare il workspace"

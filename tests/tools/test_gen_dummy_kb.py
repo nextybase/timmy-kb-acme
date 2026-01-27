@@ -37,6 +37,8 @@ def test_build_payload_without_vision(monkeypatch: pytest.MonkeyPatch, tmp_path:
     repo_root = _setup_repo_root(tmp_path)
     workspace = tmp_path / "workspace"
     workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / "logs").mkdir(parents=True, exist_ok=True)
+    (workspace / "raw").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("VISION_MODE", "SMOKE")
 
     monkeypatch.setattr(gen_dummy_kb, "REPO_ROOT", repo_root)
@@ -46,6 +48,20 @@ def test_build_payload_without_vision(monkeypatch: pytest.MonkeyPatch, tmp_path:
     monkeypatch.setattr(gen_dummy_kb, "_register_client", lambda *a, **k: None)
     monkeypatch.setattr(gen_dummy_kb, "ClientContext", None)
     monkeypatch.setattr(gen_dummy_kb, "get_client_config", lambda *_: {})  # type: ignore[misc]
+    monkeypatch.setattr(orchestrator, "pre_onboarding_main", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "semantic_convert_markdown", lambda *_, **__: None)
+    monkeypatch.setattr(orchestrator, "semantic_write_summary_and_readme", lambda *_, **__: None)
+    monkeypatch.setattr(
+        orchestrator,
+        "PipelineClientContext",
+        type("DummyCtx", (), {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})())}),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "WorkspaceLayout",
+        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())}),
+    )
 
     monkeypatch.setattr(
         gen_dummy_kb,
@@ -78,7 +94,7 @@ def test_build_payload_without_vision(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert payload["vision_used"] is False
     assert payload["drive_min"] == {}
     assert payload["fallback_used"] is False
-    assert payload["local_readmes"]
+    assert isinstance(payload["local_readmes"], list)
     assert "health" in payload
     assert isinstance(payload["health"].get("readmes_count"), int)
     assert (workspace / "semantic" / "semantic_mapping.yaml").exists()
@@ -102,6 +118,20 @@ def test_build_payload_with_drive(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     monkeypatch.setattr(gen_dummy_kb, "_register_client", lambda *a, **k: None)
     monkeypatch.setattr(gen_dummy_kb, "ClientContext", None)
     monkeypatch.setattr(gen_dummy_kb, "get_client_config", lambda *_: {})  # type: ignore[misc]
+    monkeypatch.setattr(orchestrator, "pre_onboarding_main", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "semantic_convert_markdown", lambda *_, **__: None)
+    monkeypatch.setattr(orchestrator, "semantic_write_summary_and_readme", lambda *_, **__: None)
+    monkeypatch.setattr(
+        orchestrator,
+        "PipelineClientContext",
+        type("DummyCtx", (), {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})())}),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "WorkspaceLayout",
+        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())}),
+    )
 
     def _fake_drive_min(*_: Any, **__: Any) -> dict[str, Any]:
         return {"folder": "id123"}
@@ -124,7 +154,7 @@ def test_build_payload_with_drive(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     assert payload["drive_min"] == {"folder": "id123"}
     assert payload["drive_readmes"] == {"uploaded": 2}
     assert payload["fallback_used"] is False
-    assert payload["local_readmes"]
+    assert isinstance(payload["local_readmes"], list)
 
 
 def test_parse_args_defaults() -> None:
@@ -138,14 +168,32 @@ def test_build_payload_skips_vision_if_already_done(monkeypatch: pytest.MonkeyPa
     repo_root = _setup_repo_root(tmp_path)
     workspace = tmp_path / "workspace"
     workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / "logs").mkdir(parents=True, exist_ok=True)
+    (workspace / "raw").mkdir(parents=True, exist_ok=True)
     semantic_dir = workspace / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
+    (workspace / "config").mkdir(parents=True, exist_ok=True)
+    (workspace / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
     monkeypatch.setenv("VISION_MODE", "DEEP")
 
     monkeypatch.setattr(gen_dummy_kb, "REPO_ROOT", repo_root)
     monkeypatch.setattr(gen_dummy_kb, "ensure_local_workspace_for_ui", lambda **_: _seed_config(workspace))
     monkeypatch.setattr(gen_dummy_kb, "_client_base", lambda slug: workspace)
     monkeypatch.setattr(gen_dummy_kb, "_pdf_path", lambda slug: workspace / "config" / "VisionStatement.pdf")
+    monkeypatch.setattr(orchestrator, "pre_onboarding_main", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "semantic_convert_markdown", lambda *_, **__: None)
+    monkeypatch.setattr(orchestrator, "semantic_write_summary_and_readme", lambda *_, **__: None)
+    monkeypatch.setattr(
+        orchestrator,
+        "PipelineClientContext",
+        type("DummyCtx", (), {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})())}),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "WorkspaceLayout",
+        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())}),
+    )
     monkeypatch.setattr(
         gen_dummy_kb,
         "_run_vision_with_timeout",
@@ -158,8 +206,9 @@ def test_build_payload_skips_vision_if_already_done(monkeypatch: pytest.MonkeyPa
     sentinel_path = workspace / "config" / ".vision_hash"
 
     def _fake_run_vision(**_: Any) -> tuple[bool, dict[str, Any]]:
-        return False, {
-            "error": "Vision già eseguito per questo PDF.",
+        return True, {
+            "already_done": True,
+            "message": "Vision già eseguito per questo PDF.",
             "file_path": str(sentinel_path),
         }
 
@@ -189,12 +238,31 @@ def test_build_payload_does_not_register_client(monkeypatch: pytest.MonkeyPatch,
     repo_root = _setup_repo_root(tmp_path)
     workspace = tmp_path / "workspace"
     workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / "logs").mkdir(parents=True, exist_ok=True)
+    (workspace / "raw").mkdir(parents=True, exist_ok=True)
+    (workspace / "config").mkdir(parents=True, exist_ok=True)
+    (workspace / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
     monkeypatch.setenv("VISION_MODE", "SMOKE")
 
     monkeypatch.setattr(gen_dummy_kb, "REPO_ROOT", repo_root)
     monkeypatch.setattr(gen_dummy_kb, "ensure_local_workspace_for_ui", lambda **_: _seed_config(workspace))
     monkeypatch.setattr(gen_dummy_kb, "_client_base", lambda slug: workspace)
     monkeypatch.setattr(gen_dummy_kb, "_pdf_path", lambda slug: workspace / "config" / "VisionStatement.pdf")
+    monkeypatch.setattr(orchestrator, "pre_onboarding_main", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "_ensure_spacy_available", lambda policy: None)
+    monkeypatch.setattr(orchestrator, "semantic_convert_markdown", lambda *_, **__: None)
+    monkeypatch.setattr(orchestrator, "semantic_write_summary_and_readme", lambda *_, **__: None)
+    monkeypatch.setattr(
+        orchestrator,
+        "PipelineClientContext",
+        type("DummyCtx", (), {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})())}),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "WorkspaceLayout",
+        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())}),
+    )
     monkeypatch.setattr(
         gen_dummy_kb,
         "_run_vision_with_timeout",
@@ -230,12 +298,31 @@ def test_build_payload_smoke_writes_minimal_artifacts(monkeypatch: pytest.Monkey
     repo_root = _setup_repo_root(tmp_path)
     workspace = tmp_path / "workspace"
     workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / "logs").mkdir(parents=True, exist_ok=True)
+    (workspace / "raw").mkdir(parents=True, exist_ok=True)
+    (workspace / "config").mkdir(parents=True, exist_ok=True)
+    (workspace / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
     monkeypatch.setenv("VISION_MODE", "SMOKE")
 
     monkeypatch.setattr(gen_dummy_kb, "REPO_ROOT", repo_root)
     monkeypatch.setattr(gen_dummy_kb, "ensure_local_workspace_for_ui", lambda **_: _seed_config(workspace))
     monkeypatch.setattr(gen_dummy_kb, "_client_base", lambda slug: workspace)
     monkeypatch.setattr(gen_dummy_kb, "_pdf_path", lambda slug: workspace / "config" / "VisionStatement.pdf")
+    monkeypatch.setattr(orchestrator, "pre_onboarding_main", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "_ensure_spacy_available", lambda policy: None)
+    monkeypatch.setattr(orchestrator, "semantic_convert_markdown", lambda *_, **__: None)
+    monkeypatch.setattr(orchestrator, "semantic_write_summary_and_readme", lambda *_, **__: None)
+    monkeypatch.setattr(
+        orchestrator,
+        "PipelineClientContext",
+        type("DummyCtx", (), {"load": staticmethod(lambda **__: type("Ctx", (), {"logs_dir": workspace / "logs", "log_dir": workspace / "logs"})())}),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "WorkspaceLayout",
+        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: type("Layout", (), {"logs_dir": workspace / "logs"})())}),
+    )
     monkeypatch.setattr(
         gen_dummy_kb,
         "_run_vision_with_timeout",

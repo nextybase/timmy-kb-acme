@@ -1,12 +1,19 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # tests/ui/test_manage_dedup.py
+import importlib
 import types
 from pathlib import Path
 
-from ui.pages import manage
+
+def _load_manage(monkeypatch, tmp_path: Path):
+    # Evita che la pagina richieda un workspace reale all'import.
+    monkeypatch.setattr("ui.chrome.render_chrome_then_require", lambda allow_without_slug=True: "")
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(tmp_path / "dummy-workspace"))
+    return importlib.reload(importlib.import_module("ui.pages.manage"))
 
 
-def test_manage_shows_single_caption(monkeypatch):
+def test_manage_shows_single_caption(monkeypatch, tmp_path: Path):
+    manage = _load_manage(monkeypatch, tmp_path)
     # stub streamlit
     calls = {"caption": 0, "warning": 0}
     st = types.SimpleNamespace(
