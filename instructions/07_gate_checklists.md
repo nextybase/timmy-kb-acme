@@ -30,6 +30,14 @@ Riferimenti normativi:
   `instructions/06_promptchain_workspace_mapping.md`.
 - Tutti i gate MUST essere conformi a `instructions/10_runtime_strict_contract_beta.md`; ogni violazione implica BLOCK.
 
+## Ambiente Virtuale (venv)
+- Prima di eseguire gli script generativi (es. `tools/gen_dummy_kb.py`), assicurarsi che il `venv` abbia installato il modello SpaCy `it_core_news_sm`.
+- Passaggi consigliati per chi crea/ripristina il venv:
+  1. `venv\Scripts\python -m pip install -e .`
+  2. `venv\Scripts\python -m pip install spacy==3.7.4`
+  3. `venv\Scripts\python -m pip install https://github.com/explosion/spacy-models/releases/download/it_core_news_sm-3.7.0/it_core_news_sm-3.7.0.tar.gz`
+  4. Con questo setup, gli script di semantic gating trovano SpaCy e il modello linguistico richiesto.
+
 ---
 
 ## Modulo 1 - `WORKSPACE_BOOTSTRAP → SEMANTIC_INGEST`

@@ -174,7 +174,7 @@ networkx==3.5
     # via
     #   torch
     #   yake
-numpy==2.3.0
+numpy==1.26.4
     # via
     #   -r requirements.in
     #   blis

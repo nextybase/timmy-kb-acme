@@ -18,7 +18,7 @@ dependencies = [
     "python-slugify~=8.0",
     "PyYAML~=6.0",
     "requests~=2.32",
-    "numpy~=2.3",
+    "numpy==1.26.4",
     # Compat pydantic/types
     "typing-extensions>=4.12,<5",
     "annotated-types~=0.7",

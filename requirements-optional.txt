@@ -117,7 +117,7 @@ networkx==3.5
     #   -c constraints.txt
     #   torch
     #   yake
-numpy==2.3.0
+numpy==1.26.4
     # via
     #   -c constraints.txt
     #   blis
