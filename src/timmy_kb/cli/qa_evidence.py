@@ -15,6 +15,7 @@ from pipeline.observability_config import get_observability_settings
 from pipeline.paths import get_repo_root
 from pipeline.proc_utils import CmdError, run_cmd
 from pipeline.qa_evidence import write_qa_evidence
+from pipeline.runtime_guard import ensure_strict_runtime
 from pipeline.workspace_layout import WorkspaceLayout
 from timmy_kb.versioning import build_env_fingerprint
 
@@ -27,6 +28,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    ensure_strict_runtime(context="cli.qa_evidence")
     repo_root = str(get_repo_root())
     args = _parse_args()
     slug = args.slug

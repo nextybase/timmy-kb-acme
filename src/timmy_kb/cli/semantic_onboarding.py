@@ -27,6 +27,7 @@ from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineEr
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.runtime_guard import ensure_strict_runtime
 from pipeline.semantic_mapping_utils import raw_categories_from_semantic_mapping
 from pipeline.tracing import start_root_trace
 from pipeline.workspace_layout import WorkspaceLayout
@@ -177,6 +178,7 @@ def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
 
 def main() -> int:
     # ENTRYPOINT BOOTSTRAP - consentito: CLI standalone usa la repo root per il workspace.
+    ensure_strict_runtime(context="cli.semantic_onboarding")
     get_repo_root()
     args = _parse_args()
     slug: str = args.slug.strip()

@@ -34,10 +34,17 @@ def _ctx(base_dir: Path) -> TestClientCtx:
     return ctx
 
 
+@pytest.fixture(autouse=True)
+def ensure_strict_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+
+
 def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     args = argparse.Namespace(slug="dummy", no_preview=False, non_interactive=False)
     monkeypatch.setattr(cli, "_parse_args", lambda: args)
     monkeypatch.setattr(cli, "_require_normalize_raw_gate", lambda *_a, **_k: None)
+
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
 
     ctx = _ctx(tmp_path / "output" / "dummy")
     monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))
@@ -88,6 +95,8 @@ def test_main_bubbles_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     args = argparse.Namespace(slug="dummy", no_preview=False, non_interactive=True)
     monkeypatch.setattr(cli, "_parse_args", lambda: args)
     monkeypatch.setattr(cli, "_require_normalize_raw_gate", lambda *_a, **_k: None)
+
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
 
     ctx = _ctx(tmp_path / "output" / "dummy")
     monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))

@@ -8,11 +8,18 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 import semantic.api as sapi
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
 from tests.utils.workspace import ensure_minimal_workspace_layout
 from timmy_kb.cli import semantic_onboarding as mod
+
+
+@pytest.fixture(autouse=True)
+def strict_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
 
 
 class _DummyCtx(SimpleNamespace):

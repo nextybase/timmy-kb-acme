@@ -56,6 +56,7 @@ from pipeline.logging_utils import (
 from pipeline.metrics import start_metrics_server_once
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_valid_slug, ensure_within, read_text_safe  # STRONG guard SSoT
+from pipeline.runtime_guard import ensure_strict_runtime
 from pipeline.tracing import start_root_trace
 from pipeline.types import WorkflowResult
 from pipeline.workspace_bootstrap import bootstrap_client_workspace as _pipeline_bootstrap_client_workspace
@@ -668,6 +669,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main(args: argparse.Namespace) -> None:
     """Entrypoint CLI orchestrato via `run_cli_orchestrator`."""
+    ensure_strict_runtime(context="cli.pre_onboarding")
     run_id = uuid.uuid4().hex
     start_metrics_server_once()
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)

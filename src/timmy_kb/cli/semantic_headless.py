@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, TypeVar, cast
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary
+from pipeline.runtime_guard import ensure_strict_runtime
 from pipeline.tracing import start_root_trace
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.api import require_reviewed_vocab
@@ -234,6 +235,7 @@ def run_semantic_headless(
 
 
 def main() -> int:
+    ensure_strict_runtime(context="cli.semantic_headless")
     args = _parse_args()
     result = run_semantic_headless(
         slug=args.slug,

@@ -10,6 +10,11 @@ from tests.support.contexts import TestClientCtx
 from timmy_kb.cli import semantic_headless as sh
 
 
+@pytest.fixture(autouse=True)
+def strict_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+
+
 def test_headless_fails_without_vocab(tmp_path, monkeypatch):
     base = tmp_path / "output" / "timmy-kb-dummy"
     book = base / "book"

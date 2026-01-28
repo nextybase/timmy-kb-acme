@@ -26,6 +26,7 @@ from pipeline.path_utils import (
     open_for_read_bytes_selfguard,
 )
 from pipeline.raw_transform_service import STATUS_FAIL, STATUS_OK, STATUS_SKIP, get_default_raw_transform_service
+from pipeline.runtime_guard import ensure_strict_runtime
 from pipeline.workspace_layout import WorkspaceLayout
 from storage import decision_ledger
 
@@ -245,6 +246,7 @@ def run_raw_ingest(
 
 
 def main() -> int:
+    ensure_strict_runtime(context="cli.raw_ingest")
     args = _parse_args()
     slug = (args.slug_pos or args.slug or "").strip()
     if not slug:

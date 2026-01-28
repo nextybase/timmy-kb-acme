@@ -10,15 +10,17 @@ Applies to: All Beta 1.0 executions
 ## 1. Contract Vision
 
 The system MUST operate in **deterministic, strict-only mode**.
+Strict-only execution is a **precondition**, not a selectable runtime option.
 
 Execution SHALL be allowed **only** when all structural and semantic prerequisites are present and verifiable.
 Any deviation from declared formats, schemas, or invariants MUST result in a **deterministic hard-fail**.
 
-The system MUST NOT introduce:
+  The system MUST NOT introduce:
 - silent fallbacks
 - best-effort parsing
 - auto-generated structure
 - tolerance-based recovery paths
+- any non-strict or degraded execution mode within runtime
 
 Determinism takes precedence over usability, resilience, or graceful degradation.
 
@@ -37,6 +39,12 @@ Any error on prerequisites or output validity MUST interrupt execution with:
 
 **I-3 -- No silent fallback**
 The system MUST NOT continue execution in best-effort or log-only mode after a critical error.
+
+**I-3bis -- Strict-only runtime**
+The runtime core MUST NOT support non-strict execution paths.
+Any behavior that relies on heuristics, fallbacks, partial execution,
+capability probing, or tolerance-based recovery is **out of scope for runtime**
+and MUST be implemented exclusively as external tooling.
 
 **I-4 -- Binding Ledger**
 Decision Records (ledger) are binding.
@@ -94,6 +102,26 @@ Optional adapter prerequisites (Drive):
 - extras `.[drive]`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`;
 - missing prerequisites MUST raise an explicit capability error (no degraded behavior);
 - `--dry-run` and local modes are first-class and do not depend on Drive.
+
+---
+
+## 2quater. Runtime vs Tooling Boundary (Beta 1.0)
+
+The architecture distinguishes **runtime strict execution** from **supporting tooling**.
+
+**Runtime (strict-only):**
+- executes state transitions;
+- produces Decision Records and canonical artefacts;
+- enforces invariants and schemas;
+- fails fast on any missing prerequisite.
+
+**Tooling (out of runtime scope):**
+- environment checks, capability probes, provisioning helpers;
+- bootstrap, migration, or diagnostic utilities;
+- heuristic inference of paths, roots, or defaults;
+- any user-facing guidance or recovery suggestions.
+
+Tooling MUST NOT produce Decision Records, advance state, or generate canonical artefacts.
 
 ---
 
@@ -161,6 +189,10 @@ The system MUST hard-fail in the following cases:
 - `strict_output` is not `True`
 - Vision LLM output contains code fences or extra text
 - Goal parsing without valid `Goal N` blocks
+- any attempt to execute runtime logic with:
+  - missing or unresolved configuration,
+  - unavailable required capability,
+  - heuristic or fallback-derived inputs.
 - Missing, empty, or unreadable `tags.db` when required
 - `TAGS_NLP_BACKEND == "spacy"` and SpaCy is unavailable or errors
 - Failure of `doc_entities` enrichment when invoked

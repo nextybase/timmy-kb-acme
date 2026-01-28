@@ -14,6 +14,7 @@ from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_valid_slug, ensure_within_and_resolve
+from pipeline.runtime_guard import ensure_strict_runtime
 from pipeline.workspace_layout import WorkspaceLayout
 from timmy_kb.cli.kg_builder import build_kg_for_workspace
 from timmy_kb.versioning import build_env_fingerprint
@@ -109,6 +110,7 @@ def kg_build_main(
 
 
 def main(args: argparse.Namespace) -> None:
+    ensure_strict_runtime(context="cli.kg_build")
     run_id = args.run_id or uuid.uuid4().hex
     early_logger = get_structured_logger("kg_build", run_id=run_id)
 

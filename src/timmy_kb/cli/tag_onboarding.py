@@ -63,6 +63,7 @@ from pipeline.path_utils import (  # STRONG guard SSoT
     iter_safe_paths,
     open_for_read_bytes_selfguard,
 )
+from pipeline.runtime_guard import ensure_strict_runtime
 from pipeline.tracing import start_root_trace
 from pipeline.types import TaggingPayload
 from pipeline.workspace_layout import WorkspaceLayout
@@ -990,6 +991,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main(args: argparse.Namespace) -> int | None:
     """Entrypoint CLI orchestrato via `run_cli_orchestrator`."""
+    ensure_strict_runtime(context="cli.tag_onboarding")
     run_id = uuid.uuid4().hex
     start_metrics_server_once()
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
