@@ -10,10 +10,8 @@ Obiettivi:
   `pipeline.path_utils.ensure_within` (SSoT) e va chiamata dai *callers* prima di scrivere.
 
 Indice (ruolo funzioni):
-- `_fsync_file(fd, *, path=None, allow_fallback=False)`: sincronizza il file descriptor.
-  - `allow_fallback=True` abilita un fallback esplicito (log warning) senza sollevare.
-- `_fsync_dir(dir_path, allow_fallback=False)`: sincronizza la directory padre.
-  - `allow_fallback=True` abilita un fallback esplicito (log warning) senza sollevare.
+- `_fsync_file(fd, *, path=None)`: sincronizza il file descriptor in modo deterministico.
+- `_fsync_dir(dir_path)`: sincronizza la directory padre in modo deterministico.
 - `safe_write_text(path, data, *, encoding="utf-8", atomic=True, fsync=False)`:
   scrittura **testo** sicura.
   - Crea le directory mancanti.
@@ -23,7 +21,7 @@ Indice (ruolo funzioni):
 - `safe_write_bytes(path, data, *, atomic=True, fsync=False)`: come sopra, per **bytes**.
 
 Note:
-- Nessun fsync implicito quando `fsync=False`; i fallback sono opt-in.
+- Nessun fsync implicito quando `fsync=False`; tutti gli fsync sono deterministici e falliscono fast.
 - Questo modulo non valida che `path` sia "dentro" un perimetro: quel controllo va fatto a monte.
 """
 
@@ -53,28 +51,16 @@ def _post_write_hooks(path: Path) -> None:
         refresh_iter_safe_pdfs_cache_for_path(Path(path), prewarm=True)
 
 
-def _fsync_file(fd: int, *, path: Optional[Path] = None, allow_fallback: bool = False) -> None:
-    """Sincronizza il file descriptor.
-
-    Se `allow_fallback=True`, su errore logga e continua; altrimenti solleva `ConfigError`.
-    """
+def _fsync_file(fd: int, *, path: Optional[Path] = None) -> None:
+    """Sincronizza il file descriptor e fallisce fast se l'operazione non riesce."""
     try:
         os.fsync(fd)
     except Exception as exc:  # pragma: no cover - dipende da l'FS
-        if allow_fallback:
-            _logger.warning(
-                "file_utils.fsync_file_failed",
-                extra={"file_path": str(path) if path else None, "error": str(exc)},
-            )
-            return
         raise ConfigError("fsync(file) fallito.", file_path=str(path) if path else None) from exc
 
 
-def _fsync_dir(dir_path: Path, *, allow_fallback: bool = False) -> None:
-    """Sincronizza la directory contenitore.
-
-    Se `allow_fallback=True`, su errore logga e continua; altrimenti solleva `ConfigError`.
-    """
+def _fsync_dir(dir_path: Path) -> None:
+    """Sincronizza la directory contenitore e fallisce fast se l'operazione non riesce."""
     try:
         flags = getattr(os, "O_DIRECTORY", 0)
         dir_str = to_extended_length_path(dir_path)
@@ -84,12 +70,6 @@ def _fsync_dir(dir_path: Path, *, allow_fallback: bool = False) -> None:
         finally:
             os.close(dfd)
     except Exception as exc:  # pragma: no cover - dipende da l'OS/FS
-        if allow_fallback:
-            _logger.warning(
-                "file_utils.fsync_dir_failed",
-                extra={"dir_path": str(dir_path), "error": str(exc)},
-            )
-            return
         raise ConfigError("fsync(dir) fallito.", file_path=str(dir_path)) from exc
 
 
@@ -280,7 +260,6 @@ def safe_append_text(
     encoding: str = "utf-8",
     lock_timeout: float = 5.0,
     fsync: bool = False,
-    fsync_dir_allow_fallback: bool = False,
 ) -> None:
     """Appende testo in modo sicuro usando path-safety, lock file e append diretto.
 
@@ -288,8 +267,7 @@ def safe_append_text(
     del lock file. Lo trattiamo come contesa del lock (al pari di FileExistsError),
     con piccoli retry fino a lock_timeout.
 
-    - Con `fsync=True` sincronizza file e directory.
-    - `fsync_dir_allow_fallback=True` abilita il fallback esplicito per fsync(dir).
+    - Con `fsync=True` sincronizza file e directory in modo deterministico.
     """
     root_dir = Path(root_dir)
     resolved_base = root_dir.resolve()
@@ -334,7 +312,7 @@ def safe_append_text(
                     f.flush()
                     _fsync_file(f.fileno(), path=resolved)
             if fsync:
-                _fsync_dir(parent_path, allow_fallback=fsync_dir_allow_fallback)
+                _fsync_dir(parent_path)
         except Exception as exc:
             raise ConfigError(
                 "Append fallito.",
