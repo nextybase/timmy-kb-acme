@@ -340,7 +340,6 @@ def build_dummy_payload(
             mode="deep" if deep_testing else "smoke",
             strict=True,
             ci=False,
-            allow_downgrade=False,
             require_registry=True,
         )
     spacy_checker = ensure_spacy_available_fn or _ensure_spacy_available
@@ -453,11 +452,6 @@ def build_dummy_payload(
     vision_status = "skipped"
     vision_completed = False
     hard_check_results: Dict[str, tuple[bool, str, int | None]] = {}
-    soft_errors: List[str] = []
-    fallback_used = False
-    degraded_stop_code: str | None = None
-    degraded_reason: str | None = None
-
     if enable_vision:
         pdf_path_resolved = pdf_path(slug)
         vision_yaml_path = vision_yaml_workspace_path(base_dir, pdf_path=pdf_path_resolved)
@@ -500,27 +494,15 @@ def build_dummy_payload(
                 )
             except Exception:
                 pass
-            if policy.allow_downgrade:
-                fallback_used = True
-                degraded_reason = f"Vision fallita: {message} (downgraded to smoke)"
-                degraded_stop_code = "DUMMY_DEGRADED_TO_SMOKE"
-                hard_check_results["vision_hardcheck"] = (
-                    False,
-                    degraded_reason,
-                    latency_ms,
-                )
-                soft_errors.append(degraded_reason)
-                vision_status = "degraded"
-            else:
-                raise HardCheckError(
-                    f"Vision fallita: {message}",
-                    build_hardcheck_health(
-                        "DUMMY_VISION_UNAVAILABLE",
-                        message,
-                        mode=policy.mode,
-                        latency_ms=latency_ms,
-                    ),
-                )
+            raise HardCheckError(
+                f"Vision fallita: {message}",
+                build_hardcheck_health(
+                    "DUMMY_VISION_UNAVAILABLE",
+                    message,
+                    mode=policy.mode,
+                    latency_ms=latency_ms,
+                ),
+            )
         else:
             vision_completed = True
             vision_status = "ok"
@@ -595,24 +577,16 @@ def build_dummy_payload(
             ) or {}
         except Exception as exc:
             latency_ms = int((perf_counter() - drive_start) * 1000)
-            if deep_testing:
-                msg = f"Drive hard check fallito: {exc}"
-                raise HardCheckError(
+            msg = f"Drive hard check fallito: {exc}"
+            raise HardCheckError(
+                msg,
+                build_hardcheck_health(
+                    "drive_hardcheck",
                     msg,
-                    build_hardcheck_health(
-                        "drive_hardcheck",
-                        msg,
-                        mode=policy.mode,
-                        latency_ms=latency_ms,
-                    ),
-                ) from exc
-            logger.warning(
-                "tools.gen_dummy_kb.drive_provisioning_failed",
-                extra={"error": str(exc), "slug": slug},
-            )
-            soft_errors.append(str(exc))
-            drive_min_info = {}
-            drive_readmes_info = {}
+                    mode=policy.mode,
+                    latency_ms=latency_ms,
+                ),
+            ) from exc
         else:
             latency_ms = int((perf_counter() - drive_start) * 1000)
             if deep_testing:
@@ -626,8 +600,6 @@ def build_dummy_payload(
 
     health: Dict[str, Any] = {
         "vision_status": vision_status,
-        "fallback_used": fallback_used,
-        "stop_code": degraded_stop_code,
         "raw_pdf_count": _count_raw_pdfs(base_dir),
         "tags_count": _count_tags(base_dir),
         "mapping_valid": (semantic_dir / "semantic_mapping.yaml").exists(),
@@ -639,10 +611,6 @@ def build_dummy_payload(
         "external_checks": {},
         "mode": "deep" if deep_testing else "smoke",
     }
-    if fallback_used:
-        health["status"] = "degraded"
-    if soft_errors:
-        health["errors"].extend(soft_errors)
     if hard_check_results:
         for name, (ok, details, latency) in hard_check_results.items():
             _record_external_check(health, name, ok, details, latency)
@@ -664,7 +632,6 @@ def build_dummy_payload(
         "config_ids": {},
         "vision_used": vision_completed,
         "drive_used": bool(enable_drive),
-        "fallback_used": False,
         "local_readmes": [],
         "health": health,
     }

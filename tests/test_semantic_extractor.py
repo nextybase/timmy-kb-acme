@@ -14,6 +14,7 @@ from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from semantic.core import _list_markdown_files, extract_semantic_concepts
 from tests.conftest import build_vocab_db
+from tests.utils.workspace import ensure_minimal_workspace_layout
 
 
 @dataclass
@@ -29,15 +30,9 @@ class DummyCtx:
 
 def _prepare_layout(base: Path, book_dir: Path, *, strict: bool) -> None:
     book_dir.mkdir(parents=True, exist_ok=True)
+    ensure_minimal_workspace_layout(base, client_name="test")
     if not strict:
         return
-    config_dir = base / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "config.yaml").write_text("meta:\n  client_name: test\n", encoding="utf-8")
-    (base / "raw").mkdir(parents=True, exist_ok=True)
-    (base / "normalized").mkdir(parents=True, exist_ok=True)
-    (base / "logs").mkdir(parents=True, exist_ok=True)
-    (base / "semantic").mkdir(parents=True, exist_ok=True)
     (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
     (book_dir / "README.md").write_text("README", encoding="utf-8")
     (book_dir / "SUMMARY.md").write_text("SUMMARY", encoding="utf-8")
@@ -57,7 +52,7 @@ def test__list_markdown_files_happy_path(tmp_path: Path) -> None:
         cast(Any, ctx),
         get_structured_logger("tests.semantic_extractor.list_md", context=ctx),
     )
-    assert [p.name for p in files] == ["a.md", "b.md"]
+    assert [p.name for p in files] == ["a.md", "b.md", "README.md", "SUMMARY.md"]
 
 
 def test__list_markdown_files_missing_fields_raises() -> None:

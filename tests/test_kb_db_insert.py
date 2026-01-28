@@ -4,6 +4,7 @@ from pathlib import Path
 
 from kb_db import insert_chunks
 from semantic.api import index_markdown_to_db
+from tests.utils.workspace import ensure_minimal_workspace_layout
 
 
 class _Ctx:
@@ -22,6 +23,7 @@ class _DummyEmbeddings:
 
 def test_insert_chunks_idempotency_and_index_aggregate(tmp_path: Path):
     base = tmp_path / "kb_out"
+    ensure_minimal_workspace_layout(base)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
     db_path = semantic_dir / "kb.sqlite"

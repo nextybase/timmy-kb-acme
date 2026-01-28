@@ -5,6 +5,7 @@ from pathlib import Path
 
 import semantic.api as api
 from tests.support.contexts import TestClientCtx
+from tests.utils.workspace import ensure_minimal_workspace_layout
 
 
 class _DummyEmb:
@@ -24,10 +25,9 @@ def _ctx(base: Path, book: Path) -> TestClientCtx:
 
 def test_index_markdown_no_files_emits_phase_and_artifacts_zero(tmp_path, caplog):
     base = tmp_path / "output" / "timmy-kb-dummy"
+    ensure_minimal_workspace_layout(base, client_name="dummy")
     book = base / "book"
-    book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
-    semantic_dir.mkdir(parents=True, exist_ok=True)
 
     # Nessun file .md di contenuto (README/SUMMARY esclusi): branch "no files"
     (book / "README.md").write_text("# Readme\n", encoding="utf-8")

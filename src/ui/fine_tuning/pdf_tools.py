@@ -6,7 +6,7 @@ from pathlib import Path
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.vision_paths import vision_yaml_workspace_path
-from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.core import compile_document_to_vision_yaml
 from ui.utils.context_cache import get_client_context
 from ui.utils.stubs import get_streamlit
@@ -17,8 +17,7 @@ LOG = get_structured_logger("ui.pdf_tools")
 
 def run_pdf_to_yaml_config(slug: str) -> None:
     ctx = get_client_context(slug, require_env=False)
-    with workspace_validation_policy(skip_validation=True):
-        layout = WorkspaceLayout.from_context(ctx)
+    layout = WorkspaceLayout.from_context(ctx)
     repo_root = layout.repo_root_dir
     cfg_dir = layout.config_path.parent
     pdf_path = ensure_within_and_resolve(repo_root, layout.vision_pdf or (cfg_dir / "VisionStatement.pdf"))

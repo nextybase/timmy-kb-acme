@@ -7,7 +7,7 @@ from typing import Any, Dict
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import read_text_safe
 from pipeline.vision_paths import vision_yaml_workspace_path
-from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from pipeline.workspace_layout import WorkspaceLayout
 from ui.utils.context_cache import get_client_context
 
 try:
@@ -20,8 +20,7 @@ SECTION_ORDER = ["Vision", "Mission", "Framework Etico", "Goal", "Contesto Opera
 
 def _workspace_layout(slug: str) -> WorkspaceLayout:
     ctx = get_client_context(slug, require_env=False)
-    with workspace_validation_policy(skip_validation=True):
-        return WorkspaceLayout.from_context(ctx)
+    return WorkspaceLayout.from_context(ctx)
 
 
 def load_workspace_yaml(slug: str) -> Dict[str, Any]:

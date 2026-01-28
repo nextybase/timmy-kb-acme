@@ -11,6 +11,7 @@ from typing import Any
 import semantic.api as sapi
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
+from tests.utils.workspace import ensure_minimal_workspace_layout
 from timmy_kb.cli import semantic_onboarding as mod
 
 
@@ -23,14 +24,11 @@ class _DummyCtx(SimpleNamespace):
 
 def _make_ctx(tmp_path: Path, slug: str = "dummy") -> _DummyCtx:
     base = tmp_path / "output" / f"timmy-kb-{slug}"
+    ensure_minimal_workspace_layout(base, client_name=slug)
     book = base / "book"
     config_dir = base / "config"
     logs_dir = base / "logs"
-    base.mkdir(parents=True, exist_ok=True)
-    book.mkdir(parents=True, exist_ok=True)
-    config_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
     qa_payload = {
         "schema_version": 1,
         "qa_status": "pass",

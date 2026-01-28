@@ -26,7 +26,7 @@ from pipeline.path_utils import (
     open_for_read_bytes_selfguard,
 )
 from pipeline.raw_transform_service import STATUS_FAIL, STATUS_OK, STATUS_SKIP, get_default_raw_transform_service
-from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from pipeline.workspace_layout import WorkspaceLayout
 from storage import decision_ledger
 
 
@@ -110,8 +110,7 @@ def run_raw_ingest(
         run_id=run_id,
         bootstrap_config=False,
     )
-    with workspace_validation_policy(skip_validation=True):
-        layout = WorkspaceLayout.from_context(context)
+    layout = WorkspaceLayout.from_context(context)
 
     ledger_conn = decision_ledger.open_ledger(layout)
     decision_ledger.start_run(ledger_conn, run_id=run_id, slug=slug, started_at=_utc_now_iso())

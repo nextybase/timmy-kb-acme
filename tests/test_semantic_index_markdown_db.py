@@ -10,6 +10,7 @@ import numpy as np
 import semantic.embedding_service as emb_service
 from kb_db import fetch_candidates
 from semantic.api import index_markdown_to_db
+from tests.utils.workspace import ensure_minimal_workspace_layout
 
 
 class _DummyEmbeddings:
@@ -27,6 +28,7 @@ class C:
 
 
 def _ctx(repo_root_dir: Path) -> C:
+    ensure_minimal_workspace_layout(repo_root_dir, client_name="dummy")
     return C(
         repo_root_dir=repo_root_dir,
         raw_dir=repo_root_dir / "raw",

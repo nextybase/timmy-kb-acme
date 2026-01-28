@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Mapping, Sequence, TypedDict, cast
 from pipeline.exceptions import ConfigError, PathTraversalError
 from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve
-from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.auto_tagger import render_tags_csv as _render_tags_csv
 from semantic.config import load_semantic_config as _load_semantic_config
@@ -142,8 +142,7 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
             "Context privo di repo_root_dir: impossibile risolvere WorkspaceLayout.",
             slug=slug,
         )
-    with workspace_validation_policy(skip_validation=True):
-        layout = WorkspaceLayout.from_context(cast(Any, context))
+    layout = WorkspaceLayout.from_context(cast(Any, context))
     repo_root_dir = layout.repo_root_dir
     perimeter_root = repo_root_dir
     normalized_dir = layout.normalized_dir

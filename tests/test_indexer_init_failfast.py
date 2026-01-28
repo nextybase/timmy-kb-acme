@@ -18,6 +18,20 @@ class _Ctx:
         self.raw_dir = base / "raw"
         self.book_dir = base / "book"
         self.slug = slug
+        self.config_dir = base / "config"
+        self.normalized_dir = base / "normalized"
+        self.semantic_dir = base / "semantic"
+        self.logs_dir = base / "logs"
+        for child in (
+            self.raw_dir,
+            self.normalized_dir,
+            self.book_dir,
+            self.semantic_dir,
+            self.logs_dir,
+            self.config_dir,
+        ):
+            child.mkdir(parents=True, exist_ok=True)
+        (self.config_dir / "config.yaml").write_text("version: 1\n", encoding="utf-8")
 
 
 class _NoopLogger:
@@ -45,6 +59,8 @@ def test_indexer_init_db_failfast_raises_configerror(tmp_path: Path, monkeypatch
     (book / "a.md").write_text("# A\nBody\n", encoding="utf-8")
 
     ctx = _Ctx(base)
+    (book / "README.md").write_text("# Dummy\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("* [Dummy](README.md)\n", encoding="utf-8")
     logger = _NoopLogger()
     db_path = semantic_dir / "kb.sqlite"
 

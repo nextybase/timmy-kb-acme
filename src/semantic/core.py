@@ -18,7 +18,7 @@ from pipeline.exceptions import EnrichmentError, InputDirectoryMissing, Pipeline
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths, read_text_safe
-from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.document_ingest import DocumentContent, read_document
 from semantic.vocab_loader import load_reviewed_vocab
 
@@ -59,8 +59,7 @@ def _list_markdown_files(context: _CtxProto, logger: logging.Logger) -> List[Pat
             "Contesto incompleto: book_dir/repo_root_dir mancanti",
             slug=getattr(context, "slug", None),
         )
-    with workspace_validation_policy(skip_validation=True):
-        layout = WorkspaceLayout.from_context(context)
+    layout = WorkspaceLayout.from_context(context)
     repo_root_dir = layout.repo_root_dir
     try:
         safe_book_dir = ensure_within_and_resolve(repo_root_dir, context.book_dir)

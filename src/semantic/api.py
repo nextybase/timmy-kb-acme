@@ -11,7 +11,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.types import ChunkRecord
-from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic import embedding_service, tagging_service
 from semantic.convert_service import convert_markdown
 from semantic.embedding_service import list_content_markdown
@@ -77,8 +77,7 @@ __all__ = [
 
 
 def get_paths(slug: str) -> Dict[str, Path]:
-    with workspace_validation_policy(skip_validation=True):
-        layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
+    layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
     return {
         "base": layout.repo_root_dir,
         "raw": layout.raw_dir,
@@ -152,11 +151,9 @@ def export_tags_yaml_from_db(
                 "Contesto privo di repo_root_dir: impossibile risolvere il workspace.",
                 file_path=str(semantic_dir),
             )
-        with workspace_validation_policy(skip_validation=True):
-            layout = WorkspaceLayout.from_context(cast(Any, context))
+        layout = WorkspaceLayout.from_context(cast(Any, context))
     elif workspace_base is not None:
-        with workspace_validation_policy(skip_validation=True):
-            layout = WorkspaceLayout.from_workspace(Path(workspace_base).resolve(), skip_validation=True)
+        layout = WorkspaceLayout.from_workspace(Path(workspace_base).resolve())
     else:
         raise ConfigError(
             "workspace_base o context richiesti per esportare tags_reviewed.yaml.",
@@ -222,8 +219,7 @@ def _run_build_workflow(
             "Contesto privo di repo_root_dir: impossibile risolvere il workspace in modo deterministico.",
             slug=slug,
         )
-    with workspace_validation_policy(skip_validation=True):
-        layout = WorkspaceLayout.from_context(cast(Any, context))
+    layout = WorkspaceLayout.from_context(cast(Any, context))
     repo_root_dir = layout.repo_root_dir
 
     def _wrap(stage_name: str, func: Callable[[], Any]) -> Any:
@@ -389,8 +385,7 @@ def index_markdown_to_db(
             "Contesto privo di repo_root_dir: impossibile risolvere il workspace in modo deterministico.",
             slug=slug,
         )
-    with workspace_validation_policy(skip_validation=True):
-        layout = WorkspaceLayout.from_context(cast(Any, context))
+    layout = WorkspaceLayout.from_context(cast(Any, context))
     repo_root_dir = layout.repo_root_dir
     book_dir = layout.book_dir
     store = KbStore.for_slug(slug=slug, repo_root_dir=repo_root_dir, db_path=db_path)

@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 import semantic.core as se
+from tests.utils.workspace import ensure_minimal_workspace_layout
 
 
 class _Ctx:
@@ -33,6 +34,7 @@ def test_enrich_markdown_folder_disabled_logs(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     base = tmp_path / "kb"
+    ensure_minimal_workspace_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "a.md").write_text("# A\nBody\n", encoding="utf-8")
@@ -49,6 +51,7 @@ def test_enrich_markdown_folder_disabled_logs(
 
 def test_enrich_markdown_folder_noop_when_disabled(tmp_path: Path) -> None:
     base = tmp_path / "kb"
+    ensure_minimal_workspace_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "a.md").write_text("# A\nBody\n", encoding="utf-8")
@@ -63,6 +66,7 @@ def test_enrich_markdown_folder_noop_when_disabled(tmp_path: Path) -> None:
 
 def test_enrich_markdown_folder_invokes_hook(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     base = tmp_path / "kb"
+    ensure_minimal_workspace_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "a.md").write_text("# A\nBody\n", encoding="utf-8")
@@ -76,13 +80,14 @@ def test_enrich_markdown_folder_invokes_hook(monkeypatch: pytest.MonkeyPatch, tm
     monkeypatch.setattr(se, "_enrich_md", _spy)
     se.enrich_markdown_folder(_Ctx(base), logging.getLogger("test.enrich2"))
 
-    assert set(called) == {"a.md", "b.md"}
+    assert set(called) == {"a.md", "b.md", "README.md", "SUMMARY.md"}
 
 
 def test_extract_semantic_concepts_sanitizes_and_dedups_keywords(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     base = tmp_path / "kb"
+    ensure_minimal_workspace_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     (book / "doc.md").write_text("# Titolo\nQuesto documento contiene il nome autore.\n", encoding="utf-8")

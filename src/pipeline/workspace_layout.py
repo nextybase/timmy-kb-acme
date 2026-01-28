@@ -10,7 +10,6 @@ La Workspace Layout Resolution Policy è fail-fast: il resolver solleva
 anche quando la struttura fisica è presente."""
 
 import os
-from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -21,23 +20,6 @@ from pipeline.exceptions import WorkspaceLayoutInconsistent, WorkspaceLayoutInva
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, validate_slug
 
 __all__ = ["WorkspaceLayout", "get_workspace_layout"]
-
-_SKIP_VALIDATION = False
-
-
-@contextmanager
-def workspace_validation_policy(*, skip_validation: bool = False):
-    """
-    Policy di validazione.
-    - skip_validation: solo per bootstrap/test controllati (nessun silent fix).
-    """
-    global _SKIP_VALIDATION
-    prev_skip = _SKIP_VALIDATION
-    _SKIP_VALIDATION = skip_validation
-    try:
-        yield
-    finally:
-        _SKIP_VALIDATION = prev_skip
 
 
 def _to_path(value: Any, fallback: Path) -> Path:
@@ -108,7 +90,6 @@ class WorkspaceLayout:
             config_path=config_path,
             semantic_dir=semantic_dir,
             mapping_path=mapping_path,
-            skip_validation=_SKIP_VALIDATION,
         )
 
         log_file = ensure_within_and_resolve(logs_dir, logs_dir / LOG_FILE_NAME)
@@ -194,7 +175,6 @@ class WorkspaceLayout:
             config_path=config_path,
             semantic_dir=semantic_dir,
             mapping_path=mapping_path,
-            skip_validation=skip_validation or _SKIP_VALIDATION,
         )
 
         log_file = ensure_within_and_resolve(logs_dir, logs_dir / LOG_FILE_NAME)
@@ -256,16 +236,13 @@ def _validate_layout_assets(
     config_path: Path,
     semantic_dir: Path,
     mapping_path: Path | None = None,
-    skip_validation: bool = False,
 ) -> None:
     """Fail-fast se gli asset minimi del layout non esistono.
 
     In futuro la logica di validazione di config/version/mapping solleverà
     WorkspaceLayoutInconsistent tramite `_ensure_layout_consistency`.
-    La validazione può essere disattivata solo se esplicitamente richiesto
-    (es. bootstrap/test controllati)."""
-    if skip_validation or _SKIP_VALIDATION:
-        return
+    Questa validazione è ora sempre obbligatoria e non può essere disattivata.
+    """
     _ensure_directory(workspace_root, slug, description="workspace root")
     _ensure_file(config_path, slug, description="config/config.yaml")
     _ensure_directory(raw_dir, slug, description="raw directory")

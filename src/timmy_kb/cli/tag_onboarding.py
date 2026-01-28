@@ -65,7 +65,7 @@ from pipeline.path_utils import (  # STRONG guard SSoT
 )
 from pipeline.tracing import start_root_trace
 from pipeline.types import TaggingPayload
-from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic import nlp_runner
 from semantic.tags_validator import validate_tags_reviewed as validate_tags_payload
 from semantic.tags_validator import write_validation_report as write_validation_report_payload
@@ -593,8 +593,7 @@ def _require_layout(context: ClientContextProtocol | ClientContext) -> Workspace
             "Contesto privo di repo_root_dir: impossibile risolvere il workspace in modo deterministico.",
             slug=getattr(context, "slug", None),
         )
-    with workspace_validation_policy(skip_validation=True):
-        return WorkspaceLayout.from_context(cast(Any, context))
+    return WorkspaceLayout.from_context(cast(Any, context))
 
 
 def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:

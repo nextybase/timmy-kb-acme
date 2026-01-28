@@ -5,6 +5,7 @@ import logging
 from semantic import embedding_service
 from semantic.api import index_markdown_to_db
 from tests.support.contexts import TestClientCtx
+from tests.utils.workspace import ensure_minimal_workspace_layout
 
 
 class FakeEmbClient:
@@ -15,8 +16,8 @@ class FakeEmbClient:
 
 def test_index_markdown_partial_on_mismatch_inserts_and_logs(tmp_path, caplog, monkeypatch):
     base = tmp_path
+    ensure_minimal_workspace_layout(base, client_name="dummy")
     book = base / "book"
-    book.mkdir(parents=True)
 
     # due file di contenuto (README/SUMMARY non considerati)
     (book / "content_1.md").write_text("# A\ntext", encoding="utf-8")

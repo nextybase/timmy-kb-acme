@@ -92,7 +92,6 @@ from tools.dummy.policy import DummyPolicy
 # ------------------------------------------------------------
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
 from pipeline.path_utils import ensure_within_and_resolve, open_for_read_bytes_selfguard, read_text_safe  # noqa: E402
-from pipeline.workspace_layout import workspace_validation_policy  # noqa: E402
 from pipeline.vision_template import load_vision_template_sections  # noqa: E402
 
 try:
@@ -692,25 +691,22 @@ def main(argv: Optional[list[str]] = None) -> int:
             raise SystemExit(msg)
 
         try:
-            with workspace_validation_policy(skip_validation=True):
-                import pipeline.workspace_layout as _wl
-                _wl._SKIP_VALIDATION = True
-                workspace_root = workspace_override or _client_base(slug)
-                for child in ("raw", "semantic", "book", "logs", "config"):
-                    (workspace_root / child).mkdir(parents=True, exist_ok=True)
-                payload = build_payload(
-                    slug=slug,
-                    client_name=client_name,
-                    enable_drive=enable_drive,
-                    enable_vision=enable_vision,
-                    enable_semantic=enable_semantic,
-                    enable_enrichment=enable_enrichment,
-                    enable_preview=enable_preview,
-                    records_hint=records_hint,
-                    logger=logger,
-                    deep_testing=args.deep_testing,
-                    policy=policy,
-                )
+            workspace_root = workspace_override or _client_base(slug)
+            for child in ("raw", "semantic", "book", "logs", "config"):
+                (workspace_root / child).mkdir(parents=True, exist_ok=True)
+            payload = build_payload(
+                slug=slug,
+                client_name=client_name,
+                enable_drive=enable_drive,
+                enable_vision=enable_vision,
+                enable_semantic=enable_semantic,
+                enable_enrichment=enable_enrichment,
+                enable_preview=enable_preview,
+                records_hint=records_hint,
+                logger=logger,
+                deep_testing=args.deep_testing,
+                policy=policy,
+            )
             emit_structure(payload)
             logger.info(_format_mode_summary(mode), extra={"mode": mode_label, "runtime_mode": mode.__dict__})
             return 0

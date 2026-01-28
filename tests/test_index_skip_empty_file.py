@@ -16,8 +16,20 @@ class _Emb:
         return [[1.0, 0.0] for _ in texts]
 
 
+def _ensure_minimal_workspace(base: Path) -> None:
+    config_dir = base / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+    for child in ("raw", "normalized", "book", "semantic", "logs"):
+        (base / child).mkdir(parents=True, exist_ok=True)
+    book_dir = base / "book"
+    (book_dir / "README.md").write_text("# Dummy\n", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("* [Dummy](README.md)\n", encoding="utf-8")
+
+
 def test_index_logs_skip_empty_file(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     base = tmp_path / "output" / "timmy-kb-dummy"
+    _ensure_minimal_workspace(base)
     book = base / "book"
     db_path = base / "kb.sqlite"
     book.mkdir(parents=True, exist_ok=True)

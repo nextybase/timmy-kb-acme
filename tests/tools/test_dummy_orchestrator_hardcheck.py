@@ -233,56 +233,49 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
     monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
     policy = DummyPolicy(mode="deep", strict=True, ci=False, allow_downgrade=True, require_registry=True)
 
-    payload = orchestrator.build_dummy_payload(
-        slug="dummy",
-        client_name="Dummy",
-        enable_drive=True,
-        enable_vision=True,
-        enable_semantic=False,
-        enable_enrichment=False,
-        enable_preview=False,
-        records_hint=None,
-        deep_testing=True,
-        logger=logger,
-        repo_root=repo_root,
-        ensure_local_workspace_for_ui=_workspace_env_setter(base_dir),
-        run_vision=lambda **_: None,
-        get_env_var=_get_env_var,
-        ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
-        open_for_read_bytes_selfguard=lambda path: path.open("rb"),
-        load_vision_template_sections=lambda: [],
-        client_base=lambda _: base_dir,
-        pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
-        register_client_fn=lambda *_args, **_kwargs: None,
-        ClientContext=None,
-        get_client_config=None,
-        ensure_drive_minimal_and_upload_config=None,
-        emit_readmes_for_raw=None,
-        run_vision_with_timeout_fn=_run_vision_with_timeout_fn,
-        load_mapping_categories_fn=lambda _: {},
-        ensure_minimal_tags_db_fn=lambda *_args, **_kwargs: None,
-        ensure_raw_pdfs_fn=lambda *_args, **_kwargs: None,
-        ensure_local_readmes_fn=lambda *_args, **_kwargs: [],
-        ensure_book_skeleton_fn=lambda *_args, **_kwargs: None,
-        write_basic_semantic_yaml_fn=lambda *_args, **_kwargs: {"categories": {"contracts": {}}},
-        write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
-        validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
-        ensure_spacy_available_fn=lambda policy: None,
-        call_drive_min_fn=_call_drive_min_fn,
-        call_drive_emit_readmes_fn=_call_drive_emit_readmes_fn,
-        policy=policy,
-    )
+    with pytest.raises(orchestrator.HardCheckError) as excinfo:
+        orchestrator.build_dummy_payload(
+            slug="dummy",
+            client_name="Dummy",
+            enable_drive=True,
+            enable_vision=True,
+            enable_semantic=False,
+            enable_enrichment=False,
+            enable_preview=False,
+            records_hint=None,
+            deep_testing=True,
+            logger=logger,
+            repo_root=repo_root,
+            ensure_local_workspace_for_ui=_workspace_env_setter(base_dir),
+            run_vision=lambda **_: None,
+            get_env_var=_get_env_var,
+            ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
+            open_for_read_bytes_selfguard=lambda path: path.open("rb"),
+            load_vision_template_sections=lambda: [],
+            client_base=lambda _: base_dir,
+            pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
+            register_client_fn=lambda *_args, **_kwargs: None,
+            ClientContext=None,
+            get_client_config=None,
+            ensure_drive_minimal_and_upload_config=None,
+            emit_readmes_for_raw=None,
+            run_vision_with_timeout_fn=_run_vision_with_timeout_fn,
+            load_mapping_categories_fn=lambda _: {},
+            ensure_minimal_tags_db_fn=lambda *_args, **_kwargs: None,
+            ensure_raw_pdfs_fn=lambda *_args, **_kwargs: None,
+            ensure_local_readmes_fn=lambda *_args, **_kwargs: [],
+            ensure_book_skeleton_fn=lambda *_args, **_kwargs: None,
+            write_basic_semantic_yaml_fn=lambda *_args, **_kwargs: {"categories": {"contracts": {}}},
+            write_minimal_tags_raw_fn=lambda *_args, **_kwargs: base_dir / "semantic" / "tags_raw.json",
+            validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
+            ensure_spacy_available_fn=lambda policy: None,
+            call_drive_min_fn=_call_drive_min_fn,
+            call_drive_emit_readmes_fn=_call_drive_emit_readmes_fn,
+            policy=policy,
+        )
 
-    vision_check = payload["health"]["external_checks"]["vision_hardcheck"]
-    assert vision_check["ok"] is False
-    assert "downgraded to smoke" in vision_check["details"].lower()
-    assert "insufficient_quota" in vision_check["details"].lower()
-    assert payload["health"]["external_checks"]["drive_hardcheck"]["ok"] is True
-    assert any("downgraded to smoke" in err.lower() for err in payload["health"]["errors"])
-    assert drive_calls == {"min": 1, "readmes": 1}
-    assert payload["health"]["status"] == "degraded"
-    assert payload["health"]["stop_code"] == "DUMMY_DEGRADED_TO_SMOKE"
-    assert payload["health"]["fallback_used"] is True
+    assert "insufficient_quota" in str(excinfo.value).lower()
+    assert drive_calls == {"min": 0, "readmes": 0}
 
 
 def test_deep_testing_vision_quota_without_downgrade_errors(

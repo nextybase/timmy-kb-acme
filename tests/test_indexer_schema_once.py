@@ -8,6 +8,7 @@ import pytest
 
 import semantic.api as sapi
 from semantic import embedding_service
+from tests.utils.workspace import ensure_minimal_workspace_layout
 
 
 class _Ctx:
@@ -40,6 +41,7 @@ class _EmbClient:
 
 def test_indexer_initializes_schema_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = tmp_path / "kb"
+    ensure_minimal_workspace_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
@@ -75,6 +77,7 @@ def test_indexer_initializes_schema_once(tmp_path: Path, monkeypatch: pytest.Mon
 
 def test_indexer_reduces_overhead_with_single_init(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = tmp_path / "kb"
+    ensure_minimal_workspace_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"

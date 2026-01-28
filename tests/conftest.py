@@ -394,34 +394,51 @@ def dummy_workspace(tmp_path_factory):
     i file possono non esistere se DUMMY_WS_WITH_SEMANTIC=0).
     """
     base_parent = tmp_path_factory.mktemp("kbws")
+    (base_parent / ".git").mkdir(parents=True, exist_ok=True)
     clients_db_relative = Path("clients_db/clients.yaml")
+
+    workspace_override = base_parent / "output" / f"timmy-kb-{DUMMY_SLUG}"
+    for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
+        (workspace_override / child).mkdir(parents=True, exist_ok=True)
+    book_dir = workspace_override / "book"
+    if not (book_dir / "README.md").exists():
+        safe_write_text(book_dir / "README.md", "# Dummy KB\n", encoding="utf-8")
+    if not (book_dir / "SUMMARY.md").exists():
+        safe_write_text(book_dir / "SUMMARY.md", "* [Dummy](README.md)\n", encoding="utf-8")
+    cfg_dir = workspace_override / "config"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
 
     # I test UI non verificano la presenza del modello SpaCy: bypassiamo l'hard check
     import tools.dummy.orchestrator as dummy_orch
 
     dummy_orch._ensure_spacy_available = lambda policy: None
 
-    rc = _gen_dummy_main(
-        [
-            "--base-dir",
-            str(base_parent),
-            "--slug",
-            DUMMY_SLUG,
-            "--records",
-            "0",  # niente finanza per i test generici
-            "--clients-db",
-            clients_db_relative.as_posix(),
-            "--no-semantic",
-            "--no-preview",
-        ]
-    )
+    prev_repo_root_dir = os.environ.get("REPO_ROOT_DIR")
+    os.environ["REPO_ROOT_DIR"] = str(base_parent)
+    try:
+        rc = _gen_dummy_main(
+            [
+                "--base-dir",
+                str(base_parent),
+                "--slug",
+                DUMMY_SLUG,
+                "--records",
+                "0",  # niente finanza per i test generici
+                "--clients-db",
+                clients_db_relative.as_posix(),
+                "--no-semantic",
+                "--no-preview",
+            ]
+        )
+    finally:
+        if prev_repo_root_dir is None:
+            os.environ.pop("REPO_ROOT_DIR", None)
+        else:
+            os.environ["REPO_ROOT_DIR"] = prev_repo_root_dir
     assert rc == 0, "gen_dummy_kb.py non è riuscito a creare il workspace"
 
-    base = Path(base_parent) / f"{DUMMY_SLUG}"
-    if not base.exists():  # fallback: alcuni script usano "timmy-kb-<slug>"
-        base = Path(base_parent) / f"timmy-kb-{DUMMY_SLUG}"
-    # normalizziamo al formato standard timmy-kb-<slug>
-    if base.name != f"timmy-kb-{DUMMY_SLUG}":
+    base = Path(base_parent) / "output" / f"timmy-kb-{DUMMY_SLUG}"
+    if not base.exists():
         base = Path(base_parent) / f"timmy-kb-{DUMMY_SLUG}"
 
     cfg = base / "config" / "config.yaml"

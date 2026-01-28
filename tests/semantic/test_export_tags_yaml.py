@@ -15,10 +15,23 @@ def _fake_write(*args, **kwargs):
     return Path(args[0]) / "tags_reviewed.yaml"
 
 
+def _ensure_minimal_workspace(workspace: Path) -> None:
+    """Costruisce la struttura workspace richiesta da WorkspaceLayout strict."""
+    config_dir = workspace / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+    for child in ("raw", "normalized", "semantic", "book", "logs"):
+        (workspace / child).mkdir(parents=True, exist_ok=True)
+    book_dir = workspace / "book"
+    (book_dir / "README.md").write_text("# Dummy\n", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("* [Dummy](README.md)\n", encoding="utf-8")
+
+
 def test_export_tags_yaml_honors_workspace_base(tmp_path, monkeypatch):
     workspace = tmp_path / "output"
     semantic_dir = workspace / "semantic"
     semantic_dir.mkdir(parents=True)
+    _ensure_minimal_workspace(workspace)
     db_path = semantic_dir / "tags.db"
     db_path.touch()
 
@@ -39,6 +52,7 @@ def test_export_tags_yaml_rejects_mismatched_db(tmp_path):
     workspace = tmp_path / "output"
     semantic_dir = workspace / "semantic"
     semantic_dir.mkdir(parents=True)
+    _ensure_minimal_workspace(workspace)
     db_path = workspace / "external" / "tags.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
     db_path.touch()

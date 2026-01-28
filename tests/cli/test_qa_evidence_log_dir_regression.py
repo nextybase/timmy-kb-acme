@@ -7,7 +7,7 @@ from pipeline.context import ClientContext
 from pipeline.env_constants import WORKSPACE_ROOT_ENV
 from pipeline.qa_evidence import QA_EVIDENCE_FILENAME, write_qa_evidence
 from pipeline.workspace_bootstrap import bootstrap_dummy_workspace
-from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from pipeline.workspace_layout import WorkspaceLayout
 
 
 def _resolve_logs_dir(layout: WorkspaceLayout) -> Path:
@@ -36,8 +36,7 @@ def test_cli_qa_evidence_writes_in_logs_dir(tmp_path: Path, monkeypatch) -> None
 
     # 3) Costruisci context+layout come fa la CLI
     ctx = ClientContext.load(slug=slug, require_env=False, run_id="test", bootstrap_config=False)
-    with workspace_validation_policy(skip_validation=True):
-        layout = WorkspaceLayout.from_context(ctx)
+    layout = WorkspaceLayout.from_context(ctx)
 
     logs_dir = _resolve_logs_dir(layout)
     assert logs_dir.name == "logs"

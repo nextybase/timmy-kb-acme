@@ -10,6 +10,17 @@ import semantic.core as se
 from pipeline.exceptions import EnrichmentError, PipelineError
 
 
+def _prepare_workspace(base: Path) -> Path:
+    """Crea i file/dir minimi richiesti dal layout Beta (config, book, raw, etc.)."""
+    base.mkdir(parents=True, exist_ok=True)
+    for subdir in ("raw", "normalized", "semantic", "logs", "config", "book"):
+        (base / subdir).mkdir(parents=True, exist_ok=True)
+    (base / "config" / "config.yaml").write_text("meta:\n  client_name: 'dummy'\n", encoding="utf-8")
+    (base / "book" / "README.md").write_text("# README\n", encoding="utf-8")
+    (base / "book" / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+    return base
+
+
 class _Ctx:
     def __init__(self, base: Path, slug: str = "proj") -> None:
         self.repo_root_dir = base
@@ -20,9 +31,8 @@ class _Ctx:
 
 
 def test_enrich_markdown_folder_raises_on_first_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    base = tmp_path / "kb"
+    base = _prepare_workspace(tmp_path / "kb")
     book = base / "book"
-    book.mkdir(parents=True, exist_ok=True)
     (book / "a.md").write_text("# A\nBody\n", encoding="utf-8")
 
     def _boom(_ctx: object, _file: Path, _logger: logging.Logger) -> None:
@@ -35,9 +45,8 @@ def test_enrich_markdown_folder_raises_on_first_failure(monkeypatch: pytest.Monk
 
 
 def test_extract_semantic_concepts_raises_on_read_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    base = tmp_path / "kb"
+    base = _prepare_workspace(tmp_path / "kb")
     book = base / "book"
-    book.mkdir(parents=True, exist_ok=True)
     (book / "doc.md").write_text("# Doc\n", encoding="utf-8")
 
     monkeypatch.setattr(se, "load_semantic_mapping", lambda _ctx, logger=None: {"persona": ["nome"]})

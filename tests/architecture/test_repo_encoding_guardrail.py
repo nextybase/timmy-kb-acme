@@ -49,6 +49,9 @@ MOJIBAKE_TOKENS = {
 }
 
 
+SKIP_PATH_PREFIXES = {"instructions/"}
+
+
 def _iter_tracked_text_files() -> list[Path]:
     git_path = _git_path()
     output = subprocess.check_output(
@@ -66,6 +69,9 @@ def _iter_tracked_text_files() -> list[Path]:
         if path.suffix.lower() not in TEXT_EXTENSIONS:
             continue
         if path.is_file():
+            rel = path.relative_to(REPO_ROOT).as_posix()
+            if any(rel.startswith(prefix) for prefix in SKIP_PATH_PREFIXES):
+                continue
             paths.append(path)
     return sorted(paths, key=lambda item: item.as_posix())
 

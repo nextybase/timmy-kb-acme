@@ -15,7 +15,7 @@ from pipeline.observability_config import get_observability_settings
 from pipeline.paths import get_repo_root
 from pipeline.proc_utils import CmdError, run_cmd
 from pipeline.qa_evidence import write_qa_evidence
-from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from pipeline.workspace_layout import WorkspaceLayout
 from timmy_kb.versioning import build_env_fingerprint
 
 
@@ -42,8 +42,7 @@ def main() -> int:
     logger.info("cli.qa_evidence.started", extra={"env_fingerprint": build_env_fingerprint()})
 
     ctx = ClientContext.load(slug=slug, require_env=False, run_id=run_id, bootstrap_config=False)
-    with workspace_validation_policy(skip_validation=True):
-        layout = WorkspaceLayout.from_context(ctx)
+    layout = WorkspaceLayout.from_context(ctx)
     # WorkspaceLayout naming can vary across versions: prefer logs_dir, fallback to log_dir.
     logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
     if logs_dir is None:

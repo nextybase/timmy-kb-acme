@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from semantic.core import extract_semantic_concepts
+from tests.utils.workspace import ensure_minimal_workspace_layout
 
 
 class Ctx:
@@ -27,14 +28,7 @@ class Ctx:
 def test_extractor_matches_punctuated_keywords(tmp_path: Path, monkeypatch) -> None:
     base = tmp_path / "kb"
     md = base / "book"
-    base.mkdir()
-    md.mkdir()
-    (base / "raw").mkdir(parents=True, exist_ok=True)
-    (base / "config").mkdir(parents=True, exist_ok=True)
-    (base / "config" / "config.yaml").write_text("slug: x\n", encoding="utf-8")
-    (base / "semantic").mkdir(parents=True, exist_ok=True)
-    (md / "README.md").write_text("# README\n", encoding="utf-8")
-    (md / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+    ensure_minimal_workspace_layout(base, client_name="x")
     (md / "cxx.md").write_text("intro to C++ basics", encoding="utf-8")
     (md / "mlops.md").write_text("we love ml/ops pipelines", encoding="utf-8")
     (md / "data_plus.md").write_text("this is data+ catalog", encoding="utf-8")

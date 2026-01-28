@@ -29,7 +29,7 @@ from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.semantic_mapping_utils import raw_categories_from_semantic_mapping
 from pipeline.tracing import start_root_trace
-from pipeline.workspace_layout import WorkspaceLayout, workspace_validation_policy
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.api import require_reviewed_vocab  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import run_semantic_pipeline
 from semantic.convert_service import convert_markdown  # noqa: F401  # esposto per monkeypatch nei test CLI
@@ -203,8 +203,7 @@ def main() -> int:
         bootstrap_config=True,
     )
     ensure_config_migrated(ctx, logger=logger)
-    with workspace_validation_policy(skip_validation=True):
-        layout = WorkspaceLayout.from_context(ctx)
+    layout = WorkspaceLayout.from_context(ctx)
     requested, effective = _resolve_requested_effective(args)
     ledger_conn = None
     ledger_conn = decision_ledger.open_ledger(layout)
