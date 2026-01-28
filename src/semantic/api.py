@@ -88,7 +88,7 @@ def get_paths(slug: str) -> Dict[str, Path]:
 
 
 def load_reviewed_vocab(repo_root_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Sequence[str]]]:
-    return cast(Dict[str, Dict[str, Sequence[str]]], _load_reviewed_vocab(repo_root_dir, logger, strict=True))
+    return cast(Dict[str, Dict[str, Sequence[str]]], _load_reviewed_vocab(repo_root_dir, logger))
 
 
 def require_reviewed_vocab(

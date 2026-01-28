@@ -2,6 +2,7 @@
 # src/semantic/vocab_loader.py
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 from collections import defaultdict
@@ -315,21 +316,56 @@ def load_reviewed_vocab(
     strict: bool = False,
 ) -> Dict[str, Dict[str, list[str]]]:
     """
-    Carica (se presente) il vocabolario consolidato per l'enrichment da semantic/tags.db.
+    Carica il vocabolario consolidato da `semantic/reviewed_vocab.json`, con fallback
+    su `semantic/tags.db` per mantenere la compatibilità con il vocabolario canonico.
 
-    Regole:
-    - Se `tags.db` non esiste: solleva `ConfigError` dopo log informativo.
-    - Errori di path (traversal/symlink) o apertura DB: `ConfigError` con metadati utili.
-    - Dati letti adattati a: {canonical: {"aliases": [str,...]}}.
+    Le letture passano sempre da `path_utils` per garantire sicurezza di percorso e
+    vengono loggate con gli eventi canonicali esistenti (es. `semantic.vocab.loaded`).
     """
     repo_root_dir = Path(repo_root_dir)
     perimeter_root = repo_root_dir
-    # Path-safety forte con risoluzione reale
     sem_dir = ppath.ensure_within_and_resolve(perimeter_root, _semantic_dir(repo_root_dir))
-    db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
+    reviewed_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "reviewed_vocab.json")
     slug = _derive_slug(repo_root_dir)
 
-    # DB assente: stop hard
+    if reviewed_path.exists():
+        try:
+            raw_text = ppath.read_text_safe(sem_dir, reviewed_path, encoding="utf-8")
+            data = json.loads(raw_text)
+        except Exception as exc:
+            _log_vocab_event(
+                logger,
+                "semantic.vocab.review_unreadable",
+                slug=slug,
+                file_path=reviewed_path,
+                canon_count=0,
+            )
+            raise ConfigError("reviewed vocab unreadable", file_path=str(reviewed_path)) from exc
+
+        if not isinstance(data, dict):
+            _log_vocab_event(
+                logger,
+                "semantic.vocab.review_invalid_type",
+                slug=slug,
+                file_path=reviewed_path,
+                canon_count=0,
+            )
+            raise ConfigError(
+                f"reviewed vocab invalid type: {type(data).__name__}",
+                file_path=str(reviewed_path),
+            )
+
+        _log_vocab_event(
+            logger,
+            "semantic.vocab.review_loaded",
+            slug=slug,
+            file_path=reviewed_path,
+            canon_count=len(data),
+        )
+        return cast(Dict[str, Dict[str, list[str]]], data)
+
+    db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
+
     if not db_path.exists():
         _log_vocab_event(
             logger,

@@ -129,7 +129,12 @@ def _append_layout_note_to_readme(
         content = read_text_safe(book_dir, readme_path, encoding="utf-8")
     except Exception:
         return
-    note = "\n\n## Layout (service)\n" "Vedi `semantic/layout_summary.md` per il riepilogo strutturale del servizio.\n"
+    layout_path = repo_root_dir / "semantic" / "layout_proposal.yaml"
+    top_levels = _read_layout_top_levels(layout_path)
+    note_lines = ["\n\n## Layout (service)", "Struttura semantica proposta:"]
+    note_lines.extend(f"- {entry}" for entry in top_levels)
+    note_lines.append("Vedi `semantic/layout_summary.md` per il riepilogo strutturale del servizio.")
+    note = "\n".join(note_lines) + "\n"
     if "## Layout (service)" in content:
         return
     updated = content.rstrip() + "\n" + note

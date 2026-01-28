@@ -342,8 +342,30 @@ def search(
             )
         except RetrieverError as exc:
             _apply_error_context(exc, code=ERR_EMBEDDING_FAILED, slug=params.slug, scope=params.scope)
+            try:
+                LOGGER.warning(
+                    "retriever.query.embedding_failed.softfail",
+                    extra={
+                        "code": ERR_EMBEDDING_FAILED,
+                        "slug": params.slug,
+                        "scope": params.scope,
+                    },
+                )
+            except Exception:
+                pass
             raise
         if query_vector is None:
+            try:
+                LOGGER.warning(
+                    "retriever.query.embedding_invalid.softfail",
+                    extra={
+                        "code": ERR_EMBEDDING_INVALID,
+                        "slug": params.slug,
+                        "scope": params.scope,
+                    },
+                )
+            except Exception:
+                pass
             _raise_retriever_error(
                 "invalid embedding",
                 code=ERR_EMBEDDING_INVALID,
