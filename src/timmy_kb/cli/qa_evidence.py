@@ -45,8 +45,7 @@ def main() -> int:
 
     ctx = ClientContext.load(slug=slug, require_env=False, run_id=run_id, bootstrap_config=False)
     layout = WorkspaceLayout.from_context(ctx)
-    # WorkspaceLayout naming can vary across versions: prefer logs_dir, fallback to log_dir.
-    logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
+    logs_dir = layout.logs_dir
     if logs_dir is None:
         raise ConfigError("WorkspaceLayout non espone logs_dir/log_dir: impossibile scrivere qa_passed.json")
 
