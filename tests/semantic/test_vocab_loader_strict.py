@@ -25,5 +25,5 @@ def test_load_reviewed_vocab_missing_db_raises(tmp_path: Path) -> None:
     base = tmp_path / "output" / "timmy-kb-dummy"
     (base / "semantic").mkdir(parents=True, exist_ok=True)
 
-    with pytest.raises(ConfigError, match="tags.db missing or unreadable"):
+    with pytest.raises(FileNotFoundError, match="Missing required reviewed vocab artifact"):
         vl.load_reviewed_vocab(base, _NoopLogger())

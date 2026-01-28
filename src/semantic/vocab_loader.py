@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence, Set, cast
@@ -309,99 +308,58 @@ def _log_vocab_event(
         )
 
 
-def load_reviewed_vocab(
-    repo_root_dir: Path,
-    logger: logging.Logger,
-    *,
-    strict: bool = False,
-) -> Dict[str, Dict[str, list[str]]]:
+def _load_reviewed_vocab_json(path: Path, logger: logging.Logger, slug: str | None) -> Dict[str, Dict[str, list[str]]]:
     """
-    Carica il vocabolario consolidato da `semantic/reviewed_vocab.json`, con fallback
-    su `semantic/tags.db` per mantenere la compatibilità con il vocabolario canonico.
-
-    Le letture passano sempre da `path_utils` per garantire sicurezza di percorso e
-    vengono loggate con gli eventi canonicali esistenti (es. `semantic.vocab.loaded`).
+    Legge il file JSON revisionato e verifica la shape canonicale.
     """
-    repo_root_dir = Path(repo_root_dir)
-    perimeter_root = repo_root_dir
-    sem_dir = ppath.ensure_within_and_resolve(perimeter_root, _semantic_dir(repo_root_dir))
-    reviewed_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "reviewed_vocab.json")
-    slug = _derive_slug(repo_root_dir)
+    try:
+        raw_text = ppath.read_text_safe(path.parent, path, encoding="utf-8")
+        data = json.loads(raw_text)
+    except Exception as exc:
+        _log_vocab_event(
+            logger,
+            "semantic.vocab.review_unreadable",
+            slug=slug,
+            file_path=path,
+            canon_count=0,
+        )
+        raise ConfigError("reviewed vocab unreadable", file_path=str(path)) from exc
 
-    if reviewed_path.exists():
-        try:
-            raw_text = ppath.read_text_safe(sem_dir, reviewed_path, encoding="utf-8")
-            data = json.loads(raw_text)
-        except Exception as exc:
-            _log_vocab_event(
-                logger,
-                "semantic.vocab.review_unreadable",
-                slug=slug,
-                file_path=reviewed_path,
-                canon_count=0,
-            )
-            raise ConfigError("reviewed vocab unreadable", file_path=str(reviewed_path)) from exc
-
-        if not isinstance(data, dict):
-            _log_vocab_event(
-                logger,
-                "semantic.vocab.review_invalid_type",
-                slug=slug,
-                file_path=reviewed_path,
-                canon_count=0,
-            )
-            raise ConfigError(
-                f"reviewed vocab invalid type: {type(data).__name__}",
-                file_path=str(reviewed_path),
-            )
+    if not isinstance(data, dict):
+        _log_vocab_event(
+            logger,
+            "semantic.vocab.review_invalid_type",
+            slug=slug,
+            file_path=path,
+            canon_count=0,
+        )
+        raise ConfigError(
+            f"reviewed vocab invalid type: {type(data).__name__}",
+            file_path=str(path),
+        )
 
         _log_vocab_event(
             logger,
             "semantic.vocab.review_loaded",
             slug=slug,
-            file_path=reviewed_path,
+            file_path=path,
             canon_count=len(data),
         )
-        return cast(Dict[str, Dict[str, list[str]]], data)
+    return cast(Dict[str, Dict[str, list[str]]], data)
 
-    db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
 
-    if not db_path.exists():
-        _log_vocab_event(
-            logger,
-            "semantic.vocab.db_missing",
-            slug=slug,
-            file_path=db_path,
-            canon_count=0,
-        )
-        raise ConfigError("tags.db missing or unreadable", file_path=str(db_path))
+def load_reviewed_vocab(
+    repo_root_dir: Path,
+    logger: logging.Logger,
+) -> Dict[str, Dict[str, list[str]]]:
+    """Load reviewed vocab from the canonical artifact (reviewed_vocab.json)."""
+    repo_root_dir = Path(repo_root_dir)
+    reviewed_path = repo_root_dir / "semantic" / "reviewed_vocab.json"
+    reviewed_path = ppath.ensure_within_and_resolve(repo_root_dir, reviewed_path)
 
-    try:
-        con = sqlite3.connect(str(db_path))
-        con.close()
-    except Exception as exc:
-        logger.warning(
-            "semantic.vocab.open_failed",
-            extra={"file_path": str(db_path), "error": str(exc), "slug": slug},
-        )
-        raise ConfigError("tags.db missing or unreadable", file_path=str(db_path)) from exc
+    if not reviewed_path.exists():
+        logger.error("vocab.reviewed.missing", extra={"path": str(reviewed_path)})
+        raise FileNotFoundError(f"Missing required reviewed vocab artifact: {reviewed_path}")
 
-    vocab = load_tags_reviewed_db(db_path)
-    if not vocab:
-        _log_vocab_event(
-            logger,
-            "semantic.vocab.db_empty",
-            slug=slug,
-            file_path=db_path,
-            canon_count=0,
-        )
-        raise ConfigError("Canonical vocab shape invalid", file_path=str(db_path))
-
-    _log_vocab_event(
-        logger,
-        "semantic.vocab.loaded",
-        slug=slug,
-        file_path=db_path,
-        canon_count=len(vocab),
-    )
-    return vocab
+    slug = _derive_slug(repo_root_dir)
+    return _load_reviewed_vocab_json(reviewed_path, logger, slug)

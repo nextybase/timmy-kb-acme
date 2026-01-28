@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -22,38 +21,26 @@ def test_returns_empty_when_db_missing(tmp_path: Path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
-    db = sem / "tags.db"
 
-    with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
+    with pytest.raises(FileNotFoundError, match="Missing required reviewed vocab artifact"):
         _ = vl.load_reviewed_vocab(base, _NoopLogger())
 
-    err = ei.value
-    assert getattr(err, "file_path", None) == str(db)
 
-
-def test_raises_configerror_on_db_open_failure(tmp_path: Path, monkeypatch: Any):
+def test_raises_configerror_on_invalid_json(tmp_path: Path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
-    db = sem / "tags.db"
-    db.write_bytes(b"not a real sqlite db")  # file presente ma corrotto
+    reviewed_path = sem / "reviewed_vocab.json"
+    reviewed_path.write_text("{", encoding="utf-8")  # invalid JSON
 
-    # Forza sqlite3.connect a fallire per verificare il fail-fast
-    import sqlite3
-
-    def _boom(*_a, **_k):
-        raise sqlite3.OperationalError("db is malformed")
-
-    monkeypatch.setattr("sqlite3.connect", _boom, raising=True)
-
-    with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
+    with pytest.raises(ConfigError, match="reviewed vocab unreadable") as ei:
         _ = vl.load_reviewed_vocab(base, _NoopLogger())
 
     err = ei.value
-    assert getattr(err, "file_path", None) == str(db)
+    assert getattr(err, "file_path", None) == str(reviewed_path)
 
 
-def test_path_guard_is_enforced(tmp_path: Path, monkeypatch: Any):
+def test_path_guard_is_enforced(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     base = tmp_path / "output" / "timmy-kb-dummy"
     (base / "semantic").mkdir(parents=True, exist_ok=True)
 

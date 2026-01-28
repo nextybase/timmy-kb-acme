@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -16,67 +18,38 @@ def _mk_workspace(tmp_path: Path) -> Path:
     return base
 
 
-def test_load_vocab_missing_db_returns_empty_and_logs(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+def test_load_vocab_missing_reviewed_json_raises(tmp_path: Path, caplog: pytest.LogCaptureFixture):
     base = _mk_workspace(tmp_path)
     logger = get_structured_logger("test.vocab.missing")
 
-    with pytest.raises(ConfigError, match="tags.db missing or unreadable"):
+    caplog.clear()
+    caplog.set_level(logging.ERROR)
+    with pytest.raises(FileNotFoundError, match="Missing required reviewed vocab artifact"):
         load_reviewed_vocab(base, logger)
-    out = capsys.readouterr().out
-    assert "semantic.vocab.db_missing" in out
-    assert f"slug={base.name}" in out
+    assert any(rec.getMessage() == "vocab.reviewed.missing" for rec in caplog.records)
 
 
-def test_load_vocab_empty_db_warns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+def test_load_vocab_invalid_json_type_raises(tmp_path: Path, caplog: pytest.LogCaptureFixture):
     base = _mk_workspace(tmp_path)
-    db = base / "semantic" / "tags.db"
-    db.write_bytes(b"")
+    reviewed_path = base / "semantic" / "reviewed_vocab.json"
+    reviewed_path.write_text("[]", encoding="utf-8")
 
-    import semantic.vocab_loader as vl
-
-    monkeypatch.setattr(vl, "load_tags_reviewed_db", lambda p: {}, raising=True)
-
-    logger = get_structured_logger("test.vocab.empty")
-    with pytest.raises(ConfigError, match="Canonical vocab shape invalid"):
+    logger = get_structured_logger("test.vocab.invalid")
+    caplog.clear()
+    caplog.set_level(logging.INFO)
+    with pytest.raises(ConfigError, match="reviewed vocab invalid type"):
         load_reviewed_vocab(base, logger)
-    out = capsys.readouterr().out
-    assert "semantic.vocab.db_empty" in out
-    assert f"slug={base.name}" in out
+    assert any(rec.getMessage() == "semantic.vocab.review_invalid_type" for rec in caplog.records)
 
 
-def test_load_vocab_empty_db_strict_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_vocab_valid_json_logs(tmp_path: Path, caplog: pytest.LogCaptureFixture):
     base = _mk_workspace(tmp_path)
-    db = base / "semantic" / "tags.db"
-    db.write_bytes(b"")
-
-    import semantic.vocab_loader as vl
-
-    monkeypatch.setattr(vl, "load_tags_reviewed_db", lambda p: {}, raising=True)
-
-    logger = get_structured_logger("test.vocab.empty.strict")
-    with pytest.raises(ConfigError, match="Canonical vocab shape invalid"):
-        load_reviewed_vocab(base, logger, strict=True)
-
-
-def test_load_vocab_valid_info(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
-    base = _mk_workspace(tmp_path)
-    db = base / "semantic" / "tags.db"
-    db.write_bytes(b"sqlite placeholder")
-
-    data = {
-        "tags": [
-            {"name": "analytics", "action": "keep", "synonyms": ["analisi"]},
-            {"name": "fatturato", "action": "merge_into:analytics", "synonyms": ["revenues"]},
-        ]
-    }
-    import semantic.vocab_loader as vl
-
-    monkeypatch.setattr(vl, "load_tags_reviewed_db", lambda p: vl._to_vocab(data), raising=True)
+    reviewed_path = base / "semantic" / "reviewed_vocab.json"
+    reviewed_path.write_text(json.dumps({"analytics": {"aliases": ["alias"]}}), encoding="utf-8")
 
     logger = get_structured_logger("test.vocab.ok")
+    caplog.clear()
+    caplog.set_level(logging.INFO)
     vocab = load_reviewed_vocab(base, logger)
 
-    assert "analytics" in vocab and "aliases" in vocab["analytics"]
-    out = capsys.readouterr().out
-    assert "semantic.vocab.loaded" in out
-    assert f"slug={base.name}" in out
+    assert "analytics" in vocab and vocab["analytics"]["aliases"] == ["alias"]

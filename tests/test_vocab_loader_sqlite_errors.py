@@ -25,20 +25,13 @@ def _mk_semantic_db_placeholder(tmp_path: Path) -> Path:
     return base
 
 
-def test_raises_configerror_on_query_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_load_reviewed_vocab_unreadable_json(tmp_path: Path) -> None:
     base = _mk_semantic_db_placeholder(tmp_path)
-    db = base / "semantic" / "tags.db"
+    reviewed_path = base / "semantic" / "reviewed_vocab.json"
+    reviewed_path.write_text("{", encoding="utf-8")  # invalid JSON
 
-    import sqlite3
-
-    # Simula errore a livello di query/cursor nel loader reale
-    def _boom(_path: str):
-        raise sqlite3.OperationalError("malformed database or query failed")
-
-    monkeypatch.setattr(vl, "_load_tags_reviewed", _boom, raising=True)
-
-    with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
+    with pytest.raises(ConfigError, match="reviewed vocab unreadable") as ei:
         _ = vl.load_reviewed_vocab(base, _NoopLogger())
 
     err = ei.value
-    assert getattr(err, "file_path", None) == str(db)
+    assert getattr(err, "file_path", None) == str(reviewed_path)
