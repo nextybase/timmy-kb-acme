@@ -647,9 +647,9 @@ def ingest_folder(
 def get_vision_cfg(cfg: dict | None) -> dict:
     """
     Restituisce la configurazione Vision normalizzata **inline-only**.
-    - Percorso unico: engine = "assistant" (Threads/Runs), niente vector/attachments/alternative.
-    - Modello non configurato qui: lo decide il profilo Assistant (dashboard).
-    - `assistant_id` è OBBLIGATORIO: letto da OBNEXT_ASSISTANT_ID.
+    - Percorso unico: API Responses (no thread/run, no vector/attachments).
+    - Modello risolto dal config SSoT (`ai.vision.model` via Settings/get_vision_model) e non dal dashboard assistant.
+    - `assistant_id` è OBBLIGATORIO: letto da OBNEXT_ASSISTANT_ID per metadati e auditoria.
     - `strict_output` resta abilitato di default.
     """
     v = (cfg or {}).get("vision") or {}
