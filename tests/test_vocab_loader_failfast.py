@@ -22,7 +22,7 @@ def test_returns_empty_when_db_missing(tmp_path: Path):
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
 
-    with pytest.raises(FileNotFoundError, match="Missing required reviewed vocab artifact"):
+    with pytest.raises(ConfigError, match="tags.db missing or unreadable"):
         _ = vl.load_reviewed_vocab(base, _NoopLogger())
 
 

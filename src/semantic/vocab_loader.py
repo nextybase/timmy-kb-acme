@@ -352,14 +352,43 @@ def load_reviewed_vocab(
     repo_root_dir: Path,
     logger: logging.Logger,
 ) -> Dict[str, Dict[str, list[str]]]:
-    """Load reviewed vocab from the canonical artifact (reviewed_vocab.json)."""
+    """Get reviewed vocab, preferring review JSON and falling back to tags.db."""
     repo_root_dir = Path(repo_root_dir)
-    reviewed_path = repo_root_dir / "semantic" / "reviewed_vocab.json"
-    reviewed_path = ppath.ensure_within_and_resolve(repo_root_dir, reviewed_path)
-
-    if not reviewed_path.exists():
-        logger.error("vocab.reviewed.missing", extra={"path": str(reviewed_path)})
-        raise FileNotFoundError(f"Missing required reviewed vocab artifact: {reviewed_path}")
-
+    perimeter_root = repo_root_dir
+    sem_dir = ppath.ensure_within_and_resolve(perimeter_root, _semantic_dir(repo_root_dir))
+    reviewed_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "reviewed_vocab.json")
     slug = _derive_slug(repo_root_dir)
-    return _load_reviewed_vocab_json(reviewed_path, logger, slug)
+
+    if reviewed_path.exists():
+        return _load_reviewed_vocab_json(reviewed_path, logger, slug)
+
+    db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
+    if not db_path.exists():
+        _log_vocab_event(
+            logger,
+            "semantic.vocab.db_missing",
+            slug=slug,
+            file_path=db_path,
+            canon_count=0,
+        )
+        raise ConfigError("tags.db missing or unreadable", file_path=str(db_path))
+
+    vocab = load_tags_reviewed_db(db_path)
+    if not vocab:
+        _log_vocab_event(
+            logger,
+            "semantic.vocab.db_empty",
+            slug=slug,
+            file_path=db_path,
+            canon_count=0,
+        )
+        raise ConfigError("Canonical vocab shape invalid", file_path=str(db_path))
+
+    _log_vocab_event(
+        logger,
+        "semantic.vocab.loaded",
+        slug=slug,
+        file_path=db_path,
+        canon_count=len(vocab),
+    )
+    return vocab

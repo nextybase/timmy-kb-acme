@@ -18,15 +18,12 @@ def _mk_workspace(tmp_path: Path) -> Path:
     return base
 
 
-def test_load_vocab_missing_reviewed_json_raises(tmp_path: Path, caplog: pytest.LogCaptureFixture):
+def test_load_vocab_missing_reviewed_json_raises(tmp_path: Path):
     base = _mk_workspace(tmp_path)
     logger = get_structured_logger("test.vocab.missing")
 
-    caplog.clear()
-    caplog.set_level(logging.ERROR)
-    with pytest.raises(FileNotFoundError, match="Missing required reviewed vocab artifact"):
+    with pytest.raises(ConfigError, match="tags.db missing or unreadable"):
         load_reviewed_vocab(base, logger)
-    assert any(rec.getMessage() == "vocab.reviewed.missing" for rec in caplog.records)
 
 
 def test_load_vocab_invalid_json_type_raises(tmp_path: Path, caplog: pytest.LogCaptureFixture):
