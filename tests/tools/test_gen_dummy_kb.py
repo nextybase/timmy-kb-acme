@@ -105,7 +105,7 @@ def test_build_payload_without_vision(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert payload["drive_used"] is False
     assert payload["vision_used"] is False
     assert payload["drive_min"] == {}
-    assert payload["fallback_used"] is False
+    assert "fallback_used" not in payload
     assert isinstance(payload["local_readmes"], list)
     assert "health" in payload
     assert isinstance(payload["health"].get("readmes_count"), int)
@@ -177,7 +177,7 @@ def test_build_payload_with_drive(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     assert payload["vision_used"] is False
     assert payload["drive_min"] == {"folder": "id123"}
     assert payload["drive_readmes"] == {"uploaded": 2}
-    assert payload["fallback_used"] is False
+    assert "fallback_used" not in payload
     assert isinstance(payload["local_readmes"], list)
 
 
@@ -267,7 +267,7 @@ def test_build_payload_skips_vision_if_already_done(monkeypatch: pytest.MonkeyPa
     )
 
     assert payload["vision_used"] is True
-    assert payload["fallback_used"] is False
+    assert "fallback_used" not in payload
 
 
 def test_build_payload_does_not_register_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -412,7 +412,7 @@ def test_build_payload_smoke_writes_minimal_artifacts(monkeypatch: pytest.Monkey
     )
 
     assert payload["vision_used"] is False
-    assert payload["fallback_used"] is False
+    assert "fallback_used" not in payload
     assert (workspace / "semantic" / "semantic_mapping.yaml").exists()
     assert (workspace / "semantic" / "tags.db").exists()
     assert (workspace / "book" / "README.md").exists()
