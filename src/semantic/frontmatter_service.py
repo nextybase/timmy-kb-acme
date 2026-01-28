@@ -114,18 +114,6 @@ def _read_layout_top_levels(layout_path: Path) -> list[str]:
     return sorted(str(key).strip() for key in data.keys() if key)
 
 
-def _layout_note_text(top_levels: list[str]) -> str:
-    if not top_levels:
-        return ""
-    bullets = "\n".join(f"- {entry}" for entry in top_levels)
-    return (
-        "\n\n## Struttura semantica proposta (layout_proposal)\n"
-        "La proposta ER generata da `layout_enricher` è stata salvata in `semantic/layout_proposal.yaml`. "
-        "Includiamo qui i top level suggeriti per riferimento:\n\n"
-        f"{bullets}\n"
-    )
-
-
 def _append_layout_note_to_readme(
     repo_root_dir: Path,
     book_dir: Path,
@@ -133,11 +121,6 @@ def _append_layout_note_to_readme(
     *,
     slug: str,
 ) -> None:
-    layout_path = repo_root_dir / "semantic" / "layout_proposal.yaml"
-    top_levels = _read_layout_top_levels(layout_path)
-    if not top_levels:
-        return
-    ensure_within(repo_root_dir, layout_path)
     readme_path = book_dir / "README.md"
     ensure_within(repo_root_dir, readme_path)
     if not readme_path.exists():
@@ -146,8 +129,8 @@ def _append_layout_note_to_readme(
         content = read_text_safe(book_dir, readme_path, encoding="utf-8")
     except Exception:
         return
-    note = _layout_note_text(top_levels)
-    if not note or "## Struttura semantica proposta" in content:
+    note = "\n\n## Layout (service)\n" "Vedi `semantic/layout_summary.md` per il riepilogo strutturale del servizio.\n"
+    if "## Layout (service)" in content:
         return
     updated = content.rstrip() + "\n" + note
     safe_write_text(readme_path, updated, encoding="utf-8", atomic=True)
