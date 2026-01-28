@@ -105,6 +105,8 @@ Optional adapter prerequisites (Drive):
 
 ---
 
+Strict runtime guard è obbligatorio. Gli errori non sono incidenti ma esito naturale del design.
+
 ## 2quater. Runtime vs Tooling Boundary (Beta 1.0)
 
 The architecture distinguishes **runtime strict execution** from **supporting tooling**.
