@@ -160,11 +160,9 @@ def _repo_root_dir_for(slug: str) -> Path:
     if isinstance(repo_root_dir, Path):
         return repo_root_dir
 
-    raw_dir = getattr(ctx, "raw_dir", None)
-    if isinstance(raw_dir, Path):
-        return raw_dir.parent
-
-    raise RuntimeError(CLIENT_CONTEXT_ERROR_MSG)
+    raise RuntimeError(
+        "repo_root_dir non disponibile nel ClientContext: risoluzione legacy da raw_dir disabilitata in Beta."
+    )
 
 
 def _st_notify(level: str, message: str) -> None:
