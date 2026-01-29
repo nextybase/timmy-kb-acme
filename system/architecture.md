@@ -274,9 +274,11 @@ Defines:
 - runtime configuration,
 - logging context.
 
-Historical compatibility fields (e.g. `base_dir`, `md_dir`) are **temporary and deprecated**;
-they exist only to support legacy paths and **must not be used by new or refactored code**
-as authoritative sources.
+Beta 1.0 policy (strict-only):
+- `ClientContext` exposes **only** the canonical workspace root (`repo_root_dir`) as SSoT.
+- Historical compatibility fields (e.g. `base_dir`, `md_dir`, `raw_dir`, `normalized_dir`)
+  are considered **legacy shims** and must not exist in production runtime code.
+  Any re-introduction of these fields (even as aliases) is treated as a determinism regression.
 
 ### Path Safety (SSoT of perimeter)
 Module: `pipeline/path_utils.py`
@@ -320,8 +322,10 @@ Runtime boundary modules (strict guard):
 The following patterns are explicitly forbidden in the production runtime.
 They are banned because they already occur in legacy paths and break determinism:
 
-FORBIDDEN: Deriving paths via `context.base_dir`, `context.md_dir`, `context.raw_dir`, `context.normalized_dir`
-ALLOWED: Use `WorkspaceLayout.from_context(context)`
+FORBIDDEN: Deriving paths via any legacy context dir fields
+  (e.g. `context.base_dir`, `context.md_dir`, `context.raw_dir`, `context.normalized_dir`).
+ALLOWED: Resolve all paths via `WorkspaceLayout.from_context(context)` and layout-provided attributes.
+NOTE: In Beta 1.0 strict-only, these legacy fields are not part of the runtime `ClientContext` API.
 
 FORBIDDEN: Reconstructing paths via manual joins
 ALLOWED: Use layout-provided paths and `ensure_within`
@@ -433,7 +437,7 @@ Any violation of these rules introduces entropy and breaks determinism.
 
 | Rule type   | Forbidden pattern                                           | Required alternative                      |
 |------------|--------------------------------------------------------------|-------------------------------------------|
-| Paths       | Use `context.base_dir` / `context.md_dir` / `context.raw_dir` / `context.normalized_dir` | `WorkspaceLayout.from_context(context)`   |
+| Paths       | Use legacy context dir shims (`base_dir`/`md_dir`/`raw_dir`/`normalized_dir`) | `WorkspaceLayout.from_context(context)`   |
 | Paths       | Manual path joins                                            | Layout-provided paths + `ensure_within`   |
 | Roots       | Heuristic workspace root inference                           | Resolve via context + layout              |
 | Fallbacks   | Silent or non-deterministic fallback in runtime code          | Explicit, logged, deterministic fallback  |
