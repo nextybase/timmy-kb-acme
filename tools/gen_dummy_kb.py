@@ -161,7 +161,7 @@ ensure_drive_minimal_and_upload_config = _drive_attrs.get("ensure_drive_minimal_
 emit_readmes_for_raw = _drive_attrs.get("emit_readmes_for_raw")
 
 _cleanup_mod, _cleanup_attrs, _cleanup_import_error = _strict_optional_import(
-    "tools.clean_client_workspace",
+    "src.tools.clean_client_workspace",
     feature_name="cleanup",
     attrs={"perform_cleanup": "perform_cleanup"},
 )
