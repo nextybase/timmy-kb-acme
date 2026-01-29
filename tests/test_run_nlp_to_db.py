@@ -57,7 +57,8 @@ def test_run_nlp_to_db_processes_nested_markdown(tmp_path, monkeypatch):
 
     monkeypatch.setattr("storage.tags_store.save_doc_terms", fake_save_doc_terms)
 
-    stats = run_nlp_to_db("dummy", normalized_dir, str(db_path))
+    # unit test isolation: skip entities pipeline to keep the NLP-only behavior deterministic.
+    stats = run_nlp_to_db("dummy", normalized_dir, str(db_path), enable_entities=False)
 
     assert captured_text["value"] == "dummy text"
     assert captured_doc_ids == [doc_id]
@@ -93,10 +94,8 @@ def test_run_nlp_to_db_records_entities_failure_non_strict(tmp_path, monkeypatch
     fake_entities.run_doc_entities_pipeline = _boom
     monkeypatch.setitem(sys.modules, "semantic.entities_runner", fake_entities)
 
-    stats = run_nlp_to_db("dummy", normalized_dir, str(db_path), repo_root_dir=tmp_path)
-
-    assert stats["entities_status"] == "failed"
-    assert stats["entities_error_type"] == "RuntimeError"
+    with pytest.raises(PipelineError):
+        run_nlp_to_db("dummy", normalized_dir, str(db_path), repo_root_dir=tmp_path)
 
 
 def test_run_nlp_to_db_entities_import_missing_non_strict(tmp_path, monkeypatch):
@@ -117,10 +116,8 @@ def test_run_nlp_to_db_entities_import_missing_non_strict(tmp_path, monkeypatch)
 
     monkeypatch.setattr(importlib, "import_module", _import_module)
 
-    stats = run_nlp_to_db("dummy", normalized_dir, str(db_path), repo_root_dir=tmp_path)
-
-    assert stats["entities_status"] == "skipped"
-    assert "entities_error_type" not in stats
+    with pytest.raises(PipelineError):
+        run_nlp_to_db("dummy", normalized_dir, str(db_path), repo_root_dir=tmp_path)
 
 
 def test_run_nlp_to_db_entities_import_missing_strict_raises(tmp_path, monkeypatch):
@@ -207,7 +204,8 @@ def test_run_nlp_to_db_persists_terms_and_folder_terms(tmp_path, monkeypatch):
 
     monkeypatch.setattr("nlp.nlp_keywords.cluster_synonyms", fake_cluster_synonyms)
 
-    stats = run_nlp_to_db("dummy", normalized_dir, str(db_path))
+    # unit test isolation: bypass the entities pipeline for deterministic storage checks.
+    stats = run_nlp_to_db("dummy", normalized_dir, str(db_path), enable_entities=False)
 
     with get_conn(str(db_path)) as conn:
         term_rows = conn.execute("SELECT canonical FROM terms").fetchall()
@@ -246,6 +244,15 @@ def test_resolve_cli_paths_uses_context_and_enforces_perimeter(tmp_path):
     semantic_dir = base_dir / "semantic"
     normalized_dir.mkdir(parents=True)
     semantic_dir.mkdir(parents=True)
+    (base_dir / "raw").mkdir(parents=True)
+    book_dir = base_dir / "book"
+    book_dir.mkdir(parents=True)
+    (book_dir / "README.md").write_text("# book", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("# summary", encoding="utf-8")
+    (base_dir / "logs").mkdir(parents=True)
+    config_dir = base_dir / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
     ctx = TestClientCtx(
         slug="dummy",
         repo_root_dir=base_dir,

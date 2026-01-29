@@ -396,66 +396,50 @@ def run_nlp_to_db(
             logger=log,
         )
 
-    entities_status = "skipped"
-    entities_error_type: str | None = None
+    entities_status: str | None = None
     if enable_entities:
         try:
             entities_module = importlib.import_module("semantic.entities_runner")
             run_doc_entities_pipeline = getattr(entities_module, "run_doc_entities_pipeline")
         except Exception as exc:
-            if strict_mode:
-                log.error(
-                    "tag_onboarding.entities.failed",
-                    extra={"slug": slug, "error_type": type(exc).__name__, "strict": True},
-                )
-                raise PipelineError(
-                    "Entities pipeline non disponibile in strict mode.",
-                    slug=slug,
-                    file_path=str(db_path_path),
-                ) from exc
-            log.warning(
-                "tag_onboarding.entities.skipped",
-                extra={"slug": slug, "error_type": type(exc).__name__, "strict": False},
+            log.error(
+                "tag_onboarding.entities.failed",
+                extra={"slug": slug, "error_type": type(exc).__name__, "strict": strict_mode},
             )
-            entities_status = "skipped"
-        else:
-            try:
-                # repo_root_dir here is workspace root, not the system REPO_ROOT_DIR.
-                ent_stats = run_doc_entities_pipeline(
-                    repo_root_dir=repo_root_dir_path,
-                    raw_dir=normalized_dir_path,
-                    semantic_dir=repo_root_dir_path / "semantic",
-                    db_path=db_path_path,
-                    logger=log,
-                )
-                stats = {**stats, **ent_stats}
-                entities_status = "ok"
-            except Exception as exc:  # pragma: no cover
-                if strict_mode:
-                    log.error(
-                        "tag_onboarding.entities.failed",
-                        extra={"slug": slug, "error_type": type(exc).__name__, "strict": True},
-                    )
-                    raise PipelineError(
-                        "Entities pipeline fallita in strict mode.",
-                        slug=slug,
-                        file_path=str(db_path_path),
-                    ) from exc
-                log.warning(
-                    "tag_onboarding.entities.degraded",
-                    extra={"slug": slug, "error_type": type(exc).__name__, "strict": False},
-                )
-                entities_status = "failed"
-                entities_error_type = type(exc).__name__
+            raise PipelineError(
+                "Entities pipeline non disponibile.",
+                slug=slug,
+                file_path=str(db_path_path),
+            ) from exc
+        try:
+            # repo_root_dir here is workspace root, not the system REPO_ROOT_DIR.
+            ent_stats = run_doc_entities_pipeline(
+                repo_root_dir=repo_root_dir_path,
+                raw_dir=normalized_dir_path,
+                semantic_dir=repo_root_dir_path / "semantic",
+                db_path=db_path_path,
+                logger=log,
+            )
+            stats = {**stats, **ent_stats}
+            entities_status = "ok"
+        except Exception as exc:  # pragma: no cover
+            log.error(
+                "tag_onboarding.entities.failed",
+                extra={"slug": slug, "error_type": type(exc).__name__, "strict": strict_mode},
+            )
+            raise PipelineError(
+                "Entities pipeline fallita.",
+                slug=slug,
+                file_path=str(db_path_path),
+            ) from exc
 
     enriched_stats = {
         **stats,
         "workers": worker_count,
         "batch_size": worker_batch_size,
-        "entities_status": entities_status,
     }
-    if entities_error_type:
-        enriched_stats["entities_error_type"] = entities_error_type
+    if entities_status is not None:
+        enriched_stats["entities_status"] = entities_status
 
     log.info("cli.tag_onboarding.nlp_completed", extra=enriched_stats)
 
