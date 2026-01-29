@@ -284,7 +284,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
 
     if slug:
         try:
-            ready, _path = normalized_ready(slug, strict=False)
+            ready, _path = normalized_ready(slug, strict=strict_mode)
             normalized_ready_flag = bool(ready)
         except Exception as exc:
             if strict_mode:
@@ -297,11 +297,11 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
             _log_gating_failure(
                 "ui.gating.normalized_ready_failed",
                 exc,
-                extra={"slug": slug, "path": "", "strict": False, "reason": "exception"},
+                extra={"slug": slug, "path": "", "strict": bool(strict_mode), "reason": "exception"},
             )
             normalized_ready_flag = False
         try:
-            tagging_ready_flag, _ = tagging_ready(slug, strict=False)
+            tagging_ready_flag, _ = tagging_ready(slug, strict=strict_mode)
         except Exception as exc:
             if strict_mode:
                 _stop_gating_error(
@@ -313,7 +313,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
             _log_gating_failure(
                 "ui.gating.tagging_ready_failed",
                 exc,
-                extra={"slug": slug, "path": "", "strict": False, "reason": "exception"},
+                extra={"slug": slug, "path": "", "strict": bool(strict_mode), "reason": "exception"},
             )
             tagging_ready_flag = False
         try:
@@ -331,7 +331,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
             _log_gating_failure(
                 "ui.gating.state_failed",
                 exc,
-                extra={"slug": slug, "path": "", "strict": False, "reason": "exception"},
+                extra={"slug": slug, "path": "", "strict": bool(strict_mode), "reason": "exception"},
             )
             state_norm = ""
             semantic_ready = False

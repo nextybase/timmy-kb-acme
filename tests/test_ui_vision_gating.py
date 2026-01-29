@@ -70,6 +70,14 @@ def test_ui_gating_hash_file_and_block_then_force(
     monkeypatch.setattr("pipeline.vision_runner._provision_from_vision_yaml_with_config", _stub)
     monkeypatch.setattr("pipeline.vision_runner.resolve_vision_config", lambda ctx, override_model=None: config)
     monkeypatch.setattr("pipeline.vision_runner.resolve_vision_retention_days", lambda ctx: 7)
+    monkeypatch.setattr(
+        "pipeline.vision_runner.get_client_config",
+        lambda _ctx: {"integrations": {"drive": {"raw_folder_id": "raw-id"}}},
+    )
+    monkeypatch.setattr(
+        "pipeline.vision_runner.create_drive_structure_from_names",
+        lambda **kwargs: list(kwargs.get("folder_names") or []),
+    )
     config = AssistantConfig(
         model="test-model",
         assistant_id="test-assistant",
@@ -133,44 +141,6 @@ def test_ui_gating_hash_file_and_block_then_force(
         else:
             hash_path.write_text(original_hash, encoding="utf-8")
         mapping_path.write_text(original_mapping, encoding="utf-8")
-
-
-def test_vision_mode_smoke_skips_without_touching_hash(
-    monkeypatch: pytest.MonkeyPatch,
-    dummy_workspace,
-    dummy_ctx,
-    dummy_logger,
-):
-    import pipeline.vision_runner as runner
-
-    monkeypatch.setenv("VISION_MODE", "SMOKE")
-
-    def _boom(*_: object, **__: object) -> None:
-        raise AssertionError("Vision non dovrebbe essere invocata in SMOKE.")
-
-    monkeypatch.setattr(runner, "_provision_from_vision_with_config", _boom)
-    monkeypatch.setattr(runner, "_provision_from_vision_yaml_with_config", _boom)
-
-    base = dummy_workspace["base"]
-    (base / "normalized").mkdir(parents=True, exist_ok=True)
-    pdf = dummy_workspace["vision_pdf"]
-    slug = dummy_workspace["slug"]
-    hash_path = base / "semantic" / ".vision_hash"
-    original = hash_path.read_text(encoding="utf-8") if hash_path.exists() else None
-
-    result = runner.run_vision_with_gating(
-        dummy_ctx,
-        logger=dummy_logger,
-        slug=slug,
-        pdf_path=pdf,
-    )
-
-    assert result.get("skipped") is True
-    assert result.get("mode") == "SMOKE"
-    if original is None:
-        assert not hash_path.exists()
-    else:
-        assert hash_path.read_text(encoding="utf-8") == original
 
 
 def test_vision_mode_deep_propagates_failure(

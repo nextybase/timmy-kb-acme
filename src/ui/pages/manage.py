@@ -455,21 +455,12 @@ if slug:
                         expanded=True,
                         error_label="Errore durante la generazione dei README",
                     ) as status_widget:
-                        try:
-                            result = manage_helpers.call_best_effort(
-                                emit_fn,
-                                logger=LOGGER,
-                                slug=slug,
-                                ensure_structure=False,
-                                require_env=True,
-                            )
-                        except TypeError:
-                            result = manage_helpers.call_best_effort(
-                                emit_fn,
-                                logger=LOGGER,
-                                slug=slug,
-                                ensure_structure=False,
-                            )
+                        result = manage_helpers.call_best_effort(
+                            emit_fn,
+                            logger=LOGGER,
+                            slug=slug,
+                            require_env=True,
+                        )
                         count = len(result or {})
                         if status_widget is not None and hasattr(status_widget, "update"):
                             status_widget.update(label=f"README creati/aggiornati: {count}", state="complete")

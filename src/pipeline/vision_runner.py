@@ -18,10 +18,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
-import yaml
-
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
-from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.drive.upload import create_drive_structure_from_names
 from pipeline.env_utils import get_env_var
@@ -51,9 +48,19 @@ def _resolve_vision_mode(ctx: Any) -> str:
     if not raw:
         raw = get_env_var("VISION_MODE", default="DEEP")
     mode = str(raw or "DEEP").strip().lower()
-    if mode in {"smoke", "deep"}:
+    if mode == "smoke":
+        raise ConfigError(
+            "VISION_MODE=SMOKE non supportato in Beta strict-only. Usa 'DEEP'.",
+            code="vision.mode.invalid",
+            component="vision_runner",
+        )
+    if mode == "deep":
         return mode
-    raise ConfigError(f"VISION_MODE non valido: {raw!r}. Usa 'SMOKE' o 'DEEP'.")
+    raise ConfigError(
+        f"VISION_MODE non valido: {raw!r}. Usa 'DEEP'.",
+        code="vision.mode.invalid",
+        component="vision_runner",
+    )
 
 
 def _semantic_dir(repo_root_dir: Path) -> Path:
@@ -118,17 +125,6 @@ def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_di
             "vision_mapping_missing_areas",
             extra={"slug": slug, "path": str(mapping_path), "error": str(exc)},
         )
-        if slug == "dummy" and _ensure_dummy_area(mapping_path, logger, slug=slug):
-            try:
-                categories = raw_categories_from_semantic_mapping(
-                    semantic_dir=layout.semantic_dir,
-                    mapping_path=Path(mapping_path),
-                )
-            except ConfigError as exc_retry:
-                logger.error(
-                    "vision_mapping_dummy_patch_failed",
-                    extra={"slug": slug, "path": str(mapping_path), "error": str(exc_retry)},
-                )
         if categories is None:
             raise ConfigError(str(exc), slug=slug, file_path=str(mapping_path)) from exc
     if not categories:
@@ -156,30 +152,15 @@ def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_di
 
     cfg = get_client_config(ctx) or {}
     drive_parent = get_drive_id(cfg, "raw_folder_id")
-    strict_mode = is_beta_strict()
     if not drive_parent:
-        reason = "drive.raw_folder_id_missing"
-        log_payload = {"slug": slug, "reason": reason}
-        if strict_mode:
-            logger.error("raw_structure_drive_skipped", extra=log_payload)
-            raise ConfigError(
-                "Drive raw folder id mancante: impossibile materializzare raw su Drive.",
-                slug=slug,
-                file_path=str(mapping_path),
-            )
-        logger.warning("raw_structure_drive_skipped", extra=log_payload)
-        logger.info(
-            "vision.raw_structure.done",
-            extra={"local_count": len(categories), "drive_enabled": False, "drive_status": "skipped"},
+        logger.error("raw_structure_drive_missing", extra={"slug": slug, "reason": "drive.raw_folder_id_missing"})
+        raise ConfigError(
+            "Drive raw folder id mancante: impossibile materializzare raw su Drive.",
+            slug=slug,
+            file_path=str(mapping_path),
+            code="vision.drive.missing",
+            component="vision_runner",
         )
-        return {
-            "areas": categories,
-            "areas_sha256": areas_hash,
-            "local_count": len(categories),
-            "drive_status": "skipped",
-            "drive_reason": reason,
-            "drive_count": 0,
-        }
 
     try:
         created = create_drive_structure_from_names(
@@ -189,28 +170,17 @@ def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_di
             log=logger,
         )
     except Exception as exc:
-        reason = "drive_error"
-        log_payload = {"slug": slug, "reason": reason, "error": str(exc)}
-        if strict_mode:
-            logger.error("raw_structure_drive_skipped", extra=log_payload)
-            raise ConfigError(
-                "Drive non disponibile: impossibile materializzare raw su Drive.",
-                slug=slug,
-                file_path=str(mapping_path),
-            ) from exc
-        logger.warning("raw_structure_drive_skipped", extra=log_payload)
-        logger.info(
-            "vision.raw_structure.done",
-            extra={"local_count": len(categories), "drive_enabled": True, "drive_status": "skipped"},
+        logger.error(
+            "raw_structure_drive_failed",
+            extra={"slug": slug, "reason": "drive_error", "error": str(exc)},
         )
-        return {
-            "areas": categories,
-            "areas_sha256": areas_hash,
-            "local_count": len(categories),
-            "drive_status": "skipped",
-            "drive_reason": reason,
-            "drive_count": 0,
-        }
+        raise ConfigError(
+            "Drive non disponibile: impossibile materializzare raw su Drive.",
+            slug=slug,
+            file_path=str(mapping_path),
+            code="vision.drive.unavailable",
+            component="vision_runner",
+        ) from exc
 
     logger.info(
         "raw_structure_drive_created",
@@ -236,34 +206,8 @@ def materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_dir
 
 
 def _ensure_dummy_area(mapping_path: Path, logger: logging.Logger, *, slug: str) -> bool:
-    try:
-        raw = read_text_safe(mapping_path.parent, mapping_path, encoding="utf-8")
-    except Exception:
-        raw = ""
-
-    payload: Dict[str, Any] = {}
-    if raw:
-        try:
-            parsed = yaml.safe_load(raw)
-            if isinstance(parsed, dict):
-                payload = parsed
-        except Exception:
-            payload = {}
-
-    areas = payload.get("areas")
-    if isinstance(areas, list) and any(isinstance(item, dict) and item.get("key") for item in areas):
-        return False
-
-    payload.setdefault("semantic_tagger", {})
-    payload["areas"] = [{"key": "dummy", "title": "Dummy area"}]
-    safe_write_text(
-        mapping_path, yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8", atomic=True
-    )
-    logger.warning(
-        "vision_mapping_dummy_area_injected",
-        extra={"slug": slug, "path": str(mapping_path)},
-    )
-    return True
+    _ = (mapping_path, logger, slug)
+    return False
 
 
 def _load_last_hash(repo_root_dir: Path) -> Optional[Dict[str, Any]]:
@@ -310,18 +254,7 @@ def run_vision_with_gating(
     """
     Esegue Vision con gating hash/sentinel condiviso (headless-safe).
     """
-    mode = _resolve_vision_mode(ctx)
-    if mode == "smoke":
-        logger.info(
-            "vision_runner.skipped",
-            extra={"slug": slug, "mode": "SMOKE", "reason": "Vision skipped: SMOKE mode"},
-        )
-        return {
-            "skipped": True,
-            "hash": "",
-            "mapping": "",
-            "mode": "SMOKE",
-        }
+    _resolve_vision_mode(ctx)
 
     repo_root_dir = getattr(ctx, "repo_root_dir", None)
     if not repo_root_dir:

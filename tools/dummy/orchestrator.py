@@ -449,9 +449,39 @@ def build_dummy_payload(
         write_minimal_tags_raw_fn,
     )
 
+    drive_min_info: Dict[str, Any] = {}
+    drive_readmes_info: Dict[str, Any] = {}
+    hard_check_results: Dict[str, tuple[bool, str, int | None]] = {}
+
+    if enable_drive:
+        drive_start = perf_counter()
+        try:
+            drive_min_info = call_drive_min_fn(
+                slug,
+                client_name,
+                base_dir,
+                logger,
+                ensure_drive_minimal_and_upload_config,
+            ) or {}
+        except Exception as exc:
+            latency_ms = int((perf_counter() - drive_start) * 1000)
+            msg = f"Drive hard check fallito: {exc}"
+            raise HardCheckError(
+                msg,
+                build_hardcheck_health(
+                    "drive_hardcheck",
+                    msg,
+                    mode=policy.mode,
+                    latency_ms=latency_ms,
+                ),
+            ) from exc
+        else:
+            latency_ms = int((perf_counter() - drive_start) * 1000)
+            if deep_testing:
+                hard_check_results["drive_hardcheck"] = (True, "Drive hard check succeeded", latency_ms)
+
     vision_status = "skipped"
     vision_completed = False
-    hard_check_results: Dict[str, tuple[bool, str, int | None]] = {}
     if enable_vision:
         pdf_path_resolved = pdf_path(slug)
         vision_yaml_path = vision_yaml_workspace_path(base_dir, pdf_path=pdf_path_resolved)
@@ -556,41 +586,13 @@ def build_dummy_payload(
     else:
         logger.info("tools.gen_dummy_kb.semantic_skipped", extra={"slug": slug})
 
-    drive_min_info: Dict[str, Any] = {}
-    drive_readmes_info: Dict[str, Any] = {}
-
     if enable_drive:
-        drive_start = perf_counter()
-        try:
-            drive_min_info = call_drive_min_fn(
-                slug,
-                client_name,
-                base_dir,
-                logger,
-                ensure_drive_minimal_and_upload_config,
-            ) or {}
-            drive_readmes_info = call_drive_emit_readmes_fn(
-                slug,
-                base_dir,
-                logger,
-                emit_readmes_for_raw,
-            ) or {}
-        except Exception as exc:
-            latency_ms = int((perf_counter() - drive_start) * 1000)
-            msg = f"Drive hard check fallito: {exc}"
-            raise HardCheckError(
-                msg,
-                build_hardcheck_health(
-                    "drive_hardcheck",
-                    msg,
-                    mode=policy.mode,
-                    latency_ms=latency_ms,
-                ),
-            ) from exc
-        else:
-            latency_ms = int((perf_counter() - drive_start) * 1000)
-            if deep_testing:
-                hard_check_results["drive_hardcheck"] = (True, "Drive hard check succeeded", latency_ms)
+        drive_readmes_info = call_drive_emit_readmes_fn(
+            slug,
+            base_dir,
+            logger,
+            emit_readmes_for_raw,
+        ) or {}
 
     validator = validate_dummy_structure_fn or validate_dummy_structure
     validator(base_dir, logger)

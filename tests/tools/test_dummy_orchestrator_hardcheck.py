@@ -275,7 +275,7 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
         )
 
     assert "insufficient_quota" in str(excinfo.value).lower()
-    assert drive_calls == {"min": 0, "readmes": 0}
+    assert drive_calls == {"min": 1, "readmes": 0}
 
 
 def test_deep_testing_vision_quota_without_downgrade_errors(

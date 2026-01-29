@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.context import validate_slug
 from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import get_int
@@ -246,6 +247,12 @@ def _run_and_render(slug: str, cmd: list[str]) -> None:
 
 
 def main() -> None:
+    if is_beta_strict():
+        st.error(
+            "Dummy KB disabilitata in Beta strict-only. "
+            "Usa il tooling fuori runtime o disattiva TIMMY_BETA_STRICT per ambienti non garantiti.",
+        )
+        return
     set_active_slug("dummy", persist=False, update_query=True)
     render_chrome_then_require(
         allow_without_slug=True,

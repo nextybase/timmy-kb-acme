@@ -79,35 +79,26 @@ def test_materialize_raw_structure_missing_areas_raises(tmp_path: Path) -> None:
     assert "areas" in str(excinfo.value).lower()
 
 
-def test_materialize_raw_structure_dummy_injects_area(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    base = _setup_workspace(tmp_path, "dummy", "semantic_tagger: {}\nareas: []\n")
-    ctx = _Ctx(base)
-    monkeypatch.setattr(
-        vision_runner,
-        "get_client_config",
-        lambda _ctx: {"integrations": {"drive": {"raw_folder_id": "raw-id"}}},
-        raising=True,
-    )
-    monkeypatch.setattr(
-        vision_runner,
-        "create_drive_structure_from_names",
-        lambda **kwargs: list(kwargs.get("folder_names") or []),
-        raising=True,
-    )
-
-    result = materialize_raw_structure(ctx, _logger(), repo_root_dir=base, slug="dummy")
-
-    assert (base / "raw" / "dummy").is_dir()
-    assert result["areas"] == ["dummy"]
-    assert result["drive_status"] == "created"
-
-
 def test_materialize_raw_structure_idempotent(tmp_path: Path) -> None:
     base = _setup_workspace(tmp_path, "acme", "areas:\n  - key: Area One\n  - key: Area Two\n")
     ctx = _Ctx(base)
 
-    materialize_raw_structure(ctx, _logger(), repo_root_dir=base, slug="acme")
-    materialize_raw_structure(ctx, _logger(), repo_root_dir=base, slug="acme")
+    def _get_client_config(_ctx: object) -> dict[str, object]:
+        return {"integrations": {"drive": {"raw_folder_id": "raw-id"}}}
+
+    def _create_drive_structure_from_names(**kwargs: object) -> list[str]:
+        return list(kwargs.get("folder_names") or [])
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(vision_runner, "get_client_config", _get_client_config, raising=True)
+    monkeypatch.setattr(
+        vision_runner, "create_drive_structure_from_names", _create_drive_structure_from_names, raising=True
+    )
+    try:
+        materialize_raw_structure(ctx, _logger(), repo_root_dir=base, slug="acme")
+        materialize_raw_structure(ctx, _logger(), repo_root_dir=base, slug="acme")
+    finally:
+        monkeypatch.undo()
 
     assert (base / "raw" / "area-one").is_dir()
     assert (base / "raw" / "area-two").is_dir()

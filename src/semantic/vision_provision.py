@@ -17,17 +17,19 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
 import yaml
 
+from ai.client_factory import make_openai_client
 from ai.responses import run_json_model
 from ai.types import AssistantConfig
 from pipeline import ontology
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
-from pipeline.import_utils import import_from_candidates
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.vision_paths import vision_yaml_workspace_path
 from pipeline.vision_template import load_vision_template_sections
+from security.masking import hash_identifier, mask_paths, sha256_path
+from security.retention import purge_old_artifacts
 from semantic.core import compile_document_to_vision_yaml
 from semantic.pdf_utils import PdfExtractError, extract_text_from_pdf
 from semantic.validation import validate_context_slug
@@ -43,40 +45,6 @@ def _evt(suffix: str) -> str:
 
 
 LOGGER = get_structured_logger(EVENT)
-IMPORT_LOGGER = get_structured_logger(_evt("imports"))
-
-make_openai_client = import_from_candidates(
-    [
-        "ai.client_factory:make_openai_client",
-        "..ai.client_factory:make_openai_client",
-    ],
-    package=__package__,
-    description="make_openai_client",
-    logger=IMPORT_LOGGER,
-)
-
-_masking_module = import_from_candidates(
-    [
-        "security.masking",
-        "..security.masking",
-    ],
-    package=__package__,
-    description="security.masking",
-    logger=IMPORT_LOGGER,
-)
-hash_identifier = getattr(_masking_module, "hash_identifier")
-mask_paths = getattr(_masking_module, "mask_paths")
-sha256_path = getattr(_masking_module, "sha256_path")
-
-purge_old_artifacts = import_from_candidates(
-    [
-        "security.retention:purge_old_artifacts",
-        "..security.retention:purge_old_artifacts",
-    ],
-    package=__package__,
-    description="purge_old_artifacts",
-    logger=IMPORT_LOGGER,
-)
 
 
 # =========================

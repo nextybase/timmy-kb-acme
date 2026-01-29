@@ -198,13 +198,16 @@ def _write_markdown_for_normalized(
     existing_meta: dict[str, object] = {}
     if book_path.exists():
         try:
-            existing_meta, body_prev = read_frontmatter(book_root, book_path, use_cache=False, allow_fallback=True)
-            existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
-            if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
-                return book_path
-        except Exception:
-            existing_created_at = None
-            existing_meta = {}
+            existing_meta, body_prev = read_frontmatter(book_root, book_path, use_cache=False, allow_fallback=False)
+        except Exception as exc:
+            raise ConversionError(
+                "Frontmatter esistente non valido in book/: rigenera il file o correggi il frontmatter.",
+                slug=slug,
+                file_path=str(book_path),
+            ) from exc
+        existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
+        if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
+            return book_path
 
     meta: dict[str, object] = {
         "title": rel_md.stem.replace("_", " ").replace("-", " ").title() or rel_md.stem,

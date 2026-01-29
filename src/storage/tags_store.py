@@ -188,82 +188,9 @@ def _ensure_list_context(entry: _StackEntry) -> list[Any]:
 
 
 def _parse_yaml_minimal(text: str) -> dict[str, Any]:
-    """Parser minimale per `tags_reviewed.yaml` quando PyYAML non è disponibile."""
-
-    root: dict[str, Any] = {}
-    stack: list[_StackEntry] = [_StackEntry(-1, root, None, None)]
-
-    for raw_line in text.splitlines():
-        line = _strip_yaml_comment(raw_line)
-        if not line.strip():
-            continue
-
-        indent = len(line) - len(line.lstrip(" "))
-        stripped = line.strip()
-
-        while len(stack) > 1 and indent <= stack[-1].indent:
-            stack.pop()
-
-        ctx = stack[-1]
-        container = ctx.container
-
-        if stripped.startswith("-"):
-            list_ctx = _ensure_list_context(ctx)
-            item_content = stripped[1:].strip()
-            if not item_content:
-                value: dict[str, Any] = {}
-                list_ctx.append(value)
-                stack.append(_StackEntry(indent, value, list_ctx, None))
-                continue
-
-            if item_content.startswith("{") or item_content.startswith("["):
-                value = _parse_inline_structure(item_content)
-                list_ctx.append(value)
-                if isinstance(value, dict):
-                    stack.append(_StackEntry(indent, value, list_ctx, None))
-                continue
-
-            if ":" in item_content:
-                key, _, remainder = item_content.partition(":")
-                key = key.strip()
-                value_dict: dict[str, Any] = {}
-                list_ctx.append(value_dict)
-                stack.append(_StackEntry(indent, value_dict, list_ctx, None))
-                remainder = remainder.strip()
-                if remainder:
-                    value_dict[key] = _parse_scalar(remainder)
-                else:
-                    nested_dict: dict[str, Any] = {}
-                    value_dict[key] = nested_dict
-                    stack.append(_StackEntry(indent, nested_dict, value_dict, key))
-                continue
-
-            list_ctx.append(_parse_scalar(item_content))
-            continue
-
-        if ":" not in stripped:
-            raise ConfigError("Linea YAML non interpretabile senza PyYAML.")
-
-        key, _, remainder = stripped.partition(":")
-        key = key.strip()
-        remainder = remainder.strip()
-
-        if not isinstance(container, dict):
-            raise ConfigError("Struttura YAML non valida: atteso dizionario.")
-
-        if remainder:
-            value = _parse_scalar(remainder)
-            container[key] = value
-            if isinstance(value, dict):
-                stack.append(_StackEntry(indent, value, container, key))
-            elif isinstance(value, list):
-                stack.append(_StackEntry(indent, value, container, key))
-        else:
-            nested_dict: dict[str, Any] = {}
-            container[key] = nested_dict
-            stack.append(_StackEntry(indent, nested_dict, container, key))
-
-    return root
+    """Parser minimale disabilitato: PyYAML è obbligatorio in Beta 1.0."""
+    _ = text
+    raise ConfigError("PyYAML obbligatorio: fallback YAML disabilitato in Beta 1.0.")
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
