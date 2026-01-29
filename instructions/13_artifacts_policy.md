@@ -31,6 +31,13 @@ Esempi tipici (non esaustivi): `normalized/`, `book/README.md`, `book/SUMMARY.md
 
 Esempi: zip log, workspace summary, cache in-memory, preview, report "di servizio".
 
+### Conditional CORE artifact
+Alcuni artefatti sono CORE **solo** quando una capability o uno stage della pipeline è attivo.
+In questi casi:
+- se la condizione è soddisfatta e l'artefatto manca → FAIL-FAST (senza fallback);
+- se la condizione non è soddisfatta → l'artefatto **non è richiesto** e **non deve** essere prodotto implicitamente.
+“Conditional CORE” non implica comportamenti best-effort quando la condizione è attiva; la capacità deve governare la presenza dell’artefatto.
+
 ### Core-Gate Artifact (Gate prerequisite)
 È un artefatto:
 - usato come prerequisito normativo per sbloccare la produzione di core artifacts;
@@ -104,6 +111,19 @@ Qualsiasi uso in core di:
 
 deve essere elencato qui con motivazione e test dedicato.
 
+## Runtime Rules
+- Core artifacts devono essere prodotti deterministically.
+- L’assenza o la corruzione di un core artifact blocca la pipeline (fail-fast) e deve essere tracciata.
+- Il fallback silenzioso o il downgrade non sono ammessi.
+- Per i conditional CORE artifacts:
+  - “Skip with warning” non è un comportamento valido finché la condizione è attiva.
+  - La condizione deve essere esplicita e verificabile (niente euristiche di fallback).
+
+## Notes
+- Gli artefatti workspace vengono validati in base alla configurazione delle capability attive.
+- Le artifact richieste da capability inattive non devono essere forzate.
+- Chiarimento: la presenza di un conditional CORE artifact non attiva una capability; sono le capability che attivano gli artefatti.
+
 ## Appendice A - Inventario runtime (src/)
 Metodo: scansione statica dei producer in `src/` (runtime UI/CLI/pipeline). Esclusi `tools/` e `tests/`.
 Include scritture file/DB/log/zip individuate tramite `safe_write_*`, sqlite3, handler log e zip.
@@ -121,7 +141,7 @@ Legenda: CORE = artefatto deterministico della pipeline; CORE-GATE = prerequisit
 | `src/pipeline/config_utils.py:write_client_config_file`<br>`merge_client_config_from_template` | `output/timmy-kb-<slug>/config/config.yaml.bak` | Backup YAML | Operatore (rollback) | SERVICE | FS copy | No (se backup fallisce, errore) |
 | `src/ui/config_store.py:_save_repo_config`<br>`_save_config`<br>`src/ui/pages/configurazione.py:_write_config` | `config/config.yaml` | YAML | `Settings.load`, UI/CLI | CORE | PyYAML | No (fail-fast su errori) |
 | `src/ui/pages/new_client.py:_mirror_repo_config_into_client`<br>`src/timmy_kb/cli/pre_onboarding.py:ensure_local_workspace_for_ui` | `output/timmy-kb-<slug>/config/config.yaml` | YAML | Pipeline/CLI/UI | CORE | PyYAML, template config | No (fail-fast su errori) |
-| `src/timmy_kb/cli/pre_onboarding.py:ensure_local_workspace_for_ui` | `output/timmy-kb-<slug>/config/assistant_vision_system_prompt.txt` | TXT prompt | Vision provisioning | CORE (cond.) | Sorgente `config/assistant_vision_system_prompt.txt` | Yes (skip con warning se sorgente assente) |
+| `src/timmy_kb/cli/pre_onboarding.py:ensure_local_workspace_for_ui` | `output/timmy-kb-<slug>/config/assistant_vision_system_prompt.txt` | TXT prompt | Vision provisioning | CORE (cond.) | Sorgente `config/assistant_vision_system_prompt.txt` | Condition:<br>- richiesto **solo** se la capability Vision è attiva (Vision assistant in strict/structured output);<br>Behavior:<br>- se Vision è attiva e il prompt manca o è vuoto → FAIL-FAST (ConfigError / PipelineError).<br>- se Vision è inattiva → l’artefatto non è richiesto e non viene sintetizzato implicitamente.;<br>Note:<br>- la versione workspace (se presente) è un SERVICE artifact e non deve influire sul runtime quando Vision è inattiva. |
 | `src/ui/pages/new_client.py`<br>`src/timmy_kb/cli/pre_onboarding.py:ensure_local_workspace_for_ui` | `output/timmy-kb-<slug>/config/VisionStatement.pdf` | PDF | `visionstatement.yaml` + mapping | CORE (cond.) | Upload utente | No (mancanza blocca Vision) |
 | `src/ui/fine_tuning/vision_modal.py:_ensure_workspace_pdf` | `output/timmy-kb-<slug>/config/VisionStatement.pdf` | PDF | UI Vision modal | CORE (cond.) | Nessuna | No (mancanza blocca Vision) |
 
