@@ -2,8 +2,8 @@
 # tests/test_kb_db_insert.py
 from pathlib import Path
 
-from kb_db import insert_chunks
 from semantic.api import index_markdown_to_db
+from storage.kb_db import insert_chunks
 from tests.utils.workspace import ensure_minimal_workspace_layout
 
 

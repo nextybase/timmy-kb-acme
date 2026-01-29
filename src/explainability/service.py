@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from typing import Any, Dict, Iterable, Iterator, Literal, Mapping, MutableMapping, Sequence
 
 from explainability.manifest import ResponseManifest
-from kb_db import fetch_candidates
+from storage.kb_db import fetch_candidates
 
 
 class ExplainabilityService:

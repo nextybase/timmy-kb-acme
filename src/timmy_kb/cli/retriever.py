@@ -28,10 +28,10 @@ from dataclasses import MISSING, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, TypedDict
 
-from kb_db import fetch_candidates
 from pipeline.exceptions import RetrieverError  # modulo comune degli errori
 from pipeline.logging_utils import get_structured_logger
 from semantic.types import EmbeddingsClient
+from storage.kb_db import fetch_candidates
 from timmy_kb.cli import retriever_embeddings as embeddings_mod
 from timmy_kb.cli import retriever_manifest as manifest_mod
 from timmy_kb.cli import retriever_ranking as ranking_mod

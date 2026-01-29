@@ -10,8 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from kb_db import init_db as _init_kb_db
-from kb_db import insert_chunks as _insert_chunks
 from pipeline.content_utils import build_chunk_records_from_markdown_files
 from pipeline.embedding_utils import normalize_embeddings
 from pipeline.exceptions import ConfigError
@@ -21,6 +19,8 @@ from pipeline.logging_utils import phase_scope
 from pipeline.path_utils import ensure_within, iter_safe_paths, sorted_paths
 from pipeline.types import ChunkRecord
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
+from storage.kb_db import init_db as _init_kb_db
+from storage.kb_db import insert_chunks as _insert_chunks
 
 __all__ = ["list_content_markdown", "index_markdown_to_db"]
 

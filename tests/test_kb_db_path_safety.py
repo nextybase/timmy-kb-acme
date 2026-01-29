@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from kb_db import insert_chunks
 from pipeline.exceptions import ConfigError
+from storage.kb_db import insert_chunks
 
 
 def test_db_rejects_legacy_global_data_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

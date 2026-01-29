@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import kb_db as kb
+import storage.kb_db as kb
 
 
 def test_insert_chunks_is_idempotent(tmp_path: Path) -> None:

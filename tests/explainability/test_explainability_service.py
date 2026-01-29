@@ -7,8 +7,8 @@ import pytest
 
 from explainability.manifest import ResponseManifest
 from explainability.service import ExplainabilityService
-from kb_db import insert_chunks
 from pipeline.file_utils import safe_write_text
+from storage.kb_db import insert_chunks
 
 
 def _base_manifest() -> ResponseManifest:

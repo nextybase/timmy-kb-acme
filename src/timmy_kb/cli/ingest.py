@@ -23,8 +23,6 @@ from glob import iglob
 from pathlib import Path
 from typing import Any, Callable, Iterable, List, Optional, Sequence, cast
 
-# Importa kb_db in modo locale senza alias storici
-from kb_db import insert_chunks
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError, PathTraversalError
@@ -34,6 +32,9 @@ from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.tracing import start_decision_span, start_root_trace
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.types import EmbeddingsClient  # usa la SSoT del protocollo
+
+# Importa kb_db in modo locale senza alias storici
+from storage.kb_db import insert_chunks
 from storage.kb_store import KbStore
 
 LOGGER = get_structured_logger("timmy_kb.ingest")

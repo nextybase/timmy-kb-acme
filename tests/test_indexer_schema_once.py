@@ -54,7 +54,7 @@ def test_indexer_initializes_schema_once(tmp_path: Path, monkeypatch: pytest.Mon
     logger = _NoopLogger()
     db_path = semantic_dir / "kb.sqlite"
 
-    import kb_db as kdb
+    import storage.kb_db as kdb
 
     calls = {"init": 0}
     real_init = kdb.init_db
@@ -89,7 +89,7 @@ def test_indexer_reduces_overhead_with_single_init(tmp_path: Path, monkeypatch: 
     logger = _NoopLogger()
     db_path = semantic_dir / "kb2.sqlite"
 
-    import kb_db as kdb
+    import storage.kb_db as kdb
 
     calls: list[Path | None] = []
     real_init = kdb.init_db

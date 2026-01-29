@@ -8,8 +8,8 @@ from typing import Any, Iterable, cast
 import numpy as np
 
 import semantic.embedding_service as emb_service
-from kb_db import fetch_candidates
 from semantic.api import index_markdown_to_db
+from storage.kb_db import fetch_candidates
 from tests.utils.workspace import ensure_minimal_workspace_layout
 
 
