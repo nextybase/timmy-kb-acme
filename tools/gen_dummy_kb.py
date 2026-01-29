@@ -319,6 +319,16 @@ def _brute_reset_dummy(*, logger: logging.Logger) -> Path:
     return target
 
 
+def _clean_local_workspace_before_generation(*, slug: str, logger: logging.Logger) -> None:
+    """Assicura workspace locale pulito prima della generazione. Per Dummy: sempre."""
+    if slug != "dummy":
+        return
+    target = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "output" / f"timmy-kb-{slug}")
+    if target.exists():
+        shutil.rmtree(target)
+        logger.info("tools.gen_dummy_kb.local_clean.deleted", extra={"slug": slug, "path": str(target)})
+
+
 def _ensure_local_workspace_for_tooling(*, slug: str, client_name: str, vision_statement_pdf: bytes) -> None:
     workspace_override = os.environ.get("WORKSPACE_ROOT_DIR")
     if workspace_override:
@@ -404,6 +414,11 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "--brute-reset",
         action="store_true",
         help="Reset manuale: elimina output/timmy-kb-dummy e termina (solo slug dummy).",
+    )
+    ap.add_argument(
+        "--reset",
+        action="store_true",
+        help="Reset completo Dummy: cleanup cliente (locale + Drive + registry) e termina (solo slug dummy).",
     )
     semantic_group = ap.add_mutually_exclusive_group()
     semantic_group.add_argument(
@@ -598,6 +613,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     enable_enrichment = not args.no_enrichment
     enable_preview = not args.no_preview
     records_hint = args.records
+    if args.reset:
+        if slug != "dummy":
+            raise SystemExit("--reset consentito solo con slug 'dummy'")
+        logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
+        logger.setLevel(logging.INFO)
+        if not callable(_perform_cleanup):
+            raise SystemExit("Cleanup non disponibile: tools.clean_client_workspace non importabile.")
+        results = _perform_cleanup(slug, client_name=client_name)
+        emit_structure({"slug": slug, "reset": True, "results": results})
+        return int(results.get("exit_code", 1))
     if args.brute_reset:
         if slug != "dummy":
             raise SystemExit("--brute-reset consentito solo con slug 'dummy'")
@@ -692,6 +717,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         try:
             workspace_root = workspace_override or _client_base(slug)
+            _clean_local_workspace_before_generation(slug=slug, logger=logger)
             for child in ("raw", "semantic", "book", "logs", "config"):
                 (workspace_root / child).mkdir(parents=True, exist_ok=True)
             payload = build_payload(

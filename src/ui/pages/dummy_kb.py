@@ -153,11 +153,11 @@ def _render_preview_after_success(slug: str, payload: dict[str, Any] | None) -> 
     _start_preview_and_show_link(ctx)
 
 
-def _run_brute_reset(slug: str, status_label: str) -> None:
+def _run_full_reset(slug: str, status_label: str) -> None:
     if slug != "dummy":
         st.error("Il reset manuale e' consentito solo per lo slug 'dummy'.")
         return
-    cmd = [sys.executable, "-m", "tools.gen_dummy_kb", "--slug", slug, "--brute-reset"]
+    cmd = [sys.executable, "-m", "tools.gen_dummy_kb", "--slug", slug, "--reset"]
     st.caption("Esecuzione comando:")
     st.code(" ".join(shlex.quote(t) for t in cmd), language="bash")
     with st.status(status_label, expanded=True) as status_widget:
@@ -185,7 +185,7 @@ def _run_brute_reset(slug: str, status_label: str) -> None:
                 st.text(result.stderr)
         if result.returncode == 0:
             status_widget.update(label="Reset completato", state="complete")
-            st.success("Workspace dummy eliminato (solo locale).")
+            st.success("Dummy resettato: locale + Drive + registry.")
         else:
             status_widget.update(label=f"Reset fallito (codice {result.returncode})", state="error")
             st.error("Reset manuale non riuscito. Verifica i dettagli.")
@@ -309,10 +309,10 @@ def main() -> None:
         "Verifica la pagina Secrets Healthcheck prima di attivarlo."
     )
 
-    cleanup = st.button("Reset dummy (solo locale)", type="secondary")
+    cleanup = st.button("Reset Dummy", type="secondary")
     proceed = st.button("Prosegui", type="primary")
     if cleanup:
-        _run_brute_reset(slug, "Reset dummy in corso.")
+        _run_full_reset(slug, "Reset Dummy in corso (locale + Drive + registry)...")
     if proceed:
         cmd = [sys.executable, "-m", "tools.gen_dummy_kb", "--slug", slug]
         if no_drive:
