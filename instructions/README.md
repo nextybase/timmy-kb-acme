@@ -62,6 +62,9 @@ Se un comportamento non è descritto qui, **non è ammesso** nel sistema.
 - `10_runtime_strict_contract_beta.md` - **attivo** - Runtime invariants and strict-only execution rules (Beta 1.0).
 - `11_ui_contract.md` - **attivo**
 - `12_env_override_capabilities.md` - **attivo**
+- `13_artifacts_policy.md` - **attivo**
+- `14_agent_package_contract.md` - **attivo**
+- `AGENTS.md` - **attivo**
 
 Un documento **attivo** può essere raffinato, ma:
 - non può contraddire le invarianti di questo README;
