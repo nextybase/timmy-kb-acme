@@ -38,10 +38,9 @@ def test_search_logs_empty_query(caplog: pytest.LogCaptureFixture) -> None:
     params = _base_params("   ")
     client = _DummyEmbeddingsClient([[0.1, 0.2]])
 
-    with caplog.at_level(logging.WARNING), pytest.raises(RetrieverError) as exc:
-        search(params, client)
-
-    assert getattr(exc.value, "code", None) == retr.ERR_INVALID_QUERY
+    with caplog.at_level(logging.WARNING):
+        out = search(params, client)
+    assert out == []
     record = next(
         (
             rec
@@ -83,10 +82,9 @@ def test_search_logs_embedding_failure(caplog: pytest.LogCaptureFixture) -> None
         def embed_texts(self, texts: list[str]) -> list[list[float]]:
             raise RuntimeError("boom")
 
-    with caplog.at_level(logging.WARNING), pytest.raises(RetrieverError) as exc:
-        search(params, _BoomClient())
-
-    assert getattr(exc.value, "code", None) == retr.ERR_EMBEDDING_FAILED
+    with caplog.at_level(logging.WARNING):
+        out = search(params, _BoomClient())
+    assert out == []
     record = next(
         (rec for rec in reversed(caplog.records) if rec.getMessage() == "retriever.query.embed_failed"),
         None,

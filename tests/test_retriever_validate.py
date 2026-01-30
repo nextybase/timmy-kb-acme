@@ -106,9 +106,8 @@ def test_search_early_return_on_empty_query(monkeypatch) -> None:
         raise AssertionError("fetch_candidates should not be called for empty query")
 
     monkeypatch.setattr(r, "fetch_candidates", _boom)
-    with pytest.raises(RetrieverError) as exc:
-        search(_params(query="   "), DummyEmbeddings())
-    assert getattr(exc.value, "code", None) == r.ERR_INVALID_QUERY
+    out = search(_params(query="   "), DummyEmbeddings())
+    assert out == []
 
 
 def test_search_early_return_on_zero_k(monkeypatch) -> None:
@@ -116,9 +115,8 @@ def test_search_early_return_on_zero_k(monkeypatch) -> None:
         raise AssertionError("fetch_candidates should not be called when k==0")
 
     monkeypatch.setattr(r, "fetch_candidates", _boom)
-    with pytest.raises(RetrieverError) as exc:
-        search(_params(k=0), DummyEmbeddings())
-    assert getattr(exc.value, "code", None) == r.ERR_INVALID_K
+    out = search(_params(k=0), DummyEmbeddings())
+    assert out == []
 
 
 def test_search_early_return_on_zero_candidate_limit(monkeypatch) -> None:

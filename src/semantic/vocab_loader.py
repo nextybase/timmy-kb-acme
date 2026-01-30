@@ -15,17 +15,15 @@ from pipeline.logging_utils import get_structured_logger
 
 __all__ = ["load_reviewed_vocab", "load_tags_reviewed_db"]
 
-# Import lazy del loader reale; se assente, enrichment resta opzionale.
 LOGGER = get_structured_logger("semantic.vocab_loader")
 
-try:  # pragma: no cover - dipende dall'ambiente
-    from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
-except Exception as exc:  # pragma: no cover
-    _load_tags_reviewed = None
-    LOGGER.warning(
-        "semantic.vocab_loader.stubbed",
-        extra={"error": str(exc)},
-    )
+def _load_tags_reviewed_or_raise() -> Any:
+    try:  # pragma: no cover - dipende dall'ambiente
+        from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
+    except Exception as exc:  # pragma: no cover
+        LOGGER.warning("semantic.vocab.loader_missing", extra={"error": str(exc)})
+        raise ConfigError("tags.db missing or unreadable") from exc
+    return _load_tags_reviewed
 
 
 def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
@@ -250,14 +248,9 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
 
     Se il modulo reale non è disponibile → {} (enrichment opzionale).
     """
-    if _load_tags_reviewed is None:
-        LOGGER.warning(
-            "semantic.vocab.loader_missing",
-            extra={"event": "semantic.vocab.loader_missing", "file_path": str(db_path)},
-        )
-        raise ConfigError("tags.db missing or unreadable", file_path=str(db_path))
     try:
-        raw = _load_tags_reviewed(str(db_path))  # accetta str/Path
+        loader = _load_tags_reviewed_or_raise()
+        raw = loader(str(db_path))  # accetta str/Path
     except Exception as exc:  # errori SQLite (query/cursor)
         LOGGER.warning(
             "semantic.vocab.load_failed",
@@ -337,14 +330,13 @@ def _load_reviewed_vocab_json(path: Path, logger: logging.Logger, slug: str | No
             f"reviewed vocab invalid type: {type(data).__name__}",
             file_path=str(path),
         )
-
-        _log_vocab_event(
-            logger,
-            "semantic.vocab.review_loaded",
-            slug=slug,
-            file_path=path,
-            canon_count=len(data),
-        )
+    _log_vocab_event(
+        logger,
+        "semantic.vocab.review_loaded",
+        slug=slug,
+        file_path=path,
+        canon_count=len(data),
+    )
     return cast(Dict[str, Dict[str, list[str]]], data)
 
 

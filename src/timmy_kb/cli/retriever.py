@@ -292,12 +292,7 @@ def search(
                         "error": repr(exc),
                     },
                 )
-            _raise_retriever_error(
-                "k is zero",
-                code=ERR_INVALID_K,
-                slug=params.slug,
-                scope=params.scope,
-            )
+            return []
         if not params.query.strip():
             LOGGER.warning(
                 "retriever.query.invalid",
@@ -307,12 +302,7 @@ def search(
                     "reason": "empty_query",
                 },
             )
-            _raise_retriever_error(
-                "empty query",
-                code=ERR_INVALID_QUERY,
-                slug=params.slug,
-                scope=params.scope,
-            )
+            return []
         budget_hit = False
 
         t_total_start = time.time()
@@ -344,7 +334,7 @@ def search(
             _apply_error_context(exc, code=ERR_EMBEDDING_FAILED, slug=params.slug, scope=params.scope)
             try:
                 LOGGER.warning(
-                    "retriever.query.embedding_failed.softfail",
+                    "retriever.query.embed_failed",
                     extra={
                         "code": ERR_EMBEDDING_FAILED,
                         "slug": params.slug,
@@ -353,7 +343,7 @@ def search(
                 )
             except Exception:
                 pass
-            raise
+            return []
         if query_vector is None:
             try:
                 LOGGER.warning(
