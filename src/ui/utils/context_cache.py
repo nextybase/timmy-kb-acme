@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-from typing import Dict, Optional, cast
+import sys
+from typing import Any, Dict, Optional, cast
 
 from pipeline.context import ClientContext
-from ui.utils.stubs import get_streamlit
 
-st = get_streamlit()
+st: Any | None = None
 _CACHE_KEY = "_client_context_cache"
 _DEFAULT_RUN_KEY = "__default__"
 
@@ -18,7 +18,15 @@ def _cache_key(normalized_slug: str, require_drive_env: bool, run_id: str | None
 
 
 def _get_cache() -> Optional[Dict[str, ClientContext]]:
-    session_state = getattr(st, "session_state", None) if st is not None else None
+    if st is not None:
+        session_state = getattr(st, "session_state", None)
+    elif "streamlit" in sys.modules:
+        from ui.utils.stubs import get_streamlit
+
+        st_module = get_streamlit()
+        session_state = getattr(st_module, "session_state", None) if st_module is not None else None
+    else:
+        return None
     if session_state is None:
         return None
     cache = cast(Optional[Dict[str, ClientContext]], session_state.get(_CACHE_KEY))

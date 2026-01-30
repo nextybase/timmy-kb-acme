@@ -121,11 +121,11 @@ def _resolve_settings_root() -> Path:
 
 def _load_settings() -> Settings:
     try:
-        # Strict: la SSoT è il workspace. Se non dichiarato → fail-fast.
-        ws = get_env_var("WORKSPACE_ROOT_DIR", default=None)
-        root = Path(ws).expanduser().resolve() if ws else _REPO_ROOT
+        root = _resolve_settings_root()
         return Settings.load(root)
     except Exception as exc:  # noqa: BLE001
+        if isinstance(exc, ConfigError):
+            raise
         # Beta 1.0 STRICT: niente degradazioni silenziose in runtime.
         # Se la config globale non è caricabile è un errore di provisioning.
         try:

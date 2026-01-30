@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple
@@ -16,18 +17,18 @@ from semantic.tags_validator import validate_tags_reviewed as _validate_tags_rev
 from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
 from ui.utils.config import get_tags_env_config
 from ui.utils.context_cache import get_client_context, invalidate_client_context
-
-# Import opzionale di Streamlit senza type: ignore.
-# Se non disponibile, st è un Any con valore None.
-try:
-    import streamlit as _st  # type: ignore[unused-ignore]  # noqa: F401
-except Exception:  # pragma: no cover
-    _st = None
-
-st: Any = _st  # st rimane Any; accessi protetti da guardie runtime
 _log = get_structured_logger("ui.workspace")
 _LAYOUT_CACHE: dict[str, WorkspaceLayout] = {}
 _UI_RAW_CACHE_TTL = 3.0  # secondi, garantisce feedback rapido in UI
+
+
+def _get_streamlit_session_state() -> Any | None:
+    if "streamlit" not in sys.modules:
+        return None
+    from ui.utils.stubs import get_streamlit
+
+    st_module = get_streamlit()
+    return getattr(st_module, "session_state", None)
 
 
 def _log_workspace_failure(event: str, exc: Exception, *, extra: dict[str, object] | None = None) -> None:
@@ -153,8 +154,9 @@ def has_normalized_markdown(slug: Optional[str], *, strict: bool = False) -> Tup
     now = time.time()
     ttl_seconds = 3.0  # TTL breve per evitare staleness percettibile in UI
     current_mtime: float | None = None
-    if st is not None and hasattr(st, "session_state"):
-        cached = st.session_state.get(cache_key)
+    session_state = _get_streamlit_session_state()
+    if session_state is not None:
+        cached = session_state.get(cache_key)
         if isinstance(cached, dict):
             cached_ts = float(cached.get("ts", 0))
             cached_mtime = float(cached.get("mtime", 0))
@@ -181,11 +183,11 @@ def has_normalized_markdown(slug: Optional[str], *, strict: bool = False) -> Tup
             pass
         return False, normalized_dir
 
-    if st is not None and hasattr(st, "session_state"):
+    if session_state is not None:
         if has_pdf:
             if current_mtime is None:
                 current_mtime = _dir_mtime(normalized_dir)
-            st.session_state[cache_key] = {
+            session_state[cache_key] = {
                 "has_pdf": True,
                 "mtime": current_mtime,
                 "ts": now,
@@ -193,8 +195,8 @@ def has_normalized_markdown(slug: Optional[str], *, strict: bool = False) -> Tup
         else:
             # Evita negative-caching: rimuovi eventuale cache precedente
             try:
-                if cache_key in st.session_state:
-                    del st.session_state[cache_key]
+                if cache_key in session_state:
+                    del session_state[cache_key]
             except Exception:
                 pass
 

@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 from typing import Any, Optional
-
-try:
-    import streamlit as st
-except Exception:  # pragma: no cover
-    st = None
 
 from ui.theme.tokens import resolve_tokens
 
 from .core import get_theme_base
+
+
+def _get_streamlit_module() -> Any | None:
+    if "streamlit" not in sys.modules:
+        return None
+    from ui.utils.stubs import get_streamlit
+
+    return get_streamlit()
 
 
 def _theme_img_dir(repo_root: Path) -> Path:
@@ -34,8 +38,9 @@ def _resolve_theme_base() -> str:
     # 1) Tentativo: opzioni Streamlit
     try:
         opt_base = None
-        if st is not None:
-            get_opt = getattr(st, "get_option", None)
+        st_module = _get_streamlit_module()
+        if st_module is not None:
+            get_opt = getattr(st_module, "get_option", None)
             if callable(get_opt):
                 opt_base = get_opt("theme.base")
         if isinstance(opt_base, str):
