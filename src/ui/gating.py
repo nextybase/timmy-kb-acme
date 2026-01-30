@@ -12,11 +12,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.exceptions import CapabilityUnavailableError, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
-from ui.utils.strict_mode import is_ui_strict
 
 __all__ = [
     "GateState",
@@ -261,7 +261,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     semantic_ready = False
     tagging_ready_flag = False
     state_norm = ""
-    strict_mode = is_ui_strict()
+    strict_mode = is_beta_strict()
     try:
         slug = get_active_slug()
     except Exception as exc:

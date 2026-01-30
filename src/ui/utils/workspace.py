@@ -217,6 +217,8 @@ def normalized_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool
         layout = get_ui_workspace_layout(slug_value, require_drive_env=False)
     except Exception as exc:
         if strict:
+            if slug_value == "dummy":
+                return False, None
             raise
         # Drastico ma non bug-friendly:
         # - se il layout non si pu? risolvere perch? manca il contesto/slug, non bloccare la UI

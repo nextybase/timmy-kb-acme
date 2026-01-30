@@ -26,6 +26,7 @@ def test_dummy_kb_sets_slug_before_persist(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(page, "set_active_slug", _set_slug, raising=True)
     monkeypatch.setattr(page, "render_chrome_then_require", _render_chrome, raising=True)
     monkeypatch.setattr(page, "get_slug", lambda: "dummy", raising=True)
+    monkeypatch.setattr(page, "is_beta_strict", lambda: False, raising=True)
 
     page.main()
 

@@ -62,9 +62,11 @@ def test_semantics_hidden_logs_once(monkeypatch: pytest.MonkeyPatch) -> None:
 
     dummy_logger = DummyLogger()
     monkeypatch.setattr(gating, "_LOGGER", dummy_logger, raising=False)
+    monkeypatch.setattr(gating, "is_beta_strict", lambda: False, raising=False)
     monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
     monkeypatch.setattr(gating, "normalized_ready", lambda _slug, **_kwargs: (False, None), raising=False)
     monkeypatch.setattr(gating, "tagging_ready", lambda _slug, **_kwargs: (False, None), raising=False)
+    monkeypatch.setattr(gating, "get_state", lambda _slug: "", raising=False)
 
     gates = GateState(drive=True, vision=True, tags=True)
     visible_page_specs(gates)

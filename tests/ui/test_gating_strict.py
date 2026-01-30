@@ -16,7 +16,7 @@ def test_visible_page_specs_blocks_on_gating_error_in_strict(
     stub = StreamlitStub()
     monkeypatch.setitem(sys.modules, "streamlit", stub)
     register_streamlit_runtime(monkeypatch, stub)
-    monkeypatch.setenv("TIMMY_UI_STRICT", "1")
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
 
     import ui.gating as gating
 

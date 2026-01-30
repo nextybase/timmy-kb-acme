@@ -68,24 +68,7 @@ TIMMY_BETA_STRICT=1
 
 ---
 
-## Modalita Strict UI (`TIMMY_UI_STRICT`)
 
-### Attivazione
-Variabile d'ambiente:
-```bash
-TIMMY_UI_STRICT=1
-```
-
-### Comportamento
-- Vale **solo per la UI** (gating e pagine), non modifica il runtime CLI.
-- Per default e' **spenta**: la UI non e' bloccata dalla strict globale.
-- In strict UI, i gate bloccanti restano coerenti con i prerequisiti (es. `normalized/`).
-
-### Ledger
-- Non scrive nel Decision Ledger: la UI resta un **gating layer**, non uno stato.
-- Le transizioni restano governate dal runtime CLI (TIMMY_BETA_STRICT).
-
----
 
 ## Modalità Dummy (`--dummy`)
 
@@ -94,23 +77,16 @@ Flag CLI esplicito:
 ```bash
 timmy-kb tag-onboarding ... --dummy
 ```
-**Capability gate** (solo quando strict è spento):
-```bash
-TIMMY_ALLOW_DUMMY=1
-```
 
 ### Comportamento
 - Consente **solo esplicitamente** la generazione degli stub.
-- Se `TIMMY_BETA_STRICT` è attivo, **non ha effetto**.
-- Fuori dallo strict, l'uso di dummy è **capability-gated**: richiede `TIMMY_ALLOW_DUMMY=1`.
+- Nel tooling dummy, `TIMMY_BETA_STRICT` viene forzato a `0` solo per il processo **se non** si usa `--deep-testing` (override locale).
 
 ### Ledger
 - `from_state = SEMANTIC_INGEST`
 - `to_state   = SEMANTIC_INGEST` (intra-state)
 - `normative_verdict = PASS` con `rationale = ok_dummy_mode` quando gli stub vengono generati
 - `evidence_refs` include `dummy_mode:true`, `requested_mode:dummy`, `effective_mode:dummy`
-- Se dummy è richiesto ma **non consentito** (capability mancante): `normative_verdict = BLOCK`
-  con `stop_code = CAPABILITY_DUMMY_FORBIDDEN`.
 
 ### Quando usarla
 - Demo end-to-end
@@ -121,12 +97,11 @@ TIMMY_ALLOW_DUMMY=1
 
 ## Matrice riassuntiva
 
-| Strict | --dummy | TIMMY_ALLOW_DUMMY | Esito |
-|------|--------|-------------------|------|
-| ✅ | ❌ | n/a | PASS (no stub) |
-| ✅ | ✅ | n/a | PASS (dummy richiesto ma bloccato; no stub) |
-| ❌ | ✅ | ✅ | PASS (stub generati; ok_dummy_mode) |
-| ❌ | ✅ | ❌ | BLOCK (CAPABILITY_DUMMY_FORBIDDEN) |
+| Strict | --dummy | Esito |
+|------|--------|------|
+| SI | NO | PASS (no stub) |
+| SI | SI | PASS (deep-testing: strict reale; no override) |
+| NO | SI | PASS (override locale; ok_dummy_mode) |
 
 ---
 

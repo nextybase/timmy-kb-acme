@@ -648,8 +648,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     prev_vision_mode = os.environ.get("VISION_MODE")
     prev_clients_db_dir = os.environ.get("CLIENTS_DB_DIR")
     prev_clients_db_file = os.environ.get("CLIENTS_DB_FILE")
+    prev_beta_strict = os.environ.get("TIMMY_BETA_STRICT")
+    strict_overridden = False
     workspace_override: Optional[Path] = None
     try:
+        if not args.deep_testing and prev_beta_strict is not None and prev_beta_strict.strip() not in ("", "0"):
+            os.environ["TIMMY_BETA_STRICT"] = "0"
+            strict_overridden = True
         if not enable_vision and prev_vision_mode is None:
             os.environ["VISION_MODE"] = "SMOKE"
         if args.base_dir:
@@ -675,6 +680,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         mode_label = "deep" if args.deep_testing else "smoke"
         logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
         logger.setLevel(logging.INFO)
+        if strict_overridden:
+            logger.info(
+                "tools.gen_dummy_kb.strict_override",
+                extra={
+                    "slug": slug,
+                    "previous": prev_beta_strict,
+                    "current": os.environ.get("TIMMY_BETA_STRICT"),
+                },
+            )
         mode = _compute_runtime_mode(
             drive_request=drive_request,
             drive_module_available=ensure_drive_minimal_and_upload_config is not None,
@@ -775,6 +789,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             os.environ.pop("VISION_MODE", None)
         else:
             os.environ["VISION_MODE"] = prev_vision_mode
+        if prev_beta_strict is None:
+            os.environ.pop("TIMMY_BETA_STRICT", None)
+        else:
+            os.environ["TIMMY_BETA_STRICT"] = prev_beta_strict
         if args.clients_db:
             if prev_clients_db_dir is None:
                 os.environ.pop("CLIENTS_DB_DIR", None)
