@@ -31,7 +31,7 @@ import logging
 import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, TypedDict, runtime_checkable
+from typing import Any, Dict, List, Mapping, Optional, Protocol, TypedDict, runtime_checkable
 
 from pipeline.beta_flags import is_beta_strict
 
@@ -82,6 +82,12 @@ def _safe_settings_get(settings: Any | None, key: str) -> Any:
     """Estrae un valore da settings (dict/oggetto) senza assumere .get presente."""
     if settings is None:
         return None
+    if is_beta_strict() and not isinstance(settings, (Settings, Mapping)):
+        raise ConfigError(
+            "Settings non conforme: atteso Settings o mapping.",
+            code="config.shape.invalid",
+            component="pipeline.context",
+        )
     if isinstance(settings, dict):
         return settings.get(key)
     if isinstance(settings, SupportsGetItem):

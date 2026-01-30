@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.capabilities import get_openai_ctor
+from pipeline.env_constants import REPO_ROOT_ENV, WORKSPACE_ROOT_ENV
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
@@ -76,16 +78,58 @@ def make_openai_client():
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _reject_repo_sentinels(root: Path, *, context: str) -> None:
+    if (root / ".git").exists() or (root / "pyproject.toml").exists():
+        raise ConfigError(
+            f"{context} non valido: punta alla repo root, non al workspace.",
+            code="config.root.invalid",
+            component="client_factory",
+        )
+
+
+def _resolve_settings_root() -> Path:
+    workspace_root = get_env_var(WORKSPACE_ROOT_ENV, default=None)
+    repo_root_env = get_env_var(REPO_ROOT_ENV, default=None)
+    if workspace_root:
+        try:
+            resolved = Path(str(workspace_root)).expanduser().resolve()
+        except Exception as exc:
+            raise ConfigError(
+                f"{WORKSPACE_ROOT_ENV} non valido: {workspace_root}",
+                code="config.root.invalid",
+                component="client_factory",
+            ) from exc
+        _reject_repo_sentinels(resolved, context=WORKSPACE_ROOT_ENV)
+        return resolved
+    if is_beta_strict():
+        raise ConfigError(
+            f"{WORKSPACE_ROOT_ENV} mancante: in strict mode la config deve provenire dal workspace.",
+            code="config.root.missing",
+            component="client_factory",
+        )
+    if repo_root_env:
+        try:
+            return Path(str(repo_root_env)).expanduser().resolve()
+        except Exception as exc:
+            raise ConfigError(
+                f"{REPO_ROOT_ENV} non valido: {repo_root_env}",
+                code="config.root.invalid",
+                component="client_factory",
+            ) from exc
+    return _REPO_ROOT
+
+
 def _load_settings() -> Settings:
+    settings_root = _resolve_settings_root()
     try:
-        return Settings.load(_REPO_ROOT)
+        return Settings.load(settings_root)
     except Exception as exc:  # noqa: BLE001
         # Beta 1.0 STRICT: niente degradazioni silenziose in runtime.
         # Se la config globale non è caricabile è un errore di provisioning.
         try:
             LOGGER.error(
                 "openai.client.settings_load_failed",
-                extra={"error": repr(exc), "repo_root": str(_REPO_ROOT)},
+                extra={"error": repr(exc), "repo_root": str(settings_root)},
             )
         except Exception:
             # In caso di logger non disponibile o handler rotti, non mascheriamo l'errore.

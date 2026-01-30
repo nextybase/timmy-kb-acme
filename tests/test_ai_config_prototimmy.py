@@ -79,6 +79,20 @@ def test_get_from_settings_raises_on_non_mapping() -> None:
     assert excinfo.value.code == "config.read.failed"
 
 
+def test_get_from_settings_strict_rejects_non_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeSettings:
+        def get(self, path: str, default: object | None = None) -> object | None:
+            return None
+
+        def as_dict(self) -> dict[str, Any]:
+            return _sample_data()
+
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    with pytest.raises(ConfigError) as excinfo:
+        _get_from_settings(FakeSettings(), "ai.prototimmy.model", default=None)
+    assert excinfo.value.code == "config.shape.invalid"
+
+
 def test_resolve_prototimmy_config_raises_when_model_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     data = {"ai": {"prototimmy": {"assistant_id_env": "PROTOTIMMY_ID"}}}
 

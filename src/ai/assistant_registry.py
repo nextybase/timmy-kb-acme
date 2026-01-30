@@ -5,8 +5,10 @@ import os
 from typing import Any, Mapping, Optional
 
 import pipeline.env_utils as env_utils
+from pipeline.beta_flags import is_beta_strict
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
+from pipeline.settings import Settings
 
 from .resolution import resolve_assistant_env, resolve_assistant_id, resolve_boolean_flag
 from .types import AssistantConfig
@@ -38,6 +40,13 @@ def _optional_env(name: str) -> Optional[str]:
 
 
 def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
+    if is_beta_strict() and not isinstance(settings, (Settings, Mapping)):
+        raise ConfigError(
+            "Settings non conforme: atteso Settings o mapping.",
+            code="config.shape.invalid",
+            component="assistant_registry",
+            path=path,
+        )
     parts = path.split(".")
     if hasattr(settings, "get"):
         try:

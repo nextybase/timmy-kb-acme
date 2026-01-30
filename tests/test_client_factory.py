@@ -70,6 +70,8 @@ def test_make_openai_client_success(monkeypatch):
 def test_make_openai_client_fails_if_settings_not_loadable(monkeypatch):
     # Beta 1.0 STRICT: se Settings.load fallisce, il runtime deve fermarsi.
     monkeypatch.setenv("OPENAI_API_KEY", "secret")  # pragma: allowlist secret
+    monkeypatch.delenv("WORKSPACE_ROOT_DIR", raising=False)
+    monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
 
     # Evita dipendenze dal SDK: basta che get_openai_ctor sia risolvibile.
     monkeypatch.setattr(client_factory, "get_openai_ctor", lambda: (lambda **_kwargs: object()))
@@ -85,3 +87,14 @@ def test_make_openai_client_fails_if_settings_not_loadable(monkeypatch):
     msg = str(excinfo.value).lower()
     assert "config" in msg
     assert "strict" in msg or "beta" in msg
+
+
+def test_load_settings_strict_requires_workspace_root(monkeypatch):
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    monkeypatch.delenv("WORKSPACE_ROOT_DIR", raising=False)
+    monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
+
+    with pytest.raises(ConfigError) as excinfo:
+        client_factory._load_settings()
+
+    assert excinfo.value.code == "config.root.missing"
