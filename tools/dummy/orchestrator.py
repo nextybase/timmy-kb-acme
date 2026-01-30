@@ -592,6 +592,7 @@ def build_dummy_payload(
             base_dir,
             logger,
             emit_readmes_for_raw,
+            deep_testing=deep_testing,
         ) or {}
 
     validator = validate_dummy_structure_fn or validate_dummy_structure

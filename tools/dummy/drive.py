@@ -3,7 +3,8 @@
 FORBIDDEN IN RUNTIME-CORE (src/)
 Fallback behavior is intentional and confined to this perimeter
 
-Wrapper per le integrazioni Drive opzionali usate dalla dummy KB."""
+Wrapper per le integrazioni Drive opzionali usate dalla dummy KB.
+"""
 
 from __future__ import annotations
 
@@ -62,6 +63,8 @@ def call_drive_emit_readmes(
     base_dir: Path,
     logger: logging.Logger,
     emit_readmes_for_raw: Callable[..., Any] | None,
+    *,
+    deep_testing: bool = False,
 ) -> Optional[dict[str, Any]]:
     """Upload dei README delle cartelle RAW su Drive (best-effort)."""
     if not callable(emit_readmes_for_raw):
@@ -90,10 +93,12 @@ def call_drive_emit_readmes(
                 extra={"slug": slug, "error": message},
             )
         else:
-            logger.warning(
+            logger.exception(
                 "tools.gen_dummy_kb.drive_readmes_failed",
                 extra={"slug": slug, "error": message},
             )
+            if deep_testing:
+                raise
         return None
 
 
