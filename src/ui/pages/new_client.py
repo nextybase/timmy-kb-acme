@@ -13,7 +13,7 @@ from ui.utils.stubs import get_streamlit
 st = get_streamlit()
 import yaml
 
-from pipeline.beta_flags import is_beta_strict
+from ui.utils.strict_mode import is_ui_strict
 from pipeline.config_utils import ensure_config_migrated, get_client_config, get_drive_id, update_config_with_drive_ids
 from pipeline.context import validate_slug
 from pipeline.exceptions import ConfigError, WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
@@ -637,7 +637,7 @@ if current_phase == UI_PHASE_INIT:
 
             # 4) Provisioning minimo su Drive (obbligatorio solo quando disponibile)
             local_only_mode = ui_allow_local_only_enabled()
-            strict_mode = is_beta_strict()
+            strict_mode = is_ui_strict()
             if _ensure_drive_minimal is None:
                 if strict_mode:
                     _log_drive_capability_missing(
@@ -742,7 +742,7 @@ if current_phase == UI_PHASE_INIT:
                         s,
                         mapping_path=_semantic_dir_client(s, layout=layout) / "semantic_mapping.yaml",
                         raw_info=cast(Optional[Dict[str, Any]], vision_payload.get("raw_structure")),
-                        strict=is_beta_strict(),
+                        strict=is_ui_strict(),
                     )
                     old_root = ctx.repo_root_dir
                     invalidate_client_context(s)
@@ -811,7 +811,7 @@ if current_phase == UI_PHASE_INIT:
                                     s,
                                     mapping_path=_semantic_dir_client(s, layout=layout) / "semantic_mapping.yaml",
                                     raw_info=cast(Optional[Dict[str, Any]], forced_payload.get("raw_structure")),
-                                    strict=is_beta_strict(),
+                                    strict=is_ui_strict(),
                                 )
                                 old_root = ctx.repo_root_dir
                                 invalidate_client_context(s)
@@ -906,7 +906,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
     # ora leggerà la configurazione aggiornata.
     has_drive_ids = _has_drive_ids(eff)
     local_only_mode = ui_allow_local_only_enabled()
-    strict_mode = is_beta_strict()
+    strict_mode = is_ui_strict()
     if not has_drive_ids and strict_mode:
         _log_drive_capability_missing(
             eff,
