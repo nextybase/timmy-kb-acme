@@ -173,6 +173,7 @@ def _prepare_context_and_logger(
         bootstrap_config=True,
     )
 
+    bootstrap_client_workspace(context)
     layout = WorkspaceLayout.from_context(context)
     layout.logs_dir.mkdir(parents=True, exist_ok=True)
     log_file = layout.log_file

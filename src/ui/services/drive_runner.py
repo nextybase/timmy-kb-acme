@@ -477,7 +477,9 @@ def _listify(value: Any) -> List[str]:
     return [str(value).strip()] if str(value).strip() else []
 
 
-def _extract_categories_from_mapping(mapping: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+def _extract_categories_from_mapping(
+    mapping: Dict[str, Any], *, include_system_folders: bool = True
+) -> Dict[str, Dict[str, Any]]:
     """
     Vision-only:
       - areas: [...]  (obbligatorio)
@@ -521,26 +523,27 @@ def _extract_categories_from_mapping(mapping: Dict[str, Any]) -> Dict[str, Dict[
         keywords = [x for x in (docs + artefatti + hints + include) if x]
         cats[key] = {"ambito": ambito, "descrizione": descr, "keywords": keywords}
 
-    # 2) System folders (identity, glossario, ...) se presenti
-    sys = mapping.get("system_folders")
-    if isinstance(sys, dict):
-        for sys_key, sys_val in sys.items():
-            key = str(sys_key).strip()
-            key_norm = to_kebab(key)
-            if key != key_norm:
-                raise RuntimeError(
-                    "semantic_mapping.yaml non conforme: system_folders key deve essere kebab-case. "
-                    f"Trovato {key!r}, atteso {key_norm!r}."
-                )
-            if not isinstance(sys_val, dict):
-                raise RuntimeError(
-                    "semantic_mapping.yaml non conforme: system_folders deve mappare a oggetti."
-                )
-            docs = _listify(sys_val.get("documents"))
-            artifacts = _listify(sys_val.get("artefatti"))
-            terms = _listify(sys_val.get("terms_hint"))
-            keywords = [x for x in (docs + artifacts + terms) if x]
-            cats.setdefault(key, {"ambito": key, "descrizione": "", "keywords": keywords})
+    # 2) System folders (identity, glossario, ...) se richiesto
+    if include_system_folders:
+        sys = mapping.get("system_folders")
+        if isinstance(sys, dict):
+            for sys_key, sys_val in sys.items():
+                key = str(sys_key).strip()
+                key_norm = to_kebab(key)
+                if key != key_norm:
+                    raise RuntimeError(
+                        "semantic_mapping.yaml non conforme: system_folders key deve essere kebab-case. "
+                        f"Trovato {key!r}, atteso {key_norm!r}."
+                    )
+                if not isinstance(sys_val, dict):
+                    raise RuntimeError(
+                        "semantic_mapping.yaml non conforme: system_folders deve mappare a oggetti."
+                    )
+                docs = _listify(sys_val.get("documents"))
+                artifacts = _listify(sys_val.get("artefatti"))
+                terms = _listify(sys_val.get("terms_hint"))
+                keywords = [x for x in (docs + artifacts + terms) if x]
+                cats.setdefault(key, {"ambito": key, "descrizione": "", "keywords": keywords})
 
     return cats
 
@@ -575,7 +578,7 @@ def emit_readmes_for_raw(
 
     # Mapping Vision -> categorie
     mapping = load_semantic_mapping(slug, base_root=base_root)
-    cats = _extract_categories_from_mapping(mapping or {})
+    cats = _extract_categories_from_mapping(mapping or {}, include_system_folders=False)
 
     # Cartella cliente; NON crea la struttura raw se non richiesto esplicitamente
     cfg = get_client_config(ctx) or {}

@@ -8,11 +8,15 @@ Helper isolati per l'esecuzione Vision con timeout."""
 from __future__ import annotations
 
 import logging
+import os
 import multiprocessing as mp
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from pipeline.env_constants import WORKSPACE_ROOT_ENV
+from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.settings import Settings
 
 
@@ -23,6 +27,24 @@ class _Ctx:
         self.base_dir = base_dir
         self.repo_root_dir = base_dir
         self.slug = slug
+        os.environ[WORKSPACE_ROOT_ENV] = str(base_dir)
+        # Guard: garantisce config/config.yaml nel workspace prima del load.
+        config_path = ensure_within_and_resolve(base_dir, base_dir / "config" / "config.yaml")
+        logger = get_structured_logger("tools.gen_dummy_kb.vision", context={"slug": slug})
+        logger.info(
+            "tools.gen_dummy_kb.vision.config_probe",
+            extra={
+                "base_dir": str(base_dir),
+                "config_path": str(config_path),
+            },
+        )
+        if not config_path.exists():
+            template = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
+            if template.exists():
+                text = read_text_safe(template.parent, template, encoding="utf-8")
+                safe_write_text(config_path, text, encoding="utf-8", atomic=True)
+            else:
+                raise RuntimeError("config/config.yaml mancante nel workspace dummy.")
         try:
             self.settings = Settings.load(base_dir)
         except Exception:
@@ -37,6 +59,13 @@ def _vision_worker(queue: mp.Queue, slug: str, base_dir: str, pdf_path: str, run
         run_vision(ctx, slug=slug, pdf_path=Path(pdf_path), logger=logger)
         queue.put({"status": "ok"})
     except Exception as exc:  # noqa: BLE001
+        try:
+            logger.exception(
+                "tools.gen_dummy_kb.vision_worker.failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
+        except Exception:
+            pass
         payload: dict[str, Any] = {
             "status": "error",
             "error": str(exc),

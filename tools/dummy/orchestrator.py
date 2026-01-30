@@ -485,6 +485,18 @@ def build_dummy_payload(
     if enable_vision:
         pdf_path_resolved = pdf_path(slug)
         vision_yaml_path = vision_yaml_workspace_path(base_dir, pdf_path=pdf_path_resolved)
+
+        # Guard: in deep-testing la Vision deve sempre trovare config/config.yaml nel workspace.
+        if deep_testing:
+            config_path = base_dir / "config" / "config.yaml"
+            if not config_path.exists():
+                template = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
+                if template.exists():
+                    text = read_text_safe(template.parent, template, encoding="utf-8")
+                    safe_write_text(config_path, text, encoding="utf-8", atomic=True)
+                else:
+                    raise RuntimeError("config/config.yaml mancante nel workspace dummy.")
+
         if not vision_yaml_path.exists():
             try:
                 compile_document_to_vision_yaml(pdf_path_resolved, vision_yaml_path)

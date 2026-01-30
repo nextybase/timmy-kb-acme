@@ -223,6 +223,9 @@ class _KVFormatter(logging.Formatter):
             "categories_missing",
             "missing_count",
             "categories_missing_list",
+            "base_dir",
+            "config_path",
+            "config_exists",
         ):
             v = getattr(record, k, None)
             if v:

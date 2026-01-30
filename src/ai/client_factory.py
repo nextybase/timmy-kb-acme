@@ -122,6 +122,15 @@ def _resolve_settings_root() -> Path:
 def _load_settings() -> Settings:
     try:
         root = _resolve_settings_root()
+        config_path = root / "config" / "config.yaml"
+        LOGGER.info(
+            "openai.client.settings_root.resolved",
+            extra={
+                "root": str(root),
+                "config_path": str(config_path),
+                "config_exists": config_path.exists(),
+            },
+        )
         return Settings.load(root)
     except Exception as exc:  # noqa: BLE001
         if isinstance(exc, ConfigError):

@@ -43,7 +43,9 @@
         "type": "object",
         "properties": {
           "key": {
-            "type": "string"
+            "type": "string",
+            "description": "Chiave canonica kebab-case (solo a-z, 0-9 e '-').",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
           },
           "ambito": {
             "type": "string",
