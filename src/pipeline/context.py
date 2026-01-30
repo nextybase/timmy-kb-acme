@@ -28,9 +28,12 @@ Linee guida rispettate:
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, TypedDict, runtime_checkable
+
+from pipeline.beta_flags import is_beta_strict
 
 from .constants import SEMANTIC_DIR_NAME, SEMANTIC_MAPPING_FILE
 from .env_constants import REPO_ROOT_ENV, WORKSPACE_ROOT_ENV
@@ -165,7 +168,7 @@ class ClientContext:
         logger: Optional[logging.Logger] = None,
         *,
         require_env: bool = True,
-        bootstrap_config: bool = True,
+        bootstrap_config: bool = False,
         run_id: Optional[str] = None,
         stage: Optional[str] = None,
         **kwargs: Any,
@@ -194,6 +197,26 @@ class ClientContext:
         # 3) Calcola repo_root_dir (SSoT) con possibile override da kwargs/ENV
         repo_root_override = kwargs.get("repo_root_dir")
         repo_root = cls._compute_repo_root_dir(slug, env_vars, _logger, repo_root_override)
+
+        # ───────────────────────────────
+        # Strict runtime guard
+        # ───────────────────────────────
+        if bootstrap_config and is_beta_strict():
+            allow = os.getenv("TIMMY_ALLOW_BOOTSTRAP", "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "y",
+                "on",
+            }
+            if not allow:
+                raise ConfigError(
+                    "Bootstrap non consentito in strict runtime. "
+                    "Imposta TIMMY_ALLOW_BOOTSTRAP=1 solo nei flussi di onboarding/tooling.",
+                    code="runtime.bootstrap.forbidden",
+                    component="pipeline.context",
+                    slug=slug,
+                )
 
         # 4) Due modalita': bootstrap (crea config) o runtime (fail-fast, no mutazioni).
         if bootstrap_config:

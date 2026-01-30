@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import logging
+import os
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -161,6 +162,9 @@ def _prepare_context_and_logger(
         client_name = _prompt("Inserisci nome cliente: ").strip()
     if not client_name:
         client_name = slug
+
+    # Bootstrap consentito solo in onboarding
+    os.environ.setdefault("TIMMY_ALLOW_BOOTSTRAP", "1")
 
     context: ClientContext = ClientContext.load(
         slug=slug,

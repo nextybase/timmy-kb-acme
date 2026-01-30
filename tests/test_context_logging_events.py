@@ -26,6 +26,7 @@ def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     repo_root = tmp_path / "repo-root"
     (repo_root / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
+    monkeypatch.setenv("TIMMY_ALLOW_BOOTSTRAP", "1")
 
     # Logger strutturato con handler in memoria
     lg = get_structured_logger("test.context")
@@ -34,7 +35,7 @@ def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     lg.addHandler(mem)
 
     # require_env=False per non dipendere da variabili esterne
-    ctx = ClientContext.load(DUMMY_SLUG, logger=lg, require_env=False)
+    ctx = ClientContext.load(DUMMY_SLUG, logger=lg, require_env=False, bootstrap_config=True)
     expected_root = repo_root / "output" / f"timmy-kb-{DUMMY_SLUG}"
     assert ctx.repo_root_dir == expected_root.resolve()
 

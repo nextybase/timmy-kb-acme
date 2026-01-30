@@ -46,7 +46,13 @@ def test_client_context_load_reads_dotenv(tmp_path: Path, monkeypatch: pytest.Mo
     # Act: reload env_utils to reset lazy loader, explicitly load .env, then create context (no required env)
     _il.reload(envu)
     envu.ensure_dotenv_loaded()
-    ClientContext.load(slug="dummy", require_env=False, run_id=None, repo_root_dir=tmp_path)
+    ClientContext.load(
+        slug="dummy",
+        require_env=False,
+        run_id=None,
+        repo_root_dir=tmp_path,
+        bootstrap_config=True,
+    )
 
     # Assert: value is read from current CWD .env via env getter
     assert envu.get_env_var("ZZZ_DRIVE_ID", required=True) == "abc123"
