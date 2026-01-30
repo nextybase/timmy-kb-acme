@@ -5,7 +5,7 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.path_utils import ensure_within_and_resolve
@@ -32,6 +32,7 @@ __all__ = [
     "start_run",
     "record_decision",
     "record_normative_decision",
+    "record_event",
 ]
 
 DECISION_ALLOW: Final[str] = "ALLOW"
@@ -85,6 +86,19 @@ CREATE TABLE IF NOT EXISTS decisions (
     decided_at TEXT NOT NULL,
     evidence_json TEXT,
     rationale TEXT,
+    FOREIGN KEY(run_id) REFERENCES runs(run_id)
+);
+
+-- Append-only audit trail (non normativo): eventi di esecuzione/UI/tooling.
+-- NOTA: run_id e' opzionale: alcuni eventi (UI) non hanno un run orchestrato.
+CREATE TABLE IF NOT EXISTS events (
+    event_id TEXT PRIMARY KEY,
+    run_id TEXT,
+    slug TEXT NOT NULL,
+    event_name TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    occurred_at TEXT NOT NULL,
+    payload_json TEXT,
     FOREIGN KEY(run_id) REFERENCES runs(run_id)
 );
 """
@@ -234,6 +248,40 @@ def record_normative_decision(conn: sqlite3.Connection, record: NormativeDecisio
         decided_at=record.decided_at,
         evidence_json=evidence_json,
         rationale=rationale,
+    )
+
+
+def record_event(
+    conn: sqlite3.Connection,
+    *,
+    event_id: str,
+    slug: str,
+    event_name: str,
+    actor: str,
+    occurred_at: str,
+    payload: dict[str, Any] | None = None,
+    run_id: str | None = None,
+) -> None:
+    if not event_id:
+        raise ValueError("event_id richiesto")
+    if not slug:
+        raise ValueError("slug richiesto")
+    if not event_name:
+        raise ValueError("event_name richiesto")
+    if not actor:
+        raise ValueError("actor richiesto")
+    payload_json = None
+    if payload is not None:
+        if not isinstance(payload, dict):
+            raise TypeError("payload deve essere un dict")
+        payload_json = json.dumps(payload, sort_keys=True)
+    _insert_row(
+        conn,
+        "INSERT INTO events (event_id, run_id, slug, event_name, actor, occurred_at, payload_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (event_id, run_id, slug, event_name, actor, occurred_at, payload_json),
+        hint="record_event",
+        slug=slug,
     )
 
 

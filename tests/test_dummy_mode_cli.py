@@ -13,6 +13,7 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 
+
 def _repo_root() -> Path:
     # tests/ è in repo root
     return Path(__file__).resolve().parents[1]
