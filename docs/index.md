@@ -38,12 +38,16 @@ Vedi anche: `instructions/13_artifacts_policy.md` (core vs service artifacts, fa
   - [User Quickstart](user/quickstart.md)
   - [Developer Quickstart](developer/developer_quickstart.md)
 
+- **Installazione**
+  - [Guida installazione](user/insitallation_guide.md)
+
 ---
 
 ## User documentation (`docs/user/`)
 
 Guida per chi **utilizza Timmy-KB** tramite UI o CLI.
 
+- **[Guida installazione](user/insitallation_guide.md)** - setup passo-passo (software, venv, dipendenze, test architettura, avvio UI).
 - **[User Guide](user/user_guide.md)** - utilizzo della pipeline (pre-onboarding, tagging, semantic onboarding, preview).
 - **[Arricchimento semantico](user/arricchimento.md)** - flusso completo UI/CLI, generazione tag, euristica vs SpaCy.
 

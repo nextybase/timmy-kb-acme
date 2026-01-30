@@ -8,6 +8,8 @@ Il sistema non decide per te né nasconde l'incertezza, e non si sostituisce all
 
 Per la cornice filosofica del progetto vedi [MANIFEST.md](../../MANIFEST.md).
 
+Installazione step-by-step: [Guida installazione](insitallation_guide.md).
+
 Guida rapida all'onboarding e alla produzione della **KB Markdown AIready**.
 
 ## Normative context

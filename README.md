@@ -18,16 +18,7 @@ Timmy-KB è l'implementazione operativa che incarna i principi del framework NeX
 
 Cornice filosofica e di responsabilità: [MANIFEST.md](MANIFEST.md).
 
----
-
-## Prerequisiti rapidi
-- Python >= 3.11, `pip` e `pip-tools`
-- (Opz.) Docker per la preview HonKit
-- Credenziali Google Drive (Service Account JSON) se usi la sorgente Drive
-- Le credenziali (es. service_account.json, OPENAI_API_KEY) restano fuori dal repo e vanno fornite via `.env`/file locali non tracciati
-
-Variabili d'ambiente principali: `OPENAI_API_KEY`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`, `LOG_REDACTION`.
-Per il logging avanzato usa `TIMMY_LOG_MAX_BYTES`, `TIMMY_LOG_BACKUP_COUNT`, `TIMMY_LOG_PROPAGATE`, `TIMMY_OTEL_ENDPOINT`, `TIMMY_SERVICE_NAME`, `TIMMY_ENV`.
+Installazione step-by-step: [Guida installazione](docs/user/insitallation_guide.md).
 
 ---
 
@@ -47,7 +38,6 @@ python -m timmy_kb.cli.pre_onboarding --slug acme --name "Cliente ACME" --non-in
 python -m timmy_kb.cli.tag_onboarding --slug acme --non-interactive --proceed
 python -m timmy_kb.cli.semantic_onboarding --slug acme --non-interactive
 ```
-```
 Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user/user_guide.md). Il flusso termina con la preview locale via Docker/HonKit (pipeline `honkit_preview`).
 
 ## ⚠️ Beta constraint: Strict vs Dummy mode
@@ -60,6 +50,11 @@ Nota importante: il gate `tag_onboarding` è **intra-state** su `SEMANTIC_INGEST
 
 L'esecuzione end-to-end (con generazione stub) è consentita **solo** tramite flag esplicito
 `--dummy` *e* capability gate `TIMMY_ALLOW_DUMMY=1`, ed è sempre **tracciata nel _Decision Ledger_**.
+
+Attenzione: anche se esplicita e tracciata, la modalita' `--dummy` resta una **eccezione pericolosa**
+rispetto all'obiettivo deterministico e a bassa entropia. Genera materiale non derivato da evidenza reale.
+In strict mode gli stub sono vietati dal contratto runtime e qualsiasi tentativo di forzarli deve
+portare a BLOCK. Non deve esistere (ne' essere introdotta) alcuna via laterale "comoda" nel runtime.
 
 👉 Dettagli operativi e implicazioni di audit:
 **[Strict vs Dummy - Guida Operativa](docs/strict_vs_dummy_beta.md)**.
@@ -81,7 +76,6 @@ Usalo per interpretare il ledger in modo deterministico.
 ---
 
 ## Dipendenze & QA
-- Installa gli ambienti tramite i pin generati con `pip-compile` (`requirements*.txt`). Maggiori dettagli in [docs/developer/configurazione.md](docs/developer/configurazione.md).
 - Il vocabolario richiede PyYAML. Non sono supportati parser di fallback o retrocompat: usa `semantic/tags.db` come SSoT runtime e `semantic/tags_reviewed.yaml` solo come artefatto di editing.
 - Namespace: i moduli sono importabili direttamente da `src` (es. `from timmy_kb.cli.ingest import ingest_folder`, `from pipeline.context import ClientContext`); gli alias di import legacy sono stati rimossi, usa il namespace attuale.
 - Hook consigliati:
@@ -95,6 +89,7 @@ Usalo per interpretare il ledger in modo deterministico.
 ---
 
 ## Documentazione & riferimenti
+- [Guida installazione](docs/user/insitallation_guide.md) - setup passo-passo.
 - [User Quickstart](docs/user/quickstart.md) - avvio rapido UI/CLI.
 - [User Guide](docs/user/user_guide.md) - flussi UI/CLI, Vision, workspace.
 - [Developer Guide](docs/developer/developer_guide.md) - contesto e onboarding (non normativo).
