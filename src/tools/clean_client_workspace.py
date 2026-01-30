@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -13,6 +12,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.paths import get_repo_root
 from pipeline.yaml_utils import yaml_read
 from ui import clients_store
 
@@ -25,14 +25,11 @@ except Exception:  # pragma: no cover - dipendenze Drive opzionali
 
 def _resolve_workspace_root(slug: str) -> Path:
     """Risoluzione deterministica della root workspace (<repo_root>/output/timmy-kb-<slug>)."""
-    env_root = os.environ.get("REPO_ROOT_DIR")
-    repo_root = Path(__file__).resolve().parents[1]
-    if env_root:
-        try:
-            repo_root = Path(str(env_root)).expanduser().resolve()
-        except Exception:
-            raise ConfigError(f"REPO_ROOT_DIR non valido: {env_root}", slug=slug)
-    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
+    try:
+        repo_root = get_repo_root(allow_env=True)
+    except Exception as exc:
+        raise ConfigError(f"REPO_ROOT_DIR non valido: {exc}", slug=slug) from exc
+    workspace_root = Path(repo_root) / "output" / f"timmy-kb-{slug}"
     return ensure_within_and_resolve(repo_root, workspace_root)
 
 
