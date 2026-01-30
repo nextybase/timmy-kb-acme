@@ -121,13 +121,13 @@ def _layout_for_slug(slug: str) -> WorkspaceLayout | None:
 
     layout = None
     try:
-        layout = get_ui_workspace_layout(key, require_env=False)
+        layout = get_ui_workspace_layout(key, require_drive_env=False)
     except Exception:
         layout = None
 
     if layout is None:
         try:
-            layout = WorkspaceLayout.from_slug(slug=key, require_env=False)
+            layout = WorkspaceLayout.from_slug(slug=key, require_drive_env=False)
         except Exception:
             layout = None
 
@@ -176,7 +176,7 @@ def _has_drive_ids(slug: str) -> bool:
     """
     try:
         invalidate_client_context(slug)
-        ctx = get_client_context(slug, require_env=False, force_reload=True)
+        ctx = get_client_context(slug, require_drive_env=False, force_reload=True)
     except Exception:
         return False
     try:
@@ -566,7 +566,7 @@ if current_phase == UI_PHASE_INIT:
                 file_path="config/config.yaml",
             )
         try:
-            ctx = get_client_context(s, require_env=False)
+            ctx = get_client_context(s, require_drive_env=False)
             with status_guard(
                 "Preparo il workspace locale...",
                 expanded=True,
@@ -574,7 +574,7 @@ if current_phase == UI_PHASE_INIT:
             ) as status:
                 layout = bootstrap_client_workspace(ctx)
                 invalidate_client_context(s)
-                ctx = get_client_context(s, require_env=False, force_reload=True)
+                ctx = get_client_context(s, require_drive_env=False, force_reload=True)
                 _ensure_config_migrated_once(s, ctx)
                 if getattr(ctx, "repo_root_dir", None) is None:
                     raise ConfigError(
@@ -615,7 +615,7 @@ if current_phase == UI_PHASE_INIT:
                     update_config_with_drive_ids(ctx, updates, logger=LOGGER)
                     # Reload immediato dopo scrittura config (pre-Vision) per evitare Context stale.
                     invalidate_client_context(s)
-                    ctx = get_client_context(s, require_env=False, force_reload=True)
+                    ctx = get_client_context(s, require_drive_env=False, force_reload=True)
                     if getattr(ctx, "repo_root_dir", None) is None:
                         raise ConfigError(
                             "Context privo di repo_root_dir dopo la scrittura config pre-Vision.",
@@ -701,7 +701,7 @@ if current_phase == UI_PHASE_INIT:
                         invalidate_client_context(s)
                         ctx = get_client_context(
                             s,
-                            require_env=False,
+                            require_drive_env=False,
                             force_reload=True,
                         )
                     except Exception as exc:
@@ -746,7 +746,7 @@ if current_phase == UI_PHASE_INIT:
                     )
                     old_root = ctx.repo_root_dir
                     invalidate_client_context(s)
-                    ctx_reloaded = get_client_context(s, require_env=False, force_reload=True)
+                    ctx_reloaded = get_client_context(s, require_drive_env=False, force_reload=True)
                     if ctx_reloaded.repo_root_dir != old_root:
                         msg = (
                             f"Workspace root drift rilevato per slug={s}. "
@@ -815,7 +815,7 @@ if current_phase == UI_PHASE_INIT:
                                 )
                                 old_root = ctx.repo_root_dir
                                 invalidate_client_context(s)
-                                ctx_reloaded = get_client_context(s, require_env=False, force_reload=True)
+                                ctx_reloaded = get_client_context(s, require_drive_env=False, force_reload=True)
                                 if ctx_reloaded.repo_root_dir != old_root:
                                     msg = (
                                         f"Workspace root drift rilevato per slug={s}. "

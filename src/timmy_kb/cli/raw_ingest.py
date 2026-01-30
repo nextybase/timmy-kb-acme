@@ -107,7 +107,7 @@ def run_raw_ingest(
 
     context = ClientContext.load(
         slug=slug,
-        require_env=(source == "drive"),
+        require_drive_env=(source == "drive"),
         run_id=run_id,
         bootstrap_config=False,
     )

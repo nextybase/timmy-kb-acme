@@ -82,12 +82,12 @@ def _load_client_config(slug: str) -> tuple[Path, GlobalConfig]:
             try:
                 ctx = ClientContext.load(
                     slug=slug,
-                    require_env=False,
+                    require_drive_env=False,
                 )
             except Exception:
                 ctx = None
         if ctx is None:
-            ctx = get_client_context(slug, require_env=False)
+            ctx = get_client_context(slug, require_drive_env=False)
     except Exception as exc:
         raise ConfigError(f"Impossibile caricare il contesto per {slug}.", slug=slug) from exc
 

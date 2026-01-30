@@ -48,7 +48,7 @@ def test_dummy_capability_forbidden_is_blocked_and_recorded(tmp_path: Path, monk
     monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
     monkeypatch.delenv("TIMMY_ALLOW_DUMMY", raising=False)
 
-    # Richieste da ClientContext.load(require_env=True) usato da tag_onboarding_context
+    # Richieste da ClientContext.load(require_drive_env=True) usato da tag_onboarding_context
     saf = tmp_path / "service_account.json"
     saf.write_text("{}", encoding="utf-8")
     monkeypatch.setenv("SERVICE_ACCOUNT_FILE", str(saf))

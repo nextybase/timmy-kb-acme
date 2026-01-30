@@ -26,7 +26,7 @@ def test_kg_build_cli_fails_without_config_and_does_not_bootstrap(
         workspace=None,
         namespace=None,
         run_id=None,
-        require_env=False,
+        require_drive_env=False,
     )
 
     with pytest.raises(ConfigError):

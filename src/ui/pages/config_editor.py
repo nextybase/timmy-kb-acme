@@ -40,7 +40,7 @@ else:  # pragma: no cover
 
 # ---------- helpers config ----------
 def _load_context_and_settings(slug: str) -> Tuple[ClientContext, Settings]:
-    ctx = get_client_context(slug, require_env=False)
+    ctx = get_client_context(slug, require_drive_env=False)
     settings_obj = ctx.settings
     if isinstance(settings_obj, Settings):
         return ctx, settings_obj
@@ -281,7 +281,7 @@ def _render_runtime_retriever(slug: str, *, st_module: StreamlitLike | None = No
 # ---------- entrypoint pagina ----------
 def main() -> None:
     slug = render_chrome_then_require()
-    layout = get_ui_workspace_layout(slug, require_env=False)
+    layout = get_ui_workspace_layout(slug, require_drive_env=False)
     ctx, settings = _load_context_and_settings(slug)
     data = settings.as_dict()
 

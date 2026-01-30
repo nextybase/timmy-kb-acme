@@ -84,7 +84,7 @@ def main() -> int:
     )
     logger.info("schema_test.dumped", extra={"path": str(dump_path), "sha256": digest})
 
-    ctx = ClientContext.load(slug="dummy", require_env=False, run_id=None)
+    ctx = ClientContext.load(slug="dummy", require_drive_env=False, run_id=None)
     resolved = resolve_vision_config(ctx)
     model = resolved.model
 

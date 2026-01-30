@@ -164,7 +164,7 @@ def ensure_drive_minimal_and_upload_config(slug: str, client_name: Optional[str]
     ctx, logger, resolved_name = _prepare_context_and_logger(
         slug,
         interactive=False,
-        require_env=True,  # necessari per accedere a Drive
+        require_drive_env=True,  # necessari per accedere a Drive
         run_id=None,
         client_name=client_name,
     )
@@ -348,7 +348,7 @@ def plan_raw_download(
             "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
         )
 
-    ctx = get_client_context(slug, require_env=require_env)
+    ctx = get_client_context(slug, require_drive_env=require_env)
     layout = _require_layout_from_context(ctx)
     service = cast(Callable[[ClientContext], Any], get_drive_service)(ctx)
     parent_id = (ctx.env or {}).get("DRIVE_ID")
@@ -553,7 +553,7 @@ def emit_readmes_for_raw(
         )
 
     # Context & service
-    ctx = get_client_context(slug, require_env=require_env)
+    ctx = get_client_context(slug, require_drive_env=require_env)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
 
@@ -651,7 +651,7 @@ def download_raw_from_drive(
     return download_raw_from_drive_with_progress(
         slug,
         base_root=base_root,
-        require_env=require_env,
+        require_drive_env=require_env,
         overwrite=overwrite,
         logger=logger,
         on_progress=None,
@@ -689,7 +689,7 @@ def download_raw_from_drive_with_progress(
         )
 
     # Context & service
-    ctx = get_client_context(slug, require_env=require_env)
+    ctx = get_client_context(slug, require_drive_env=require_env)
     layout = _require_layout_from_context(ctx)
     svc = cast(Callable[[ClientContext], Any], get_drive_service)(ctx)
     parent_id = (ctx.env or {}).get("DRIVE_ID")

@@ -16,7 +16,7 @@ LOG = get_structured_logger("ui.pdf_tools")
 
 
 def run_pdf_to_yaml_config(slug: str) -> None:
-    ctx = get_client_context(slug, require_env=False)
+    ctx = get_client_context(slug, require_drive_env=False)
     layout = WorkspaceLayout.from_context(ctx)
     repo_root = layout.repo_root_dir
     cfg_dir = layout.config_path.parent

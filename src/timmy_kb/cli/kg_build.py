@@ -73,7 +73,7 @@ def _resolve_workspace(
 
     context = ClientContext.load(
         slug=slug,
-        require_env=args.require_env,
+        require_drive_env=args.require_env,
         run_id=run_id,
         bootstrap_config=False,
     )

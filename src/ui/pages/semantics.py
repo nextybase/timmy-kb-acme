@@ -63,7 +63,7 @@ def _log_semantics_failure(
 def _make_ctx_and_logger(slug: str) -> tuple[Any, logging.Logger, WorkspaceLayout]:
     run_id = uuid.uuid4().hex
     logger = get_structured_logger("ui.semantics", run_id=run_id)
-    ctx = get_client_context(slug, require_env=False, run_id=run_id)
+    ctx = get_client_context(slug, require_drive_env=False, run_id=run_id)
     layout = WorkspaceLayout.from_context(ctx)
     return ctx, logger, layout
 
@@ -448,7 +448,7 @@ def main() -> None:
 
     slug = cast(str, render_chrome_then_require())
     try:
-        layout = get_ui_workspace_layout(slug, require_env=False)
+        layout = get_ui_workspace_layout(slug, require_drive_env=False)
     except (ConfigError, ConversionError) as exc:
         LOGGER.error("ui.semantics.layout_invalid", extra={"slug": slug, "error": str(exc)})
         _display_user_error(exc)

@@ -48,13 +48,13 @@ def _load_context_layout(slug: str) -> Optional[WorkspaceLayout]:
     cached = _LAYOUT_CACHE.get(slug_key)
     if cached:
         return cached
-    ctx = get_client_context(slug_key, require_env=False)
+    ctx = get_client_context(slug_key, require_drive_env=False)
     layout = WorkspaceLayout.from_context(ctx)
     _LAYOUT_CACHE[slug_key] = layout
     return layout
 
 
-def get_ui_workspace_layout(slug: str, *, require_env: bool = True) -> WorkspaceLayout:
+def get_ui_workspace_layout(slug: str, *, require_drive_env: bool = False) -> WorkspaceLayout:
     """Helper UI: restituisce sempre il layout canonico per lo slug dato."""
     slug_value = (slug or "").strip().lower()
     validate_slug(slug_value)
@@ -144,7 +144,7 @@ def has_normalized_markdown(slug: Optional[str], *, strict: bool = False) -> Tup
 
     validate_slug(slug_value)
 
-    normalized_dir = get_ui_workspace_layout(slug_value, require_env=False).normalized_dir
+    normalized_dir = get_ui_workspace_layout(slug_value, require_drive_env=False).normalized_dir
     if not normalized_dir.is_dir():
         return False, normalized_dir
 
@@ -211,7 +211,7 @@ def normalized_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool
         # NOT_APPLICABLE: niente slug => niente gating su normalized
         return True, None
     try:
-        layout = get_ui_workspace_layout(slug_value, require_env=False)
+        layout = get_ui_workspace_layout(slug_value, require_drive_env=False)
     except Exception as exc:
         if strict:
             raise
@@ -249,7 +249,7 @@ def tagging_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, O
     if not normalized_ok:
         return False, normalized_dir
     try:
-        layout = get_ui_workspace_layout(slug or "", require_env=False)
+        layout = get_ui_workspace_layout(slug or "", require_drive_env=False)
     except Exception as exc:
         if strict:
             raise

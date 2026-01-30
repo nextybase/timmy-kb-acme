@@ -87,7 +87,7 @@ def _load_clients() -> list[dict[str, Any]]:
 def _resolve_layout(slug: str) -> WorkspaceLayout | None:
     """Risoluzione cvb per il WorkspaceLayout (fraintende slug)."""
     try:
-        return get_ui_workspace_layout(slug, require_env=False)
+        return get_ui_workspace_layout(slug, require_drive_env=False)
     except Exception as exc:
         LOGGER.warning("ui.manage.layout_resolution_failed", extra={"slug": slug, "error": str(exc)})
         return None
@@ -101,7 +101,7 @@ def _call_best_effort(fn: Callable[..., Any], **kwargs: Any) -> Any:
 def _repair_workspace(slug: str) -> None:
     """Invoca migrate_or_repair_workspace quando il layout è rotto."""
     try:
-        context = get_client_context(slug, require_env=False)
+        context = get_client_context(slug, require_drive_env=False)
     except Exception as exc:
         st.error(f"Impossibile preparare il contesto di repair: {exc}")
         LOGGER.warning("ui.manage.repair.context_failed", extra={"slug": slug, "error": str(exc)})
@@ -459,7 +459,7 @@ if slug:
                             emit_fn,
                             logger=LOGGER,
                             slug=slug,
-                            require_env=True,
+                            require_drive_env=True,
                         )
                         count = len(result or {})
                         if status_widget is not None and hasattr(status_widget, "update"):

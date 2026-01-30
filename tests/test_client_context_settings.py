@@ -68,7 +68,7 @@ def test_client_context_exposes_settings(
 ) -> None:
     monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
     monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(repo_with_config))
-    ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False)
+    ctx = ClientContext.load(slug=DUMMY_SLUG, require_drive_env=False)
     assert isinstance(ctx.settings, Settings)
     assert ctx.settings.vision_model == "gpt-4o-mini-2024-07-18"
     assert ctx.settings.retriever_throttle.candidate_limit == 3000
@@ -81,7 +81,7 @@ def test_client_context_logger_respects_ops_level(
 ) -> None:
     monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
     monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(repo_with_config))
-    ctx = ClientContext.load(slug=DUMMY_SLUG, require_env=False)
+    ctx = ClientContext.load(slug=DUMMY_SLUG, require_drive_env=False)
     logger = ctx.logger or ctx._get_logger()
     assert logger.level == logging.DEBUG
     handler_levels = {h.level for h in logger.handlers}

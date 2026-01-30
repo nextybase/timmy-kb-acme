@@ -25,7 +25,7 @@ def test_write_yaml_text_syncs_tags_db(tmp_path, monkeypatch):
     monkeypatch.setattr(
         yaml_editors,
         "get_ui_workspace_layout",
-        lambda _slug, *, require_env=True: layout,
+        lambda _slug, *, require_drive_env=True: layout,
     )
 
     called: dict[str, Path] = {}

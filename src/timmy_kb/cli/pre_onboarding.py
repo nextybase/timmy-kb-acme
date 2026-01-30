@@ -131,7 +131,7 @@ def _prepare_context_and_logger(
     slug: str,
     *,
     interactive: bool,
-    require_env: bool,
+    require_drive_env: bool,
     run_id: Optional[str],
     client_name: Optional[str],
 ) -> Tuple[ClientContext, logging.Logger, str]:
@@ -140,7 +140,7 @@ def _prepare_context_and_logger(
     Args:
         slug: Identificatore del cliente (slug) da validare.
         interactive: Se True abilita i prompt CLI (es. richiesta `client_name`).
-        require_env: Se True richiede variabili d'ambiente esterne (no dry-run).
+        require_drive_env: Se True richiede variabili d'ambiente esterne (no dry-run).
         run_id: Correlazione opzionale per i log.
         client_name: Nome cliente; se assente e `interactive=True` viene richiesto via prompt.
 
@@ -168,7 +168,7 @@ def _prepare_context_and_logger(
 
     context: ClientContext = ClientContext.load(
         slug=slug,
-        require_env=require_env,
+        require_drive_env=require_drive_env,
         run_id=run_id,
         bootstrap_config=True,
     )
@@ -184,7 +184,7 @@ def _prepare_context_and_logger(
         run_id=run_id,
         **obs_kwargs,
     )
-    if not require_env:
+    if not require_drive_env:
         logger.info("cli.pre_onboarding.offline_mode", extra={"slug": context.slug})
     logger.info("cli.pre_onboarding.config_loaded", extra={"slug": context.slug, "path": str(layout.config_path)})
     logger.info("cli.pre_onboarding.started", extra={"slug": context.slug})
@@ -291,7 +291,7 @@ def ensure_local_workspace_for_ui(
     """Garantisce la presenza del workspace locale del cliente per la UI.
 
     Comportamento:
-      - Prepara contesto offline (interactive=False, require_env=False) e logger.
+      - Prepara contesto offline (interactive=False, require_drive_env=False) e logger.
       - Riusa la creazione struttura locale e config tramite `_create_local_structure`.
       - Se `vision_statement_pdf` è fornito, lo salva in `config/VisionStatement.pdf`
         (scrittura atomica) e aggiorna `config.yaml` con:
@@ -306,7 +306,7 @@ def ensure_local_workspace_for_ui(
     context, logger, resolved_name = _prepare_context_and_logger(
         slug,
         interactive=False,
-        require_env=False,
+        require_drive_env=False,
         run_id=None,
         client_name=client_name,
     )
@@ -518,7 +518,7 @@ def pre_onboarding_main(
     context, logger, client_name = _prepare_context_and_logger(
         slug,
         interactive=interactive,
-        require_env=require_env,
+        require_drive_env=require_env,
         run_id=run_id,
         client_name=client_name,
     )

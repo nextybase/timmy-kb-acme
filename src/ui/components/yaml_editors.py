@@ -51,7 +51,7 @@ def _require_layout(slug: str) -> WorkspaceLayout:
     if not slug_value:
         raise ConfigError("Slug mancante per gli editor YAML.")
     try:
-        return get_ui_workspace_layout(slug_value, require_env=False)
+        return get_ui_workspace_layout(slug_value, require_drive_env=False)
     except Exception as exc:
         raise ConfigError(
             "Impossibile risolvere il layout workspace: "

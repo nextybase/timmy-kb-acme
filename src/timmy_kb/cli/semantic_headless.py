@@ -156,7 +156,7 @@ def run_semantic_headless(
 
             ctx = ClientContext.load(
                 slug=slug,
-                require_env=False,
+                require_drive_env=False,
                 run_id=None,
                 bootstrap_config=False,
             )

@@ -43,7 +43,7 @@ def main() -> int:
     )
     logger.info("cli.qa_evidence.started", extra={"env_fingerprint": build_env_fingerprint()})
 
-    ctx = ClientContext.load(slug=slug, require_env=False, run_id=run_id, bootstrap_config=False)
+    ctx = ClientContext.load(slug=slug, require_drive_env=False, run_id=run_id, bootstrap_config=False)
     layout = WorkspaceLayout.from_context(ctx)
     logs_dir = layout.logs_dir
     if logs_dir is None:

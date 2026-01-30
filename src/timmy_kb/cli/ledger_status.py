@@ -159,7 +159,7 @@ def _render_human(status: dict[str, Any]) -> str:
 
 
 def _collect_status(slug: str) -> dict[str, Any]:
-    layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
+    layout = WorkspaceLayout.from_slug(slug=slug, require_drive_env=False)
     db_path = decision_ledger.ledger_path_from_layout(layout)
     conn = _open_readonly(db_path, slug=slug)
     conn.row_factory = sqlite3.Row

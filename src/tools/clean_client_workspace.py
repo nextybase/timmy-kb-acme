@@ -150,7 +150,7 @@ def perform_cleanup(slug: str, *, client_name: Optional[str] = None) -> Dict[str
     if drive_root_id and drive_error is None:
         try:
             _require_drive_utils()
-            context = ClientContext.load(slug=slug, require_env=True, bootstrap_config=False)
+            context = ClientContext.load(slug=slug, require_drive_env=True, bootstrap_config=False)
             service = get_drive_service(context)
             delete_drive_file(service, drive_root_id, redact_logs=bool(context.redact_logs))
             drive_deleted = True

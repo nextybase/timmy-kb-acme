@@ -82,7 +82,7 @@ def _load_manage_module(
     monkeypatch.setattr(
         ui.utils.workspace,
         "get_ui_workspace_layout",
-        lambda _slug, require_env=False: layout,
+        lambda _slug, require_drive_env=False: layout,
     )
 
     sys.modules.pop("ui.pages.manage", None)

@@ -96,7 +96,7 @@ def test_modal_save_uses_path_safety(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     import ui.pages.manage as manage  # type: ignore
 
     # Monkeypatch layout helper per evitare dipendenze da resolve_raw_dir
-    monkeypatch.setattr("ui.utils.workspace.get_ui_workspace_layout", lambda slug, require_env=False: layout)
+    monkeypatch.setattr("ui.utils.workspace.get_ui_workspace_layout", lambda slug, require_drive_env=False: layout)
 
     # Tracciamo la chiamata a ensure_within_and_resolve
     called_args: list[tuple[Path, Path]] = []

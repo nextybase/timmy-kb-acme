@@ -37,7 +37,7 @@ def _require_streamlit() -> None:
 
 
 def _resolve_paths(ctx: ClientContext, slug: str) -> tuple[Path, Path, Path]:
-    layout = get_ui_workspace_layout(slug, require_env=False)
+    layout = get_ui_workspace_layout(slug, require_drive_env=False)
     repo_root_dir = layout.repo_root_dir
     if repo_root_dir is None:
         raise ConfigError(
@@ -75,11 +75,11 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
 
     try:
         with st.spinner("Preparazione contesto..."):
-            ctx = get_client_context(slug, require_env=False)
+            ctx = get_client_context(slug, require_drive_env=False)
             repo_root, _normalized_dir, semantic_dir = _resolve_paths(ctx, slug)
 
         # Audit trail canonico (ledger events)
-        layout = get_ui_workspace_layout(slug, require_env=False)
+        layout = get_ui_workspace_layout(slug, require_drive_env=False)
         conn = decision_ledger.open_ledger(layout)
         decision_ledger.record_event(
             conn,
@@ -144,7 +144,7 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
         st.error(f"Estrazione tag non riuscita: {message}")
         try:
             # Best effort: se conn/layout non disponibili, evitiamo cascade failure in UI
-            layout = get_ui_workspace_layout(slug, require_env=False)
+            layout = get_ui_workspace_layout(slug, require_drive_env=False)
             conn = decision_ledger.open_ledger(layout)
             decision_ledger.record_event(
                 conn,
@@ -166,7 +166,7 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
     except Exception:  # pragma: no cover
         st.error("Errore inatteso durante l'estrazione dei tag. Consulta i log.")
         try:
-            layout = get_ui_workspace_layout(slug, require_env=False)
+            layout = get_ui_workspace_layout(slug, require_drive_env=False)
             conn = decision_ledger.open_ledger(layout)
             decision_ledger.record_event(
                 conn,

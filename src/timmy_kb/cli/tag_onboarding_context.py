@@ -31,12 +31,12 @@ def prepare_context(
     *,
     non_interactive: bool,
     run_id: Optional[str],
-    require_env: bool,
+    require_drive_env: bool,
 ) -> ContextResources:
     """Carica il contesto cliente e restituisce percorsi/log pronti all'uso."""
     context = ClientContext.load(
         slug=slug,
-        require_env=require_env,
+        require_drive_env=require_drive_env,
         run_id=run_id,
         bootstrap_config=False,
     )

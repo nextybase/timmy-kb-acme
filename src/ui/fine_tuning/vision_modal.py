@@ -135,7 +135,7 @@ def open_vision_modal(slug: str = "dummy") -> None:
 
         if col_run.button("Prosegui", key="ft_modal_vision_run", type="primary"):
             try:
-                ctx = get_client_context(slug, require_env=False)
+                ctx = get_client_context(slug, require_drive_env=False)
                 pdf_path = _ensure_workspace_pdf(ctx)
                 tmp_data = dict(data)
                 tmp_data["sections"] = dict(state)

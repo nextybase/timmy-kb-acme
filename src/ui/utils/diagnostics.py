@@ -27,7 +27,7 @@ MAX_TOTAL_LOG_BYTES = 5 * 1024 * 1024  # ~5 MiB
 def resolve_repo_root_dir(slug: str) -> Optional[Path]:
     """Ritorna la repo_root_dir del client se disponibile, None altrimenti."""
     try:
-        ctx = get_client_context(slug, require_env=False)
+        ctx = get_client_context(slug, require_drive_env=False)
     except Exception:
         return None
     repo_root_dir = getattr(ctx, "repo_root_dir", None)

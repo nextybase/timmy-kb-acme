@@ -116,12 +116,18 @@ class WorkspaceLayout:
         )
 
     @classmethod
-    def from_slug(cls, *, slug: str, require_env: bool = True, run_id: str | None = None) -> "WorkspaceLayout":
+    def from_slug(
+        cls,
+        *,
+        slug: str,
+        require_drive_env: bool = False,
+        run_id: str | None = None,
+    ) -> "WorkspaceLayout":
         """Valida lo slug, costruisce il ClientContext e applica la policy fail-fast."""
         validate_slug(slug)
         context = ClientContext.load(
             slug=slug,
-            require_env=require_env,
+            require_drive_env=require_drive_env,
             run_id=run_id,
             bootstrap_config=False,
         )
@@ -199,9 +205,14 @@ class WorkspaceLayout:
         )
 
 
-def get_workspace_layout(*, slug: str, require_env: bool = True, run_id: str | None = None) -> WorkspaceLayout:
+def get_workspace_layout(
+    *,
+    slug: str,
+    require_drive_env: bool = False,
+    run_id: str | None = None,
+) -> WorkspaceLayout:
     """Entrypoint canonico: slug validato → WorkspaceLayout con ClientContext."""
-    return WorkspaceLayout.from_slug(slug=slug, require_env=require_env, run_id=run_id)
+    return WorkspaceLayout.from_slug(slug=slug, require_drive_env=require_drive_env, run_id=run_id)
 
 
 def _derive_child_path(base: Path | None, relative: str) -> Path | None:

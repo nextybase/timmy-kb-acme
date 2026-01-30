@@ -458,7 +458,7 @@ def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
 
     context = ClientContext.load(
         slug=slug,
-        require_env=False,
+        require_drive_env=False,
         run_id=run_id,
         stage="validate",
         bootstrap_config=False,
@@ -616,7 +616,7 @@ def tag_onboarding_main(
         slug=slug,
         non_interactive=non_interactive,
         run_id=run_id,
-        require_env=True,
+        require_drive_env=False,
     )
 
     context = resources.context
@@ -991,7 +991,7 @@ def main(args: argparse.Namespace) -> int | None:
         if getattr(args, "scan_normalized", False):
             ctx = ClientContext.load(
                 slug=slug,
-                require_env=False,
+                require_drive_env=False,
                 run_id=run_id,
                 stage="scan_normalized",
                 bootstrap_config=False,
@@ -1009,7 +1009,7 @@ def main(args: argparse.Namespace) -> int | None:
         if getattr(args, "nlp", False):
             ctx = ClientContext.load(
                 slug=slug,
-                require_env=False,
+                require_drive_env=False,
                 run_id=run_id,
                 stage="nlp",
                 bootstrap_config=False,

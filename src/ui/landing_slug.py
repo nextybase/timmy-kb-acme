@@ -109,7 +109,7 @@ def _reset_to_landing() -> None:
 
 def _resolve_layout(slug: str) -> WorkspaceLayout | None:
     try:
-        return get_ui_workspace_layout(slug, require_env=False)
+        return get_ui_workspace_layout(slug, require_drive_env=False)
     except (ConfigError, InvalidSlug):
         return None
     except Exception as exc:
@@ -152,7 +152,7 @@ def _request_shutdown(logger: Optional[logging.Logger]) -> None:
 
 def _repo_root_dir_for(slug: str) -> Path:
     try:
-        ctx = get_client_context(slug, require_env=False)
+        ctx = get_client_context(slug, require_drive_env=False)
     except Exception as exc:
         raise RuntimeError(CLIENT_CONTEXT_ERROR_MSG) from exc
 
@@ -200,7 +200,7 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
     _require_streamlit()
     client_name: str = fallback_name or slug
     try:
-        ctx = get_client_context(slug, require_env=False)
+        ctx = get_client_context(slug, require_drive_env=False)
         from pipeline.config_utils import get_client_config
 
         cfg = get_client_config(ctx) or {}
@@ -387,7 +387,7 @@ def render_workspace_summary(
         else:
             try:
                 ensure_local_workspace_for_ui(slug, client_name or slug, vision_statement_pdf=pdf_bytes)
-                ctx = get_client_context(slug, require_env=False)
+                ctx = get_client_context(slug, require_drive_env=False)
                 if ctx.repo_root_dir is None:
                     raise ConfigError("Workspace creato ma repo_root_dir non disponibile.")
                 repo_root_dir = Path(ctx.repo_root_dir)

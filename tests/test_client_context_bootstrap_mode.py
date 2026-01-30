@@ -21,7 +21,7 @@ def test_load_without_bootstrap_requires_config(monkeypatch: pytest.MonkeyPatch,
     with pytest.raises(ConfigError) as exc_info:
         ClientContext.load(
             DUMMY_SLUG,
-            require_env=False,
+            require_drive_env=False,
             bootstrap_config=False,
         )
     err = exc_info.value
@@ -41,7 +41,7 @@ def test_strict_runtime_blocks_bootstrap_without_allow(monkeypatch: pytest.Monke
     with pytest.raises(ConfigError) as exc_info:
         ClientContext.load(
             DUMMY_SLUG,
-            require_env=False,
+            require_drive_env=False,
             bootstrap_config=True,
         )
     err = exc_info.value

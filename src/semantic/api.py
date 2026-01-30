@@ -77,7 +77,7 @@ __all__ = [
 
 
 def get_paths(slug: str) -> Dict[str, Path]:
-    layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
+    layout = WorkspaceLayout.from_slug(slug=slug, require_drive_env=False)
     return {
         "base": layout.repo_root_dir,
         "raw": layout.raw_dir,

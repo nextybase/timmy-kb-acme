@@ -167,7 +167,7 @@ class ClientContext:
         slug: str,
         logger: Optional[logging.Logger] = None,
         *,
-        require_env: bool = True,
+        require_drive_env: bool = False,
         bootstrap_config: bool = False,
         run_id: Optional[str] = None,
         stage: Optional[str] = None,
@@ -192,7 +192,7 @@ class ClientContext:
         validate_slug(slug)
 
         # 2) Carica ENV (prima dei path per eventuale override)
-        env_vars = cls._load_env(require_env=require_env)
+        env_vars = cls._load_env(require_drive_env=require_drive_env)
 
         # 3) Calcola repo_root_dir (SSoT) con possibile override da kwargs/ENV
         repo_root_override = kwargs.get("repo_root_dir")
@@ -437,7 +437,7 @@ class ClientContext:
             raise ConfigError("Errore lettura config cliente.", file_path=config_path, slug=slug) from e
 
     @staticmethod
-    def _load_env(*, require_env: bool) -> Dict[str, Any]:
+    def _load_env(*, require_drive_env: bool) -> Dict[str, Any]:
         """Raccoglie variabili d'ambiente rilevanti (richieste/opzionali).
 
         Nota: qui si legge, non si redige; la policy di redazione è calcolata da
@@ -445,24 +445,21 @@ class ClientContext:
         """
         env_vars: Dict[str, Any] = {}
 
-        # Richieste (se require_env=True): mappare mancanze in ConfigError chiaro (no KeyError propagati)
-        if require_env:
+        env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
+        env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", default=None)
+
+        if require_drive_env:
             missing: list[str] = []
-            saf = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
-            did = get_env_var("DRIVE_ID", default=None)
-            if not (saf and str(saf).strip()):
+            if not (env_vars.get("SERVICE_ACCOUNT_FILE") and str(env_vars["SERVICE_ACCOUNT_FILE"]).strip()):
                 missing.append("SERVICE_ACCOUNT_FILE")
-            if not (did and str(did).strip()):
+            if not (env_vars.get("DRIVE_ID") and str(env_vars["DRIVE_ID"]).strip()):
                 missing.append("DRIVE_ID")
             if missing:
-                from .exceptions import ConfigError  # import locale per evitare effetti collaterali
-
-                raise ConfigError("Variabili d'ambiente mancanti o vuote: " + ", ".join(missing))
-            env_vars["SERVICE_ACCOUNT_FILE"] = saf
-            env_vars["DRIVE_ID"] = did
-        else:
-            env_vars["SERVICE_ACCOUNT_FILE"] = get_env_var("SERVICE_ACCOUNT_FILE", default=None)
-            env_vars["DRIVE_ID"] = get_env_var("DRIVE_ID", default=None)
+                raise ConfigError(
+                    "Prerequisiti Drive mancanti: " + ", ".join(missing),
+                    code="drive.env.missing",
+                    component="pipeline.context",
+                )
 
         # Opzionali utili
         env_vars["DRIVE_PARENT_FOLDER_ID"] = get_env_var("DRIVE_PARENT_FOLDER_ID", default=None)

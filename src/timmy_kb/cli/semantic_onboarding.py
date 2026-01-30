@@ -45,7 +45,7 @@ from timmy_kb.cli.kg_builder import build_kg_for_workspace
 
 
 def get_paths(slug: str) -> dict[str, Path]:
-    layout = WorkspaceLayout.from_slug(slug=slug, require_env=False)
+    layout = WorkspaceLayout.from_slug(slug=slug, require_drive_env=False)
     return {"base": layout.repo_root_dir, "book": layout.book_dir}
 
 
@@ -200,7 +200,7 @@ def main() -> int:
     # Carica contesto locale (niente Drive / env obbligatori)
     ctx: SemanticContextProtocol = ClientContext.load(
         slug=slug,
-        require_env=False,
+        require_drive_env=False,
         run_id=run_id,
         bootstrap_config=True,
     )

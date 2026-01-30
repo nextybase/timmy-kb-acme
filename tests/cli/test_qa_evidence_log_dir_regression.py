@@ -35,7 +35,7 @@ def test_cli_qa_evidence_writes_in_logs_dir(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setenv(WORKSPACE_ROOT_ENV, str(workspace_dir))
 
     # 3) Costruisci context+layout come fa la CLI
-    ctx = ClientContext.load(slug=slug, require_env=False, run_id="test", bootstrap_config=False)
+    ctx = ClientContext.load(slug=slug, require_drive_env=False, run_id="test", bootstrap_config=False)
     layout = WorkspaceLayout.from_context(ctx)
 
     logs_dir = _resolve_logs_dir(layout)

@@ -74,7 +74,7 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from semantic.convert_service import convert_markdown
     from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
 
-    ctx = ClientContext.load(slug=slug, require_env=False)
+    ctx = ClientContext.load(slug=slug, require_drive_env=False)
     logger = get_structured_logger("smoke.bad", context=ctx, run_id="test-run")
 
     from storage.tags_store import save_tags_reviewed

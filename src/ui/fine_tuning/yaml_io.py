@@ -19,7 +19,7 @@ SECTION_ORDER = ["Vision", "Mission", "Framework Etico", "Goal", "Contesto Opera
 
 
 def _workspace_layout(slug: str) -> WorkspaceLayout:
-    ctx = get_client_context(slug, require_env=False)
+    ctx = get_client_context(slug, require_drive_env=False)
     return WorkspaceLayout.from_context(ctx)
 
 

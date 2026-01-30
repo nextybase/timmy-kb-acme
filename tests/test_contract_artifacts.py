@@ -66,7 +66,7 @@ ops:
 
     from pipeline.context import ClientContext
 
-    return ClientContext.load(slug=slug, require_env=False)
+    return ClientContext.load(slug=slug, require_drive_env=False)
 
 
 def test_book_artifacts_are_generated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

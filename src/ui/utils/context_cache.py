@@ -11,10 +11,10 @@ _CACHE_KEY = "_client_context_cache"
 _DEFAULT_RUN_KEY = "__default__"
 
 
-def _cache_key(normalized_slug: str, require_env: bool, run_id: str | None) -> str:
+def _cache_key(normalized_slug: str, require_drive_env: bool, run_id: str | None) -> str:
     """Costruisce la chiave di cache includendo run_id per distinguere i contesti."""
     run_marker = run_id or _DEFAULT_RUN_KEY
-    return f"{normalized_slug}|{int(require_env)}|{run_marker}"
+    return f"{normalized_slug}|{int(require_drive_env)}|{run_marker}"
 
 
 def _get_cache() -> Optional[Dict[str, ClientContext]]:
@@ -32,14 +32,14 @@ def _get_cache() -> Optional[Dict[str, ClientContext]]:
 def get_client_context(
     slug: str,
     *,
-    require_env: bool = False,
+    require_drive_env: bool = False,
     run_id: str | None = None,
     force_reload: bool = False,
 ) -> ClientContext:
     """Ritorna il ClientContext per lo slug, cacheando in sessione Streamlit quando disponibile."""
     normalized = (slug or "").strip().lower()
     cache = _get_cache()
-    cache_key = _cache_key(normalized, require_env, run_id)
+    cache_key = _cache_key(normalized, require_drive_env, run_id)
 
     cached_ctx = cache.get(cache_key) if cache and not force_reload else None
     if cached_ctx is not None:
@@ -51,7 +51,7 @@ def get_client_context(
 
     ctx = ClientContext.load(
         slug=slug,
-        require_env=require_env,
+        require_drive_env=require_drive_env,
         run_id=run_id,
     )
     if cache is not None:

@@ -114,7 +114,7 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
     if st is None:
         return index
     try:
-        ctx = get_client_context(slug, require_env=True)
+        ctx = get_client_context(slug, require_drive_env=True)
     except Exception as exc:  # pragma: no cover
         st.error("Impossibile inizializzare il contesto Drive.")
         _LOGGER.warning("drive_tree.context_failed", extra={"slug": slug, "error": str(exc)})

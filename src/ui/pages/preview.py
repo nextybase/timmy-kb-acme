@@ -227,7 +227,7 @@ st.subheader("Preview Docker (HonKit)")
 slug = render_chrome_then_require()
 
 try:
-    ctx = get_client_context(slug, require_env=False)
+    ctx = get_client_context(slug, require_drive_env=False)
     logger = get_structured_logger("ui.preview", context=ctx)
 except Exception as exc:
     title, body, caption = to_user_message(exc)
