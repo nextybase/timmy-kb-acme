@@ -68,6 +68,25 @@ TIMMY_BETA_STRICT=1
 
 ---
 
+## Modalita Strict UI (`TIMMY_UI_STRICT`)
+
+### Attivazione
+Variabile d'ambiente:
+```bash
+TIMMY_UI_STRICT=1
+```
+
+### Comportamento
+- Vale **solo per la UI** (gating e pagine), non modifica il runtime CLI.
+- Per default e' **spenta**: la UI non e' bloccata dalla strict globale.
+- In strict UI, i gate bloccanti restano coerenti con i prerequisiti (es. `normalized/`).
+
+### Ledger
+- Non scrive nel Decision Ledger: la UI resta un **gating layer**, non uno stato.
+- Le transizioni restano governate dal runtime CLI (TIMMY_BETA_STRICT).
+
+---
+
 ## Modalità Dummy (`--dummy`)
 
 ### Attivazione
