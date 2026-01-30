@@ -19,7 +19,6 @@ from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.vision_paths import vision_yaml_workspace_path
 from pipeline.vision_runner import run_vision_with_gating
-from ui.imports import get_streamlit
 
 
 class _ProvisionFromVisionWithConfigFunc(Protocol):
@@ -266,6 +265,8 @@ def run_vision(
 
     prepared_prompt: Optional[str] = prepared_prompt_override
     if preview_prompt:
+        from ui.imports import get_streamlit
+
         st = get_streamlit()
         with st.container(border=True):
             st.subheader("Anteprima prompt inviato all'Assistant")
