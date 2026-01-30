@@ -63,3 +63,33 @@ def test_reportlab_missing_blocks_core_folder(monkeypatch):
         assert True
     else:
         raise AssertionError("Expected RuntimeError for core folder when service_only")
+
+
+def test_extract_categories_requires_kebab_key():
+    import pytest
+    import ui.services.drive_runner as dr
+
+    mapping = {"areas": [{"key": "Area Uno"}]}
+    with pytest.raises(RuntimeError) as excinfo:
+        dr._extract_categories_from_mapping(mapping)
+    assert "kebab-case" in str(excinfo.value)
+
+
+def test_extract_categories_rejects_non_dict_area():
+    import pytest
+    import ui.services.drive_runner as dr
+
+    mapping = {"areas": ["not-a-dict"]}
+    with pytest.raises(RuntimeError) as excinfo:
+        dr._extract_categories_from_mapping(mapping)
+    assert "areas[]" in str(excinfo.value)
+
+
+def test_extract_categories_system_folders_requires_kebab_key():
+    import pytest
+    import ui.services.drive_runner as dr
+
+    mapping = {"areas": [{"key": "area-uno"}], "system_folders": {"Bad Key": {"documents": []}}}
+    with pytest.raises(RuntimeError) as excinfo:
+        dr._extract_categories_from_mapping(mapping)
+    assert "system_folders" in str(excinfo.value)

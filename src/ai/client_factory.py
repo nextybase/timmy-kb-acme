@@ -120,16 +120,18 @@ def _resolve_settings_root() -> Path:
 
 
 def _load_settings() -> Settings:
-    settings_root = _resolve_settings_root()
     try:
-        return Settings.load(settings_root)
+        # Strict: la SSoT è il workspace. Se non dichiarato → fail-fast.
+        ws = get_env_var("WORKSPACE_ROOT_DIR", default=None)
+        root = Path(ws).expanduser().resolve() if ws else _REPO_ROOT
+        return Settings.load(root)
     except Exception as exc:  # noqa: BLE001
         # Beta 1.0 STRICT: niente degradazioni silenziose in runtime.
         # Se la config globale non è caricabile è un errore di provisioning.
         try:
             LOGGER.error(
                 "openai.client.settings_load_failed",
-                extra={"error": repr(exc), "repo_root": str(settings_root)},
+                extra={"error": repr(exc), "repo_root": str(_REPO_ROOT)},
             )
         except Exception:
             # In caso di logger non disponibile o handler rotti, non mascheriamo l'errore.

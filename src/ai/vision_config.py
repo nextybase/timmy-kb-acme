@@ -8,6 +8,8 @@ from typing import Any, Mapping, Optional, Tuple, TypedDict, cast
 import pipeline.env_utils as env_utils
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
+from pathlib import Path
+
 from pipeline.settings import Settings
 
 from . import resolution
@@ -199,7 +201,7 @@ def _load_settings_cached(repo_root_dir: Optional[str]) -> Optional[Settings]:
     if not repo_root_dir:
         return None
     try:
-        return Settings.load(repo_root_dir)
+        return Settings.load(Path(repo_root_dir))
     except Exception as exc:
         LOGGER.warning(
             "ai.vision_config.settings_load_failed",

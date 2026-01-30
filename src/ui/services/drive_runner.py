@@ -495,11 +495,19 @@ def _extract_categories_from_mapping(mapping: Dict[str, Any]) -> Dict[str, Dict[
 
     for a in areas:
         if not isinstance(a, dict):
-            continue
-        key_raw = a.get("key") or a.get("ambito") or a.get("title") or ""
-        key = to_kebab(str(key_raw))
-        if not key:
-            continue
+            raise RuntimeError("semantic_mapping.yaml non conforme: areas[] deve contenere oggetti.")
+        key_raw = a.get("key")
+        if not isinstance(key_raw, str) or not key_raw.strip():
+            raise RuntimeError(
+                "semantic_mapping.yaml non conforme: areas[].key mancante (kebab-case richiesto)."
+            )
+        key = key_raw.strip()
+        key_norm = to_kebab(key)
+        if key != key_norm:
+            raise RuntimeError(
+                "semantic_mapping.yaml non conforme: areas[].key deve essere canonico kebab-case. "
+                f"Trovato {key!r}, atteso {key_norm!r}."
+            )
         descr = str(a.get("descrizione_breve") or a.get("descrizione") or "")
         ambito = str(a.get("ambito") or key)
 
@@ -517,9 +525,17 @@ def _extract_categories_from_mapping(mapping: Dict[str, Any]) -> Dict[str, Dict[
     sys = mapping.get("system_folders")
     if isinstance(sys, dict):
         for sys_key, sys_val in sys.items():
+            key = str(sys_key).strip()
+            key_norm = to_kebab(key)
+            if key != key_norm:
+                raise RuntimeError(
+                    "semantic_mapping.yaml non conforme: system_folders key deve essere kebab-case. "
+                    f"Trovato {key!r}, atteso {key_norm!r}."
+                )
             if not isinstance(sys_val, dict):
-                continue
-            key = to_kebab(str(sys_key))
+                raise RuntimeError(
+                    "semantic_mapping.yaml non conforme: system_folders deve mappare a oggetti."
+                )
             docs = _listify(sys_val.get("documents"))
             artifacts = _listify(sys_val.get("artefatti"))
             terms = _listify(sys_val.get("terms_hint"))
