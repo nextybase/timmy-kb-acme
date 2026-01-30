@@ -362,12 +362,7 @@ def search(
                 )
             except Exception:
                 pass
-            _raise_retriever_error(
-                "invalid embedding",
-                code=ERR_EMBEDDING_INVALID,
-                slug=params.slug,
-                scope=params.scope,
-            )
+            return []
         try:
             LOGGER.info(
                 "retriever.query.embedded",

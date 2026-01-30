@@ -8,7 +8,7 @@ import pytest
 
 import timmy_kb.cli.retriever as retr
 from tests.conftest import DUMMY_SLUG
-from timmy_kb.cli.retriever import QueryParams, RetrieverError, search
+from timmy_kb.cli.retriever import QueryParams, search
 
 
 class _DummyEmbeddingsClient:
@@ -58,10 +58,9 @@ def test_search_logs_empty_embedding(caplog: pytest.LogCaptureFixture) -> None:
     params = _base_params("ciao")
     client = _DummyEmbeddingsClient([])
 
-    with caplog.at_level(logging.WARNING), pytest.raises(RetrieverError) as exc:
-        search(params, client)
-
-    assert getattr(exc.value, "code", None) == retr.ERR_EMBEDDING_INVALID
+    with caplog.at_level(logging.WARNING):
+        out = search(params, client)
+    assert out == []
     record = next(
         (
             rec
