@@ -111,6 +111,9 @@ python tools/test_runner.py fast
 
 Se il comando fallisce, non procedere: risolvi prima i problemi di setup.
 
+Nota (Dummy strict): se esegui `tools/gen_dummy_kb.py` con `TIMMY_BETA_STRICT=1`,
+imposta `WORKSPACE_ROOT_DIR` al workspace (es. `output/timmy-kb-<slug>`) prima del run.
+
 ## 9) Prossimi passi (comandi separati)
 
 Test architettura (guardrail struttura):

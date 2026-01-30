@@ -56,6 +56,9 @@ rispetto all'obiettivo deterministico e a bassa entropia. Genera materiale non d
 In strict mode gli stub sono vietati dal contratto runtime e qualsiasi tentativo di forzarli deve
 portare a BLOCK. Non deve esistere (ne' essere introdotta) alcuna via laterale "comoda" nel runtime.
 
+Nota operativa: in strict (`TIMMY_BETA_STRICT=1`) la dummy richiede `WORKSPACE_ROOT_DIR` impostato
+sul workspace (es. `output/timmy-kb-<slug>`). Il tool non lo imposta automaticamente.
+
 👉 Dettagli operativi e implicazioni di audit:
 **[Strict vs Dummy - Guida Operativa](docs/strict_vs_dummy_beta.md)**.
 
