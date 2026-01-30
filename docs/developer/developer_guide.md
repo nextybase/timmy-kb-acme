@@ -102,6 +102,13 @@ Per regole operative e accesso runtime vedi
 [Coding Rules](coding_rule.md#1bis-configurazione-ssot) e la guida di dettaglio in
 [configurazione](configurazione.md).
 
+### Glossario rapido (env core vs env capability)
+
+- **Env core**: variabili necessarie al runtime deterministico per risolvere il workspace.
+  Oggi: `REPO_ROOT_DIR` / `WORKSPACE_ROOT_DIR` (SSoT in `pipeline/env_constants.py`).
+- **Env capability**: variabili richieste solo quando una capability e' attiva
+  (es. Drive: `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`), non parte del core context.
+
 ### OIDC (opzionale)
 
 Per i dettagli operativi e i placeholder vedi [configurazione](configurazione.md)
@@ -120,6 +127,22 @@ Il logging strutturato e la redazione dei segreti sono centrali per la
 tracciabilita. Per regole vincolanti e pattern supportati vedi
 [Coding Rules](coding_rule.md#3-logging-centralizzato) e
 [Logging events](logging_events.md).
+
+### Eventi Ledger (audit trail)
+
+Il Decision Ledger contiene anche eventi append-only (non normativi) usati da UI e tooling.
+Per evitare drift semantico, i nomi evento vanno considerati un vocabolario controllato
+anche se oggi non esiste un file di tassonomia dedicato. Esempi correnti:
+`ui.tags_update.started`, `ui.tags_update.completed`, `ui.tags_update.failed`.
+
+Nota di governance (non bloccante): in futuro e' consigliabile formalizzare una
+tassonomia eventi in un documento dedicato (es. `docs/developer/event_taxonomy.md`).
+
+### Run ID negli eventi UI
+
+Gli eventi UI possono avere `run_id=None`: e' una scelta esplicita per evitare
+correlazioni fittizie. Il campo resta disponibile per futuri "UI-driven runs"
+senza introdurre ambiguita' oggi.
 
 ---
 

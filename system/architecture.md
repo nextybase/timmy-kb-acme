@@ -274,6 +274,11 @@ Defines:
 - runtime configuration,
 - logging context.
 
+Invariant (core deterministico):
+- la risoluzione del workspace richiede un root canonico derivato da
+  `REPO_ROOT_DIR` oppure `WORKSPACE_ROOT_DIR` (SSoT in `pipeline/env_constants.py`);
+  l'assenza di entrambi e' un errore deterministico e fail-fast, non un requisito opzionale.
+
 Beta 1.0 policy (strict-only):
 - `ClientContext` exposes **only** the canonical workspace root (`repo_root_dir`) as SSoT.
 - Historical compatibility fields (e.g. `base_dir`, `md_dir`, `raw_dir`, `normalized_dir`)
