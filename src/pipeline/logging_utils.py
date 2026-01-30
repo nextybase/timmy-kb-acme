@@ -219,6 +219,10 @@ class _KVFormatter(logging.Formatter):
             "phase",
             "duration_ms",
             "artifact_count",
+            "category",
+            "categories_missing",
+            "missing_count",
+            "categories_missing_list",
         ):
             v = getattr(record, k, None)
             if v:

@@ -600,10 +600,33 @@ def emit_readmes_for_raw(
     # sottocartelle RAW
     subfolders = _drive_list_folders(svc, raw_id)
     name_to_id = {d["name"]: d["id"] for d in subfolders}
+    # Validazione + summary: le chiavi devono già essere kebab canoniche.
+    missing_categories = []
+    for cat_name in cats.keys():
+        if not isinstance(cat_name, str) or not cat_name.strip():
+            raise RuntimeError("semantic_mapping.yaml non conforme: area key vuota o non testuale.")
+        folder_k = cat_name.strip()
+        folder_norm = to_kebab(folder_k)
+        if folder_k != folder_norm:
+            raise RuntimeError(
+                "semantic_mapping.yaml non conforme: areas[].key deve essere canonico kebab-case. "
+                f"Trovato {folder_k!r}, atteso {folder_norm!r}."
+            )
+        if folder_k not in name_to_id:
+            missing_categories.append(folder_k)
+    if missing_categories:
+        log.warning(
+            "raw.subfolder.missing.summary",
+            extra={
+                "missing_count": len(missing_categories),
+                "categories_missing": ",".join(sorted(missing_categories)),
+                "categories_missing_list": f"[{', '.join(sorted(missing_categories))}]",
+            },
+        )
 
     uploaded: Dict[str, str] = {}
     for cat_name, meta in cats.items():
-        folder_k = to_kebab(cat_name)
+        folder_k = str(cat_name).strip()
         folder_id = name_to_id.get(folder_k)
         if not folder_id:
             log.warning("raw.subfolder.missing", extra={"category": folder_k})
