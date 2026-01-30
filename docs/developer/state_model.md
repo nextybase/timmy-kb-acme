@@ -70,16 +70,23 @@ Regola: lo stato del workspace non avanza mai a causa di un BLOCK/FAIL.
 ### Strict (`TIMMY_BETA_STRICT=1`)
 - Blocca la generazione degli stub.
 - tag_onboarding resta intra-state su `SEMANTIC_INGEST`.
+- Strict e' **non bypassabile**: nessun flag CLI lo disattiva.
 
 ### Dummy (`--dummy`)
 - Abilita eccezionalmente la generazione degli stub end-to-end.
 - E ammesso solo se esplicitamente richiesto tramite flag.
 - Se strict e attivo, dummy non ha effetto.
+- Se strict e **spento**, dummy richiede `TIMMY_ALLOW_DUMMY=1`.
 
 ### Auditabilita
-Quando `--dummy` e usato:
+Quando `--dummy` e usato (consentito):
 - `evidence_refs` contiene `dummy_mode:true` e `effective_mode:dummy`.
 - `rationale` contiene una traccia esplicita (es. `ok_dummy_mode`).
+
+Quando `--dummy` e richiesto ma **non consentito**:
+- `verdict = BLOCK`
+- `stop_code = CAPABILITY_DUMMY_FORBIDDEN`
+- `rationale = deny_dummy_capability_forbidden`
 
 ## Derivazione e reporting (ledger-status)
 - `current_state` = `workspace_state` (ultimo PASS)

@@ -79,6 +79,8 @@ from storage.tags_store import upsert_document, upsert_folder
 from .tag_onboarding_context import ContextResources, prepare_context
 from .tag_onboarding_semantic import emit_csv_phase, emit_stub_phase
 
+_DUMMY_TRUTHY = {"1", "true", "yes", "on"}
+
 
 def _prompt(msg: str) -> str:
     """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori)."""
@@ -106,6 +108,12 @@ def _summarize_error(exc: BaseException) -> str:
     return f"{name}: {first_line}"
 
 
+def _is_dummy_allowed() -> bool:
+    # Capability-gate: dummy ammesso solo in ambienti esplicitamente abilitati (dev/demo/tooling)
+    v = os.getenv("TIMMY_ALLOW_DUMMY", "")
+    return v.strip().lower() in _DUMMY_TRUTHY
+
+
 def _build_evidence_refs(
     layout: WorkspaceLayout,
     *,
@@ -113,7 +121,6 @@ def _build_evidence_refs(
     requested_mode: str,
     strict_mode: bool,
     effective_mode: str,
-    force_dummy: bool,
 ) -> list[str]:
     return [
         f"path:{layout.config_path}",
@@ -123,7 +130,7 @@ def _build_evidence_refs(
         f"requested_mode:{requested_mode}",
         f"strict_mode:{str(bool(strict_mode)).lower()}",
         f"effective_mode:{effective_mode}",
-        f"force_dummy:{str(bool(force_dummy)).lower()}",
+        "force_dummy:false",
         "gate_scope:intra_state",
         "state_transition:false",
     ]
@@ -149,9 +156,9 @@ def _deny_rationale(exc: BaseException) -> str:
     return "deny_unexpected_error"
 
 
-def _resolve_modes(*, dummy_mode: bool, strict_mode: bool, force_dummy: bool) -> tuple[str, str, str]:
+def _resolve_modes(*, dummy_mode: bool, strict_mode: bool) -> tuple[str, str, str]:
     requested_mode = "dummy" if dummy_mode else "standard"
-    if dummy_mode and strict_mode and not force_dummy:
+    if dummy_mode and strict_mode:
         effective_mode = "strict"
         rationale = "dummy_blocked_by_strict"
     elif dummy_mode:
@@ -593,8 +600,6 @@ def tag_onboarding_main(
     non_interactive: bool = False,
     proceed_after_csv: bool = False,
     dummy_mode: bool = False,
-    strict_mode: bool | None = None,
-    force_dummy: bool = False,
     run_id: Optional[str] = None,
 ) -> None:
     """Orchestratore della fase di *Tag Onboarding*."""
@@ -625,17 +630,16 @@ def tag_onboarding_main(
         started_at=_utc_now_iso(),
     )
     dummy_mode = bool(dummy_mode)
-    strict_mode_resolved = is_beta_strict() if strict_mode is None else bool(strict_mode)
+    strict_mode_resolved = is_beta_strict()
     requested_mode = "dummy" if dummy_mode else "standard"
     decision_recorded = False
-    if strict_mode_resolved and force_dummy:
+    if dummy_mode and not strict_mode_resolved and not _is_dummy_allowed():
         evidence_refs = _build_evidence_refs(
             layout,
-            dummy_mode=dummy_mode,
-            requested_mode=requested_mode,
-            strict_mode=strict_mode_resolved,
-            effective_mode="strict",
-            force_dummy=bool(force_dummy),
+            dummy_mode=True,
+            requested_mode="dummy",
+            strict_mode=False,
+            effective_mode="forbidden",
         )
         decision_ledger.record_normative_decision(
             ledger_conn,
@@ -651,17 +655,19 @@ def tag_onboarding_main(
                 decided_at=_utc_now_iso(),
                 actor="cli.tag_onboarding",
                 evidence_refs=evidence_refs,
-                stop_code=decision_ledger.STOP_CODE_STRICT_MODE_VIOLATION,
-                rationale="strict_mode_force_dummy",
+                stop_code=decision_ledger.STOP_CODE_CAPABILITY_DUMMY_FORBIDDEN,
+                rationale="deny_dummy_capability_forbidden",
             ),
         )
         decision_recorded = True
-        raise ConfigError("Strict mode: --force-dummy non consentito.", slug=slug)
+        raise ConfigError(
+            "Dummy mode non consentita: abilita TIMMY_ALLOW_DUMMY=1 (solo dev/demo/tooling).",
+            slug=slug,
+        )
 
     requested_mode, effective_mode, effective_rationale = _resolve_modes(
         dummy_mode=dummy_mode,
         strict_mode=strict_mode_resolved,
-        force_dummy=bool(force_dummy),
     )
     evidence_refs = _build_evidence_refs(
         layout,
@@ -669,7 +675,6 @@ def tag_onboarding_main(
         requested_mode=requested_mode,
         strict_mode=strict_mode_resolved,
         effective_mode=effective_mode,
-        force_dummy=bool(force_dummy),
     )
 
     payload: TaggingPayload = {
@@ -865,27 +870,6 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Abilita la modalita dummy end-to-end (consente la generazione degli stub).",
     )
-    strict_group = p.add_mutually_exclusive_group()
-    strict_group.add_argument(
-        "--strict",
-        action="store_const",
-        const=True,
-        default=None,
-        help="Forza strict mode (default se TIMMY_BETA_STRICT=1).",
-    )
-    strict_group.add_argument(
-        "--no-strict",
-        action="store_const",
-        const=False,
-        default=None,
-        help="Disabilita strict mode (consente dummy/stub se usato con --dummy).",
-    )
-    p.add_argument(
-        "--force-dummy",
-        action="store_true",
-        help="Se strict è attivo, consente comunque la generazione stub quando --dummy è richiesto (eccezione esplicita).",
-    )
-
     p.add_argument(
         "--validate-only",
         action="store_true",
@@ -1062,8 +1046,6 @@ def main(args: argparse.Namespace) -> int | None:
                 non_interactive=args.non_interactive,
                 proceed_after_csv=bool(args.proceed),
                 dummy_mode=bool(args.dummy),
-                strict_mode=getattr(args, "strict", None),
-                force_dummy=bool(getattr(args, "force_dummy", False)),
                 run_id=run_id,
             )
             return 0

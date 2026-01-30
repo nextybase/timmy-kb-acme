@@ -1,4 +1,4 @@
-# Strict vs Dummy Mode - Guida Operativa (Beta 1.0)
+# Strict vs Dummy Mode - Guida Operativa (Beta 1.0, Ledger SSoT)
 
 Questo documento descrive un **vincolo strutturale della Beta 1.0 di Timmy-KB**.
 
@@ -50,14 +50,15 @@ TIMMY_BETA_STRICT=1
 ### Comportamento
 - Modalità **raccomandata di default** per la Beta.
 - Blocca **qualsiasi generazione di stub semantici**.
-- Il flusso di *tag_onboarding*:
-  - può arrivare **al massimo** a `TAGS_CSV_READY`
-  - **non** può raggiungere `TAGS_READY`
+- Il gate `tag_onboarding` resta **intra-state** su `SEMANTIC_INGEST` (nessuna transizione di stato nel ledger).
+- In strict, una richiesta `--dummy` è **tracciata** ma non produce stub.
 
 ### Ledger
-- `to_state = TAGS_CSV_READY`
-- `verdict = ALLOW`
-- `rationale = checkpoint_proceeded_no_stub`
+- `from_state = SEMANTIC_INGEST`
+- `to_state   = SEMANTIC_INGEST`  (intra-state; *State Model SSoT*)
+- `normative_verdict = PASS`
+- `rationale` deterministica (es. `dummy_blocked_by_strict` / `checkpoint_proceeded_no_stub`)
+- `evidence_refs` include `requested_mode:*` e `effective_mode:*`
 
 ### Quando usarla
 - Ambienti reali
@@ -74,16 +75,23 @@ Flag CLI esplicito:
 ```bash
 timmy-kb tag-onboarding ... --dummy
 ```
+**Capability gate** (solo quando strict è spento):
+```bash
+TIMMY_ALLOW_DUMMY=1
+```
 
 ### Comportamento
 - Consente **solo esplicitamente** la generazione degli stub.
 - Se `TIMMY_BETA_STRICT` è attivo, **non ha effetto**.
+- Fuori dallo strict, l'uso di dummy è **capability-gated**: richiede `TIMMY_ALLOW_DUMMY=1`.
 
 ### Ledger
-- `to_state = TAGS_READY`
-- `verdict = ALLOW`
-- `rationale = ok_dummy_mode`
-- `evidence_json.dummy_mode = true`
+- `from_state = SEMANTIC_INGEST`
+- `to_state   = SEMANTIC_INGEST` (intra-state)
+- `normative_verdict = PASS` con `rationale = ok_dummy_mode` quando gli stub vengono generati
+- `evidence_refs` include `dummy_mode:true`, `requested_mode:dummy`, `effective_mode:dummy`
+- Se dummy è richiesto ma **non consentito** (capability mancante): `normative_verdict = BLOCK`
+  con `stop_code = CAPABILITY_DUMMY_FORBIDDEN`.
 
 ### Quando usarla
 - Demo end-to-end
@@ -94,17 +102,18 @@ timmy-kb tag-onboarding ... --dummy
 
 ## Matrice riassuntiva
 
-| Strict | Dummy | Stato finale |
-|------|-------|--------------|
-| ❌ | ❌ | TAGS_CSV_READY |
-| ✅ | ❌ | TAGS_CSV_READY |
-| ❌ | ✅ | TAGS_READY |
-| ✅ | ✅ | TAGS_CSV_READY |
+| Strict | --dummy | TIMMY_ALLOW_DUMMY | Esito |
+|------|--------|-------------------|------|
+| ✅ | ❌ | n/a | PASS (no stub) |
+| ✅ | ✅ | n/a | PASS (dummy richiesto ma bloccato; no stub) |
+| ❌ | ✅ | ✅ | PASS (stub generati; ok_dummy_mode) |
+| ❌ | ✅ | ❌ | BLOCK (CAPABILITY_DUMMY_FORBIDDEN) |
 
 ---
 
 ## Regola d'oro
-> Se nel Ledger leggi `TAGS_READY`, sai con certezza che è stato usato `--dummy`.
+> Nel ledger non compaiono stati `TAGS_*`. Dummy è riconoscibile tramite `evidence_refs`
+> (`requested_mode`, `effective_mode`, `dummy_mode`) e, quando negato, tramite `stop_code`.
 
 ---
 

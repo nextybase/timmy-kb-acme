@@ -52,12 +52,14 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 
 ## ⚠️ Beta constraint: Strict vs Dummy mode
 
-In Beta, il flusso di onboarding è **strict by default**:
-la generazione degli stub semantici è **disabilitata** e lo stato massimo
-raggiungibile è `TAGS_CSV_READY`.
+In Beta, il flusso di onboarding è **strict-only** quando `TIMMY_BETA_STRICT=1`:
+la generazione degli stub semantici è **disabilitata**.
 
-L'esecuzione end-to-end è consentita **solo** tramite flag esplicito
-`--dummy` ed è sempre **tracciata nel _Decision Ledger_**.
+Nota importante: il gate `tag_onboarding` è **intra-state** su `SEMANTIC_INGEST`
+(nessuna transizione di stato nel Decision Ledger).
+
+L'esecuzione end-to-end (con generazione stub) è consentita **solo** tramite flag esplicito
+`--dummy` *e* capability gate `TIMMY_ALLOW_DUMMY=1`, ed è sempre **tracciata nel _Decision Ledger_**.
 
 👉 Dettagli operativi e implicazioni di audit:
 **[Strict vs Dummy - Guida Operativa](docs/strict_vs_dummy_beta.md)**.
