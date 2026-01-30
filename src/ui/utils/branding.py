@@ -2,8 +2,8 @@
 # src/ui/utils/branding.py
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Any, Optional
 
 from ui.theme.tokens import resolve_tokens

@@ -3,13 +3,12 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Mapping, Optional, Tuple, TypedDict, cast
 
 import pipeline.env_utils as env_utils
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from pathlib import Path
-
 from pipeline.settings import Settings
 
 from . import resolution

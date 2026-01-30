@@ -500,9 +500,7 @@ def _extract_categories_from_mapping(
             raise RuntimeError("semantic_mapping.yaml non conforme: areas[] deve contenere oggetti.")
         key_raw = a.get("key")
         if not isinstance(key_raw, str) or not key_raw.strip():
-            raise RuntimeError(
-                "semantic_mapping.yaml non conforme: areas[].key mancante (kebab-case richiesto)."
-            )
+            raise RuntimeError("semantic_mapping.yaml non conforme: areas[].key mancante (kebab-case richiesto).")
         key = key_raw.strip()
         key_norm = to_kebab(key)
         if key != key_norm:
@@ -536,9 +534,7 @@ def _extract_categories_from_mapping(
                         f"Trovato {key!r}, atteso {key_norm!r}."
                     )
                 if not isinstance(sys_val, dict):
-                    raise RuntimeError(
-                        "semantic_mapping.yaml non conforme: system_folders deve mappare a oggetti."
-                    )
+                    raise RuntimeError("semantic_mapping.yaml non conforme: system_folders deve mappare a oggetti.")
                 docs = _listify(sys_val.get("documents"))
                 artifacts = _listify(sys_val.get("artefatti"))
                 terms = _listify(sys_val.get("terms_hint"))

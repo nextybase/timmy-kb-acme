@@ -12,11 +12,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from ui.utils.strict_mode import is_ui_strict
 from pipeline.exceptions import CapabilityUnavailableError, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
+from ui.utils.strict_mode import is_ui_strict
 
 __all__ = [
     "GateState",

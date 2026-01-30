@@ -17,6 +17,7 @@ from semantic.tags_validator import validate_tags_reviewed as _validate_tags_rev
 from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
 from ui.utils.config import get_tags_env_config
 from ui.utils.context_cache import get_client_context, invalidate_client_context
+
 _log = get_structured_logger("ui.workspace")
 _LAYOUT_CACHE: dict[str, WorkspaceLayout] = {}
 _UI_RAW_CACHE_TTL = 3.0  # secondi, garantisce feedback rapido in UI

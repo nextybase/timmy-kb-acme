@@ -67,6 +67,7 @@ def test_reportlab_missing_blocks_core_folder(monkeypatch):
 
 def test_extract_categories_requires_kebab_key():
     import pytest
+
     import ui.services.drive_runner as dr
 
     mapping = {"areas": [{"key": "Area Uno"}]}
@@ -77,6 +78,7 @@ def test_extract_categories_requires_kebab_key():
 
 def test_extract_categories_rejects_non_dict_area():
     import pytest
+
     import ui.services.drive_runner as dr
 
     mapping = {"areas": ["not-a-dict"]}
@@ -87,6 +89,7 @@ def test_extract_categories_rejects_non_dict_area():
 
 def test_extract_categories_system_folders_requires_kebab_key():
     import pytest
+
     import ui.services.drive_runner as dr
 
     mapping = {"areas": [{"key": "area-uno"}], "system_folders": {"Bad Key": {"documents": []}}}

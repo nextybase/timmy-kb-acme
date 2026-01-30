@@ -114,7 +114,7 @@ def test_search_accepts_numpy_embeddings(monkeypatch):
 
 
 def test_search_empty_query_embedding_returns_empty(monkeypatch):
-    """Se l'embedding della query risulta vuoto, alza un errore esplicito."""
+    """Se l'embedding della query risulta vuoto, ritorna lista vuota (soft-fail)."""
 
     import timmy_kb.cli.retriever as retr
 
@@ -136,9 +136,8 @@ def test_search_empty_query_embedding_returns_empty(monkeypatch):
         candidate_limit=retr.MIN_CANDIDATE_LIMIT,
     )
 
-    with pytest.raises(retr.RetrieverError) as exc:
-        retr.search(params, EmptyEmb())
-    assert getattr(exc.value, "code", None) == retr.ERR_EMBEDDING_INVALID
+    out = retr.search(params, EmptyEmb())
+    assert out == []
 
 
 def test_search_accepts_deque_embedding(monkeypatch):

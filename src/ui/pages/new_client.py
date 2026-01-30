@@ -13,7 +13,6 @@ from ui.utils.stubs import get_streamlit
 st = get_streamlit()
 import yaml
 
-from ui.utils.strict_mode import is_ui_strict
 from pipeline.config_utils import ensure_config_migrated, get_client_config, get_drive_id, update_config_with_drive_ids
 from pipeline.context import validate_slug
 from pipeline.exceptions import ConfigError, WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
@@ -39,6 +38,7 @@ from ui.utils.html import esc_url_component
 from ui.utils.merge import deep_merge_dict
 from ui.utils.repo_root import get_repo_root
 from ui.utils.status import status_guard
+from ui.utils.strict_mode import is_ui_strict
 from ui.utils.workspace import get_ui_workspace_layout
 
 if TYPE_CHECKING:

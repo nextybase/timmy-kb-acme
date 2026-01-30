@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ui.utils.strict_mode import is_ui_strict
 from pipeline.context import validate_slug
 from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import get_int
@@ -19,6 +18,7 @@ from semantic.book_readiness import is_book_ready
 from ui.chrome import render_chrome_then_require
 from ui.errors import to_user_message
 from ui.utils import get_slug, set_active_slug
+from ui.utils.strict_mode import is_ui_strict
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
