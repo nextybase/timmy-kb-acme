@@ -22,6 +22,10 @@ def _normalize_provider(cfg: dict[str, str | bool], source: str, *, slug: str | 
             "tag_onboarding.ingest.legacy_skip_drive",
             extra={"slug": slug, "value": cfg.get("skip_drive")},
         )
+        logger.error(
+            "cli.tag_onboarding.ingest.legacy_skip_drive",
+            extra={"slug": slug, "value": cfg.get("skip_drive")},
+        )
         raise ConfigError(
             "Config legacy: 'skip_drive' non supportato. Usa ingest_provider: local.",
             slug=slug,
@@ -33,6 +37,10 @@ def _normalize_provider(cfg: dict[str, str | bool], source: str, *, slug: str | 
         return source
     logger.error(
         "tag_onboarding.ingest.provider_invalid",
+        extra={"slug": slug, "provider": provider, "source": source},
+    )
+    logger.error(
+        "cli.tag_onboarding.ingest.provider_invalid",
         extra={"slug": slug, "provider": provider, "source": source},
     )
     raise ConfigError(

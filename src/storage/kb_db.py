@@ -160,7 +160,10 @@ def init_db(db_path: Optional[Path] = None) -> None:
                 file_path=str(_resolve_db_path(db_path)),
             )
         con.commit()
-    LOGGER.debug("DB inizializzato in %s", _resolve_db_path(db_path))
+    LOGGER.debug(
+        "kb_db.initialized",
+        extra={"db_path": str(_resolve_db_path(db_path))},
+    )
 
 
 def insert_chunks(

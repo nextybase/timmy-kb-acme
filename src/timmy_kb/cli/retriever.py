@@ -185,9 +185,14 @@ def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
         )
     except Exception:
         LOGGER.debug(
-            "retrieve_candidates(): loaded %s candidates (limit=%s)",
-            len(candidates),
-            params.candidate_limit,
+            "retriever.raw_candidates",
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "candidate_limit": int(params.candidate_limit),
+                "candidates": int(len(candidates)),
+                "ms": float(dt_ms),
+            },
         )
     return candidates
 
@@ -339,6 +344,7 @@ def search(
                         "code": ERR_EMBEDDING_FAILED,
                         "slug": params.slug,
                         "scope": params.scope,
+                        "error": repr(getattr(exc, "__cause__", None) or exc),
                     },
                 )
             except Exception:
@@ -563,7 +569,10 @@ def with_config_candidate_limit(
     # Se il caller ha cambiato il limite, non toccare
     if int(params.candidate_limit) != int(default_lim):
         try:
-            LOGGER.info("limit.source=explicit", extra={"limit": int(params.candidate_limit)})
+            LOGGER.info(
+                "retriever.limit.source",
+                extra={"source": "explicit", "limit": int(params.candidate_limit)},
+            )
         except Exception:
             pass
         return params
@@ -580,14 +589,21 @@ def with_config_candidate_limit(
         safe_lim = max(MIN_CANDIDATE_LIMIT, min(int(cfg_lim), MAX_CANDIDATE_LIMIT))
         try:
             LOGGER.info(
-                "limit.source=config",
-                extra={"limit": int(safe_lim), "limit_requested": int(cfg_lim)},
+                "retriever.limit.source",
+                extra={
+                    "source": "config",
+                    "limit": int(safe_lim),
+                    "limit_requested": int(cfg_lim),
+                },
             )
         except Exception:
             pass
         return replace(params, candidate_limit=int(safe_lim))
     try:
-        LOGGER.info("limit.source=default", extra={"limit": int(default_lim)})
+        LOGGER.info(
+            "retriever.limit.source",
+            extra={"source": "default", "limit": int(default_lim)},
+        )
     except Exception:
         pass
     return params
@@ -634,7 +650,10 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
 
     if int(params.candidate_limit) != int(default_lim):
         try:
-            LOGGER.info("limit.source=explicit", extra={"limit": int(params.candidate_limit)})
+            LOGGER.info(
+                "retriever.limit.source",
+                extra={"source": "explicit", "limit": int(params.candidate_limit)},
+            )
         except Exception:
             pass
         return params
@@ -650,8 +669,8 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
         chosen = choose_limit_for_budget(budget)
         try:
             LOGGER.info(
-                "limit.source=auto_by_budget",
-                extra={"budget_ms": int(budget), "limit": int(chosen)},
+                "retriever.limit.source",
+                extra={"source": "auto_by_budget", "budget_ms": int(budget), "limit": int(chosen)},
             )
         except Exception:
             pass
@@ -666,14 +685,22 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
         safe_lim = max(MIN_CANDIDATE_LIMIT, min(int(lim), MAX_CANDIDATE_LIMIT))
         try:
             LOGGER.info(
-                "limit.source=config",
-                extra={"limit": int(safe_lim), "limit_requested": int(lim)},
+                "retriever.limit.source",
+                extra={
+                    "source": "config",
+                    "limit": int(safe_lim),
+                    "limit_requested": int(lim),
+                },
             )
         except Exception as exc:
             _log_logging_failure(
-                "limit.source=config",
+                "retriever.limit.source",
                 exc,
-                extra={"limit": int(safe_lim), "limit_requested": int(lim)},
+                extra={
+                    "source": "config",
+                    "limit": int(safe_lim),
+                    "limit_requested": int(lim),
+                },
             )
         if safe_lim != int(lim):
             LOGGER.warning(
@@ -682,7 +709,10 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
             )
         return replace(params, candidate_limit=safe_lim)
     try:
-        LOGGER.info("limit.source=default", extra={"limit": int(default_lim)})
+        LOGGER.info(
+            "retriever.limit.source",
+            extra={"source": "default", "limit": int(default_lim)},
+        )
     except Exception:
         pass
     return params

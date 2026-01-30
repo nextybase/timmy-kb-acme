@@ -17,6 +17,7 @@ __all__ = ["load_reviewed_vocab", "load_tags_reviewed_db"]
 
 LOGGER = get_structured_logger("semantic.vocab_loader")
 
+
 def _load_tags_reviewed_or_raise() -> Any:
     try:  # pragma: no cover - dipende dall'ambiente
         from storage.tags_store import load_tags_reviewed as _load_tags_reviewed

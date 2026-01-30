@@ -59,6 +59,10 @@ def emit_stub_phase(
         "tag_onboarding.semantic.completed",
         extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},
     )
+    logger.info(
+        "cli.tag_onboarding.semantic.completed",
+        extra={"semantic_dir": str(semantic_dir), "semantic_tail": tail_path(semantic_dir)},
+    )
 
 
 __all__ = ["emit_csv_phase", "emit_stub_phase"]

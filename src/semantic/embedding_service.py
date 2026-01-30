@@ -400,6 +400,18 @@ def _persist_markdown_embeddings(
                     "embedding_count": 1,
                 },
             )
+            override = lineage.get("hilt_override")
+            if isinstance(override, dict):
+                logger.info(
+                    "semantic.lineage.hilt_override",
+                    extra={
+                        "slug": slug,
+                        "source_id": lineage.get("source_id"),
+                        "chunk_id": (lineage.get("chunks") or [{}])[0].get("chunk_id"),
+                        "operator_id": override.get("operator_id"),
+                        "reason": override.get("reason"),
+                    },
+                )
 
     logger.info(
         "semantic.index.inserted",
