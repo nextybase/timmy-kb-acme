@@ -34,7 +34,7 @@ _INVOCATION_KEYS: Sequence[str] = (
 
 
 def _debug_runtime_enabled() -> bool:
-    raw = os.environ.get("DEBUG_RUNTIME") or os.environ.get("DEBUG") or ""
+    raw = os.environ.get("DEBUG_RUNTIME") or ""
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -63,6 +63,7 @@ def _runtime_info() -> tuple[str, str, str]:
 
 def _dump_json_schema_payload(
     *,
+    run_id: str,
     raw_response_format: Mapping[str, Any],
     normalized_format: Mapping[str, Any],
 ) -> None:
@@ -90,13 +91,16 @@ def _dump_json_schema_payload(
     }
     try:
         repo_root = get_repo_root(allow_env=False)
-        dump_path = ensure_within_and_resolve(repo_root, repo_root / "output" / "debug" / "vision_schema_sent.json")
+        dump_dir_candidate = repo_root / "output" / "debug" / "responses" / run_id
+        dump_dir = ensure_within_and_resolve(repo_root, dump_dir_candidate)
+        dump_dir.mkdir(parents=True, exist_ok=True)
+        dump_path = ensure_within_and_resolve(repo_root, dump_dir / "vision_schema_sent.json")
         dump_text = json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n"
         digest = hashlib.sha256(dump_text.encode("utf-8")).hexdigest()
         safe_write_text(dump_path, dump_text, encoding="utf-8")
         LOGGER.info(
             "ai.responses.json_schema_dumped",
-            extra={"path": str(dump_path), "sha256": digest},
+            extra={"path": str(dump_path), "sha256": digest, "run_id": run_id},
         )
     except Exception as exc:
         LOGGER.warning(
@@ -134,6 +138,18 @@ def _build_invocation_extra(
             if value is not None:
                 extra[key] = value
     return extra
+
+
+def _resolve_invocation_run_id(invocation: Mapping[str, Any] | None) -> Optional[str]:
+    if not invocation:
+        return None
+    for key in ("run_id", "trace_id"):
+        value = invocation.get(key)
+        if isinstance(value, str):
+            candidate = value.strip()
+            if candidate:
+                return candidate
+    return None
 
 
 def _extract_output_text(response: Any) -> str:
@@ -370,11 +386,19 @@ def run_json_model(
     input_payload = _to_input_blocks(messages)
     raw_response_format = response_format or {"type": "json_object"}
     rf_payload = _normalize_response_format(raw_response_format)
+    invocation_run_id = _resolve_invocation_run_id(invocation)
     if _debug_runtime_enabled():
-        _dump_json_schema_payload(
-            raw_response_format=raw_response_format,
-            normalized_format=rf_payload,
-        )
+        if invocation_run_id:
+            _dump_json_schema_payload(
+                run_id=invocation_run_id,
+                raw_response_format=raw_response_format,
+                normalized_format=rf_payload,
+            )
+        else:
+            LOGGER.warning(
+                "ai.responses.json_schema_dump_skipped_missing_run_id",
+                extra={"invocation": invocation},
+            )
     if rf_payload.get("type") == "json_schema":
         raw_name = rf_payload.get("name")
         name = str(raw_name) if raw_name is not None else ""

@@ -97,14 +97,14 @@ Gli hook Git coordinano formattazione, linting e test preliminari senza costring
   ```bash
   pre-commit run --hook-stage pre-push --all-files
   ```
-  Rea­lizza localmente lo stesso flusso che precede il push (formattazione + `full`).
+  Realizza localmente lo stesso flusso che precede il push (formattazione + `full`).
 
 - **Hook chiave e scopi**:
 
   | Hook | Stage | Descrizione |
   |------|-------|-------------|
-  | `pytest-fast` | pre-commit | invoca `python tools/test_runner.py fast` → solo `unit` non `slow` |
-  | `black`, `ruff`, `isort`, `cspell`, `mypy`, `qa-safe`… | pre-commit / pre-push | garantiscono formattazione/linting/disciplina (vedi `.pre-commit-config.yaml`) |
+  | `pytest-fast` | pre-commit | invoca `python tools/test_runner.py fast` -> solo `unit` non `slow` |
+  | `black`, `ruff`, `isort`, `cspell`, `mypy`, `qa-safe`... | pre-commit / pre-push | garantiscono formattazione/linting/disciplina (vedi `.pre-commit-config.yaml`) |
   | `pytest-full` | pre-push | invoca `python tools/test_runner.py full` per la suite completa |
 
 - **Comportamento e indirizzi**:
@@ -114,4 +114,4 @@ Gli hook Git coordinano formattazione, linting e test preliminari senza costring
 
 - **Suggerimenti operativi**:
   - In caso di failure, eseguire `pre-commit run --all-files` per isolare il tool in errore.
-  - Quando si prepara un changelog “macro”, ripetere `pre-commit run --hook-stage pre-push --all-files` per essere sicuri di passare tutti i gate.
+  - Quando si prepara un changelog "macro", ripetere `pre-commit run --hook-stage pre-push --all-files` per essere sicuri di passare tutti i gate.

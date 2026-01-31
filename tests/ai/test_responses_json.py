@@ -5,6 +5,7 @@ import json
 import logging
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -214,3 +215,52 @@ def test_run_json_model_emits_json_schema_diagnostics_log(caplog) -> None:
     assert record.required_minus_properties == []
     assert record.properties_minus_required == []
     assert record.name_present is True
+
+
+def test_debug_runtime_dump_writes_run_specific_path(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("DEBUG_RUNTIME", "1")
+    monkeypatch.setattr("ai.responses.get_repo_root", lambda allow_env=False: tmp_path)
+    captured: dict[str, Any] = {}
+
+    def fake_write_text(path: Path, text: str, encoding: str) -> None:
+        captured["path"] = path
+        captured["text"] = text
+
+    monkeypatch.setattr("ai.responses.safe_write_text", fake_write_text)
+    client = _FakeClient('{"ok": true}')
+    run_json_model(
+        model="stub",
+        messages=[{"role": "user", "content": "hi"}],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "X", "schema": {"type": "object"}, "strict": True},
+        },
+        invocation={"run_id": "run-123"},
+        client=client,
+    )
+
+    assert "path" in captured
+    expected_dir = tmp_path / "output" / "debug" / "responses" / "run-123"
+    assert str(captured["path"]).endswith(str(expected_dir / "vision_schema_sent.json"))
+
+
+def test_debug_runtime_skips_dump_without_run_id(monkeypatch, caplog) -> None:
+    monkeypatch.setenv("DEBUG_RUNTIME", "1")
+    monkeypatch.setattr(
+        "ai.responses.safe_write_text", lambda *args, **kwargs: pytest.fail("dump should not be written")
+    )
+    caplog.set_level(logging.WARNING, logger="ai.responses")
+    client = _FakeClient('{"ok": true}')
+
+    run_json_model(
+        model="stub",
+        messages=[{"role": "user", "content": "hi"}],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "X", "schema": {"type": "object"}, "strict": True},
+        },
+        invocation={"component": "test"},
+        client=client,
+    )
+
+    assert any(record.message == "ai.responses.json_schema_dump_skipped_missing_run_id" for record in caplog.records)
