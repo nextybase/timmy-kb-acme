@@ -24,15 +24,15 @@ LOG_CHUNK_SIZE = 64 * 1024
 MAX_TOTAL_LOG_BYTES = 5 * 1024 * 1024  # ~5 MiB
 
 
-def resolve_repo_root_dir(slug: str) -> Optional[Path]:
-    """Ritorna la repo_root_dir del client se disponibile, None altrimenti."""
+def resolve_repo_root_dir(slug: str) -> Path:
+    """Ritorna la repo_root_dir del client se disponibile, altrimenti solleva."""
+    ctx = get_client_context(slug, require_drive_env=False)
     try:
-        ctx = get_client_context(slug, require_drive_env=False)
-    except Exception:
-        return None
-    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+        repo_root_dir = ctx.repo_root_dir
+    except AttributeError:
+        repo_root_dir = None
     if not repo_root_dir:
-        return None
+        raise ConfigError("Context privo di repo_root_dir.", slug=slug)
     return Path(repo_root_dir)
 
 

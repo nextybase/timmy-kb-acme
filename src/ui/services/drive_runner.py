@@ -164,7 +164,7 @@ def ensure_drive_minimal_and_upload_config(slug: str, client_name: Optional[str]
     ctx, logger, resolved_name = _prepare_context_and_logger(
         slug,
         interactive=False,
-        require_drive_env=True,  # necessari per accedere a Drive
+        require_drive_env=False,
         run_id=None,
         client_name=client_name,
     )

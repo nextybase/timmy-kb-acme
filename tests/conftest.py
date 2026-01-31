@@ -16,10 +16,16 @@ from typing import Any, Iterable, Sequence
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+TEST_TEMP_DIR = REPO_ROOT / "test-temp"
+CLIENTS_TEMP_DIR = TEST_TEMP_DIR / "clients_db"
+CLIENTS_DB_TEST_DIR = CLIENTS_TEMP_DIR / ".pytest_clients_db"
+OUTPUT_TEMP_DIR = TEST_TEMP_DIR / "output"
 OBSERVABILITY_COMPOSE = REPO_ROOT / "observability" / "docker-compose.yaml"
 DOCKER_BIN = shutil.which("docker")
 SRC_ROOT = REPO_ROOT / "src"
 import sqlite3
+
+DUMMY_SLUG = os.getenv("CODEX_DUMMY_SLUG", "dummy-test")
 
 from pipeline.env_constants import WORKSPACE_ROOT_ENV
 from pipeline.file_utils import safe_write_text
@@ -159,6 +165,32 @@ def _require_yaml() -> None:
 _require_yaml()
 
 
+def _clear_directory(base: Path) -> None:
+    if not base.exists():
+        return
+    for child in base.iterdir():
+        try:
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        except OSError:
+            # best-effort cleanup; ignore redundant files
+            continue
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _prepare_test_temp_dir() -> None:
+    if TEST_TEMP_DIR.exists():
+        _clear_directory(TEST_TEMP_DIR)
+    else:
+        TEST_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    CLIENTS_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    CLIENTS_DB_TEST_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    yield
+
+
 def _safe_flush(fn: Any) -> None:
     try:
         fn()
@@ -226,19 +258,16 @@ def _isolate_clients_db(tmp_path_factory: pytest.TempPathFactory) -> None:
     """
     base_root = tmp_path_factory.mktemp("pytest_repo_root")
     (base_root / ".git").mkdir(parents=True, exist_ok=True)
-    clients_db_dir = base_root / "clients_db" / ".pytest_clients_db"
+    clients_db_dir = Path(os.environ.get("CLIENTS_DB_DIR", str(CLIENTS_DB_TEST_DIR)))
     clients_db_dir.mkdir(parents=True, exist_ok=True)
     ui_state_path = clients_db_dir / "ui_state.json"
     if not ui_state_path.exists():
         safe_write_text(ui_state_path, "{}\n", encoding="utf-8")
 
-    if "REPO_ROOT_DIR" not in os.environ:
-        os.environ["REPO_ROOT_DIR"] = str(base_root)
-    if "CLIENTS_DB_DIR" not in os.environ:
-        os.environ["CLIENTS_DB_DIR"] = Path("clients_db/.pytest_clients_db").as_posix()
-    if "CLIENTS_DB_FILE" not in os.environ:
-        os.environ["CLIENTS_DB_FILE"] = "clients.yaml"
-    os.environ[WORKSPACE_ROOT_ENV] = str(base_root)
+    os.environ.setdefault("REPO_ROOT_DIR", str(base_root))
+    os.environ["CLIENTS_DB_DIR"] = str(clients_db_dir)
+    os.environ.setdefault("CLIENTS_DB_FILE", "clients.yaml")
+    os.environ.setdefault(WORKSPACE_ROOT_ENV, str(base_root))
 
 
 # Helpers per avviare lo stack osservabilità (docker compose ...)
@@ -337,8 +366,6 @@ try:
     from tools.gen_dummy_kb import main as _gen_dummy_main  # type: ignore
 except Exception as exc:
     raise RuntimeError("tools.gen_dummy_kb non importabile per i test; verifica le dipendenze di runtime.") from exc
-
-DUMMY_SLUG = "dummy"
 
 
 def _ensure_gen_dummy_available():
@@ -557,6 +584,13 @@ def dummy_logger():
         log.handlers.pop()
     log.addHandler(logging.NullHandler())
     return log
+
+
+@pytest.fixture(autouse=True)
+def _redirect_dummy_output_root(monkeypatch):
+    if "TIMMY_KB_DUMMY_OUTPUT_ROOT" not in os.environ:
+        monkeypatch.setenv("TIMMY_KB_DUMMY_OUTPUT_ROOT", str(TEST_TEMP_DIR))
+    yield
 
 
 @pytest.fixture(autouse=True)

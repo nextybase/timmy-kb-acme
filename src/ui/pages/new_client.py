@@ -93,20 +93,11 @@ def _layout_for_slug(slug: str) -> WorkspaceLayout | None:
     if cached:
         return cached
 
-    layout = None
     try:
         layout = get_ui_workspace_layout(key, require_drive_env=False)
     except Exception:
-        layout = None
-
-    if layout is None:
-        try:
-            layout = WorkspaceLayout.from_slug(slug=key, require_drive_env=False)
-        except Exception:
-            layout = None
-
-    if layout:
-        _LAYOUT_CACHE[key] = layout
+        return None
+    _LAYOUT_CACHE[key] = layout
     return layout
 
 
@@ -118,6 +109,38 @@ def _require_layout(slug: str, layout: WorkspaceLayout | None = None) -> Workspa
             slug=slug,
         )
     return candidate
+
+
+def _require_repo_root(ctx: Any, slug: str) -> Path:
+    try:
+        repo_root = ctx.repo_root_dir
+    except AttributeError:
+        repo_root = None
+    if repo_root is None:
+        raise ConfigError(
+            "Context privo di repo_root_dir: impossibile proseguire.",
+            slug=slug,
+        )
+    return Path(repo_root)
+
+
+_LEGACY_DRIVE_KEYS = {
+    "drive_folder_id",
+    "drive_raw_folder_id",
+    "drive_contrattualistica_folder_id",
+    "drive_config_folder_id",
+}
+
+
+def _has_legacy_config_keys(payload: dict[str, Any]) -> bool:
+    if any(key in payload for key in _LEGACY_DRIVE_KEYS):
+        return True
+    if "vision_statement_pdf" in payload:
+        return True
+    meta = payload.get("meta")
+    if isinstance(meta, dict) and "vision_statement_pdf" in meta:
+        return True
+    return False
 
 
 # --------- helper ---------
@@ -164,9 +187,21 @@ def _ensure_config_migrated_once(slug: str, ctx: Any) -> None:
     key = f"config_migrated_{(slug or '').strip().lower()}"
     if st.session_state.get(key):
         return
-    if ensure_config_migrated(ctx, logger=LOGGER):
-        LOGGER.info("ui.new_client.config_migrated", extra={"slug": slug})
-        invalidate_client_context(slug)
+    current_config: dict[str, Any] = {}
+    try:
+        current_config = get_client_config(ctx) or {}
+    except Exception:
+        current_config = {}
+    if _has_legacy_config_keys(current_config):
+        migrated = ensure_config_migrated(ctx, logger=LOGGER)
+        if migrated:
+            LOGGER.info("ui.new_client.config_migrated", extra={"slug": slug})
+            invalidate_client_context(slug)
+        elif is_beta_strict():
+            raise ConfigError(
+                "Config legacy rilevato: in strict mode non sono ammessi fallback automatici.",
+                slug=slug,
+            )
     st.session_state[key] = True
 
 
@@ -555,11 +590,7 @@ if current_phase == UI_PHASE_INIT:
                 invalidate_client_context(s)
                 ctx = get_client_context(s, require_drive_env=False, force_reload=True)
                 _ensure_config_migrated_once(s, ctx)
-                if getattr(ctx, "repo_root_dir", None) is None:
-                    raise ConfigError(
-                        "Context privo di repo_root_dir dopo il bootstrap del workspace.",
-                        slug=s,
-                    )
+                _require_repo_root(ctx, s)
                 ensure_ownership_file(s, get_repo_root())
                 if isinstance(pdf_bytes, (bytes, bytearray)) and len(pdf_bytes) > 20 * 1024 * 1024:
                     try:
@@ -595,11 +626,7 @@ if current_phase == UI_PHASE_INIT:
                     # Reload immediato dopo scrittura config (pre-Vision) per evitare Context stale.
                     invalidate_client_context(s)
                     ctx = get_client_context(s, require_drive_env=False, force_reload=True)
-                    if getattr(ctx, "repo_root_dir", None) is None:
-                        raise ConfigError(
-                            "Context privo di repo_root_dir dopo la scrittura config pre-Vision.",
-                            slug=s,
-                        )
+                    _require_repo_root(ctx, s)
                 yaml_target = _client_vision_yaml_path(s, layout=layout)
                 try:
                     compile_document_to_vision_yaml(_client_pdf_path(s, layout=layout), yaml_target)
@@ -616,45 +643,33 @@ if current_phase == UI_PHASE_INIT:
 
             # 4) Provisioning minimo su Drive (obbligatorio solo quando disponibile)
             local_only_mode = ui_allow_local_only_enabled()
-            strict_mode = is_beta_strict()
-            if _ensure_drive_minimal is None:
-                if strict_mode:
+            if local_only_mode:
+                LOGGER.info(
+                    "ui.drive.provisioning_skipped",
+                    extra={"slug": s, "reason": "allow_local_only", "local_only": True},
+                )
+                _log_diagnostics(
+                    s,
+                    "warning",
+                    "ui.drive.not_configured_local_only",
+                    extra={"slug": s, "phase": "init"},
+                    layout=layout,
+                )
+                progress.progress(60, text="Drive in modalità locale (skip provisioning).")
+            else:
+                if _ensure_drive_minimal is None:
                     _log_drive_capability_missing(
                         s,
                         phase="init",
-                        strict=True,
+                        strict=False,
                         helper_missing=True,
                         ids_missing=False,
                     )
                     st.error(
-                        "Provisioning Drive non disponibile in strict mode. "
-                        "Installa gli extra `pip install .[drive]` e riprova."
+                        "Drive non disponibile: installa gli extra `pip install .[drive]` "
+                        "o imposta `ui.allow_local_only: true` per saltare Drive."
                     )
                     st.stop()
-                _log_drive_capability_missing(
-                    s,
-                    phase="init",
-                    strict=False,
-                    helper_missing=True,
-                    ids_missing=False,
-                )
-                if local_only_mode:
-                    LOGGER.info(
-                        "ui.drive.provisioning_skipped",
-                        extra={"slug": s, "reason": "helper_unavailable", "local_only": True},
-                    )
-                    _log_diagnostics(
-                        s,
-                        "warning",
-                        "ui.drive.not_configured_local_only",
-                        extra={"slug": s, "phase": "init"},
-                        layout=layout,
-                    )
-                    progress.progress(60, text="Drive in modalità locale (skip provisioning).")
-                else:
-                    st.error("Provisioning Drive non disponibile. Installa gli extra `pip install .[drive]` e riprova.")
-                    st.stop()
-            else:
                 with status_guard(
                     "Provisioning su Google Drive...",
                     expanded=True,
@@ -743,11 +758,7 @@ if current_phase == UI_PHASE_INIT:
                         st.error(msg)
                         st.stop()
                     ctx = ctx_reloaded
-                    if getattr(ctx, "repo_root_dir", None) is None:
-                        raise ConfigError(
-                            "Context privo di repo_root_dir dopo Vision.",
-                            slug=s,
-                        )
+                    _require_repo_root(ctx, s)
                 except Exception as exc:
                     # Mapping unico degli errori (PR-C)
                     try:
@@ -811,7 +822,7 @@ if current_phase == UI_PHASE_INIT:
                                     )
                                     st.error(msg)
                                     st.stop()
-                                if getattr(ctx_reloaded, "repo_root_dir", None) is None:
+                                if ctx_reloaded.repo_root_dir is None:
                                     raise ConfigError(
                                         "Context privo di repo_root_dir dopo Vision.",
                                         slug=s,
@@ -885,17 +896,6 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
     # ora leggerà la configurazione aggiornata.
     has_drive_ids = _has_drive_ids(eff)
     local_only_mode = ui_allow_local_only_enabled()
-    strict_mode = is_beta_strict()
-    if not has_drive_ids and strict_mode:
-        _log_drive_capability_missing(
-            eff,
-            phase="open",
-            strict=True,
-            helper_missing=_ensure_drive_minimal is None,
-            ids_missing=True,
-        )
-        st.error("Config privo degli ID Drive. In strict mode non è consentito proseguire senza Drive.")
-        st.stop()
     if not has_drive_ids:
         _log_drive_capability_missing(
             eff,
@@ -904,17 +904,11 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
             helper_missing=_ensure_drive_minimal is None,
             ids_missing=True,
         )
-    if not has_drive_ids and not local_only_mode:
-        st.warning(
-            "Config privo degli ID Drive (integrations.drive.folder_id/raw_folder_id). "
-            "Ripeti 'Inizializza Workspace' dopo aver configurato le variabili .env e i permessi Drive."
-        )
+        if not local_only_mode:
+            st.error("Config privo degli ID Drive. Ripeti 'Inizializza Workspace' dopo aver configurato Drive.")
+            st.stop()
 
     display_name = st.session_state.get("client_name") or (name or eff)
-
-    if not has_drive_ids and not local_only_mode:
-        st.error("Config privo degli ID Drive. Ripeti 'Inizializza Workspace' dopo aver configurato Drive.")
-        st.stop()
 
     if local_only_mode and not has_drive_ids:
         LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})

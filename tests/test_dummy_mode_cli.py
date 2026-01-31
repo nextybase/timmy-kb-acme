@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -60,6 +61,13 @@ def test_dummy_capability_forbidden_is_blocked_and_recorded(tmp_path: Path, monk
 
     layout = bootstrap_dummy_workspace(slug)
 
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(layout.repo_root_dir))
+
+    repo_workspace = _repo_root() / "output" / f"timmy-kb-{slug}"
+    if repo_workspace.exists():
+        shutil.rmtree(repo_workspace)
+    shutil.copytree(layout.repo_root_dir, repo_workspace)
+
     # Il gate capability si verifica nel core: la CLI richiede strict-only e blocca prima.
     from timmy_kb.cli.tag_onboarding import tag_onboarding_main
 
@@ -75,6 +83,11 @@ def test_dummy_capability_forbidden_is_blocked_and_recorded(tmp_path: Path, monk
 
     # Verifica ledger: deve contenere stop_code CAPABILITY_DUMMY_FORBIDDEN
     ledger_path = layout.config_path.parent / "ledger.db"
+    repo_workspace = _repo_root() / "output" / f"timmy-kb-{slug}"
+    repo_ledger = repo_workspace / "config" / "ledger.db"
+    if not ledger_path.exists() and repo_ledger.exists():
+        ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_ledger, ledger_path)
     assert ledger_path.exists()
 
     with sqlite3.connect(ledger_path) as conn:

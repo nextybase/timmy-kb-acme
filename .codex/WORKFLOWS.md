@@ -54,6 +54,7 @@ and is **not** the system-level Epistemic Envelope.
 ### UI Gating
 - The Semantica tab appears only after `normalized/` is present locally.
 - Docker preview: start/stop with a safe container name and port validation.
+- Drive provisioning and onboarding workflows now depend solely on `ui.allow_local_only`: when the flag is `true` every Drive-related action (provisioning, cleanup, dummy generation, or UI controls) is skipped and treated as "local-only", and when it is `false` the preflight assumes Drive IDs/Service Account are already present without revalidating them at other layers. No other component should gate Drive actions outside of this flag-driven contract.
 
 ### Tag SSoT
 - Human authoring relies on `semantic/tags_reviewed.yaml` as the review artifact.

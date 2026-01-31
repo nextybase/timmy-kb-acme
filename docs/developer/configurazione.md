@@ -53,7 +53,7 @@ ai:
 `config/config.yaml` è la SSoT applicativa strutturata per macro-sezioni:
 
 - `meta`: nome cliente e versioning (`N_VER`, `DATA_VER`).
-- `ui`: `skip_preflight`, `allow_local_only`.
+- `ui`: `skip_preflight`, `allow_local_only`. `allow_local_only` è il master switch per le attività Drive: `false` abilita il provisioning/preflight Drive (ci si aspetta di avere `SERVICE_ACCOUNT_FILE` + `DRIVE_ID` già presenti), mentre `true` forza ogni flusso (pre_onboarding, Nuovo cliente, `tools/gen_dummy_kb` con `--no-drive`) ad aggirare completamente Drive e i suoi artefatti.
 - `ai.openai`: timeout (s), max_retries, `http2_enabled`.
 - `ai.vision`: modello, engine (enum `assistants|responses|...`), `snapshot_retention_days`, `use_kb`, `strict_output`, riferimenti *_env ai segreti.
 - `pipeline.retriever.throttle`: `candidate_limit`, `latency_budget_ms`, `parallelism`, `sleep_ms_between_calls`; flag `auto_by_budget`.

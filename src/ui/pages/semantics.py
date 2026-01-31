@@ -82,7 +82,7 @@ def _update_client_state(slug: str, target_state: str, logger: logging.Logger) -
         log_gate_event(
             logger,
             "ui.semantics.state_promoted",
-            fields={"slug": slug, "state_id": target_state},
+            fields=_gate_fields(slug=slug, state=target_state, action="state_promoted"),
         )
     except Exception as exc:
         _log_semantics_failure(
@@ -151,7 +151,7 @@ def _run_convert(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             log_gate_event(
                 _GATING_LOG,
                 "qa_gate_retry",
-                fields={"slug": slug, "state_id": get_state(slug) or "", "action_id": "convert"},
+                fields=_gate_fields(slug=slug, state=get_state(slug) or "", action="convert"),
             )
     except Exception as exc:
         _log_semantics_failure(
@@ -208,7 +208,12 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             log_gate_event(
                 _GATING_LOG,
                 "evidence_gate_blocked",
-                fields={"slug": slug or "", "state_id": get_state(slug) or "", "reason": "tagging_not_ready"},
+                fields=_gate_fields(
+                    slug=slug,
+                    state=get_state(slug) or "",
+                    action="enrich",
+                    reason="tagging_not_ready",
+                ),
             )
             st.error("Arricchimento bloccato: genera prima semantic/tags.db e tags_reviewed.yaml.")
             st.caption("Esegui Estrai tag (tag_onboarding) per popolari i prerequisiti e riprova.")
@@ -223,7 +228,7 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             log_gate_event(
                 _GATING_LOG,
                 "qa_gate_retry",
-                fields={"slug": slug, "state_id": get_state(slug) or "", "action_id": "enrich"},
+                fields=_gate_fields(slug=slug, state=get_state(slug) or "", action="enrich"),
             )
     except Exception as exc:
         _log_semantics_failure(
@@ -275,11 +280,12 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             log_gate_event(
                 _GATING_LOG,
                 "evidence_gate_blocked",
-                fields={
-                    "slug": slug or "",
-                    "state_id": get_state(slug) or "",
-                    "reason": "summary_prerequisites_missing",
-                },
+                fields=_gate_fields(
+                    slug=slug,
+                    state=get_state(slug) or "",
+                    action="summary",
+                    reason="summary_prerequisites_missing",
+                ),
             )
             st.error("Generazione SUMMARY/README bloccata: prerequisiti normalized/tag mancanti.")
             st.caption("Verifica la presenza di Markdown in normalized/ e semantic/tags.db + tags_reviewed.yaml.")
@@ -299,12 +305,13 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
         log_gate_event(
             _GATING_LOG,
             "qa_gate_failed",
-            fields={
-                "slug": slug or "",
-                "state_id": get_state(slug) or "",
-                "reason": reason,
-                "evidence_path": tail_path(qa_marker),
-            },
+            fields=_gate_fields(
+                slug=slug,
+                state=get_state(slug) or "",
+                action="summary",
+                reason=reason,
+                evidence_path=tail_path(qa_marker),
+            ),
         )
         st.error("QA Gate mancante: esegui `python -m timmy_kb.cli.qa_evidence --slug <slug>` per generare l'evidenza.")
         st.caption("Il comando produce `qa_passed.json` in logs/ e fallisce se la QA non passa.")
@@ -316,7 +323,7 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             log_gate_event(
                 _GATING_LOG,
                 "qa_gate_retry",
-                fields={"slug": slug or "", "state_id": get_state(slug) or "", "action_id": "summary"},
+                fields=_gate_fields(slug=slug, state=get_state(slug) or "", action="summary"),
             )
     except Exception as exc:
         _log_semantics_failure(
@@ -370,11 +377,31 @@ _book_dir: Path | None = None
 _GATE_CACHE: dict[str, tuple[str, bool, bool, Path | None]] = {}
 _ACTION_RUNS: dict[str, dict[str, int]] = {}
 _GATING_LOG = get_structured_logger("ui.semantics.gating")
+_GATE_PHASE_ID = "semantic"
+_GATE_INTENT_ID = "ui.semantics"
 _PROGRESS = {
     "pronto": "[1/3] Conversione completata. Procedi con arricchimento e README/SUMMARY.",
     "arricchito": "[2/3] Conversione + arricchimento completati. Genera README/SUMMARY.",
     "finito": "[3/3] Tutti gli step completati: pronta per la preview locale.",
 }
+
+
+def _gate_fields(
+    *,
+    slug: str | None,
+    state: str,
+    action: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "slug": slug or "",
+        "state_id": state or "",
+        "phase_id": _GATE_PHASE_ID,
+        "intent_id": _GATE_INTENT_ID,
+        "action_id": action,
+    }
+    payload.update(extra)
+    return payload
 
 
 def _mark_retry(slug: str, action: str) -> bool:
@@ -400,11 +427,12 @@ def _log_gating_block(
         log_gate_event(
             _GATING_LOG,
             "evidence_gate_blocked",
-            fields={
-                "slug": slug or "",
-                "state_id": state or "",
-                "reason": reason or "",
-            },
+            fields=_gate_fields(
+                slug=slug,
+                state=state,
+                action="gating_blocked",
+                reason=reason or "",
+            ),
         )
     except Exception as exc:
         _log_semantics_failure(

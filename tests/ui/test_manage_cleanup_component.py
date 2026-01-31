@@ -60,6 +60,11 @@ def test_client_display_name_prefers_registry(monkeypatch: pytest.MonkeyPatch) -
     assert name_unknown == "missing"
 
 
+class _LayoutStub:
+    def __init__(self, raw_dir: Path) -> None:
+        self.raw_dir = raw_dir
+
+
 def test_list_raw_subfolders_returns_sorted(tmp_path: Path) -> None:
     root = tmp_path / "output"
     root.mkdir()
@@ -67,10 +72,8 @@ def test_list_raw_subfolders_returns_sorted(tmp_path: Path) -> None:
         (root / folder).mkdir()
     (root / "file.txt").write_text("x", encoding="utf-8")
 
-    def _resolve(_slug: str) -> Path:
-        return root
-
-    folders = cleanup_component.list_raw_subfolders("dummy", _resolve)
+    layout = _LayoutStub(root)
+    folders = cleanup_component.list_raw_subfolders("dummy", layout=layout)
     assert folders == ["a", "b", "c"]
 
 

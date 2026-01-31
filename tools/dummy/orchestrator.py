@@ -134,6 +134,35 @@ def _merge_config_with_template(base_dir: Path, *, logger: logging.Logger | None
             pass
 
 
+def _apply_allow_local_only_override(base_dir: Path, *, allow: bool, logger: logging.Logger) -> None:
+    """Aggiorna esplicita `ui.allow_local_only` nel config generato per la dummy."""
+    config_path = base_dir / "config" / "config.yaml"
+    try:
+        safe_config = ensure_within_and_resolve(base_dir, config_path)
+    except Exception as exc:
+        logger.warning(
+            "tools.dummy.orchestrator.allow_local_only_update_failed",
+            extra={"path": str(config_path), "error": str(exc)},
+        )
+        return
+    payload = _load_yaml_dict(safe_config)
+    ui_section = payload.get("ui")
+    if not isinstance(ui_section, dict):
+        ui_section = {}
+    if bool(ui_section.get("allow_local_only")) == allow:
+        return
+    ui_section["allow_local_only"] = allow
+    payload["ui"] = ui_section
+    try:
+        serialized = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True)
+        safe_write_text(safe_config, serialized, encoding="utf-8", atomic=True)
+    except Exception as exc:
+        logger.warning(
+            "tools.dummy.orchestrator.allow_local_only_write_failed",
+            extra={"error": str(exc), "path": str(safe_config)},
+        )
+
+
 def _ensure_semantic_mapping_has_tagger(mapping_path: Path) -> None:
     mapping_path.parent.mkdir(parents=True, exist_ok=True)
     data: dict[str, Any] = {}
@@ -295,6 +324,7 @@ def build_dummy_payload(
     slug: str,
     client_name: str,
     enable_drive: bool,
+    allow_local_only_override: bool = False,
     enable_vision: bool,
     enable_semantic: bool = True,
     enable_enrichment: bool = True,
@@ -413,6 +443,7 @@ def build_dummy_payload(
         safe_write_text(summary_path, "* [Dummy](README.md)\n", encoding="utf-8", atomic=True)
 
     _merge_config_with_template(workspace_root, logger=logger)
+    _apply_allow_local_only_override(workspace_root, allow=allow_local_only_override, logger=logger)
 
     try:
         pre_onboarding_main(

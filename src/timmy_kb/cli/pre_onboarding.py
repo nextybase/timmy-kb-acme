@@ -131,7 +131,7 @@ def _prepare_context_and_logger(
     slug: str,
     *,
     interactive: bool,
-    require_drive_env: bool,
+    require_drive_env: bool = False,
     run_id: Optional[str],
     client_name: Optional[str],
 ) -> Tuple[ClientContext, logging.Logger, str]:
@@ -185,8 +185,6 @@ def _prepare_context_and_logger(
         run_id=run_id,
         **obs_kwargs,
     )
-    if not require_drive_env:
-        logger.info("cli.pre_onboarding.offline_mode", extra={"slug": context.slug})
     logger.info("cli.pre_onboarding.config_loaded", extra={"slug": context.slug, "path": str(layout.config_path)})
     logger.info("cli.pre_onboarding.started", extra={"slug": context.slug})
     return context, logger, client_name
@@ -228,6 +226,20 @@ def _deny_rationale(exc: BaseException) -> str:
     if isinstance(exc, PipelineError):
         return "deny_pipeline_error"
     return "deny_unexpected_error"
+
+
+def _is_local_only_mode(context: ClientContext, *, dry_run: bool) -> bool:
+    """Determina se la run deve rimanere 'local-only' basandosi sul flag UI."""
+    if dry_run:
+        return True
+    try:
+        cfg = get_client_config(context) or {}
+    except Exception:
+        return False
+    ui_section = cfg.get("ui")
+    if not isinstance(ui_section, dict):
+        return False
+    return bool(ui_section.get("allow_local_only"))
 
 
 def _create_local_structure(context: ClientContext, logger: logging.Logger, *, client_name: str) -> Path:
@@ -517,18 +529,19 @@ def pre_onboarding_main(
     run_id: Optional[str] = None,
 ) -> None:
     """Esegue la fase di pre-onboarding per il cliente indicato (orchestratore sottile)."""
-    require_env = not dry_run
-    if require_env:
+    if not dry_run:
         ensure_dotenv_loaded(strict=True, allow_fallback=False)
     run_id = run_id or uuid.uuid4().hex
 
     context, logger, client_name = _prepare_context_and_logger(
         slug,
         interactive=interactive,
-        require_drive_env=require_env,
+        require_drive_env=False,
         run_id=run_id,
         client_name=client_name,
     )
+    if dry_run:
+        logger.info("cli.pre_onboarding.offline_mode", extra={"slug": context.slug})
     ensure_config_migrated(context, logger=logger)
     layout = WorkspaceLayout.from_context(context)
     ledger_conn = None
@@ -544,14 +557,19 @@ def pre_onboarding_main(
     try:
         config_path = _create_local_structure(context, logger, client_name=client_name)
 
-        if dry_run:
+        local_only_mode = _is_local_only_mode(context, dry_run=dry_run)
+        if local_only_mode:
             enforce_core_artifacts("pre_onboarding", layout=layout)
-            logger.info("cli.pre_onboarding.dry_run", extra={"slug": context.slug, "mode": "dry-run"})
+            reason = "dry-run" if dry_run else "allow_local_only"
+            logger.info(
+                "cli.pre_onboarding.local_only_mode",
+                extra={"slug": context.slug, "local_only_reason": reason},
+            )
             logger.info(
                 "cli.pre_onboarding.completed",
                 extra={
                     "slug": context.slug,
-                    "mode": "dry-run",
+                    "mode": "local-only",
                     "artifacts": 1,
                     "config": str(config_path),
                 },
@@ -570,7 +588,7 @@ def pre_onboarding_main(
                     decided_at=_utc_now_iso(),
                     actor="cli.pre_onboarding",
                     evidence_refs=_build_evidence_refs(layout),
-                    rationale="ok",
+                    rationale="local_only",
                 ),
             )
             return
@@ -583,7 +601,7 @@ def pre_onboarding_main(
             logger,
             config_path=config_path,
             client_name=client_name,
-            require_env=require_env,
+            require_env=True,
         )
         enforce_core_artifacts("pre_onboarding", layout=layout)
         logger.info("cli.pre_onboarding.completed", extra={"slug": context.slug, "artifacts": 1})

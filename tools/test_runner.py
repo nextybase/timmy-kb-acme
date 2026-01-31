@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 import argparse
+import os
+import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 
 BINARIES = {
@@ -9,6 +12,25 @@ BINARIES = {
     "arch": "arch or contract",
     "full": None,
 }
+
+TEST_TEMP_DIR = Path("test-temp")
+CLIENTS_TEMP_DIR = TEST_TEMP_DIR / "clients_db"
+CLIENTS_DB_TEST_DIR = CLIENTS_TEMP_DIR / ".pytest_clients_db"
+OUTPUT_TEMP_DIR = TEST_TEMP_DIR / "output"
+
+
+def _prepare_test_temp() -> None:
+    if TEST_TEMP_DIR.exists():
+        for child in TEST_TEMP_DIR.iterdir():
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    else:
+        TEST_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    CLIENTS_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    CLIENTS_DB_TEST_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _build_pytest_command(binary: str, extra_args: list[str]) -> list[str]:
@@ -54,9 +76,19 @@ def main() -> int:
     if extra_args[:1] == ["--"]:
         extra_args = extra_args[1:]
 
+    _prepare_test_temp()
+    subprocess_env = os.environ.copy()
+    subprocess_env["CLIENTS_DB_DIR"] = str(CLIENTS_DB_TEST_DIR.resolve())
+    subprocess_env["CLIENTS_DB_FILE"] = "clients.yaml"
+    subprocess_env["WORKSPACE_ROOT_DIR"] = str(OUTPUT_TEMP_DIR.resolve())
+    subprocess_env["TIMMY_KB_DUMMY_OUTPUT_ROOT"] = str(TEST_TEMP_DIR.resolve())
+
     cmd = _build_pytest_command(args.binary, extra_args)
+    if args.binary in {"fast", "full"}:
+        subprocess_env["TIMMY_ALLOW_BOOTSTRAP"] = "1"
+        subprocess_env["TIMMY_BETA_STRICT"] = "0"
     print("Running:", " ".join(cmd))
-    return subprocess.call(cmd)
+    return subprocess.call(cmd, env=subprocess_env)
 
 
 if __name__ == "__main__":

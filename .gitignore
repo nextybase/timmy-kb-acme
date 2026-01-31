@@ -31,6 +31,7 @@ ENV/
 .mypy_cache/
 .ruff_cache/
 .pytest_clients_db/
+test-temp/
 coverage.*
 .coverage
 *.coverage

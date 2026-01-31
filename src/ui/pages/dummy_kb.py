@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.context import validate_slug
 from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import get_int
@@ -341,5 +342,4 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-
-__all__ = ["main"]
+__all__ = ["main", "is_beta_strict"]

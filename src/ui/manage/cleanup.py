@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import contextlib
 import io
-from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Sequence, cast
 
 from pipeline.workspace_layout import WorkspaceLayout
@@ -45,15 +44,11 @@ def client_display_name(slug: str, load_clients: Callable[[], Iterable[Any]]) ->
     return slug
 
 
-def list_raw_subfolders(
-    slug: str,
-    resolve_raw_dir: Callable[[str], Path],
-    layout: WorkspaceLayout | None = None,
-) -> list[str]:
+def list_raw_subfolders(slug: str, *, layout: WorkspaceLayout | None = None) -> list[str]:
     """Ritorna le sottocartelle presenti dentro raw/ per il cliente indicato."""
     try:
-        raw_dir = layout.raw_dir if layout is not None else Path(resolve_raw_dir(slug))
-        if not raw_dir.exists():
+        raw_dir = layout.raw_dir if layout is not None else None
+        if raw_dir is None or not raw_dir.exists():
             return []
         return sorted(child.name for child in raw_dir.iterdir() if child.is_dir())
     except Exception:

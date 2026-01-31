@@ -12,7 +12,6 @@ Pagina Streamlit per configurare un workspace cliente.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Tuple
 
 from ui.types import StreamlitLike
@@ -30,7 +29,7 @@ from ui.config_store import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, get_retrie
 from ui.manage import cleanup as cleanup_component
 from ui.utils import set_slug
 from ui.utils.context_cache import get_client_context
-from ui.utils.workspace import get_ui_workspace_layout, resolve_raw_dir
+from ui.utils.workspace import get_ui_workspace_layout
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext
@@ -44,8 +43,13 @@ def _load_context_and_settings(slug: str) -> Tuple[ClientContext, Settings]:
     settings_obj = ctx.settings
     if isinstance(settings_obj, Settings):
         return ctx, settings_obj
-    repo_root = ctx.repo_root_dir or Path(".")
+    repo_root = ctx.repo_root_dir
     config_path = ctx.config_path
+    if repo_root is None or config_path is None:
+        raise ConfigError(
+            "Contesto incompleto: repo_root_dir/config_path mancanti",
+            slug=slug,
+        )
     return ctx, Settings.load(repo_root, config_path=config_path, slug=slug)
 
 
@@ -54,8 +58,10 @@ def _copy_section(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _extract_sections(data: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
-    vision = _copy_section(data.get("vision", {}))
-    retriever = _copy_section(data.get("retriever", {}))
+    ai_section = data.get("ai", {})
+    pipeline_section = data.get("pipeline", {})
+    vision = _copy_section(ai_section.get("vision", {}))
+    retriever = _copy_section(pipeline_section.get("retriever", {}))
     throttle = _copy_section(retriever.get("throttle", {}))
     retriever["throttle"] = throttle
     ui = _copy_section(data.get("ui", {}))
@@ -166,13 +172,10 @@ def _build_updates(
     data: Dict[str, Any],
     values: Dict[str, Any],
 ) -> Dict[str, Any]:
-    updates: Dict[str, Any] = {}
-
     new_vision = _copy_section(vision_cfg)
     new_vision["engine"] = str(values["vision_engine"]).strip()
     new_vision["model"] = str(values["vision_model"]).strip()
     new_vision["strict_output"] = bool(values["vision_strict"])
-    updates["vision"] = new_vision
 
     new_retriever = _copy_section(retriever_cfg)
     throttle_cfg = _copy_section(new_retriever.get("throttle", {}))
@@ -182,13 +185,15 @@ def _build_updates(
     new_retriever["throttle"] = throttle_cfg
     auto_by_budget = bool(values["auto_by_budget"])
     new_retriever["auto_by_budget"] = auto_by_budget
-    updates["retriever"] = new_retriever
 
     new_ui = _copy_section(ui_cfg)
     new_ui["skip_preflight"] = bool(values["skip_preflight"])
-    updates["ui"] = new_ui
 
-    return updates
+    return {
+        "ai": {"vision": new_vision},
+        "pipeline": {"retriever": new_retriever},
+        "ui": new_ui,
+    }
 
 
 def handle_actions(
@@ -316,7 +321,8 @@ def main() -> None:
 
     # Danger zone - Cleanup
     cleanup_client_name = cleanup_component.client_display_name(slug, get_clients)
-    cleanup_raw_folders = cleanup_component.list_raw_subfolders(slug, resolve_raw_dir, layout=layout)
+    cleanup_raw_folders = cleanup_component.list_raw_subfolders(slug, layout=layout)
+    drive_enabled = not bool(ui_cfg.get("allow_local_only"))
     st.markdown("---")
     with st.expander("Danger zone · Cleanup cliente", expanded=False):
         st.markdown(f"**Cliente:** {cleanup_client_name}  \\\n**Google Drive:** `{slug}`")
@@ -325,7 +331,13 @@ def main() -> None:
             st.markdown(f"**Cartelle RAW:** {folders}")
         else:
             st.markdown("**Cartelle RAW:** *(nessuna cartella trovata o RAW non presente)*")
-        st.caption("Elimina workspace locale, registro clienti e (se configurato) la cartella Drive.")
+        if not drive_enabled:
+            st.info("Drive disattivato via ui.allow_local_only: il cleanup rimuove solo folder locale e DB.")
+        st.caption(
+            "Elimina workspace locale, registro clienti e (se configurato) la cartella Drive."
+            if drive_enabled
+            else "Elimina workspace locale e DB; Drive non è configurato in modalita local-only."
+        )
 
         run_cleanup_fn = cleanup_component.resolve_run_cleanup()
         perform_cleanup_fn = cleanup_component.resolve_perform_cleanup()
@@ -334,11 +346,16 @@ def main() -> None:
                 "Funzioni di cleanup non disponibili. Installa il modulo `tools.clean_client_workspace` "
                 "per abilitare la cancellazione guidata."
             )
+        help_text = (
+            "Rimozione completa: locale, DB e Drive"
+            if drive_enabled
+            else "Rimozione locale+DB; Drive è disattivato (allow_local_only)."
+        )
         if st.button(
             "Cancella cliente…",
             key="config_cleanup_open_confirm",
             type="secondary",
-            help="Rimozione completa: locale, DB e Drive",
+            help=help_text,
         ):
             cleanup_component.open_cleanup_modal(
                 st=st,

@@ -2,12 +2,14 @@
 # src/ui/config_store.py
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
 import yaml
 
 from pipeline.config_utils import load_client_settings
+from pipeline.env_constants import UI_CONFIG_FILE_ENV
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -136,6 +138,14 @@ def _load_client_config(slug: str) -> tuple[Path, GlobalConfig]:
         ) from exc
 
 
+def _load_config_override_path() -> Path | None:
+    """Ritorna il path sovrascritto via env (utile per i dummy/workspace)."""
+    override = os.environ.get(UI_CONFIG_FILE_ENV)
+    if not override:
+        return None
+    return Path(override).expanduser().resolve()
+
+
 def get_config_dir() -> Path:
     return CONFIG_DIR
 
@@ -146,25 +156,26 @@ def get_config_path() -> Path:
 
 def _load_config() -> GlobalConfig:
     """Carica config/config.yaml tramite Settings (SSoT non segreto)."""
-    if not CONFIG_FILE.exists():
+    cfg_path = _load_config_override_path() or CONFIG_FILE
+    if not cfg_path.exists():
         raise ConfigError(
             "Config globale mancante: atteso config/config.yaml (provisioning richiesto).",
-            file_path=str(CONFIG_FILE),
+            file_path=str(cfg_path),
         )
     try:
-        settings = Settings.load(REPO_ROOT, config_path=CONFIG_FILE, logger=_logger)
+        settings = Settings.load(REPO_ROOT, config_path=cfg_path, logger=_logger)
         if hasattr(settings, "as_dict"):
             return cast(GlobalConfig, settings.as_dict())
         raise AttributeError("settings.as_dict missing")
     except Exception as exc:  # noqa: BLE001
         _logger.error(
             "ui.config_store.global_config_load_failed",
-            extra={"error": str(exc), "file_path": str(CONFIG_FILE)},
+            extra={"error": str(exc), "file_path": str(cfg_path)},
         )
         raise ConfigError(
             "Impossibile caricare la config globale (config/config.yaml). "
             "Runtime strict: correggi provisioning/config.",
-            file_path=str(CONFIG_FILE),
+            file_path=str(cfg_path),
         ) from exc
 
 

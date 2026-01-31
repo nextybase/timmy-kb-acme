@@ -26,7 +26,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, List, Optional, TextIO, TypedDict
 
-import yaml
 
 
 def _strict_optional_import(
@@ -463,67 +462,6 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     )
     return ap.parse_args(argv)
 
-
-@dataclass(frozen=True)
-class RuntimeMode:
-    drive_enabled: bool
-    reasons: List[str]
-    feature_matrix: Dict[str, bool]
-
-
-def _compute_runtime_mode(
-    *,
-    drive_request: str,
-    drive_module_available: bool,
-    drive_id: Optional[str],
-    service_account_file: Optional[str],
-    cleanup_available: bool,
-    registry_available: bool,
-    config_utils_available: bool,
-    context_available: bool,
-    tags_store_available: bool,
-) -> RuntimeMode:
-    reasons: List[str] = []
-    if drive_request == "force_off":
-        reasons.append("user_disabled")
-        drive_enabled = False
-    elif not drive_module_available:
-        reasons.append("drive_module_missing")
-        drive_enabled = False
-    else:
-        missing: List[str] = []
-        if not drive_id:
-            missing.append("DRIVE_ID")
-        if not service_account_file:
-            missing.append("SERVICE_ACCOUNT_FILE")
-        if missing:
-            reasons.append(f"missing {','.join(missing)}")
-            drive_enabled = False
-        else:
-            reasons.append("enabled")
-            drive_enabled = True
-
-    feature_matrix = {
-        "cleanup": cleanup_available,
-        "registry": registry_available,
-        "config_utils": config_utils_available,
-        "context": context_available,
-        "tags_store": tags_store_available,
-        "drive_module": drive_module_available,
-    }
-    return RuntimeMode(drive_enabled=drive_enabled, reasons=reasons, feature_matrix=feature_matrix)
-
-
-def _format_mode_summary(mode: RuntimeMode) -> str:
-    drive_state = "ON" if mode.drive_enabled else "OFF"
-    reason = ",".join(mode.reasons) if mode.reasons else "none"
-    parts = [f"gen_dummy_kb.mode drive={drive_state} reason={reason}"]
-    for key in ("cleanup", "registry"):
-        value = "ON" if mode.feature_matrix.get(key, False) else "OFF"
-        parts.append(f"{key}={value}")
-    return "; ".join(parts)
-
-
 def _load_vision_statement_pdf_bytes() -> bytes:
     candidate = REPO_ROOT / "config" / "VisionStatement.pdf"
     if candidate.exists():
@@ -547,6 +485,7 @@ def build_payload(
     deep_testing: bool = False,
     logger: logging.Logger,
     policy: DummyPolicy | None = None,
+    allow_local_only_override: bool = False,
 ) -> _DummyPayload:
     vision_statement_pdf_bytes = _load_vision_statement_pdf_bytes()
 
@@ -597,6 +536,7 @@ def build_payload(
         policy=policy,
         call_drive_min_fn=_call_drive_min,
         call_drive_emit_readmes_fn=_call_drive_emit_readmes,
+        allow_local_only_override=allow_local_only_override,
     )
 
 
@@ -615,7 +555,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     slug = args.slug.strip()
     client_name = (args.name or f"Dummy {slug}").strip()
-    drive_request = "force_on" if args.with_drive else "force_off" if args.no_drive else "auto"
+    local_only_override = args.no_drive and not args.with_drive
     enable_vision = not args.no_vision
     enable_semantic = not args.no_semantic
     enable_enrichment = not args.no_enrichment
@@ -644,12 +584,6 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if records_hint is not None and not args.no_vision:
         enable_vision = False
-        drive_request = "force_off"
-
-    if not args.with_drive and (args.base_dir or args.clients_db):
-        drive_request = "force_off"
-        if not args.no_vision:
-            enable_vision = False
 
     prev_repo_root_dir = os.environ.get("REPO_ROOT_DIR")
     prev_workspace_root_dir = os.environ.get("WORKSPACE_ROOT_DIR")
@@ -697,27 +631,14 @@ def main(argv: Optional[list[str]] = None) -> int:
                     "current": os.environ.get("TIMMY_BETA_STRICT"),
                 },
             )
-        mode = _compute_runtime_mode(
-            drive_request=drive_request,
-            drive_module_available=ensure_drive_minimal_and_upload_config is not None,
-            drive_id=get_env_var("DRIVE_ID"),
-            service_account_file=get_env_var("SERVICE_ACCOUNT_FILE"),
-            cleanup_available=callable(_perform_cleanup),
-            registry_available=ClientEntry is not None and upsert_client is not None,
-            config_utils_available=get_client_config is not None,
-            context_available=ClientContext is not None,
-            tags_store_available=_tags_store is not None,
+        logger.info(
+            "tools.gen_dummy_kb.mode",
+            extra={
+                "mode": mode_label,
+                "local_only": local_only_override,
+            },
         )
-        mode_summary = _format_mode_summary(mode)
-        logger.info(mode_summary, extra={"mode": mode_label, "runtime_mode": mode.__dict__})
-        if drive_request == "force_on" and not mode.drive_enabled:
-            logger.error(
-                "tools.gen_dummy_kb.drive_prereq_missing",
-                extra={"slug": slug, "reason": mode.reasons},
-            )
-            emit_structure({"error": "Drive richiesto ma prerequisiti mancanti", "mode": mode.__dict__}, stream=sys.stderr)
-            return 1
-        enable_drive = mode.drive_enabled
+        enable_drive = not local_only_override
 
         if workspace_override:
             for child in ("raw", "semantic", "book", "logs", "config"):
@@ -758,9 +679,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                 logger=logger,
                 deep_testing=args.deep_testing,
                 policy=policy,
+                allow_local_only_override=local_only_override,
             )
             emit_structure(payload)
-            logger.info(_format_mode_summary(mode), extra={"mode": mode_label, "runtime_mode": mode.__dict__})
             return 0
         except Exception as exc:
             if HardCheckError is not None and isinstance(exc, HardCheckError):
