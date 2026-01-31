@@ -36,7 +36,6 @@ from typing import Any, Dict, Optional, Tuple
 from pipeline.artifact_policy import enforce_core_artifacts
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.config_utils import (
-    ensure_config_migrated,
     get_client_config,
     merge_client_config_from_template,
     update_config_with_drive_ids,
@@ -542,7 +541,6 @@ def pre_onboarding_main(
     )
     if dry_run:
         logger.info("cli.pre_onboarding.offline_mode", extra={"slug": context.slug})
-    ensure_config_migrated(context, logger=logger)
     layout = WorkspaceLayout.from_context(context)
     ledger_conn = None
     ledger_conn = decision_ledger.open_ledger(layout)

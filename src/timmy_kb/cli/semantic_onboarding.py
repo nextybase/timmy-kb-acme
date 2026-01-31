@@ -20,7 +20,7 @@ _T = TypeVar("_T")
 
 
 from pipeline.artifact_policy import enforce_core_artifacts
-from pipeline.config_utils import ensure_config_migrated, get_client_config, get_drive_id
+from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.context import ClientContext
 from pipeline.drive.upload import create_drive_structure_from_names
 from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, QaGateViolation, exit_code_for
@@ -204,7 +204,6 @@ def main() -> int:
         run_id=run_id,
         bootstrap_config=True,
     )
-    ensure_config_migrated(ctx, logger=logger)
     layout = WorkspaceLayout.from_context(ctx)
     requested, effective = _resolve_requested_effective(args)
     ledger_conn = None

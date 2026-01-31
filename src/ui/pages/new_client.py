@@ -15,7 +15,7 @@ st = get_streamlit()
 import yaml
 
 from pipeline.beta_flags import is_beta_strict
-from pipeline.config_utils import ensure_config_migrated, get_client_config, get_drive_id, update_config_with_drive_ids
+from pipeline.config_utils import get_client_config, get_drive_id, update_config_with_drive_ids
 from pipeline.context import ClientContext, validate_slug
 from pipeline.exceptions import ConfigError, WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.file_utils import safe_write_bytes, safe_write_text
@@ -124,25 +124,6 @@ def _require_repo_root(ctx: Any, slug: str) -> Path:
     return Path(repo_root)
 
 
-_LEGACY_DRIVE_KEYS = {
-    "drive_folder_id",
-    "drive_raw_folder_id",
-    "drive_contrattualistica_folder_id",
-    "drive_config_folder_id",
-}
-
-
-def _has_legacy_config_keys(payload: dict[str, Any]) -> bool:
-    if any(key in payload for key in _LEGACY_DRIVE_KEYS):
-        return True
-    if "vision_statement_pdf" in payload:
-        return True
-    meta = payload.get("meta")
-    if isinstance(meta, dict) and "vision_statement_pdf" in meta:
-        return True
-    return False
-
-
 # --------- helper ---------
 def _config_dir_client(slug: str, layout: WorkspaceLayout | None = None) -> Path:
     layout = _require_layout(slug, layout)
@@ -181,28 +162,6 @@ def _has_drive_ids(slug: str) -> bool:
     except Exception:
         return False
     return bool(get_drive_id(cfg, "raw_folder_id")) and bool(get_drive_id(cfg, "folder_id"))
-
-
-def _ensure_config_migrated_once(slug: str, ctx: Any) -> None:
-    key = f"config_migrated_{(slug or '').strip().lower()}"
-    if st.session_state.get(key):
-        return
-    current_config: dict[str, Any] = {}
-    try:
-        current_config = get_client_config(ctx) or {}
-    except Exception:
-        current_config = {}
-    if _has_legacy_config_keys(current_config):
-        migrated = ensure_config_migrated(ctx, logger=LOGGER)
-        if migrated:
-            LOGGER.info("ui.new_client.config_migrated", extra={"slug": slug})
-            invalidate_client_context(slug)
-        elif is_beta_strict():
-            raise ConfigError(
-                "Config legacy rilevato: in strict mode non sono ammessi fallback automatici.",
-                slug=slug,
-            )
-    st.session_state[key] = True
 
 
 def _exists_semantic_files(slug: str, layout: WorkspaceLayout | None = None) -> bool:
@@ -589,7 +548,6 @@ if current_phase == UI_PHASE_INIT:
                 layout = bootstrap_client_workspace(ctx)
                 invalidate_client_context(s)
                 ctx = get_client_context(s, require_drive_env=False, force_reload=True)
-                _ensure_config_migrated_once(s, ctx)
                 _require_repo_root(ctx, s)
                 ensure_ownership_file(s, get_repo_root())
                 if isinstance(pdf_bytes, (bytes, bytearray)) and len(pdf_bytes) > 20 * 1024 * 1024:

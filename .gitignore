@@ -137,6 +137,9 @@ clients_db/clients/*
 !clients_db/clients/example/
 !clients_db/clients/example/**
 
+# === Share artifacts ===
+share/
+
 # E2E reports
 playwright-report/
 bench_artifacts/
