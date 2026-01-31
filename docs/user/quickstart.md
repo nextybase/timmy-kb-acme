@@ -7,6 +7,7 @@ Guida essenziale per partire in pochi minuti.
 - Streamlit >= 1.50.0 (UI)
 - (Opz.) Docker per anteprima HonKit
 - (Opz.) Drive: `SERVICE_ACCOUNT_FILE` + `DRIVE_ID` + `pip install .[drive]`
+  - Per **Dummy KB**, puoi usare **Solo locale** (UI) o `--no-drive` (CLI) quando Drive non è disponibile.
 
 ## Avvio UI in 4 step
 1. `streamlit run onboarding_ui.py`

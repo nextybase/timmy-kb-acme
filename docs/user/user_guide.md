@@ -95,6 +95,7 @@ Usa la UI per:
 - **Drive (opzionale ma consigliato)**: Service Account Google con permessi su Drive; ricorda di installare gli extra `pip install .[drive]`.
   - \`DRIVE\_ID\` -> ID del Drive o cartella radice.
   - Installa gli extra Drive: \`pip install .[drive]\`.
+  - Per **Dummy KB**, se Drive non è pronto puoi usare **Solo locale** (UI) o `--no-drive` (CLI).
 
 **Avvio UI**:
 
@@ -168,9 +169,9 @@ Provisioning struttura su **Drive**:
 
 ---
 
-> ## Pagina Admin  **Configurazione** (`config/config.yaml`)
+> ## Pagina **Configurazione** (`config/config.yaml`)
 >
-> La pagina **Configurazione** (menu: **Admin  Configurazione**) permette di leggere e modificare in modo guidato il file globale `config/config.yaml`, senza passare da editor esterni.
+> La pagina **Configurazione** (menu: **Configurazione**) permette di leggere e modificare in modo guidato il file globale `config/config.yaml`, senza passare da editor esterni.
 >
 > - **Scope**
 >   Le modifiche agiscono sulla configurazione *globale* di Timmy KB (istanza/progetto), non sul singolo workspace cliente.
@@ -542,3 +543,4 @@ Nota operativa (strict dummy): quando `TIMMY_BETA_STRICT=1` devi impostare
 `WORKSPACE_ROOT_DIR` sul workspace target prima di eseguire `tools/gen_dummy_kb.py`
 (es. `output/timmy-kb-<slug>`). La dummy non auto-imposta l'environment per restare
 allineata al comportamento cliente reale.
+Se vuoi evitare Drive in Dummy, usa **Solo locale** (UI) o `--no-drive` (CLI).

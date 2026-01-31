@@ -19,7 +19,6 @@ class PagePaths:
     GUIDA_DEV = "../../ui/pages/guida_dev.py"
     AGENTS_NETWORK = "../../ui/pages/agents_network.py"
 
-    ADMIN = "../../ui/pages/admin.py"
     TUNING = "../../ui/pages/tools_check.py"
     SECRETS = "../../ui/pages/secrets_healthcheck.py"  # pragma: allowlist secret
     DIAGNOSTICS = "../../ui/pages/diagnostics.py"
@@ -65,7 +64,6 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
     NavGroup(
         "Admin",
         (
-            NavPage(PagePaths.ADMIN, "Admin", "admin"),
             NavPage(PagePaths.CONFIGURAZIONE, "Configurazione", "configurazione"),
             NavPage(PagePaths.PROTOTIMMY_CHAT, "ProtoTimmy Chat", "prototimmy-chat"),
             NavPage(PagePaths.TUNING, "Tuning", "check", requires=("vision",)),

@@ -10,7 +10,6 @@ meta:
 ui:
   skip_preflight: true
   allow_local_only: true
-  admin_local_mode: false
 
 ai:
   openai:

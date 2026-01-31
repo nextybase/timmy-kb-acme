@@ -241,9 +241,7 @@ def _write_config(config: Dict[str, Any]) -> bool:
 
 def main() -> None:
     """
-    Pagina Admin -> Configurazione.
-
-    - Usa la stessa struttura delle altre pagine Admin (header + sidebar).
+    Pagina Configurazione.
     - Lavora a livello globale, senza dipendere dallo slug del cliente.
     - Mostra i blocchi di config/config.yaml come expander, con titolo
       esplicativo e piccola descrizione, seguiti dal sottoelenco di voci singole.

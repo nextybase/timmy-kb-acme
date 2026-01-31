@@ -7,11 +7,6 @@
   "navigation": {
     "Admin": [
       {
-        "path": "../../ui/pages/admin.py",
-        "title": "Admin",
-        "url_path": "admin"
-      },
-      {
         "path": "../../ui/pages/configurazione.py",
         "title": "Configurazione",
         "url_path": "configurazione"

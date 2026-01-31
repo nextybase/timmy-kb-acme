@@ -1,1 +1,20 @@
-{"artifacts":[{"bytes":10,"path":"book/README.md","sha256":"c78da9afd9b3979501854652b088aacb299d9e601a07efb9f476ca98c7262c59"},{"bytes":9,"path":"book/SUMMARY.md","sha256":"d472979042ac41639fc5e45fc55464aaeefa9ec20e264099ebb7ebed728e9487"},{"bytes":1741,"path":"config/config.yaml","sha256":"d2f2b1e368332473a8d45281e43115c53682cb7f996a20541d061037be40fbc4"}],"schema_version":1}
+{
+  "artifacts": [
+    {
+      "bytes": 10,
+      "path": "book/README.md",
+      "sha256": "c78da9afd9b3979501854652b088aacb299d9e601a07efb9f476ca98c7262c59"
+    },
+    {
+      "bytes": 9,
+      "path": "book/SUMMARY.md",
+      "sha256": "d472979042ac41639fc5e45fc55464aaeefa9ec20e264099ebb7ebed728e9487"
+    },
+    {
+      "bytes": 1715,
+      "path": "config/config.yaml",
+      "sha256": "daf16e596fccb2ba5f2cd77be63c92983086efe24292515a94501955ab091298"
+    }
+  ],
+  "schema_version": 1
+}

@@ -134,10 +134,10 @@ set_tab("manage")                  # se serve cambiare tab
 
 Pattern unificato per aggiungere pagine Streamlit tramite `ui.pages.registry`.
 
-- **Admin pages**
+- **Pages (tools/config)**
   - Operano a livello globale: chiamare `header(None)` e `sidebar(None)` cosi l'interfaccia ignora lo slug.
   - Non forzano la selezione del cliente; i testi devono ricordare che lavorano sull'intero workspace.
-  - Registrazione nel gruppo `Admin` in `registry.py` con `url_path` opzionale (`None` per pagine interne come `logs_panel`).
+  - Registrazione nel gruppo dedicato in `registry.py` con `url_path` opzionale (`None` per pagine interne come `logs_panel`).
 - **Tools pages**
   - Agiscono su un cliente: usare `render_chrome_then_require()` per ottenere/forzare lo slug.
   - In assenza di slug mostrano la CTA guidata gia gestita da `render_chrome_then_require`.
@@ -145,8 +145,8 @@ Pattern unificato per aggiungere pagine Streamlit tramite `ui.pages.registry`.
 
 Checklist minima per una pagina nuova:
 
-1. Copiare uno scheletro esistente (`home.py` per Admin, `diagnostics.py` per Tools) dentro `src/ui/pages/`.
-2. Richiamare header/sidebar coerenti con il tipo di pagina (Admin -> `None`, Tools -> slug richiesto).
+1. Copiare uno scheletro esistente (`home.py` per Onboarding, `diagnostics.py` per Tools) dentro `src/ui/pages/`.
+2. Richiamare header/sidebar coerenti con il tipo di pagina (Onboarding -> `None`, Tools -> slug richiesto).
 3. Aggiornare `ui/navigation_spec.py` (coppia `PagePaths` + `NAVIGATION_GROUPS`) cosi da riflettere titolo/gruppo/url-path della nuova pagina; rigenerare gli snapshot con `python tools/ci_dump_nav.py` se cambiano i gruppi.
 4. Aggiungere/aggiornare i test UI (`tests/ui/...`) sfruttando gli stub Streamlit.
 5. Validare con `python tools/test_runner.py full` per riallineare la suite e i contratti di navigazione.
@@ -462,7 +462,7 @@ else:
 ```
 
 - Evita pattern che forzano `with col:` sugli stub: alcuni colonnati mock non implementano il context manager.
-- Per le pagine piu recenti (Onboarding, Semantica, Admin) l'UI è incapsulata in `main()` e gli import non generano side-effect; mantieni questo pattern per i nuovi moduli.
+- Per le pagine piu recenti (Onboarding, Semantica, Tools) l'UI è incapsulata in `main()` e gli import non generano side-effect; mantieni questo pattern per i nuovi moduli.
 
 ---
 

@@ -25,7 +25,6 @@ meta:
 ui:
   skip_preflight: false
   allow_local_only: false
-  admin_local_mode: true
 ai:
   openai:
     timeout: 60
@@ -88,7 +87,6 @@ def test_settings_loads_config(sample_config: Path) -> None:
     assert settings.vision_snapshot_retention_days == 45
     assert settings.ui_skip_preflight is False
     assert settings.ui_allow_local_only is False
-    assert settings.ui_admin_local_mode is True
     assert settings.openai_settings.timeout == 60
     assert settings.openai_settings.max_retries == 4
     assert settings.openai_settings.http2_enabled is True

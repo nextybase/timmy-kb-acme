@@ -287,7 +287,6 @@ class VisionSection:
 class UISection:
     skip_preflight: bool = False
     allow_local_only: bool = True
-    admin_local_mode: bool = False
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any], *, config_path: Path) -> "UISection":
@@ -303,12 +302,6 @@ class UISection:
                 "ui.allow_local_only",
                 config_path=config_path,
                 default=cls.allow_local_only,
-            ),
-            admin_local_mode=_extract_bool(
-                data.get("admin_local_mode"),
-                "ui.admin_local_mode",
-                config_path=config_path,
-                default=cls.admin_local_mode,
             ),
         )
 
@@ -553,9 +546,6 @@ class Settings:
         return self.ui_settings.allow_local_only
 
     @property
-    def ui_admin_local_mode(self) -> bool:
-        return self.ui_settings.admin_local_mode
-
     @property
     def retriever_auto_by_budget(self) -> bool:
         return self.retriever_settings.auto_by_budget

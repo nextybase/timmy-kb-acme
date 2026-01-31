@@ -18,6 +18,7 @@ from semantic.api import get_paths
 from semantic.book_readiness import is_book_ready
 from ui.chrome import render_chrome_then_require
 from ui.errors import to_user_message
+from ui.pages.new_client import ui_allow_local_only_enabled
 from ui.utils import get_slug, set_active_slug
 from ui.utils.stubs import get_streamlit
 
@@ -274,7 +275,16 @@ def main() -> None:
     st.subheader("Generazione Dummy KB")
     st.caption("Lo slug e' fissato a 'dummy' per questa pagina tools.")
 
-    no_drive = st.checkbox("Disabilita Drive", value=False, help="Salta provisioning/upload su Google Drive")
+    local_only_enabled = ui_allow_local_only_enabled()
+    if local_only_enabled:
+        st.markdown("**Solo locale (Drive disattivo)**")
+        local_only = True
+    else:
+        local_only = st.checkbox(
+            "Solo locale (Drive disattivo)",
+            value=False,
+            help="Salta provisioning/upload su Google Drive",
+        )
     no_vision = st.checkbox(
         "Disabilita Vision (usa fallback semantic basico)",
         value=False,
@@ -314,7 +324,7 @@ def main() -> None:
         _run_full_reset(slug, "Reset Dummy in corso (locale + Drive + registry)...")
     if proceed:
         cmd = [sys.executable, "-m", "tools.gen_dummy_kb", "--slug", slug]
-        if no_drive:
+        if local_only:
             cmd.append("--no-drive")
         if no_vision:
             cmd.append("--no-vision")

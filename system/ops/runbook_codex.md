@@ -82,7 +82,6 @@ meta:
 ui:
   skip_preflight: true
   allow_local_only: true
-  admin_local_mode: false
 ai:
   openai:
     timeout: 120
@@ -111,7 +110,7 @@ pipeline:
   - The Assistant flow uses `ai.vision.assistant_id_env` for the ENV override.
   - UI obtains the model via `get_vision_model()` (SSoT).
   - Retriever adheres to throttle limits and logs `retriever.query.embed_failed`, short-circuiting to an empty result when budgets are exhausted.
-  - Flags such as `ui.allow_local_only` and `ui.admin_local_mode` gate Admin access.
+- Flags such as `ui.allow_local_only` abilitano il funzionamento locale senza Drive.
 
 References: [Developer Guide → Configuration](../../docs/developer/developer_guide.md), [Configuration Overview](../../docs/configurazione.md).
 

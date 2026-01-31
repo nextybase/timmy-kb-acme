@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 from pipeline.config_utils import get_drive_id
 from pipeline.context import ClientContext, validate_slug
+from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -54,6 +55,15 @@ def _require_drive_root_id(config: Dict[str, Any], *, slug: str, config_path: Pa
             file_path=str(config_path),
         )
     return value
+
+
+def _should_skip_drive_cleanup(config: Dict[str, Any]) -> bool:
+    ui_section = config.get("ui")
+    ui_allow_local_only = bool(ui_section.get("allow_local_only")) if isinstance(ui_section, dict) else False
+    if ui_allow_local_only:
+        return True
+    missing_env = not get_env_var("DRIVE_ID") or not get_env_var("SERVICE_ACCOUNT_FILE")
+    return missing_env
 
 
 def _require_drive_utils() -> None:
@@ -141,7 +151,16 @@ def perform_cleanup(slug: str, *, client_name: Optional[str] = None) -> Dict[str
     if config_path.exists():
         try:
             config_payload = _load_config_payload(config_path, workspace_root=workspace_root, slug=slug)
-            drive_root_id = _require_drive_root_id(config_payload, slug=slug, config_path=config_path)
+            try:
+                drive_root_id = _require_drive_root_id(config_payload, slug=slug, config_path=config_path)
+            except ConfigError as exc:
+                if _should_skip_drive_cleanup(config_payload):
+                    logger.info(
+                        "tools.clean_client_workspace.drive_skipped",
+                        extra={"slug": slug, "reason": "missing_drive_id"},
+                    )
+                else:
+                    raise exc
         except Exception as exc:
             drive_error = f"drive_config_invalid: {exc}"
     else:

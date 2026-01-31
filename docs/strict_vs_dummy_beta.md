@@ -81,6 +81,7 @@ timmy-kb tag-onboarding ... --dummy
 ### Comportamento
 - Consente **solo esplicitamente** la generazione degli stub.
 - Nel tooling dummy, `TIMMY_BETA_STRICT` viene forzato a `0` solo per il processo **se non** si usa `--deep-testing` (override locale).
+- Se Drive non è disponibile, usa `--no-drive` (CLI) o **Solo locale** (UI) per la Dummy; in **deep-testing** Drive deve essere configurato.
 
 ### Ledger
 - `from_state = SEMANTIC_INGEST`

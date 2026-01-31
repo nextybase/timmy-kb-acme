@@ -10,7 +10,7 @@ Binding rules for the Streamlit page modules under `src/ui/pages/`: enforce Stre
 - Ban deprecated APIs: `st.cache`, any `st.experimental_*`, `unsafe_allow_html`, `use_container_width`, `use_column_width`, and legacy routers or query hacks.
 - Favor `st.dialog` with inline fallback when needed; avoid unsupported `with col` blocks during stub testing; centrally manage theme via `.streamlit/config.toml`; use `st.html` for safe HTML.
 - Log through `get_structured_logger("ui.<page>")`, limit messages to short entries without PII, and avoid `print()` or duplicate handlers.
-- Handle errors by showing concise UI messages and logging details; orchestrators must restore gating/state. Admin actions occur only on dedicated pages and remain disabled when prerequisites are missing.
+- Handle errors by showing concise UI messages and logging details; orchestrators must restore gating/state.
 
 
 # Acceptance Criteria

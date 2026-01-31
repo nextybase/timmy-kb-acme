@@ -183,7 +183,7 @@ def _render_grafana_block(
         value=settings.stack_enabled,
         help=(
             "Indica che vuoi usare lo stack di osservabilità esterno. "
-            "Questa preferenza può essere letta dalla pagina Admin o dagli "
+            "Questa preferenza può essere letta dalla pagina Configurazione o dagli "
             "script di avvio per lo stack Grafana/Loki."
         ),
     )
@@ -422,7 +422,7 @@ def _render_observability_controls() -> None:
         st.markdown(
             """
 1. **Avvia lo stack di osservabilità** (Grafana/Loki/Promtail, e Tempo se presente) da shell
-   oppure dalla pagina *Admin* se sono disponibili i bottoni Docker.
+    oppure dalla pagina *Configurazione* se sono disponibili i bottoni Docker.
 2. Imposta `TIMMY_GRAFANA_URL` e, se vuoi tracing, `TIMMY_OTEL_ENDPOINT` nell'ambiente
    in cui giri CLI e UI.
 3. Usa i toggle qui sopra per:
@@ -543,7 +543,7 @@ def _render_global_logs_view() -> None:
 
 
 def main() -> None:
-    # Chrome Admin: slug non richiesto
+    # Chrome: slug non richiesto
     render_chrome_then_require(
         allow_without_slug=True,
         title="Log dashboard",
