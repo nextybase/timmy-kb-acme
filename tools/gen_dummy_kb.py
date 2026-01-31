@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # tools/gen_dummy_kb.py
-# Genera una KB "dummy" passando dalle stesse funzioni usate dalla UI:
-# pre_onboarding + Vision (+ Drive opzionale). Con flag per disabilitare Drive/Vision.
+"""Tooling DEV/ADMIN-only per bootstrap, diagnostica e CI.
+
+Non rappresenta un percorso runtime utente né un fallback supportato in ambienti strict.
+Usa gli stessi entry point della UI (pre_onboarding + Vision + Drive opzionale)
+per produrre artefatti deterministici destinati solo all'operatore.
+"""
 
 from __future__ import annotations
 
@@ -378,6 +382,7 @@ ensure_local_workspace_for_ui = _ensure_local_workspace_for_tooling
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
+    # Parser per tooling DEV/ADMIN: i flag disponibili servono a orchestrare test controllati, non a modificare il runtime.
     ap = argparse.ArgumentParser(
         description="Genera una KB dummy usando gli entry-point della UI (pre_onboarding + Vision + (Drive opz.))."
     )
@@ -428,6 +433,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help="Reset completo Dummy: cleanup cliente (locale + Drive + registry) e termina (solo slug dummy).",
     )
     semantic_group = ap.add_mutually_exclusive_group()
+    # Gli switch semantic/no-semantic sono blocchi di sviluppo per controllare la pipeline Vision/Semantic.
     semantic_group.add_argument(
         "--semantic",
         action="store_true",
@@ -439,6 +445,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help="Disabilita il passo Semantic.",
     )
     enrich_group = ap.add_mutually_exclusive_group()
+    # Questi flag permettono di simulare varianti di arricchimento in ambiente CI senza toccare il runtime.
     enrich_group.add_argument(
         "--enrichment",
         action="store_true",
@@ -450,6 +457,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help="Disabilita il passo Enrichment.",
     )
     preview_group = ap.add_mutually_exclusive_group()
+    # Il preview group è un override di testing; l'interfaccia generica non espone queste combinazioni di flag.
     preview_group.add_argument(
         "--preview",
         action="store_true",
@@ -549,6 +557,7 @@ def emit_structure(payload: _DummyPayload | Dict[str, Any], *, stream: TextIO = 
 # Main
 # ------------------------------------------------------------
 def main(argv: Optional[list[str]] = None) -> int:
+    # Entrypoint DEV/ADMIN per generare Dummy KB; non deve essere invocato dal runtime utente strict-only.
     ensure_dotenv_loaded()
 
     args = parse_args(argv)

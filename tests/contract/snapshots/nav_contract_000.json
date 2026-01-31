@@ -17,6 +17,11 @@
         "url_path": "prototimmy-chat"
       },
       {
+        "path": "../../ui/pages/dummy_kb.py",
+        "title": "Dummy KB (Admin)",
+        "url_path": "dummy-kb"
+      },
+      {
         "path": "../../ui/pages/secrets_healthcheck.py",
         "title": "Secrets Healthcheck",
         "url_path": "secrets"
@@ -59,11 +64,6 @@
         "path": "../../ui/pages/config_editor.py",
         "title": "Config Editor",
         "url_path": "config"
-      },
-      {
-        "path": "../../ui/pages/dummy_kb.py",
-        "title": "Dummy KB",
-        "url_path": "dummy-kb"
       },
       {
         "path": "../../ui/pages/diagnostics.py",

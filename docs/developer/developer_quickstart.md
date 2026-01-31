@@ -37,9 +37,11 @@ python -m streamlit run onboarding_ui.py
 - `python -m pip index versions openai`
 - `python -m pip install -U "openai>=X"`
 - `python tests/scripts/openai_responses_signature.py`
-- Dummy smoke offline: `python tools/gen_dummy_kb.py --slug dummy --no-drive` (nessun Drive, niente deep-testing).
-- Dummy deep-testing (richiede Drive): `python tools/gen_dummy_kb.py --slug dummy --deep-testing`.
+- Dummy smoke offline (DEV/ADMIN-only): `python tools/gen_dummy_kb.py --slug dummy --no-drive` (nessun Drive, niente deep-testing; la pagina Dummy KB si trova sotto la tab **Admin**).
+- Dummy deep-testing (richiede Drive, clonato da CI): `python tools/gen_dummy_kb.py --slug dummy --deep-testing`.
   `--no-drive --deep-testing` è un conflitto e deve fallire.
+
+_Nota_: Dummy KB è tooling di sviluppo/CI; la pagina Streamlit dedicata si trova sotto **Admin** ed è disabilitata per gli utenti standard. Non rappresenta un percorso runtime alternativo.
 
 ## Flusso 3: Aggiunta nuovo cliente (registry UI)
 - Apri la UI, vai su **Gestisci cliente** ? **Nuovo cliente**.

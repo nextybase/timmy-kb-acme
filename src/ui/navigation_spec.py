@@ -56,7 +56,6 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
         "Tools",
         (
             NavPage(PagePaths.CONFIG_EDITOR, "Config Editor", "config"),
-            NavPage(PagePaths.DUMMY_KB, "Dummy KB", "dummy-kb"),
             NavPage(PagePaths.DIAGNOSTICS, "Diagnostica", "diagnostics"),
             NavPage(PagePaths.GUIDA, "Guida UI", "guida"),
         ),
@@ -66,6 +65,7 @@ _NAVIGATION: Tuple[NavGroup, ...] = (
         (
             NavPage(PagePaths.CONFIGURAZIONE, "Configurazione", "configurazione"),
             NavPage(PagePaths.PROTOTIMMY_CHAT, "ProtoTimmy Chat", "prototimmy-chat"),
+            NavPage(PagePaths.DUMMY_KB, "Dummy KB (Admin)", "dummy-kb"),
             NavPage(PagePaths.TUNING, "Tuning", "check", requires=("vision",)),
             NavPage(PagePaths.SECRETS, "Secrets Healthcheck", "secrets"),
             NavPage(PagePaths.LOGS_PANEL, "Log dashboard", None),

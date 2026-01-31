@@ -142,6 +142,11 @@ Pattern unificato per aggiungere pagine Streamlit tramite `ui.pages.registry`.
   - Agiscono su un cliente: usare `render_chrome_then_require()` per ottenere/forzare lo slug.
   - In assenza di slug mostrano la CTA guidata gia gestita da `render_chrome_then_require`.
   - Registrazione nel gruppo `Tools`; mantenere messaging slug-centrico (es. 'Workspace: slug').
+- **Admin pages**
+  - Destinate a tooling dev/ops: non si riferiscono a un workspace cliente e non devono essere esposte agli utenti standard.
+  - Registrare nel gruppo `Admin` con titoli chiari (es. `Dummy KB (Admin)`); documentare i limiti nel README di riferimento.
+  - Eseguono attività di bootstrap/diagnostica/CI (dummy, tuning, secrets, agent network); non si prestano come fallback runtime negli ambienti strict.
+  - La pagina `Dummy KB` è un caso tipico: disponibile solo da Admin, non realizza bypass di gating e non deve essere invocata dal runtime utente.
 
 Checklist minima per una pagina nuova:
 

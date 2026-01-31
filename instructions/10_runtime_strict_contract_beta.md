@@ -135,8 +135,10 @@ In Beta 1.0, strict-only execution forbids shim paths that force dummy/stub gene
   generate stubs.
 - If a user attempts to **force** dummy/stub behavior under strict mode, execution MUST:
   - emit a Decision Record with verdict **BLOCK**,
-  - include a stable `stop_code` (e.g. `STRICT_MODE_VIOLATION`),
-  - terminate with a deterministic non-zero exit.
+- include a stable `stop_code` (e.g. `STRICT_MODE_VIOLATION`),
+- terminate with a deterministic non-zero exit.
+
+_Nota_: la pagina **Dummy KB** e il tool `gen_dummy_kb.py` sono tooling DEV/ADMIN-only; l'esposizione via UI è limitata alla tab **Admin** e non rappresentano una modalità runtime alternativa o un fallback supportato negli ambienti strict.
 
 ## 3. Input Validity Rules
 

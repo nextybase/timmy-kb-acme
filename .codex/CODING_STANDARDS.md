@@ -27,3 +27,7 @@
 
 - Export only the public API using `__all__ = [...]`; keep internal helpers/Protocols prefixed with `_`.
 - Prefer local `Protocol` definitions for `context` parameters when only a few attributes are required; avoid unnecessary strong dependencies.
+
+## Dev tooling policy
+
+- Dev tooling come dummy/stub/fallback è ammesso solo nel gruppo **Admin** e deve rimanere chiaramente documentato come uso DEV/OPS. Non introdurre scorciatoie non-strict nelle pagine utente o nei percorsi runtime.
