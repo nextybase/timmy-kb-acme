@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
 
@@ -15,13 +16,12 @@ import yaml
 
 from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import ensure_config_migrated, get_client_config, get_drive_id, update_config_with_drive_ids
-from pipeline.context import validate_slug
+from pipeline.context import ClientContext, validate_slug
 from pipeline.exceptions import ConfigError, WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.file_utils import safe_write_bytes, safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.ownership import ensure_ownership_file
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from pipeline.settings import Settings
 from pipeline.system_self_check import run_system_self_check
 from pipeline.vision_paths import vision_yaml_workspace_path
 from pipeline.workspace_bootstrap import bootstrap_client_workspace
@@ -34,6 +34,7 @@ from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_
 from ui.errors import to_user_message
 from ui.imports import getattr_if_callable, import_first
 from ui.utils import clear_active_slug, set_slug
+from ui.utils.config import resolve_ui_allow_local_only
 from ui.utils.context_cache import get_client_context, invalidate_client_context
 from ui.utils.html import esc_url_component
 from ui.utils.merge import deep_merge_dict
@@ -42,9 +43,9 @@ from ui.utils.status import status_guard
 from ui.utils.workspace import get_ui_workspace_layout
 
 if TYPE_CHECKING:
-    from pipeline.context import ClientContext
+    from pipeline.context import ClientContext as ClientContextType
 else:  # pragma: no cover
-    ClientContext = Any  # type: ignore[misc]
+    ClientContextType = Any  # type: ignore[misc]
 
 _vision_module = import_first(
     "ui.services.vision_provision",
@@ -69,37 +70,10 @@ else:
     _ensure_drive_minimal = None
 
 
-def _load_repo_settings() -> Settings:
-    try:
-        return Settings.load(get_repo_root())
-    except Exception as exc:
-        LOGGER.error(
-            "ui.new_client.settings_load_failed",
-            extra={"error": str(exc)},
-        )
-        raise ConfigError(
-            "Impossibile caricare la configurazione: modalita runtime non determinabile.",
-        ) from exc
-
-
-def _resolve_ui_allow_local_only() -> bool:
-    settings_obj = _load_repo_settings()
-    try:
-        return bool(settings_obj.ui_allow_local_only)
-    except Exception as exc:
-        LOGGER.error(
-            "ui.new_client.ui_allow_local_only_failed",
-            extra={"error": str(exc)},
-        )
-        raise ConfigError(
-            "Impossibile leggere ui_allow_local_only dalla configurazione.",
-        ) from exc
-
-
 def ui_allow_local_only_enabled() -> bool:
     """Legge (o rilegge) il flag ui_allow_local_only dal settings runtime."""
     try:
-        return _resolve_ui_allow_local_only()
+        return resolve_ui_allow_local_only()
     except ConfigError as exc:
         st.error(f"{exc} Interrompo l'onboarding.")
         st.stop()
@@ -566,7 +540,12 @@ if current_phase == UI_PHASE_INIT:
                 file_path="config/config.yaml",
             )
         try:
-            ctx = get_client_context(s, require_drive_env=False)
+            os.environ.setdefault("TIMMY_ALLOW_BOOTSTRAP", "1")
+            ctx = ClientContext.load(
+                slug=s,
+                require_drive_env=False,
+                bootstrap_config=True,
+            )
             with status_guard(
                 "Preparo il workspace locale...",
                 expanded=True,

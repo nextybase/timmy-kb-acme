@@ -71,12 +71,14 @@ def safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
 def call_best_effort(fn: Callable[..., T], *, logger: Any, **kwargs: Any) -> T:
     """Chiama fn con kwargs garantendo corrispondenza con la firma dichiarata."""
     sig = inspect.signature(fn)
-    try:
-        sig.bind(**kwargs)
-    except TypeError:
+    accepted = {key: value for key, value in kwargs.items() if key in sig.parameters}
+    if len(accepted) != len(kwargs):
         logger.error(
             "ui.manage.signature_mismatch",
-            extra={"fn": getattr(fn, "__name__", repr(fn)), "kwargs": sorted(kwargs)},
+            extra={
+                "fn": getattr(fn, "__name__", repr(fn)),
+                "kwargs": sorted(kwargs),
+                "dropped": sorted(set(kwargs) - set(accepted)),
+            },
         )
-        raise
-    return fn(**kwargs)
+    return fn(**accepted)

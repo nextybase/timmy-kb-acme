@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from pipeline.beta_flags import is_beta_strict
 from pipeline.context import validate_slug
 from pipeline.docker_utils import check_docker_status
 from pipeline.env_utils import get_int
@@ -18,8 +17,8 @@ from semantic.api import get_paths
 from semantic.book_readiness import is_book_ready
 from ui.chrome import render_chrome_then_require
 from ui.errors import to_user_message
-from ui.pages.new_client import ui_allow_local_only_enabled
 from ui.utils import get_slug, set_active_slug
+from ui.utils.config import resolve_ui_allow_local_only
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
@@ -248,11 +247,6 @@ def _run_and_render(slug: str, cmd: list[str]) -> None:
 
 
 def main() -> None:
-    if is_beta_strict():
-        st.warning(
-            "Dummy KB in Beta strict-only: in deep-testing opera in strict reale; "
-            "in modalita' non deep forza strict=0 (uso dev/diagnostica)."
-        )
     set_active_slug("dummy", persist=False, update_query=True)
     render_chrome_then_require(
         allow_without_slug=True,
@@ -275,7 +269,12 @@ def main() -> None:
     st.subheader("Generazione Dummy KB")
     st.caption("Lo slug e' fissato a 'dummy' per questa pagina tools.")
 
-    local_only_enabled = ui_allow_local_only_enabled()
+    try:
+        local_only_enabled = resolve_ui_allow_local_only()
+    except Exception as exc:
+        st.error(f"{exc} Interrompo la pagina Dummy KB.")
+        st.stop()
+        raise
     if local_only_enabled:
         st.markdown("**Solo locale (Drive disattivo)**")
         local_only = True

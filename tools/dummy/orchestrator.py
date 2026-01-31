@@ -10,6 +10,7 @@ from time import perf_counter
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from pipeline.context import ClientContext as PipelineClientContext
+from pipeline.config_utils import update_config_with_drive_ids
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.file_utils import safe_write_text
@@ -427,6 +428,44 @@ def build_dummy_payload(
             msg,
             build_hardcheck_health(
                 "pre_onboarding_hardcheck",
+                msg,
+                mode=policy.mode,
+            ),
+        ) from exc
+
+    try:
+        try:
+            ctx_for_config = PipelineClientContext.load(
+                slug=slug,
+                require_env=False,
+                run_id=None,
+                bootstrap_config=False,
+            )
+        except ConfigError as exc:
+            logger.warning(
+                "tools.gen_dummy_kb.config_update_skipped",
+                extra={"slug": slug, "reason": "config_missing"},
+            )
+            ctx_for_config = None
+        if ctx_for_config is not None and not all(
+            hasattr(ctx_for_config, attr) for attr in ("slug", "config_path", "repo_root_dir")
+        ):
+            logger.warning(
+                "tools.gen_dummy_kb.config_update_skipped",
+                extra={"slug": slug, "reason": "context_missing_attrs"},
+            )
+        elif ctx_for_config is not None:
+            update_config_with_drive_ids(
+                ctx_for_config,
+                updates={"meta": {"client_name": client_name}},
+                logger=logger,
+            )
+    except Exception as exc:
+        msg = f"config aggiornata (client_name) fallita: {exc}"
+        raise HardCheckError(
+            msg,
+            build_hardcheck_health(
+                "dummy_config_update_failed",
                 msg,
                 mode=policy.mode,
             ),

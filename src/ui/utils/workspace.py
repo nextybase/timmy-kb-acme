@@ -217,6 +217,8 @@ def normalized_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool
         layout = get_ui_workspace_layout(slug_value, require_drive_env=False)
     except Exception as exc:
         if strict:
+            if isinstance(exc, ConfigError):
+                return True, None
             if slug_value == "dummy":
                 return False, None
             raise
@@ -257,6 +259,8 @@ def tagging_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, O
         layout = get_ui_workspace_layout(slug or "", require_drive_env=False)
     except Exception as exc:
         if strict:
+            if isinstance(exc, ConfigError):
+                return False, None
             raise
         _log_workspace_failure(
             "ui.workspace.tagging_ready_failed",

@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Optional
 
 from pipeline.env_utils import get_env_var
+from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
+from pipeline.settings import Settings
+from ui.utils.repo_root import get_repo_root
 
 
 @dataclass
@@ -66,3 +70,22 @@ def get_tags_env_config() -> TagsEnvConfig:
     raw = get_env_var("TAGS_MODE", default="") or ""
     normalized = raw.strip().lower()
     return TagsEnvConfig(raw_value=raw, normalized=normalized)
+
+
+def resolve_ui_allow_local_only() -> bool:
+    """Legge ui.allow_local_only dalla configurazione runtime (repo root)."""
+    logger = get_structured_logger("ui.config")
+    try:
+        settings_obj = Settings.load(get_repo_root())
+    except Exception as exc:
+        logger.error("ui.config.load_failed", extra={"error": str(exc)})
+        raise ConfigError(
+            "Impossibile caricare la configurazione: modalita runtime non determinabile.",
+        ) from exc
+    try:
+        return bool(settings_obj.ui_allow_local_only)
+    except Exception as exc:
+        logger.error("ui.config.allow_local_only_failed", extra={"error": str(exc)})
+        raise ConfigError(
+            "Impossibile leggere ui_allow_local_only dalla configurazione.",
+        ) from exc
