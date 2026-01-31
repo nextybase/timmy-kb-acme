@@ -26,6 +26,9 @@ non sono "override": sono prerequisiti di esecuzione e non rientrano in questo e
 
 - `REPO_ROOT_DIR` -> override della root repo. Deve contenere `.git` o `pyproject.toml`.
 - `WORKSPACE_ROOT_DIR` -> override della root workspace; puo includere `<slug>`.
+  - In strict mode (`TIMMY_BETA_STRICT=1`) è obbligatorio che il valore risolva direttamente a
+    `.../output/timmy-kb-<slug>`: impostare solo `.../output` senza lo slug porta
+    a `ConfigError(code=workspace.root.invalid)` e blocca l'esecuzione.
 
 Precedenza: `REPO_ROOT_DIR` ha precedenza su `WORKSPACE_ROOT_DIR` quando valido.
 

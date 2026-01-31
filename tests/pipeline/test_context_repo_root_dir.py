@@ -59,3 +59,28 @@ def test_compute_repo_root_dir_rejects_workspace_with_sentinel(tmp_path: Path) -
     logger = logging.getLogger("test.workspace_root_env")
     with pytest.raises(ConfigError):
         ClientContext._compute_repo_root_dir("acme", env_vars, logger)
+
+
+def test_compute_repo_root_dir_strict_rejects_output_parent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    env_vars = {
+        REPO_ROOT_ENV: None,
+        WORKSPACE_ROOT_ENV: str(tmp_path / "output"),
+    }
+    logger = logging.getLogger("test.workspace_root_env")
+    with pytest.raises(ConfigError) as excinfo:
+        ClientContext._compute_repo_root_dir("acme", env_vars, logger)
+    assert excinfo.value.code == "workspace.root.invalid"
+
+
+def test_compute_repo_root_dir_strict_accepts_canonical_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    env_vars = {
+        REPO_ROOT_ENV: None,
+        WORKSPACE_ROOT_ENV: str(tmp_path / "output" / "timmy-kb-<slug>"),
+    }
+    logger = logging.getLogger("test.workspace_root_env")
+    root = ClientContext._compute_repo_root_dir("acme", env_vars, logger)
+    assert root == tmp_path / "output" / "timmy-kb-acme"

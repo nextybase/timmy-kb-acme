@@ -540,7 +540,8 @@ e' descritta nella guida operativa dedicata:
 [Strict vs Dummy - Guida Operativa](../strict_vs_dummy_beta.md).
 
 Nota operativa (strict dummy): quando `TIMMY_BETA_STRICT=1` devi impostare
-`WORKSPACE_ROOT_DIR` sul workspace target prima di eseguire `tools/gen_dummy_kb.py`
-(es. `output/timmy-kb-<slug>`). La dummy non auto-imposta l'environment per restare
-allineata al comportamento cliente reale.
+`WORKSPACE_ROOT_DIR` sul workspace canonico target prima di eseguire `tools/gen_dummy_kb.py`
+(es. `output/timmy-kb-<slug>`). Non puntare al parent `output` senza slug, perché strict richiede
+di risolvere direttamente alla directory `timmy-kb-<slug>` e fallirà con `workspace.root.invalid`.
+La dummy non auto-imposta l'environment per restare allineata al comportamento cliente reale.
 Se vuoi evitare Drive in Dummy, usa **Solo locale** (UI) o `--no-drive` (CLI).

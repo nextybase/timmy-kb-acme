@@ -57,7 +57,8 @@ In strict mode gli stub sono vietati dal contratto runtime e qualsiasi tentativo
 portare a BLOCK. Non deve esistere (ne' essere introdotta) alcuna via laterale "comoda" nel runtime.
 
 Nota operativa: in strict (`TIMMY_BETA_STRICT=1`) la dummy richiede `WORKSPACE_ROOT_DIR` impostato
-sul workspace (es. `output/timmy-kb-<slug>`). Il tool non lo imposta automaticamente.
+sul workspace canonico (es. `output/timmy-kb-<slug>`). Non indicare il parent `output` senza lo slug,
+è obbligatorio passare la directory finale `timmy-kb-<slug>` o il processo fallirà con `workspace.root.invalid`.
 
 👉 Dettagli operativi e implicazioni di audit:
 **[Strict vs Dummy - Guida Operativa](docs/strict_vs_dummy_beta.md)**.

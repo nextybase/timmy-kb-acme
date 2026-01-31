@@ -348,19 +348,30 @@ class ClientContext:
                 if "<slug>" in raw:
                     raw = raw.replace("<slug>", slug)
                 root = Path(raw).expanduser().resolve()
-                expected = f"timmy-kb-{slug}"
-                if root.name == "output":
-                    root = root / expected
-                elif root.name.startswith("timmy-kb-") and root.name != expected:
-                    root = root.parent / expected
-                _reject_workspace_sentinels(root)
-                logger.info(
-                    "context.workspace_root_dir_env",
-                    extra={"slug": slug, "repo_root_dir": str(root)},
-                )
-                return root
             except Exception as e:
                 raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {workspace_env}", slug=slug) from e
+            expected = f"timmy-kb-{slug}"
+            canonical = root
+            if is_beta_strict():
+                if canonical.name != expected:
+                    raise ConfigError(
+                        f"{WORKSPACE_ROOT_ENV} in strict deve puntare direttamente al workspace canonico "
+                        f"'.../timmy-kb-{slug}' (trovato: {canonical})",
+                        code="workspace.root.invalid",
+                        component="pipeline.context",
+                        slug=slug,
+                    )
+            else:
+                if canonical.name == "output":
+                    canonical = canonical / expected
+                elif canonical.name.startswith("timmy-kb-") and canonical.name != expected:
+                    canonical = canonical.parent / expected
+            _reject_workspace_sentinels(canonical)
+            logger.info(
+                "context.workspace_root_dir_env",
+                extra={"slug": slug, "repo_root_dir": str(canonical)},
+            )
+            return canonical
 
         raise ConfigError(
             f"{WORKSPACE_ROOT_ENV}/{REPO_ROOT_ENV} mancanti: specifica un workspace root canonico.",
