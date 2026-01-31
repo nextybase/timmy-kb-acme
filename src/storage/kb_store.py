@@ -35,7 +35,6 @@ class KbStore:
     db_path_override: Optional[Path] = None
 
     @classmethod
-    @classmethod
     def for_slug(cls, slug: str, *, repo_root_dir: Optional[Path] = None, db_path: Optional[Path] = None) -> "KbStore":
         """
         Costruisce uno store per uno slug/workspace specifico.

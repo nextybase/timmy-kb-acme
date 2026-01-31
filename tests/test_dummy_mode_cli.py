@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import sqlite3
 import subprocess
 import sys
@@ -27,6 +26,12 @@ def _run_cli(args: list[str], env: dict[str, str]) -> subprocess.CompletedProces
 
 def test_cli_rejects_removed_shims() -> None:
     env = os.environ.copy()
+    env["PYTHONPATH"] = ";".join(
+        [
+            str(_repo_root() / "src"),
+            str(_repo_root() / "Lib" / "site-packages"),
+        ]
+    )
     # argparse deve fallire prima di qualunque logica runtime
     res = _run_cli(["--no-strict"], env)
     assert res.returncode == 2
@@ -41,9 +46,10 @@ def test_dummy_capability_forbidden_is_blocked_and_recorded(tmp_path: Path, monk
     # Setup workspace dummy (non richiede env Drive)
     slug = f"t-{uuid.uuid4().hex[:8]}"
 
-    # Iniettiamo REPO_ROOT_DIR per far calcolare a ClientContext
-    # workspace = <repo_root>/output/timmy-kb-<slug>
-    monkeypatch.setenv("REPO_ROOT_DIR", str(_repo_root()))
+    # Evitiamo side effect su output/ del repo: i test lavorano in test-temp/
+    test_temp = _repo_root() / "test-temp"
+    test_temp.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TIMMY_KB_DUMMY_OUTPUT_ROOT", str(test_temp.resolve()))
 
     # Strict disattivo: qui vogliamo verificare il CAPABILITY GATE.
     monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
@@ -63,11 +69,6 @@ def test_dummy_capability_forbidden_is_blocked_and_recorded(tmp_path: Path, monk
 
     monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(layout.repo_root_dir))
 
-    repo_workspace = _repo_root() / "output" / f"timmy-kb-{slug}"
-    if repo_workspace.exists():
-        shutil.rmtree(repo_workspace)
-    shutil.copytree(layout.repo_root_dir, repo_workspace)
-
     # Il gate capability si verifica nel core: la CLI richiede strict-only e blocca prima.
     from timmy_kb.cli.tag_onboarding import tag_onboarding_main
 
@@ -83,11 +84,6 @@ def test_dummy_capability_forbidden_is_blocked_and_recorded(tmp_path: Path, monk
 
     # Verifica ledger: deve contenere stop_code CAPABILITY_DUMMY_FORBIDDEN
     ledger_path = layout.config_path.parent / "ledger.db"
-    repo_workspace = _repo_root() / "output" / f"timmy-kb-{slug}"
-    repo_ledger = repo_workspace / "config" / "ledger.db"
-    if not ledger_path.exists() and repo_ledger.exists():
-        ledger_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(repo_ledger, ledger_path)
     assert ledger_path.exists()
 
     with sqlite3.connect(ledger_path) as conn:

@@ -17,20 +17,29 @@ TEST_TEMP_DIR = Path("test-temp")
 CLIENTS_TEMP_DIR = TEST_TEMP_DIR / "clients_db"
 CLIENTS_DB_TEST_DIR = CLIENTS_TEMP_DIR / ".pytest_clients_db"
 OUTPUT_TEMP_DIR = TEST_TEMP_DIR / "output"
+PYTEST_TEMP_DIR = TEST_TEMP_DIR / "pytest"
+
+
+def _safe_remove(path: Path) -> None:
+    try:
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    except (OSError, PermissionError):
+        return
 
 
 def _prepare_test_temp() -> None:
     if TEST_TEMP_DIR.exists():
         for child in TEST_TEMP_DIR.iterdir():
-            if child.is_dir():
-                shutil.rmtree(child)
-            else:
-                child.unlink()
+            _safe_remove(child)
     else:
         TEST_TEMP_DIR.mkdir(parents=True, exist_ok=True)
     CLIENTS_TEMP_DIR.mkdir(parents=True, exist_ok=True)
     CLIENTS_DB_TEST_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    PYTEST_TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _build_pytest_command(binary: str, extra_args: list[str]) -> list[str]:
@@ -78,10 +87,13 @@ def main() -> int:
 
     _prepare_test_temp()
     subprocess_env = os.environ.copy()
+    if "PYTHONPATH" in os.environ and os.environ["PYTHONPATH"]:
+        subprocess_env["PYTHONPATH"] = os.environ["PYTHONPATH"]
     subprocess_env["CLIENTS_DB_DIR"] = str(CLIENTS_DB_TEST_DIR.resolve())
     subprocess_env["CLIENTS_DB_FILE"] = "clients.yaml"
     subprocess_env["WORKSPACE_ROOT_DIR"] = str(OUTPUT_TEMP_DIR.resolve())
     subprocess_env["TIMMY_KB_DUMMY_OUTPUT_ROOT"] = str(TEST_TEMP_DIR.resolve())
+    subprocess_env.setdefault("PYTEST_TMPDIR", str(PYTEST_TEMP_DIR.resolve()))
 
     cmd = _build_pytest_command(args.binary, extra_args)
     if args.binary in {"fast", "full"}:

@@ -5,7 +5,9 @@ from __future__ import annotations
 import importlib
 import sys
 
+import pipeline.raw_transform_service as _raw_transform_sale
 import tools.gen_dummy_kb as gen_dummy_mod
+from pipeline.raw_transform_service import STATUS_OK
 from tools.gen_dummy_kb import main as gen_dummy_main
 from ui.utils.workspace import clear_base_cache
 
@@ -33,6 +35,40 @@ def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) 
     (base_dir / "book" / "README.md").write_text("# Dummy\n", encoding="utf-8")
     (base_dir / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     (base_dir / "raw" / "sample.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+    normalized_dir = base_dir / "normalized"
+    normalized_dir.mkdir(parents=True, exist_ok=True)
+    (normalized_dir / "sample.md").write_text("# normalized\n", encoding="utf-8")
+    (normalized_dir / "INDEX.json").write_text(
+        '[{"status":"OK","normalized_path":"sample.md","source_path":"raw/sample.pdf","transformer_name":"stub","transformer_version":"0.0","ruleset_hash":"stub","input_hash":"","output_hash":""}]',
+        encoding="utf-8",
+    )
+
+    class _StubTransformService:
+        transformer_name = "stub-transform"
+        transformer_version = "0.0.1"
+        ruleset_hash = "stub-ruleset"
+
+        def transform(self, *, input_path, output_path):
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text("# normalized stub\n", encoding="utf-8")
+            return _raw_transform_sale.RawTransformResult(
+                status=STATUS_OK,
+                output_path=output_path,
+                transformer_name=self.transformer_name,
+                transformer_version=self.transformer_version,
+                ruleset_hash=self.ruleset_hash,
+                error=None,
+            )
+
+    monkeypatch.setattr(
+        _raw_transform_sale,
+        "get_default_raw_transform_service",
+        lambda: _StubTransformService(),
+    )
+    monkeypatch.setattr(
+        "timmy_kb.cli.raw_ingest.get_default_raw_transform_service",
+        lambda: _StubTransformService(),
+    )
     if run_vision_return is None:
         monkeypatch.setattr(gen_dummy_mod, "run_vision", lambda *a, **k: None)
     else:

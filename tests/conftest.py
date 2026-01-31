@@ -20,6 +20,7 @@ TEST_TEMP_DIR = REPO_ROOT / "test-temp"
 CLIENTS_TEMP_DIR = TEST_TEMP_DIR / "clients_db"
 CLIENTS_DB_TEST_DIR = CLIENTS_TEMP_DIR / ".pytest_clients_db"
 OUTPUT_TEMP_DIR = TEST_TEMP_DIR / "output"
+PYTEST_TEMP_DIR = TEST_TEMP_DIR / "pytest"
 OBSERVABILITY_COMPOSE = REPO_ROOT / "observability" / "docker-compose.yaml"
 DOCKER_BIN = shutil.which("docker")
 SRC_ROOT = REPO_ROOT / "src"
@@ -188,6 +189,8 @@ def _prepare_test_temp_dir() -> None:
     CLIENTS_TEMP_DIR.mkdir(parents=True, exist_ok=True)
     CLIENTS_DB_TEST_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    PYTEST_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("PYTEST_TMPDIR", str(PYTEST_TEMP_DIR))
     yield
 
 
@@ -609,6 +612,8 @@ def _stable_env(monkeypatch, sandbox_workspace):
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
     # Evita che REPO_ROOT_DIR da .env alteri i test che richiedono la repo root.
     monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
+    # Beta strict is enforced only when explicitly requested by the test.
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
 
     # Evita side-effect su output/ del repo: se qualche codice usa default,
     # meglio che punti alla base temporanea del dummy.
