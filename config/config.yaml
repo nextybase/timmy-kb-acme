@@ -1,7 +1,7 @@
 meta:
   N_VER: 0
   DATA_VER: ''
-  client_name: prova srl
+  client_name: ''
   vision_statement_pdf: config/VisionStatement.pdf
 ui:
   skip_preflight: true

@@ -167,6 +167,16 @@ def _migrate_legacy_keys(payload: dict[str, Any]) -> tuple[dict[str, Any], list[
 
     migrated_keys.extend(removed_vision_keys)
 
+    legacy_client_name = _coerce_nonempty_str(data.get("client_name"))
+    meta_section = data.get("meta")
+    if not isinstance(meta_section, Mapping):
+        meta_section = {}
+    if legacy_client_name and not _coerce_nonempty_str(meta_section.get("client_name")):
+        meta_section = dict(meta_section)
+        meta_section["client_name"] = legacy_client_name
+        data["meta"] = meta_section
+        migrated_keys.append("client_name")
+
     return data, migrated_keys, moved_vision
 
 

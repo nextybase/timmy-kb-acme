@@ -738,10 +738,14 @@ def convert_files_to_structured_markdown(
 
     logger = get_structured_logger("pipeline.content_utils", context={"slug": getattr(ctx, "slug", None)})
 
+    validated_safe_pdfs = None
+    if safe_pdfs is not None:
+        validated_safe_pdfs = [_ensure_safe(raw_root, pdf, slug=getattr(ctx, "slug", None)) for pdf in safe_pdfs]
+
     root_pdfs, cat_items = _plan_pdf_groups(
         perimeter_root=base,
         raw_root=raw_root,
-        safe_pdfs=safe_pdfs,
+        safe_pdfs=validated_safe_pdfs,
         slug=getattr(ctx, "slug", None),
         logger=logger,
     )

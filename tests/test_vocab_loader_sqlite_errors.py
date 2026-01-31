@@ -30,8 +30,8 @@ def test_load_reviewed_vocab_unreadable_json(tmp_path: Path) -> None:
     reviewed_path = base / "semantic" / "reviewed_vocab.json"
     reviewed_path.write_text("{", encoding="utf-8")  # invalid JSON
 
-    with pytest.raises(ConfigError, match="reviewed vocab unreadable") as ei:
+    with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
         _ = vl.load_reviewed_vocab(base, _NoopLogger())
 
     err = ei.value
-    assert getattr(err, "file_path", None) == str(reviewed_path)
+    assert getattr(err, "file_path", None) == str(base / "semantic" / "tags.db")

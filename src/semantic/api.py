@@ -21,7 +21,6 @@ from semantic.tags_io import write_tags_reviewed_from_nlp_db as _write_tags_yaml
 from semantic.types import EmbeddingsClient as _EmbeddingsClient
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
 from storage.kb_store import KbStore
-from storage.tags_store import derive_db_path_from_yaml_path as _derive_tags_db_path
 
 _T = TypeVar("_T")
 
@@ -108,7 +107,8 @@ def _require_reviewed_vocab(
     vocab = load_reviewed_vocab(repo_root_dir, logger)
     if vocab:
         return vocab
-    tags_db = Path(_derive_tags_db_path(repo_root_dir / "semantic" / "tags_reviewed.yaml"))
+    layout = WorkspaceLayout.from_workspace(repo_root_dir)
+    tags_db = layout.semantic_dir / "tags.db"
     raise ConfigError(
         "Vocabolario canonico assente. Esegui l'estrazione tag per popolare semantic/tags.db.",
         slug=slug,
@@ -168,11 +168,7 @@ def export_tags_yaml_from_db(
             "semantic_dir non coerente con il workspace canonico.",
             file_path=str(semantic_dir_path),
         )
-    yaml_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "tags_reviewed.yaml")
-    expected_db_path = ensure_within_and_resolve(
-        semantic_dir_path,
-        Path(_derive_tags_db_path(yaml_path)),
-    )
+    expected_db_path = ensure_within_and_resolve(semantic_dir_path, semantic_dir_path / "tags.db")
     actual_db_path = ensure_within_and_resolve(perimeter_root, Path(db_path))
     if actual_db_path != expected_db_path:
         raise ConfigError(

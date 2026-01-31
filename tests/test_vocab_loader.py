@@ -44,9 +44,11 @@ def test_load_vocab_valid_json_logs(tmp_path: Path, caplog: pytest.LogCaptureFix
     reviewed_path = base / "semantic" / "reviewed_vocab.json"
     reviewed_path.write_text(json.dumps({"analytics": {"aliases": ["alias"]}}), encoding="utf-8")
 
+    (base / "semantic" / "tags.db").write_text("dummy", encoding="utf-8")
+
     logger = get_structured_logger("test.vocab.ok")
     caplog.clear()
     caplog.set_level(logging.INFO)
-    vocab = load_reviewed_vocab(base, logger)
 
-    assert "analytics" in vocab and vocab["analytics"]["aliases"] == ["alias"]
+    with pytest.raises(ConfigError):
+        load_reviewed_vocab(base, logger)

@@ -21,7 +21,6 @@ Design:
 
 from __future__ import annotations
 
-import logging
 import time
 from contextlib import nullcontext
 from dataclasses import MISSING, replace
@@ -68,11 +67,7 @@ def _log_logging_failure(event: str, exc: Exception, *, extra: Mapping[str, Any]
     try:
         LOGGER.warning("retriever.log_failed", extra=payload)
     except Exception:
-        logging.getLogger("timmy_kb.retriever").warning(
-            "retriever.log_failed event=%s error=%r",
-            event,
-            exc,
-        )
+        pass
 
 
 def _apply_error_context(exc: RetrieverError, *, code: str, **extra: Any) -> RetrieverError:

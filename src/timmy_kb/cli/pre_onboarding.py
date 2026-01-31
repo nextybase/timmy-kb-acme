@@ -243,7 +243,12 @@ def _create_local_structure(context: ClientContext, logger: logging.Logger, *, c
     except ConfigError:
         cfg = {}
     if client_name:
-        cfg["client_name"] = client_name
+        meta_section = cfg.get("meta")
+        if not isinstance(meta_section, dict):
+            meta_section = {}
+            cfg["meta"] = meta_section
+        if not meta_section.get("client_name"):
+            meta_section["client_name"] = client_name
 
     write_client_config_file(context, cfg)
 
@@ -337,7 +342,7 @@ def ensure_local_workspace_for_ui(
         # Aggiorna config con percorso PDF e nome cliente
         updates: Dict[str, Any] = {"ai": {"vision": {"vision_statement_pdf": "config/VisionStatement.pdf"}}}
         if resolved_name:
-            updates["client_name"] = resolved_name
+            updates["meta"] = {"client_name": resolved_name}
         update_config_with_drive_ids(context, updates, logger=logger)
 
     # --- NOVITÀ: merge dal template di repository ---
@@ -485,8 +490,9 @@ def _drive_phase(
                 "config_folder_id": client_folder_id,
             }
         },
-        "client_name": client_name,
     }
+    if client_name:
+        updates["meta"] = {"client_name": client_name}
     update_config_with_drive_ids(context, updates=updates, logger=logger)
     logger.info(
         "cli.pre_onboarding.config_updated_with_drive_ids",

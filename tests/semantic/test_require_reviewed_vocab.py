@@ -10,6 +10,18 @@ from pipeline.exceptions import ConfigError
 from semantic import api
 
 
+def _ensure_minimal_workspace(workspace: Path) -> None:
+    """Costruisce la struttura workspace richiesta da WorkspaceLayout strict."""
+    config_dir = workspace / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+    for child in ("raw", "normalized", "semantic", "book", "logs"):
+        (workspace / child).mkdir(parents=True, exist_ok=True)
+    book_dir = workspace / "book"
+    (book_dir / "README.md").write_text("# Dummy\n", encoding="utf-8")
+    (book_dir / "SUMMARY.md").write_text("* [Dummy](README.md)\n", encoding="utf-8")
+
+
 def _make_loader(
     result: dict[str, dict[str, list[str]]],
     *,
@@ -24,7 +36,7 @@ def _make_loader(
 
 def test_require_reviewed_vocab_returns_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     base_dir = tmp_path / "dummy"
-    (base_dir / "semantic").mkdir(parents=True)
+    _ensure_minimal_workspace(base_dir)
     logger = logging.getLogger("test.semantic.require")
     expected = {"areas": {"area": ["term"]}}
     monkeypatch.setattr(api, "_load_reviewed_vocab", _make_loader(expected))
@@ -36,7 +48,7 @@ def test_require_reviewed_vocab_returns_data(monkeypatch: pytest.MonkeyPatch, tm
 
 def test_require_reviewed_vocab_detects_stub(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     base_dir = tmp_path / "dummy"
-    (base_dir / "semantic").mkdir(parents=True)
+    _ensure_minimal_workspace(base_dir)
     logger = logging.getLogger("test.semantic.require.stub")
     monkeypatch.setattr(api, "_load_reviewed_vocab", _make_loader({}, module_name="tests.stub"))
 
@@ -50,7 +62,7 @@ def test_require_reviewed_vocab_detects_stub(monkeypatch: pytest.MonkeyPatch, tm
 
 def test_require_reviewed_vocab_requires_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     base_dir = tmp_path / "dummy"
-    (base_dir / "semantic").mkdir(parents=True)
+    _ensure_minimal_workspace(base_dir)
     logger = logging.getLogger("test.semantic.require.empty")
     monkeypatch.setattr(api, "_load_reviewed_vocab", _make_loader({}))
 

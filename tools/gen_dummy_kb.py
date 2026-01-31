@@ -319,11 +319,19 @@ def _brute_reset_dummy(*, logger: logging.Logger) -> Path:
     return target
 
 
-def _clean_local_workspace_before_generation(*, slug: str, logger: logging.Logger) -> None:
+def _clean_local_workspace_before_generation(
+    *,
+    slug: str,
+    logger: logging.Logger,
+    workspace_override: Optional[Path] = None,
+) -> None:
     """Assicura workspace locale pulito prima della generazione. Per Dummy: sempre."""
     if slug != "dummy":
         return
-    target = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "output" / f"timmy-kb-{slug}")
+    if workspace_override is not None:
+        target = ensure_within_and_resolve(workspace_override.parent, workspace_override)
+    else:
+        target = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "output" / f"timmy-kb-{slug}")
     if target.exists():
         shutil.rmtree(target)
         logger.info("tools.gen_dummy_kb.local_clean.deleted", extra={"slug": slug, "path": str(target)})
@@ -731,7 +739,11 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         try:
             workspace_root = workspace_override or _client_base(slug)
-            _clean_local_workspace_before_generation(slug=slug, logger=logger)
+            _clean_local_workspace_before_generation(
+                slug=slug,
+                logger=logger,
+                workspace_override=workspace_override,
+            )
             for child in ("raw", "semantic", "book", "logs", "config"):
                 (workspace_root / child).mkdir(parents=True, exist_ok=True)
             payload = build_payload(

@@ -397,11 +397,12 @@ def build_dummy_payload(
         safe_write_text(normalized_index, "{}", encoding="utf-8", atomic=True)
     template_config = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
     config_path = workspace_root / "config" / "config.yaml"
-    if template_config.exists():
-        text = read_text_safe(template_config.parent, template_config, encoding="utf-8")
-        safe_write_text(config_path, text, encoding="utf-8", atomic=True)
-    elif not config_path.exists():
-        safe_write_text(config_path, "version: 1\n", encoding="utf-8", atomic=True)
+    if not config_path.exists():
+        if template_config.exists():
+            text = read_text_safe(template_config.parent, template_config, encoding="utf-8")
+            safe_write_text(config_path, text, encoding="utf-8", atomic=True)
+        else:
+            safe_write_text(config_path, "version: 1\n", encoding="utf-8", atomic=True)
     book_dir = workspace_root / "book"
     readme_path = book_dir / "README.md"
     if not readme_path.exists():
@@ -409,6 +410,8 @@ def build_dummy_payload(
     summary_path = book_dir / "SUMMARY.md"
     if not summary_path.exists():
         safe_write_text(summary_path, "* [Dummy](README.md)\n", encoding="utf-8", atomic=True)
+
+    _merge_config_with_template(workspace_root, logger=logger)
 
     try:
         pre_onboarding_main(
@@ -432,7 +435,6 @@ def build_dummy_payload(
     register_client_fn(slug, client_name, policy=policy)
 
     base_dir = workspace_root
-    _merge_config_with_template(base_dir, logger=logger)
     semantic_dir = base_dir / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
     mapping_path = semantic_dir / "semantic_mapping.yaml"

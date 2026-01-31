@@ -204,7 +204,9 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
         from pipeline.config_utils import get_client_config
 
         cfg = get_client_config(ctx) or {}
-        client_name = str(cfg.get("client_name") or slug)
+        meta_section = cfg.get("meta")
+        meta_client_name = meta_section.get("client_name") if isinstance(meta_section, dict) else None
+        client_name = str(meta_client_name or slug)
     except Exception:  # pragma: no cover
         client_name = fallback_name or slug
 

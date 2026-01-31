@@ -611,7 +611,7 @@ if current_phase == UI_PHASE_INIT:
                     updates = {"ai": {"vision": {"vision_statement_pdf": "config/VisionStatement.pdf"}}}
                     client_name_value = (name or s).strip()
                     if client_name_value:
-                        updates["client_name"] = client_name_value
+                        updates["meta"] = {"client_name": client_name_value}
                     update_config_with_drive_ids(ctx, updates, logger=LOGGER)
                     # Reload immediato dopo scrittura config (pre-Vision) per evitare Context stale.
                     invalidate_client_context(s)

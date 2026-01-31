@@ -345,18 +345,21 @@ def load_reviewed_vocab(
     repo_root_dir: Path,
     logger: logging.Logger,
 ) -> Dict[str, Dict[str, list[str]]]:
-    """Get reviewed vocab, preferring review JSON and falling back to tags.db."""
+    """Get reviewed vocab, preferring tags.db and falling back to review JSON."""
     repo_root_dir = Path(repo_root_dir)
     perimeter_root = repo_root_dir
     sem_dir = ppath.ensure_within_and_resolve(perimeter_root, _semantic_dir(repo_root_dir))
     reviewed_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "reviewed_vocab.json")
     slug = _derive_slug(repo_root_dir)
 
-    if reviewed_path.exists():
-        return _load_reviewed_vocab_json(reviewed_path, logger, slug)
-
     db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
     if not db_path.exists():
+        if reviewed_path.exists():
+            logger.warning(
+                "semantic.vocab.fallback_review_json",
+                extra={"slug": slug, "file_path": str(reviewed_path)},
+            )
+            return _load_reviewed_vocab_json(reviewed_path, logger, slug)
         _log_vocab_event(
             logger,
             "semantic.vocab.db_missing",

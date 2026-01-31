@@ -28,12 +28,10 @@ def _load_workspace_config(workspace: Path) -> Dict[str, Any]:
 
 
 def _make_ctx(workspace: Path, cfg: Dict[str, Any]) -> Any:
-    client_name = (
-        cfg.get("client_name")
-        or cfg.get("meta", {}).get("client_name")
-        or cfg.get("meta", {}).get("client")
-        or workspace.name
-    )
+    meta_section = cfg.get("meta")
+    meta_client_name = meta_section.get("client_name") if isinstance(meta_section, dict) else None
+    meta_client_legacy = meta_section.get("client") if isinstance(meta_section, dict) else None
+    client_name = meta_client_name or meta_client_legacy or workspace.name
     return SimpleNamespace(base_dir=workspace, client_name=str(client_name), settings=cfg.get("ai", {}))
 
 
