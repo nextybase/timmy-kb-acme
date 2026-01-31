@@ -36,7 +36,7 @@ def _maybe_load_dotenv() -> None:
     env_path = Path(".env")
     _env_utils._ENV_LOADED = False
     try:
-        loaded = ensure_dotenv_loaded(strict=True, allow_fallback=False)
+        loaded = ensure_dotenv_loaded(strict=True)
     except Exception as exc:
         _logger().error(
             "ui.preflight.dotenv_error",

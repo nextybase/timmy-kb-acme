@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-"""SSoT for workspace bootstrap/migration APIs.
+"""SSoT for workspace bootstrap APIs.
 
-This module exposes the only authorized entry points that may create or repair
-workspace layouts (default locale: `output/timmy-kb-<slug>/...`) for NEW_CLIENT,
-DUMMY_BOOTSTRAP, and MIGRATION/Maintenance. Runtime modules must keep using
-`WorkspaceLayout` in fail-fast mode and never call these functions directly.
+This module exposes the only authorized entry points that may create workspace
+layouts (default locale: `output/timmy-kb-<slug>/...`) for NEW_CLIENT and
+DUMMY_BOOTSTRAP. Runtime modules must keep using `WorkspaceLayout` in fail-fast
+mode and never call these functions directly.
 """
 
 import os
@@ -23,7 +23,6 @@ from pipeline.workspace_layout import WorkspaceLayout
 __all__ = [
     "bootstrap_client_workspace",
     "bootstrap_dummy_workspace",
-    "migrate_or_repair_workspace",
 ]
 
 
@@ -135,42 +134,3 @@ def bootstrap_dummy_workspace(slug: str) -> WorkspaceLayout:
     _write_minimal_file(book_dir / "SUMMARY.md", "# Summary")
 
     return WorkspaceLayout.from_workspace(workspace_dir, slug=slug)
-
-
-def migrate_or_repair_workspace(context: ClientContext) -> WorkspaceLayout:
-    """SSoT entry for MIGRATION / MAINTENANCE workflows.
-
-    This helper expects an existing workspace and can repair missing minimal assets
-    (`config/config.yaml`, README/SUMMARY, raw/semantic/logs directories) before
-    delegating validation to `WorkspaceLayout`. It never creates a brand-new workspace
-    from scratch; missing roots raise `WorkspaceNotFound`.
-    """
-
-    validate_slug(context.slug)
-    workspace_root = _workspace_root_from_context(context)
-    if not workspace_root.exists():
-        raise WorkspaceNotFound("Workspace root missing", slug=context.slug, file_path=workspace_root)
-
-    context.repo_root_dir = workspace_root
-
-    dirs = {
-        "raw": workspace_root / "raw",
-        "normalized": workspace_root / "normalized",
-        "semantic": workspace_root / "semantic",
-        "book": workspace_root / "book",
-        "logs": workspace_root / LOGS_DIR_NAME,
-        "config": workspace_root / "config",
-    }
-    for _, path in dirs.items():
-        safe_path = _assert_within(workspace_root, path)
-        safe_path.mkdir(parents=True, exist_ok=True)
-
-    config_path = _assert_within(workspace_root, dirs["config"] / "config.yaml")
-    if not config_path.exists():
-        _write_minimal_file(config_path, _template_config_content())
-
-    book_dir = dirs["book"]
-    _write_minimal_file(_assert_within(workspace_root, book_dir / "README.md"), "# Client book\n")
-    _write_minimal_file(_assert_within(workspace_root, book_dir / "SUMMARY.md"), "# Summary\n")
-
-    return WorkspaceLayout.from_context(context)

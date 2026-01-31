@@ -10,11 +10,11 @@ Streamlit UI guard (cross-platform, Python)
   4) Logging UI: avvisa se ci sono logger senza prefisso 'ui.'
 
 Uso:
-    python tools/dev/check_streamlit_ui.py [--ci]
+    vedi --help (prog derivato dal path del file)
         --ci    tratta i warning come errori (exit 1)
 
 Note: le deprecazioni Streamlit (experimental_ / cache / unsafe_allow_html / use_*_width)
-      sono già coperte da check_streamlit_deprecations.py e check_ui_beta0_compliance.py.
+      sono già coperte da check_streamlit_deprecations.py.
 """
 
 from __future__ import annotations
@@ -23,7 +23,9 @@ import argparse
 from pathlib import Path
 from typing import Iterable
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT_PATH = Path(__file__).resolve()
+CLI_PROG = f"python {SCRIPT_PATH.as_posix()}"
+REPO_ROOT = SCRIPT_PATH.parents[2]
 # Limitiamo il controllo alla UI per evitare falsi positivi sugli altri layer.
 SRC = REPO_ROOT / "src" / "ui"
 
@@ -142,7 +144,7 @@ def check_logger_prefix() -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog=CLI_PROG)
     parser.add_argument("--ci", action="store_true", help="tratta i warning come errori")
     args = parser.parse_args(argv)
 

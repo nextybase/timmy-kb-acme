@@ -32,7 +32,7 @@ _LOGGER = get_structured_logger("pipeline.env_utils")
 _ENV_LOADED = False
 
 
-def ensure_dotenv_loaded(*, strict: bool = True, allow_fallback: bool = False) -> bool:
+def ensure_dotenv_loaded(*, strict: bool = True) -> bool:
     """Carica il file .env una sola volta su richiesta esplicita.
 
     Ritorna True se il caricamento e stato eseguito in questa chiamata,
@@ -77,12 +77,6 @@ def ensure_dotenv_loaded(*, strict: bool = True, allow_fallback: bool = False) -
             _LOGGER.info("env.dotenv_missing", extra={"path": str(env_path)})
         return True
     except Exception as exc:
-        if allow_fallback:
-            _LOGGER.warning(
-                "env.load_failed_fallback",
-                extra={"error": str(exc), "path": str(env_path)},
-            )
-            return False
         raise ConfigError("Caricamento .env fallito.", file_path=str(env_path)) from exc
 
 
@@ -92,7 +86,6 @@ def get_env_var(
     *,
     required: bool | None = False,
     strict: bool = True,
-    allow_fallback: bool = False,
 ) -> Optional[str]:
     """Ritorna il valore di una variabile d'ambiente.
 
@@ -118,14 +111,13 @@ def get_bool(
     *,
     env: Mapping[str, str] | None = None,
     strict: bool | None = None,
-    allow_fallback: bool = False,
 ) -> bool:
     """Parsa un booleano da ENV (o mapping fornito) usando valori comuni truthy/falsy.
 
     Truthy: 1,true,yes,on (case-insensitive). Falsy: 0,false,no,off.
     Se non impostata, ritorna sempre ``default``.
     Se non riconosciuta, solleva `ConfigError` in strict (default su env reale) o
-    ritorna `default` solo se `allow_fallback=True` o `strict=False`.
+    ritorna `default` solo se `strict=False`.
     Passando ``env`` si evita il caricamento di .env ed e possibile usare mapping custom.
     """
     source: Mapping[str, str]
@@ -145,18 +137,16 @@ def get_bool(
         return True
     if s in {"0", "false", "no", "off"}:
         return False
-    if allow_fallback:
-        return bool(default)
     if strict:
         raise ConfigError(f"ENV invalid boolean: {name}")
     return bool(default)
 
 
-def get_int(name: str, default: int = 0, *, strict: bool = True, allow_fallback: bool = False) -> int:
+def get_int(name: str, default: int = 0, *, strict: bool = True) -> int:
     """Parsa un intero da ENV; ritorna `default` se mancante.
 
     Valore presente ma non valido: solleva `ConfigError` in strict (default),
-    oppure ritorna `default` se `allow_fallback=True` o `strict=False`.
+    oppure ritorna `default` se `strict=False`.
     """
     val = os.environ.get(name)
     if val is None:
@@ -164,8 +154,6 @@ def get_int(name: str, default: int = 0, *, strict: bool = True, allow_fallback:
     try:
         return int(str(val).strip())
     except Exception as exc:
-        if allow_fallback:
-            return int(default)
         if strict:
             raise ConfigError(f"ENV invalid int: {name}", file_path=str(val)) from exc
     return int(default)

@@ -198,7 +198,7 @@ def _write_markdown_for_normalized(
     existing_meta: dict[str, object] = {}
     if book_path.exists():
         try:
-            existing_meta, body_prev = read_frontmatter(book_root, book_path, use_cache=False, allow_fallback=False)
+            existing_meta, body_prev = read_frontmatter(book_root, book_path, use_cache=False)
         except Exception as exc:
             raise ConversionError(
                 "Frontmatter esistente non valido in book/: rigenera il file o correggi il frontmatter.",

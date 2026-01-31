@@ -84,16 +84,34 @@ pytest -q --durations=20 --durations-min=1.0
 - A fine task o change importante: `python tools/test_runner.py arch`
 - Prima del push: `python tools/test_runner.py full`
 
-## Pre-commit / pre-push
-Installazione hook:
-```bash
-pre-commit install --hook-type pre-commit --hook-type pre-push
-```
-Debug pre-push:
-```bash
-pre-commit run --hook-stage pre-push --all-files
-```
-Serve a riprodurre localmente FULL senza fare il push.
-Comportamento:
-- pre-commit: `python tools/test_runner.py fast`
-- pre-push: `python tools/test_runner.py full`
+## Pre-commit / pre-push hooks
+Gli hook Git coordinano formattazione, linting e test preliminari senza costringere a lanciare manualmente l'intera suite.
+
+- **Installazione**:
+  ```bash
+  pre-commit install --hook-type pre-commit --hook-type pre-push
+  ```
+  Una volta installati, `pre-commit` intercetta `git commit` e `git push`.
+
+- **Debug (quando fallisce il pre-push)**:
+  ```bash
+  pre-commit run --hook-stage pre-push --all-files
+  ```
+  Rea­lizza localmente lo stesso flusso che precede il push (formattazione + `full`).
+
+- **Hook chiave e scopi**:
+
+  | Hook | Stage | Descrizione |
+  |------|-------|-------------|
+  | `pytest-fast` | pre-commit | invoca `python tools/test_runner.py fast` → solo `unit` non `slow` |
+  | `black`, `ruff`, `isort`, `cspell`, `mypy`, `qa-safe`… | pre-commit / pre-push | garantiscono formattazione/linting/disciplina (vedi `.pre-commit-config.yaml`) |
+  | `pytest-full` | pre-push | invoca `python tools/test_runner.py full` per la suite completa |
+
+- **Comportamento e indirizzi**:
+  - `python tools/test_runner.py fast` viene eseguito prima di ogni commit grazie all'hook `pytest-fast`.
+  - `python tools/test_runner.py full` viene eseguito al pre-push (oltre agli hook sincronizzati con l'intero repo).
+  - Gli hook aggiuntivi (`streamlit-ui-guard`, `detect-secrets`, `forbid-path-write-text-bytes`, ecc.) si occupano di vigilance specifiche; un elenco completo è disponibile in `.pre-commit-config.yaml`.
+
+- **Suggerimenti operativi**:
+  - In caso di failure, eseguire `pre-commit run --all-files` per isolare il tool in errore.
+  - Quando si prepara un changelog “macro”, ripetere `pre-commit run --hook-stage pre-push --all-files` per essere sicuri di passare tutti i gate.

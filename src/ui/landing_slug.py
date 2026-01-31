@@ -124,8 +124,7 @@ def _resolve_layout(slug: str) -> WorkspaceLayout | None:
 def _layout_missing_message(slug: str) -> str:
     return (
         f"Workspace '{slug}' non trovato o layout invalido. Usa pipeline.workspace_bootstrap "
-        "(bootstrap_client_workspace/migrate_or_repair_workspace/ bootstrap_dummy_workspace) per creare o riparare "
-        "il workspace prima di aprire la UI."
+        "(bootstrap_client_workspace/bootstrap_dummy_workspace) per creare il workspace prima di aprire la UI."
     )
 
 
@@ -133,7 +132,7 @@ def _workspace_dir_for(slug: str, *, layout: WorkspaceLayout | None = None) -> P
     if layout is None:
         raise ConfigError(
             "Workspace layout non disponibile: assicurati di avere un layout valido o usa le API "
-            "di bootstrap in pipeline.workspace_bootstrap (bootstrap_client_workspace/migrate_or_repair_workspace).",
+            "di bootstrap in pipeline.workspace_bootstrap (bootstrap_client_workspace/bootstrap_dummy_workspace).",
             slug=slug,
         )
     return cast(Path, layout.repo_root_dir)

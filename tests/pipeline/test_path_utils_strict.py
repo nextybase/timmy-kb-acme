@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-import re
 import types
 from pathlib import Path
 
@@ -10,16 +9,10 @@ import pytest
 import pipeline.path_utils as path_utils
 
 
-def test_sanitize_filename_non_strict_empty_returns_hashed(monkeypatch: pytest.MonkeyPatch) -> None:
-    value = path_utils.sanitize_filename("", strict=False)
-    assert value != "file"
-    assert re.fullmatch(r"file-[0-9a-f]{12}", value)
-
-
-def test_sanitize_filename_non_strict_whitespace_returns_hashed(monkeypatch: pytest.MonkeyPatch) -> None:
-    value = path_utils.sanitize_filename("   ", strict=False)
-    assert value != "file"
-    assert re.fullmatch(r"file-[0-9a-f]{12}", value)
+@pytest.mark.parametrize("value", ["", "   "])
+def test_sanitize_filename_invalid_inputs(value: str) -> None:
+    with pytest.raises(path_utils.FilenameSanitizeError):
+        path_utils.sanitize_filename(value)
 
 
 def test_sanitize_filename_strict_raises_on_internal_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -28,30 +21,29 @@ def test_sanitize_filename_strict_raises_on_internal_error(monkeypatch: pytest.M
     )
     monkeypatch.setattr(path_utils, "unicodedata", dummy_unicode, raising=True)
     with pytest.raises(path_utils.FilenameSanitizeError):
-        path_utils.sanitize_filename("ok", strict=True)
+        path_utils.sanitize_filename("ok")
 
 
-def test_sorted_paths_strict_raises_on_base_resolve(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("trigger", "paths", "base"),
+    (
+        ("BAD_BASE", [Path("ok")], Path("BAD_BASE")),
+        ("BAD_ITEM", [Path("BAD_ITEM")], None),
+    ),
+)
+def test_sorted_paths_strict_raises_on_resolve(
+    monkeypatch: pytest.MonkeyPatch, trigger: str, paths: list[Path], base: Path | None
+) -> None:
     original_resolve = path_utils.Path.resolve
 
     def _resolve(self: Path, *args: object, **kwargs: object) -> Path:
-        if "BAD_BASE" in str(self):
+        if trigger in str(self):
             raise RuntimeError("boom")
         return original_resolve(self, *args, **kwargs)
 
     monkeypatch.setattr(path_utils.Path, "resolve", _resolve, raising=True)
     with pytest.raises(path_utils.PathSortError):
-        path_utils.sorted_paths([Path("ok")], base=Path("BAD_BASE"))
-
-
-def test_sorted_paths_strict_raises_on_item_resolve(monkeypatch: pytest.MonkeyPatch) -> None:
-    original_resolve = path_utils.Path.resolve
-
-    def _resolve(self: Path, *args: object, **kwargs: object) -> Path:
-        if "BAD_ITEM" in str(self):
-            raise RuntimeError("boom")
-        return original_resolve(self, *args, **kwargs)
-
-    monkeypatch.setattr(path_utils.Path, "resolve", _resolve, raising=True)
-    with pytest.raises(path_utils.PathSortError):
-        path_utils.sorted_paths([Path("BAD_ITEM")])
+        if base is None:
+            path_utils.sorted_paths(paths)
+        else:
+            path_utils.sorted_paths(paths, base=base)

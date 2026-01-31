@@ -31,7 +31,6 @@ Principi:
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import re
@@ -102,11 +101,6 @@ class FilenameSanitizeError(RuntimeError):
 
 class PathSortError(RuntimeError):
     """Errore deterministico durante l'ordinamento dei path in STRICT."""
-
-
-def _fallback_filename(raw_name: str) -> str:
-    digest = hashlib.sha256(raw_name.encode("utf-8", errors="replace")).hexdigest()[:12]
-    return f"file-{digest}"
 
 
 def _parse_positive_float(value: Any, default: float) -> float:
@@ -652,8 +646,6 @@ def sanitize_filename(
     max_length: int = 100,
     *,
     replacement: str = "_",
-    strict: bool,
-    allow_fallback: bool = False,
 ) -> str:
     """Pulisce un nome file per l'uso su filesystem.
 
@@ -668,8 +660,6 @@ def sanitize_filename(
         name: nome originale.
         max_length: lunghezza massima del risultato (default 100).
         replacement: carattere con cui sostituire i caratteri non permessi (default "_").
-        strict: se True, solleva `FilenameSanitizeError` su errori/risultato vuoto.
-        allow_fallback: se True, usa un fallback deterministico esplicito (opt-in) su errore/risultato vuoto.
     """
     raw_name = str(name or "")
     try:
@@ -691,14 +681,10 @@ def sanitize_filename(
 
         if s:
             return s
-        if allow_fallback or not strict:
-            # Fallback esplicito in modalita permissiva.
-            return _fallback_filename(raw_name)
         raise FilenameSanitizeError("Nome file sanitizzato vuoto")
     except Exception as exc:
-        if allow_fallback or not strict:
-            # Fallback esplicito in modalita permissiva.
-            return _fallback_filename(raw_name)
+        if isinstance(exc, FilenameSanitizeError):
+            raise
         raise FilenameSanitizeError("Errore sanitizzazione nome file") from exc
 
 
@@ -725,12 +711,11 @@ def to_kebab(s: str) -> str:
 # ----------------------------------------
 # Ordinamento deterministico
 # ----------------------------------------
-def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None, *, allow_fallback: bool = False) -> List[Path]:
+def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None) -> List[Path]:
     """Restituisce i path ordinati in modo deterministico.
 
     Criterio: confronto case-insensitive sul path relativo a `base` (se fornita),
-    altrimenti sul path assoluto risolto. I path non risolvibili sollevano errore
-    solo se `allow_fallback=True` (opt-in).
+    altrimenti sul path assoluto risolto. I path non risolvibili sollevano errore.
     """
     items: List[Tuple[str, Path]] = []
     base_resolved: Optional[Path] = None
@@ -738,18 +723,14 @@ def sorted_paths(paths: Iterable[Path], base: Optional[Path] = None, *, allow_fa
         try:
             base_resolved = Path(base).resolve()
         except Exception as exc:
-            if not allow_fallback:
-                raise PathSortError("Impossibile risolvere il path base per ordinamento") from exc
-            base_resolved = None
+            raise PathSortError("Impossibile risolvere il path base per ordinamento") from exc
 
     for p in paths:
         q = Path(p)
         try:
             q_res = q.resolve()
         except Exception as exc:
-            if not allow_fallback:
-                raise PathSortError(f"Impossibile risolvere il path per ordinamento: {q}") from exc
-            q_res = q
+            raise PathSortError(f"Impossibile risolvere il path per ordinamento: {q}") from exc
 
         if base_resolved is not None:
             try:

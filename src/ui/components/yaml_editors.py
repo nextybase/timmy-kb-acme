@@ -54,8 +54,7 @@ def _require_layout(slug: str) -> WorkspaceLayout:
         return get_ui_workspace_layout(slug_value, require_drive_env=False)
     except Exception as exc:
         raise ConfigError(
-            "Impossibile risolvere il layout workspace: "
-            "usa pipeline.workspace_bootstrap per creare o riparare il workspace.",
+            "Impossibile risolvere il layout workspace: " "usa pipeline.workspace_bootstrap per creare il workspace.",
             slug=slug_value,
         ) from exc
 

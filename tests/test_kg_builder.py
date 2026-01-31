@@ -113,19 +113,10 @@ def test_call_openai_tag_kg_assistant_parses_tool_call(monkeypatch: pytest.Monke
     assert kg.tags[0].id == "tag:alpha"
 
 
-def test_invoke_assistant_raises_on_responses_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("message", ("boom", "invalid json"))
+def test_invoke_assistant_raises_on_error(monkeypatch: pytest.MonkeyPatch, message: str) -> None:
     def _raise(*_a, **_k):
-        raise ConfigError("boom")
-
-    monkeypatch.setattr(kg_builder, "invoke_kgraph_messages", _raise)
-
-    with pytest.raises(ConfigError):
-        kg_builder._invoke_assistant([{"role": "user", "content": "hi"}], redact_logs=False)
-
-
-def test_invoke_assistant_raises_on_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _raise(*_a, **_k):
-        raise ConfigError("invalid json")
+        raise ConfigError(message)
 
     monkeypatch.setattr(kg_builder, "invoke_kgraph_messages", _raise)
 

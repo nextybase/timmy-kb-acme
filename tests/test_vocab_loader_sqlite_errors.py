@@ -25,10 +25,8 @@ def _mk_semantic_db_placeholder(tmp_path: Path) -> Path:
     return base
 
 
-def test_load_reviewed_vocab_unreadable_json(tmp_path: Path) -> None:
+def test_load_reviewed_vocab_unreadable_db(tmp_path: Path) -> None:
     base = _mk_semantic_db_placeholder(tmp_path)
-    reviewed_path = base / "semantic" / "reviewed_vocab.json"
-    reviewed_path.write_text("{", encoding="utf-8")  # invalid JSON
 
     with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
         _ = vl.load_reviewed_vocab(base, _NoopLogger())

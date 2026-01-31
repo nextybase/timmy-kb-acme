@@ -276,13 +276,13 @@ def main() -> int:
                         subject="semantic_onboarding",
                         decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                         actor="cli.semantic_onboarding",
-                                evidence_refs=_build_evidence_refs(
-                                    layout=layout,
-                                    requested=requested,
-                                    effective=effective,
-                                    outcome="ok",
-                                ),
-                                reason_code="ok",
+                        evidence_refs=_build_evidence_refs(
+                            layout=layout,
+                            requested=requested,
+                            effective=effective,
+                            outcome="ok",
+                        ),
+                        reason_code="ok",
                     ),
                 )
 

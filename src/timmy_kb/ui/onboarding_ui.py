@@ -63,7 +63,7 @@ def _ensure_env_loaded_once() -> None:
     _ENV_BOOTSTRAPPED = True
     from pipeline import env_utils
 
-    env_utils.ensure_dotenv_loaded(strict=False, allow_fallback=False)
+    env_utils.ensure_dotenv_loaded(strict=False)
 
 
 def _render_preflight_header(st_module: StreamlitLike, logger: logging.Logger, *, repo_root: Path) -> None:

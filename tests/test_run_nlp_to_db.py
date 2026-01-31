@@ -98,13 +98,22 @@ def test_run_nlp_to_db_records_entities_failure_non_strict(tmp_path, monkeypatch
         run_nlp_to_db("dummy", normalized_dir, str(db_path), repo_root_dir=tmp_path)
 
 
-def test_run_nlp_to_db_entities_import_missing_non_strict(tmp_path, monkeypatch):
-    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
+def _prepare_nlp_paths(tmp_path):
     normalized_dir = tmp_path / "normalized"
     normalized_dir.mkdir(parents=True)
     db_path = tmp_path / "semantic" / "tags.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    return normalized_dir, db_path
 
+
+@pytest.mark.parametrize("strict", (False, True))
+def test_run_nlp_to_db_entities_import_missing(strict, tmp_path, monkeypatch) -> None:
+    if strict:
+        monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    else:
+        monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
+
+    normalized_dir, db_path = _prepare_nlp_paths(tmp_path)
     monkeypatch.setattr("semantic.nlp_runner.run_doc_terms_pipeline", lambda *_a, **_k: {"doc_terms": 0})
 
     original_import = importlib.import_module
@@ -120,35 +129,14 @@ def test_run_nlp_to_db_entities_import_missing_non_strict(tmp_path, monkeypatch)
         run_nlp_to_db("dummy", normalized_dir, str(db_path), repo_root_dir=tmp_path)
 
 
-def test_run_nlp_to_db_entities_import_missing_strict_raises(tmp_path, monkeypatch):
-    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
-    normalized_dir = tmp_path / "normalized"
-    normalized_dir.mkdir(parents=True)
-    db_path = tmp_path / "semantic" / "tags.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+@pytest.mark.parametrize("strict", (False, True))
+def test_run_nlp_to_db_entities_failure(strict, tmp_path, monkeypatch):
+    if strict:
+        monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    else:
+        monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
 
-    monkeypatch.setattr("semantic.nlp_runner.run_doc_terms_pipeline", lambda *_a, **_k: {"doc_terms": 0})
-
-    original_import = importlib.import_module
-
-    def _import_module(name: str, *args, **kwargs):
-        if name == "semantic.entities_runner":
-            raise ModuleNotFoundError("missing entities")
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(importlib, "import_module", _import_module)
-
-    with pytest.raises(PipelineError):
-        run_nlp_to_db("dummy", normalized_dir, str(db_path), repo_root_dir=tmp_path)
-
-
-def test_run_nlp_to_db_entities_failure_strict_raises(tmp_path, monkeypatch):
-    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
-    normalized_dir = tmp_path / "normalized"
-    normalized_dir.mkdir(parents=True)
-    db_path = tmp_path / "semantic" / "tags.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
+    normalized_dir, db_path = _prepare_nlp_paths(tmp_path)
     monkeypatch.setattr("semantic.nlp_runner.run_doc_terms_pipeline", lambda *_a, **_k: {"doc_terms": 0})
 
     fake_entities = types.ModuleType("semantic.entities_runner")

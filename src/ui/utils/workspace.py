@@ -78,8 +78,8 @@ def resolve_raw_dir(_slug: str) -> Path:
     """
     raise ConfigError(
         "DEPRECATO: `resolve_raw_dir` è stato disabilitato. Risolvi il workspace via WorkspaceLayout "
-        "e, se serve creato o riparato, chiama pipeline.workspace_bootstrap.bootstrap_client_workspace, "
-        "bootstrap_dummy_workspace o migrate_or_repair_workspace.",
+        "e, se serve, chiama pipeline.workspace_bootstrap.bootstrap_client_workspace o "
+        "bootstrap_dummy_workspace.",
     )
 
 
@@ -99,7 +99,7 @@ def workspace_root(_slug: str) -> Path:
     """
     raise ConfigError(
         "DEPRECATO: `workspace_root` è stato disabilitato. Risolvi il workspace tramite WorkspaceLayout "
-        "e lancia la logica di bootstrap/migrazione (`pipeline.workspace_bootstrap.*`).",
+        "e lancia la logica di bootstrap (`pipeline.workspace_bootstrap.*`).",
     )
 
 

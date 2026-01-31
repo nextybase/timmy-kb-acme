@@ -105,7 +105,7 @@ def _require_layout(slug: str, layout: WorkspaceLayout | None = None) -> Workspa
     candidate = layout if layout is not None else _layout_for_slug(slug)
     if candidate is None:
         raise ConfigError(
-            "Workspace layout non disponibile: usa pipeline.workspace_bootstrap per creare o riparare il workspace.",
+            "Workspace layout non disponibile: usa pipeline.workspace_bootstrap per creare il workspace.",
             slug=slug,
         )
     return candidate

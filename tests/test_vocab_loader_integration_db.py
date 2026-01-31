@@ -2,10 +2,10 @@
 # tests/test_vocab_loader_integration_db.py
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import semantic.vocab_loader as vl
+from storage.tags_store import save_tags_reviewed
 
 
 class _NoopLogger:
@@ -15,13 +15,28 @@ class _NoopLogger:
     def error(self, *a, **k): ...
 
 
-def test_loads_reviewed_vocab_json(tmp_path: Path):
+def test_loads_reviewed_vocab_from_db(tmp_path: Path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
 
-    reviewed = sem / "reviewed_vocab.json"
-    reviewed.write_text(json.dumps({"canon": {"aliases": ["alias1", "alias2"]}}), encoding="utf-8")
+    db_path = sem / "tags.db"
+    save_tags_reviewed(
+        str(db_path),
+        {
+            "version": "2",
+            "reviewed_at": "2024-01-01T00:00:00",
+            "keep_only_listed": False,
+            "tags": [
+                {
+                    "name": "canon",
+                    "action": "keep",
+                    "synonyms": ["alias1", "alias2"],
+                    "note": "",
+                }
+            ],
+        },
+    )
 
     vocab = vl.load_reviewed_vocab(base, _NoopLogger())
     assert "canon" in vocab

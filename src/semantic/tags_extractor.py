@@ -81,10 +81,10 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
         try:
             rel = src.relative_to(src_dir)
         except ValueError:
-            rel = Path(sanitize_filename(src.name, strict=True))
+            rel = Path(sanitize_filename(src.name))
 
         # Sanitize di ogni componente del path relativo
-        rel_sanitized = Path(*[sanitize_filename(p, strict=True) for p in rel.parts])
+        rel_sanitized = Path(*[sanitize_filename(p) for p in rel.parts])
         dst = raw_dir / rel_sanitized
 
         # SOFT: filtro preliminare (non autorizza write)

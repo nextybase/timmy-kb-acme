@@ -396,12 +396,6 @@ def plan_raw_download(
     return sorted(conflicts), sorted(labels)
 
 
-def _render_readme_text_bytes(title: str, descr: str, examples: List[str]) -> bytes:
-    lines = [f"README - {title}", "", "Ambito:", descr or "", "", "Esempi:"]
-    lines += [f"- {ex}" for ex in (examples or [])]
-    return ("\n".join(lines)).encode("utf-8")
-
-
 def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
@@ -439,31 +433,10 @@ def _render_readme_pdf_bytes(title: str, descr: str, examples: List[str]) -> byt
     return data
 
 
-def _render_readme_payload(title: str, descr: str, examples: List[str]) -> Tuple[bytes, str, bool, str | None]:
-    """Render README come PDF; fallback TXT con label service-only."""
-    try:
-        data = _render_readme_pdf_bytes(title, descr, examples)
-        return data, "application/pdf", False, None
-    except ImportError:
-        data = _render_readme_text_bytes(title, descr, examples)
-        return data, "text/plain", True, "capability_missing:reportlab"
-    except Exception as exc:
-        data = _render_readme_text_bytes(title, descr, examples)
-        return data, "text/plain", True, f"render_failed:{type(exc).__name__}"
-
-
-def _service_only_drive_properties(reason: str | None) -> Dict[str, str]:
-    return {
-        "SERVICE_ONLY": "true",
-        "service_only": "true",
-        "service_reason": reason or "unknown",
-    }
-
-
-def _assert_service_only_not_core_folder(folder_name: str) -> None:
-    core_names = {"book", "config", "normalized", "semantic"}
-    if folder_name in core_names:
-        raise RuntimeError(f"SERVICE_ONLY non consentito in directory CORE: {folder_name}")
+def _render_readme_payload(title: str, descr: str, examples: List[str]) -> Tuple[bytes, str]:
+    """Render README solo come PDF (strict)."""
+    data = _render_readme_pdf_bytes(title, descr, examples)
+    return data, "application/pdf"
 
 
 # ===== Estrattori Mapping (Vision only) =======================================
@@ -544,7 +517,7 @@ def _extract_categories_from_mapping(
     return cats
 
 
-# ===== README per ogni categoria raw (PDF o TXT con degradazione) =============
+# ===== README per ogni categoria raw (PDF) ===================================
 
 
 def emit_readmes_for_raw(
@@ -553,7 +526,7 @@ def emit_readmes_for_raw(
     base_root: Path | str = "output",
     require_env: bool = True,
 ) -> Dict[str, str]:
-    """Per ogni categoria Vision (sottocartella di raw) genera un README.pdf (o .txt con degradazione):
+    """Per ogni categoria Vision (sottocartella di raw) genera un README.pdf:
 
     - legge `semantic_mapping.yaml` nel workspace (cartella semantic/) in formato Vision;
     - costruisce il set categorie da `areas` (+ `system_folders` se presenti);
@@ -634,35 +607,17 @@ def emit_readmes_for_raw(
         if not isinstance(raw_examples, list):
             raw_examples = [raw_examples]
         examples = [str(x).strip() for x in raw_examples if str(x).strip()]
-        data, mime, service_only, reason = _render_readme_payload(
+        data, mime = _render_readme_payload(
             title=meta.get("ambito") or folder_k,
             descr=meta.get("descrizione") or "",
             examples=examples,
         )
-        if service_only:
-            _assert_service_only_not_core_folder(folder_k)
-            log.warning(
-                "ui.drive.readme.service_only",
-                extra={
-                    "slug": slug,
-                    "category": folder_k,
-                    "artifact": "README.txt",
-                    "service_only": True,
-                    "reason": reason or "unknown",
-                    "evidence_refs": [
-                        f"drive_path:raw/{folder_k}/README.txt",
-                        "service_only:true",
-                        f"reason:{reason or 'unknown'}",
-                    ],
-                },
-            )
         file_id = _drive_upload_or_update_bytes(
             svc,
             folder_id,
-            "README.pdf" if mime == "application/pdf" else "README.txt",
+            "README.pdf",
             data,
             mime,
-            app_properties=_service_only_drive_properties(reason) if service_only else None,
         )
         uploaded[folder_k] = file_id
 

@@ -603,20 +603,36 @@ def test_run_summary_blocks_when_qa_status_fail(monkeypatch, tmp_path):
     assert any(evt[0] == "qa_gate_failed" and evt[1].get("reason") == "qa_evidence_failed" for evt in events if evt[1])
 
 
-def test_run_summary_blocks_on_schema_version_mismatch(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    ("payload", "reason"),
+    (
+        (
+            {
+                "schema_version": 2,
+                "qa_status": "pass",
+                "checks_executed": ["pytest -q"],
+                "telemetry": {"timestamp": "2025-01-01T00:00:00+00:00"},
+            },
+            "qa_evidence_invalid",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "qa_status": "pass",
+                "checks_executed": [],
+                "telemetry": {"timestamp": "2025-01-01T00:00:00+00:00"},
+            },
+            "qa_evidence_invalid",
+        ),
+    ),
+    ids=("schema_mismatch", "empty_checks"),
+)
+def test_run_summary_blocks_on_invalid_qa_payload(monkeypatch, tmp_path, payload, reason):
     import ui.pages.semantics as sem
 
     qa_dir = tmp_path / "logs"
     qa_dir.mkdir(parents=True, exist_ok=True)
-    _write_qa_payload(
-        qa_dir / sem.QA_EVIDENCE_FILENAME,
-        {
-            "schema_version": 2,
-            "qa_status": "pass",
-            "checks_executed": ["pytest -q"],
-            "telemetry": {"timestamp": "2025-01-01T00:00:00+00:00"},
-        },
-    )
+    _write_qa_payload(qa_dir / sem.QA_EVIDENCE_FILENAME, payload)
     events = _mk_semantics_ctx(monkeypatch, sem, tmp_path=tmp_path, log_dir=qa_dir)
 
     state_calls: list[tuple[str, str]] = []
@@ -626,33 +642,7 @@ def test_run_summary_blocks_on_schema_version_mismatch(monkeypatch, tmp_path):
     sem._run_summary("dummy")
 
     assert state_calls == []
-    assert any(evt[0] == "qa_gate_failed" and evt[1].get("reason") == "qa_evidence_invalid" for evt in events if evt[1])
-
-
-def test_run_summary_blocks_on_empty_checks(monkeypatch, tmp_path):
-    import ui.pages.semantics as sem
-
-    qa_dir = tmp_path / "logs"
-    qa_dir.mkdir(parents=True, exist_ok=True)
-    _write_qa_payload(
-        qa_dir / sem.QA_EVIDENCE_FILENAME,
-        {
-            "schema_version": 1,
-            "qa_status": "pass",
-            "checks_executed": [],
-            "telemetry": {"timestamp": "2025-01-01T00:00:00+00:00"},
-        },
-    )
-    events = _mk_semantics_ctx(monkeypatch, sem, tmp_path=tmp_path, log_dir=qa_dir)
-
-    state_calls: list[tuple[str, str]] = []
-    monkeypatch.setattr(sem, "set_state", lambda slug, s: state_calls.append((slug, s)))
-    monkeypatch.setattr(sem, "write_summary_and_readme", lambda ctx, logger, slug: None)
-
-    sem._run_summary("dummy")
-
-    assert state_calls == []
-    assert any(evt[0] == "qa_gate_failed" and evt[1].get("reason") == "qa_evidence_invalid" for evt in events if evt[1])
+    assert any(evt[0] == "qa_gate_failed" and evt[1].get("reason") == reason for evt in events if evt[1])
 
 
 def test_retry_logged_and_gates_checked(monkeypatch, tmp_path):

@@ -227,12 +227,6 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit, pre-push]
-      - id: ui-beta0-compliance
-        name: UI beta0 compliance checks
-        entry: python tools/smoke/check_ui_beta0_compliance.py
-        language: system
-        pass_filenames: false
-        stages: [pre-commit, pre-push]
       - id: streamlit-ui-guard
         name: Streamlit UI guard (router + path-safety + logging)
         entry: python tools/smoke/check_streamlit_ui.py --ci

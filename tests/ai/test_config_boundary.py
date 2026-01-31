@@ -237,15 +237,9 @@ def test_optional_env_read_error_raises(monkeypatch: pytest.MonkeyPatch) -> None
     assert excinfo.value.code == "assistant.env.read_failed"
 
 
-def test_resolve_vision_retention_days_invalid_type() -> None:
-    ctx = _DummyCtx(settings={"ai": {"vision": {"snapshot_retention_days": "bad"}}})
-    with pytest.raises(ConfigError) as excinfo:
-        config.resolve_vision_retention_days(ctx)
-    assert excinfo.value.code == "vision.retention.invalid"
-
-
-def test_resolve_vision_retention_days_non_positive() -> None:
-    ctx = _DummyCtx(settings={"ai": {"vision": {"snapshot_retention_days": 0}}})
+@pytest.mark.parametrize("value", ("bad", 0), ids=("invalid_type", "non_positive"))
+def test_resolve_vision_retention_days_invalid_values(value) -> None:
+    ctx = _DummyCtx(settings={"ai": {"vision": {"snapshot_retention_days": value}}})
     with pytest.raises(ConfigError) as excinfo:
         config.resolve_vision_retention_days(ctx)
     assert excinfo.value.code == "vision.retention.invalid"

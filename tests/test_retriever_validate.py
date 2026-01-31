@@ -84,15 +84,10 @@ def test_validate_params_candidate_limit_too_high() -> None:
         search(_params(candidate_limit=r.MAX_CANDIDATE_LIMIT + 1), DummyEmbeddings())
 
 
-def test_validate_params_candidate_limit_min_ok(monkeypatch) -> None:
+@pytest.mark.parametrize("candidate_limit", (r.MIN_CANDIDATE_LIMIT, r.MAX_CANDIDATE_LIMIT))
+def test_validate_params_candidate_limit_extremes(monkeypatch, candidate_limit) -> None:
     monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: [])
-    out = search(_params(candidate_limit=r.MIN_CANDIDATE_LIMIT), HappyEmbeddings())
-    assert out == []
-
-
-def test_validate_params_candidate_limit_max_ok(monkeypatch) -> None:
-    monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: [])
-    out = search(_params(candidate_limit=r.MAX_CANDIDATE_LIMIT), HappyEmbeddings())
+    out = search(_params(candidate_limit=candidate_limit), HappyEmbeddings())
     assert out == []
 
 

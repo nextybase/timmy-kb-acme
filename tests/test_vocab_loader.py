@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
@@ -10,6 +9,7 @@ import pytest
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from semantic.vocab_loader import load_reviewed_vocab
+from storage.tags_store import save_tags_reviewed
 
 
 def _mk_workspace(tmp_path: Path) -> Path:
@@ -18,37 +18,35 @@ def _mk_workspace(tmp_path: Path) -> Path:
     return base
 
 
-def test_load_vocab_missing_reviewed_json_raises(tmp_path: Path):
+def test_load_vocab_missing_db_logs(tmp_path: Path, caplog: pytest.LogCaptureFixture):
     base = _mk_workspace(tmp_path)
     logger = get_structured_logger("test.vocab.missing")
 
+    caplog.clear()
+    caplog.set_level(logging.INFO)
     with pytest.raises(ConfigError, match="tags.db missing or unreadable"):
         load_reviewed_vocab(base, logger)
+    assert any(rec.getMessage() == "semantic.vocab.db_missing" for rec in caplog.records)
 
 
-def test_load_vocab_invalid_json_type_raises(tmp_path: Path, caplog: pytest.LogCaptureFixture):
+def test_load_vocab_valid_db_logs(tmp_path: Path, caplog: pytest.LogCaptureFixture):
     base = _mk_workspace(tmp_path)
-    reviewed_path = base / "semantic" / "reviewed_vocab.json"
-    reviewed_path.write_text("[]", encoding="utf-8")
+    db_path = base / "semantic" / "tags.db"
+    save_tags_reviewed(
+        str(db_path),
+        {
+            "version": "2",
+            "reviewed_at": "2024-01-01T00:00:00",
+            "keep_only_listed": False,
+            "tags": [
+                {"name": "analytics", "action": "keep", "synonyms": ["alias"], "note": ""},
+            ],
+        },
+    )
 
     logger = get_structured_logger("test.vocab.invalid")
     caplog.clear()
     caplog.set_level(logging.INFO)
-    with pytest.raises(ConfigError, match="reviewed vocab invalid type"):
-        load_reviewed_vocab(base, logger)
-    assert any(rec.getMessage() == "semantic.vocab.review_invalid_type" for rec in caplog.records)
-
-
-def test_load_vocab_valid_json_logs(tmp_path: Path, caplog: pytest.LogCaptureFixture):
-    base = _mk_workspace(tmp_path)
-    reviewed_path = base / "semantic" / "reviewed_vocab.json"
-    reviewed_path.write_text(json.dumps({"analytics": {"aliases": ["alias"]}}), encoding="utf-8")
-
-    (base / "semantic" / "tags.db").write_text("dummy", encoding="utf-8")
-
-    logger = get_structured_logger("test.vocab.ok")
-    caplog.clear()
-    caplog.set_level(logging.INFO)
-
-    with pytest.raises(ConfigError):
-        load_reviewed_vocab(base, logger)
+    vocab = load_reviewed_vocab(base, logger)
+    assert vocab["analytics"]["aliases"] == ["alias"]
+    assert any(rec.getMessage() == "semantic.vocab.loaded" for rec in caplog.records)

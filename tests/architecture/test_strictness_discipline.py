@@ -63,11 +63,11 @@ def test_core_disallows_sanitize_filename_non_strict():
                 continue
             call = node
             strict_value = _kw_value(call, "strict")
-            if not _is_const_bool(strict_value, True):
-                errors.append(_report(path, call, "sanitize_filename requires strict=True in core"))
+            if strict_value is not None:
+                errors.append(_report(path, call, "sanitize_filename strict kw is not allowed in core"))
             allow_fallback = _kw_value(call, "allow_fallback")
-            if allow_fallback is not None and not _is_const_bool(allow_fallback, False):
-                errors.append(_report(path, call, "sanitize_filename allow_fallback must be False in core"))
+            if allow_fallback is not None:
+                errors.append(_report(path, call, "sanitize_filename allow_fallback kw is not allowed in core"))
     assert not errors, "\n".join(errors)
 
 

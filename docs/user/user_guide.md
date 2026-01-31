@@ -246,7 +246,7 @@ Le azioni principali sono raggruppate in expander distinti: `Scarica PDF da Driv
 **Genera README in raw (Drive)** Crea/aggiorna in **ogni sottocartella di ****\`\`**** su Drive** un file guida:
 
 - **Contenuto**: titolo = *ambito* dell'area; corpo = *descrizione*; se disponibili, elenco "Esempi" ricavato da `documents`, `artefatti`, `chunking_hints` e `descrizione_dettagliata.include` del mapping Vision-only.
-- **Formato**: `README.pdf` se e' presente ReportLab; altrimenti fallback `README.txt`. Segnale: log strutturato con `SERVICE_ONLY` + `evidence_refs`, metadata Drive `appProperties`.
+- **Formato**: `README.pdf` (ReportLab obbligatorio). Se ReportLab manca, la generazione si interrompe con errore esplicito.
 - **Coerenza nomi**: le categorie sono mappate in *kebab-case* (es. `Governance Etica AI` -> `governance-etica-ai`) e devono **corrispondere ai nomi delle cartelle** sotto `raw/`.
 - **Idempotente**: se il file esiste viene **aggiornato** (non duplicato); puoi rilanciare dopo ogni modifica al mapping.
 - **Prerequisiti**: Drive configurato (`SERVICE_ACCOUNT_FILE`, `DRIVE_ID`) e struttura `<slug>/raw` gia' creata (Step 2 "Apri workspace").
@@ -345,7 +345,7 @@ Prerequisito: `normalized/` deve essere pronta (generata da `raw_ingest`).
 - **DRIVE\_ID o SERVICE\_ACCOUNT\_FILE mancanti** -> configura variabili e installa \`.[drive]\`.
 - **"Cartella raw non trovata/creata"** -> esegui **Apri workspace** (Step 2).
 - **Nessun PDF rilevato** -> carica su Drive e **Scarica**, oppure copia in locale e **Rileva PDF**.
-- **README non in PDF** -> manca ReportLab -> viene generato `README.txt` come SERVICE_ONLY (log strutturato + metadata Drive); installa ReportLab per il PDF.
+- **README non in PDF** -> ReportLab mancante: la generazione README fallisce con errore esplicito; installa ReportLab per il PDF.
 - **Tag strani o mancanti** -> rivedi mapping (aree/keywords/sinonimi), poi **Arricchisci**.
 ### 11) Best practice
 

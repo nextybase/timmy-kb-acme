@@ -103,7 +103,7 @@ def run_raw_ingest(
     slug = ensure_valid_slug(slug, interactive=not non_interactive, prompt=input, logger=logger)
 
     if source == "drive":
-        ensure_dotenv_loaded(strict=True, allow_fallback=False)
+        ensure_dotenv_loaded(strict=True)
 
     context = ClientContext.load(
         slug=slug,
@@ -193,10 +193,10 @@ def run_raw_ingest(
     except ArtifactPolicyViolation as exc:
         decision_ledger.record_normative_decision(
             ledger_conn,
-                    decision_ledger.NormativeDecisionRecord(
-                        decision_id=uuid.uuid4().hex,
-                        run_id=run_id,
-                        slug=slug,
+            decision_ledger.NormativeDecisionRecord(
+                decision_id=uuid.uuid4().hex,
+                run_id=run_id,
+                slug=slug,
                 gate_name="normalize_raw",
                 from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
                 to_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
@@ -204,18 +204,18 @@ def run_raw_ingest(
                 subject="raw_ingest",
                 decided_at=_utc_now_iso(),
                 actor="cli.raw_ingest",
-                        evidence_refs=[
-                            *_build_evidence_refs(
-                                layout,
-                                transformer_name=getattr(transform, "transformer_name", "unknown"),
-                                transformer_version=getattr(transform, "transformer_version", "unknown"),
-                                ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
-                                stats=stats,
-                            ),
-                            *exc.evidence_refs,
-                        ],
-                        stop_code=decision_ledger.STOP_CODE_ARTIFACT_POLICY_VIOLATION,
-                        reason_code="deny_artifact_policy_violation",
+                evidence_refs=[
+                    *_build_evidence_refs(
+                        layout,
+                        transformer_name=getattr(transform, "transformer_name", "unknown"),
+                        transformer_version=getattr(transform, "transformer_version", "unknown"),
+                        ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
+                        stats=stats,
+                    ),
+                    *exc.evidence_refs,
+                ],
+                stop_code=decision_ledger.STOP_CODE_ARTIFACT_POLICY_VIOLATION,
+                reason_code="deny_artifact_policy_violation",
             ),
         )
         raise
@@ -232,14 +232,14 @@ def run_raw_ingest(
             subject="raw_ingest",
             decided_at=_utc_now_iso(),
             actor="cli.raw_ingest",
-                        evidence_refs=_build_evidence_refs(
-                            layout,
-                            transformer_name=getattr(transform, "transformer_name", "unknown"),
-                            transformer_version=getattr(transform, "transformer_version", "unknown"),
-                            ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
-                            stats=stats,
-                        ),
-                        reason_code="ok",
+            evidence_refs=_build_evidence_refs(
+                layout,
+                transformer_name=getattr(transform, "transformer_name", "unknown"),
+                transformer_version=getattr(transform, "transformer_version", "unknown"),
+                ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
+                stats=stats,
+            ),
+            reason_code="ok",
         ),
     )
     logger.info("cli.raw_ingest.completed", extra={"slug": slug, **stats})

@@ -26,18 +26,18 @@ def test_returns_empty_when_db_missing(tmp_path: Path):
         _ = vl.load_reviewed_vocab(base, _NoopLogger())
 
 
-def test_raises_configerror_on_invalid_json(tmp_path: Path):
+def test_reviewed_vocab_json_is_ignored_when_db_missing(tmp_path: Path):
     base = tmp_path / "output" / "timmy-kb-dummy"
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
     reviewed_path = sem / "reviewed_vocab.json"
-    reviewed_path.write_text("{", encoding="utf-8")  # invalid JSON
+    reviewed_path.write_text('{"canon": {"aliases": ["alias"]}}', encoding="utf-8")
 
-    with pytest.raises(ConfigError, match="reviewed vocab unreadable") as ei:
+    with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
         _ = vl.load_reviewed_vocab(base, _NoopLogger())
 
     err = ei.value
-    assert getattr(err, "file_path", None) == str(reviewed_path)
+    assert getattr(err, "file_path", None) == str(sem / "tags.db")
 
 
 def test_path_guard_is_enforced(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

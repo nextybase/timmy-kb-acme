@@ -139,21 +139,17 @@ def test_optional_env_reader_error_raises(store, monkeypatch):
     assert excinfo.value.code == "assistant.env.read_failed"
 
 
-def test_parse_entries_invalid_yaml_raises(store):
+@pytest.mark.parametrize(
+    "payload",
+    (
+        "::::",
+        "- foo\n",
+        "- nome: Foo\n",
+    ),
+)
+def test_parse_entries_rejects_invalid_payloads(store, payload):
     with pytest.raises(ConfigError) as excinfo:
-        store._parse_entries("::::")
-    assert excinfo.value.code == "clients_store.yaml.invalid"
-
-
-def test_parse_entries_rejects_non_mapping_item(store):
-    with pytest.raises(ConfigError) as excinfo:
-        store._parse_entries("- foo\n")
-    assert excinfo.value.code == "clients_store.yaml.invalid"
-
-
-def test_parse_entries_rejects_missing_slug(store):
-    with pytest.raises(ConfigError) as excinfo:
-        store._parse_entries("- nome: Foo\n")
+        store._parse_entries(payload)
     assert excinfo.value.code == "clients_store.yaml.invalid"
 
 

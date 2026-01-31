@@ -6,10 +6,8 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Optional, cast
 
-from pipeline.exceptions import WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from pipeline.workspace_bootstrap import migrate_or_repair_workspace
 from pipeline.workspace_layout import WorkspaceLayout
 from storage.tags_store import import_tags_yaml_to_db
 from ui.chrome import render_chrome_then_require
@@ -23,7 +21,6 @@ from ui.manage import tags as tags_component
 from ui.pages.registry import PagePaths
 from ui.utils import set_slug
 from ui.utils.config import get_drive_env_config, get_tags_env_config
-from ui.utils.context_cache import get_client_context
 from ui.utils.core import safe_write_text
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.status import status_guard
@@ -98,63 +95,13 @@ def _call_best_effort(fn: Callable[..., Any], **kwargs: Any) -> Any:
     return manage_helpers.call_best_effort(fn, logger=LOGGER, **kwargs)
 
 
-def _repair_workspace(slug: str) -> None:
-    """Invoca migrate_or_repair_workspace quando il layout è rotto."""
-    try:
-        context = get_client_context(slug, require_drive_env=False)
-    except Exception as exc:
-        st.error(f"Impossibile preparare il contesto di repair: {exc}")
-        LOGGER.warning("ui.manage.repair.context_failed", extra={"slug": slug, "error": str(exc)})
-        return
-
-    try:
-        with status_guard(
-            "Riparo la struttura workspace...",
-            expanded=True,
-            error_label="Errore durante la riparazione del workspace",
-        ):
-            migrate_or_repair_workspace(context)
-    except WorkspaceNotFound as exc:
-        st.error("Workspace non trovato: crea un nuovo cliente da /new oppure controlla lo slug.")
-        st.caption("Il flusso NEW CLIENT usa `pipeline.workspace_bootstrap.bootstrap_client_workspace`.")
-        LOGGER.warning("ui.manage.repair_not_found", extra={"slug": slug, "error": str(exc)})
-        return
-    except WorkspaceLayoutInvalid as exc:
-        st.error("Il layout manca di asset minimi: riesegui la riparazione di mantenimento.")
-        st.caption(
-            "Il repair usa `pipeline.workspace_bootstrap.migrate_or_repair_workspace` "
-            "per riscrivere config/book/raw/semantic/log."
-        )
-        LOGGER.warning("ui.manage.repair_invalid", extra={"slug": slug, "error": str(exc)})
-        return
-    except WorkspaceLayoutInconsistent as exc:
-        st.error("Il layout appare incoerente: verifica config e asset semantic prima di riparare.")
-        st.caption("Richiama `migrate_or_repair_workspace` dopo aver allineato i file richiesti.")
-        LOGGER.warning("ui.manage.repair_inconsistent", extra={"slug": slug, "error": str(exc)})
-        return
-    except Exception as exc:
-        st.error(f"Errore durante la riparazione del workspace: {exc}")
-        LOGGER.exception("ui.manage.repair_failed", extra={"slug": slug, "error": str(exc)})
-        return
-
-    st.success("Riparazione del workspace completata.")
-    _safe_rerun()
-
-
 def _render_missing_layout(slug: str) -> None:
     """Messaggio e pulsante per layout assente o non risolvibile."""
     st.error("Impossibile risolvere il layout workspace: il runtime UI è sempre fail-fast e non crea layout impliciti.")
     st.caption(
-        "Usa /new per creare un nuovo cliente (bootstrap_client_workspace) o "
-        "il pulsante qui sotto per riparare (migrate_or_repair_workspace)."
+        "Usa /new per creare un nuovo cliente (bootstrap_client_workspace) oppure rigenera il dummy con "
+        "tools/gen_dummy_kb.py prima di aprire la UI."
     )
-    if _column_button(
-        st,
-        "Ripara workspace (migrate_or_repair_workspace)",
-        type="primary",
-        width="stretch",
-    ):
-        _repair_workspace(slug)
     stop_fn = getattr(st, "stop", None)
     if callable(stop_fn):
         stop_fn()

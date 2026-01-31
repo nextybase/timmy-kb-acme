@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from pipeline.ingest import provider as ingest_provider
 from timmy_kb.cli import tag_onboarding_raw as raw_ingest
 from timmy_kb.cli.tag_onboarding import _should_proceed  # type: ignore
@@ -17,14 +19,16 @@ class _NoopLogger:
         pass
 
 
-def test_should_proceed_non_interactive_without_proceed_stops(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("proceed_after_csv", "expected"),
+    (
+        (False, False),
+        (True, True),
+    ),
+)
+def test_should_proceed_non_interactive_flags(proceed_after_csv: bool, expected: bool) -> None:
     log = _NoopLogger()
-    assert _should_proceed(non_interactive=True, proceed_after_csv=False, logger=log) is False
-
-
-def test_should_proceed_non_interactive_with_proceed_continues(tmp_path: Path) -> None:
-    log = _NoopLogger()
-    assert _should_proceed(non_interactive=True, proceed_after_csv=True, logger=log) is True
+    assert _should_proceed(non_interactive=True, proceed_after_csv=proceed_after_csv, logger=log) is expected
 
 
 def test_copy_from_local_skips_when_same_path(tmp_path: Path) -> None:

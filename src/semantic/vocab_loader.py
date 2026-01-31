@@ -2,7 +2,6 @@
 # src/semantic/vocab_loader.py
 from __future__ import annotations
 
-import json
 import logging
 from collections import defaultdict
 from pathlib import Path
@@ -302,64 +301,18 @@ def _log_vocab_event(
         )
 
 
-def _load_reviewed_vocab_json(path: Path, logger: logging.Logger, slug: str | None) -> Dict[str, Dict[str, list[str]]]:
-    """
-    Legge il file JSON revisionato e verifica la shape canonicale.
-    """
-    try:
-        raw_text = ppath.read_text_safe(path.parent, path, encoding="utf-8")
-        data = json.loads(raw_text)
-    except Exception as exc:
-        _log_vocab_event(
-            logger,
-            "semantic.vocab.review_unreadable",
-            slug=slug,
-            file_path=path,
-            canon_count=0,
-        )
-        raise ConfigError("reviewed vocab unreadable", file_path=str(path)) from exc
-
-    if not isinstance(data, dict):
-        _log_vocab_event(
-            logger,
-            "semantic.vocab.review_invalid_type",
-            slug=slug,
-            file_path=path,
-            canon_count=0,
-        )
-        raise ConfigError(
-            f"reviewed vocab invalid type: {type(data).__name__}",
-            file_path=str(path),
-        )
-    _log_vocab_event(
-        logger,
-        "semantic.vocab.review_loaded",
-        slug=slug,
-        file_path=path,
-        canon_count=len(data),
-    )
-    return cast(Dict[str, Dict[str, list[str]]], data)
-
-
 def load_reviewed_vocab(
     repo_root_dir: Path,
     logger: logging.Logger,
 ) -> Dict[str, Dict[str, list[str]]]:
-    """Get reviewed vocab, preferring tags.db and falling back to review JSON."""
+    """Get reviewed vocab from tags.db (SSoT)."""
     repo_root_dir = Path(repo_root_dir)
     perimeter_root = repo_root_dir
     sem_dir = ppath.ensure_within_and_resolve(perimeter_root, _semantic_dir(repo_root_dir))
-    reviewed_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "reviewed_vocab.json")
     slug = _derive_slug(repo_root_dir)
 
     db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
     if not db_path.exists():
-        if reviewed_path.exists():
-            logger.warning(
-                "semantic.vocab.fallback_review_json",
-                extra={"slug": slug, "file_path": str(reviewed_path)},
-            )
-            return _load_reviewed_vocab_json(reviewed_path, logger, slug)
         _log_vocab_event(
             logger,
             "semantic.vocab.db_missing",
