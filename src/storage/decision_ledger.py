@@ -120,6 +120,7 @@ class NormativeDecisionRecord:
     stop_code: str | None = None
     conditions: list[str] | None = None
     rationale: str | None = None
+    reason_code: str | None = None
 
 
 def ledger_path_from_layout(layout: WorkspaceLayout) -> Path:
@@ -225,15 +226,12 @@ def record_normative_decision(conn: sqlite3.Connection, record: NormativeDecisio
     if record.verdict == NORMATIVE_PASS_WITH_CONDITIONS and not conditions:
         raise ValueError("conditions richieste per PASS_WITH_CONDITIONS")
     evidence_refs = _normalize_str_list(record.evidence_refs, field_name="evidence_refs")
-    evidence_payload = {
-        "actor": record.actor,
-        "conditions": conditions,
-        "evidence_refs": evidence_refs,
-        "normative_verdict": record.verdict,
-    }
-    if record.stop_code:
-        evidence_payload["stop_code"] = record.stop_code
-    evidence_json = json.dumps(evidence_payload, sort_keys=True)
+    if record.rationale is not None:
+        raise ValueError(
+            "Normative ledger forbids external rationale. "
+            "Use reason_code (evidence_json) or events for explanations."
+        )
+    evidence_json = _build_normative_evidence_json(record, evidence_refs, conditions)
     rationale = _build_rationale(record, conditions)
     record_decision(
         conn,
@@ -308,10 +306,24 @@ def _build_rationale(record: NormativeDecisionRecord, conditions: list[str]) -> 
     if record.stop_code:
         parts.append(f"stop_code={record.stop_code}")
     if conditions:
-        parts.append("conditions=" + ",".join(conditions))
-    if record.rationale:
-        parts.append(f"note={record.rationale}")
+        parts.append(f"conditions={len(conditions)}")
     return "; ".join(parts)
+
+
+def _build_normative_evidence_json(
+    record: NormativeDecisionRecord, evidence_refs: list[str], conditions: list[str]
+) -> str:
+    payload = {
+        "actor": record.actor,
+        "conditions": conditions,
+        "evidence_refs": evidence_refs,
+        "normative_verdict": record.verdict,
+    }
+    if record.stop_code:
+        payload["stop_code"] = record.stop_code
+    if record.reason_code:
+        payload["reason_code"] = record.reason_code
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 def _init_schema(conn: sqlite3.Connection, *, slug: str, db_path: Path) -> None:

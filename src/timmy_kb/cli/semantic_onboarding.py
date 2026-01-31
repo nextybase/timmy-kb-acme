@@ -276,13 +276,13 @@ def main() -> int:
                         subject="semantic_onboarding",
                         decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                         actor="cli.semantic_onboarding",
-                        evidence_refs=_build_evidence_refs(
-                            layout=layout,
-                            requested=requested,
-                            effective=effective,
-                            outcome="ok",
-                        ),
-                        rationale="ok",
+                                evidence_refs=_build_evidence_refs(
+                                    layout=layout,
+                                    requested=requested,
+                                    effective=effective,
+                                    outcome="ok",
+                                ),
+                                reason_code="ok",
                     ),
                 )
 
@@ -324,7 +324,7 @@ def main() -> int:
                                     outcome="ok",
                                     tag_kg_effective=tag_kg_effective,
                                 ),
-                                rationale="ok",
+                                reason_code="ok",
                             ),
                         )
             except (ConfigError, PipelineError) as exc:
@@ -357,7 +357,7 @@ def main() -> int:
                                 exc,
                             ),
                             stop_code=stop_code,
-                            rationale=_deny_rationale(exc),
+                            reason_code=_deny_rationale(exc),
                         ),
                     )
                 except Exception as ledger_exc:
@@ -407,7 +407,7 @@ def main() -> int:
                                 exit_code=code,
                             ),
                             stop_code=decision_ledger.STOP_CODE_UNEXPECTED_ERROR,
-                            rationale="deny_unexpected_error",
+                            reason_code="deny_unexpected_error",
                         ),
                     )
                 except Exception as ledger_exc:

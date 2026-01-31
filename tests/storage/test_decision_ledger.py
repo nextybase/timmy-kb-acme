@@ -97,6 +97,76 @@ def test_normative_decision_record_maps_allow(tmp_path: Path) -> None:
     assert "normative_verdict=PASS" in row[2]
 
 
+def test_normative_decision_record_rejects_external_rationale(tmp_path: Path) -> None:
+    workspace_root = _prepare_workspace(tmp_path / "acme")
+    layout = WorkspaceLayout.from_workspace(workspace_root, slug="acme")
+    conn = decision_ledger.open_ledger(layout)
+    try:
+        decision_ledger.start_run(
+            conn,
+            run_id="run-5",
+            slug="acme",
+            started_at="2026-01-05T00:00:00Z",
+        )
+        record = decision_ledger.NormativeDecisionRecord(
+            decision_id="dec-5",
+            run_id="run-5",
+            slug="acme",
+            gate_name="evidence",
+            from_state="WORKSPACE_BOOTSTRAP",
+            to_state="SEMANTIC_INGEST",
+            verdict=decision_ledger.NORMATIVE_PASS,
+            subject="workspace",
+            decided_at="2026-01-05T00:00:01Z",
+            actor="gatekeeper:evidence",
+            evidence_refs=["log:ctx"],
+            rationale="ok",
+            reason_code="ok",
+        )
+        with pytest.raises(ValueError, match="forbids external rationale"):
+            decision_ledger.record_normative_decision(conn, record)
+    finally:
+        conn.close()
+
+
+def test_normative_decision_record_writes_reason_code_in_evidence_json(tmp_path: Path) -> None:
+    workspace_root = _prepare_workspace(tmp_path / "acme")
+    layout = WorkspaceLayout.from_workspace(workspace_root, slug="acme")
+    conn = decision_ledger.open_ledger(layout)
+    try:
+        decision_ledger.start_run(
+            conn,
+            run_id="run-6",
+            slug="acme",
+            started_at="2026-01-06T00:00:00Z",
+        )
+        record = decision_ledger.NormativeDecisionRecord(
+            decision_id="dec-6",
+            run_id="run-6",
+            slug="acme",
+            gate_name="evidence",
+            from_state="WORKSPACE_BOOTSTRAP",
+            to_state="SEMANTIC_INGEST",
+            verdict=decision_ledger.NORMATIVE_PASS,
+            subject="workspace",
+            decided_at="2026-01-06T00:00:01Z",
+            actor="gatekeeper:evidence",
+            evidence_refs=["log:ctx"],
+            reason_code="ok",
+        )
+        decision_ledger.record_normative_decision(conn, record)
+        row = conn.execute(
+            "SELECT evidence_json, rationale FROM decisions WHERE decision_id = ?",
+            ("dec-6",),
+        ).fetchone()
+    finally:
+        conn.close()
+    evidence = json.loads(row[0])
+    assert evidence["reason_code"] == "ok"
+    assert "normative_verdict=PASS" in row[1]
+    assert "note=" not in row[1]
+
+
 def test_normative_decision_record_requires_to_state(tmp_path: Path) -> None:
     workspace_root = _prepare_workspace(tmp_path / "acme")
     layout = WorkspaceLayout.from_workspace(workspace_root, slug="acme")

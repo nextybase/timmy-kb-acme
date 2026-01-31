@@ -656,7 +656,7 @@ def tag_onboarding_main(
                 actor="cli.tag_onboarding",
                 evidence_refs=evidence_refs,
                 stop_code=decision_ledger.STOP_CODE_CAPABILITY_DUMMY_FORBIDDEN,
-                rationale="deny_dummy_capability_forbidden",
+                reason_code="deny_dummy_capability_forbidden",
             ),
         )
         decision_recorded = True
@@ -722,7 +722,7 @@ def tag_onboarding_main(
                     decided_at=_utc_now_iso(),
                     actor="cli.tag_onboarding",
                     evidence_refs=evidence_refs,
-                    rationale="ok",
+                    reason_code="ok",
                 ),
             )
             return
@@ -742,7 +742,7 @@ def tag_onboarding_main(
                     decided_at=_utc_now_iso(),
                     actor="cli.tag_onboarding",
                     evidence_refs=evidence_refs,
-                    rationale=effective_rationale,
+                    reason_code=effective_rationale,
                 ),
             )
             return
@@ -772,7 +772,7 @@ def tag_onboarding_main(
                 decided_at=_utc_now_iso(),
                 actor="cli.tag_onboarding",
                 evidence_refs=evidence_refs,
-                rationale="ok_dummy_mode",
+                reason_code="ok_dummy_mode",
             ),
         )
     except Exception as exc:
@@ -796,7 +796,7 @@ def tag_onboarding_main(
                     actor="cli.tag_onboarding",
                     evidence_refs=_merge_evidence_refs(evidence_refs, exc),
                     stop_code=stop_code,
-                    rationale=_deny_rationale(exc),
+                    reason_code=_deny_rationale(exc),
                 ),
             )
         except Exception as ledger_exc:

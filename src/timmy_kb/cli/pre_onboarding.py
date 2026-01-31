@@ -574,10 +574,10 @@ def pre_onboarding_main(
             )
             decision_ledger.record_normative_decision(
                 ledger_conn,
-                decision_ledger.NormativeDecisionRecord(
-                    decision_id=uuid.uuid4().hex,
-                    run_id=run_id,
-                    slug=context.slug,
+                    decision_ledger.NormativeDecisionRecord(
+                        decision_id=uuid.uuid4().hex,
+                        run_id=run_id,
+                        slug=context.slug,
                     gate_name="pre_onboarding",
                     from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
                     to_state=decision_ledger.STATE_SEMANTIC_INGEST,
@@ -585,9 +585,9 @@ def pre_onboarding_main(
                     subject="workspace_bootstrap",
                     decided_at=_utc_now_iso(),
                     actor="cli.pre_onboarding",
-                    evidence_refs=_build_evidence_refs(layout),
-                    rationale="local_only",
-                ),
+                        evidence_refs=_build_evidence_refs(layout),
+                        reason_code="local_only",
+                    ),
             )
             return
 
@@ -605,10 +605,10 @@ def pre_onboarding_main(
         logger.info("cli.pre_onboarding.completed", extra={"slug": context.slug, "artifacts": 1})
         decision_ledger.record_normative_decision(
             ledger_conn,
-            decision_ledger.NormativeDecisionRecord(
-                decision_id=uuid.uuid4().hex,
-                run_id=run_id,
-                slug=context.slug,
+                    decision_ledger.NormativeDecisionRecord(
+                        decision_id=uuid.uuid4().hex,
+                        run_id=run_id,
+                        slug=context.slug,
                 gate_name="pre_onboarding",
                 from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
                 to_state=decision_ledger.STATE_SEMANTIC_INGEST,
@@ -616,8 +616,8 @@ def pre_onboarding_main(
                 subject="workspace_bootstrap",
                 decided_at=_utc_now_iso(),
                 actor="cli.pre_onboarding",
-                evidence_refs=_build_evidence_refs(layout),
-                rationale="ok",
+                        evidence_refs=_build_evidence_refs(layout),
+                        reason_code="ok",
             ),
         )
     except Exception as exc:
@@ -637,9 +637,9 @@ def pre_onboarding_main(
                     subject="workspace_bootstrap",
                     decided_at=_utc_now_iso(),
                     actor="cli.pre_onboarding",
-                    evidence_refs=_merge_evidence_refs(_build_evidence_refs(layout), exc),
-                    stop_code=stop_code,
-                    rationale=_deny_rationale(exc),
+                        evidence_refs=_merge_evidence_refs(_build_evidence_refs(layout), exc),
+                        stop_code=stop_code,
+                        reason_code=_deny_rationale(exc),
                 ),
             )
         except Exception as ledger_exc:

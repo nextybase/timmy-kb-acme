@@ -62,7 +62,9 @@ La persistenza **non cambia schema** e mappa i campi normativi nel ledger così:
   - `evidence_refs` (lista, anche vuota)
   - `conditions` (lista, anche vuota)
   - `normative_verdict`
-- `rationale` → `decisions.rationale` (stringa deterministica)
+- `rationale` → `decisions.rationale` (stringa deterministica, puramente costruita internamente; i gate/CLI non possono fornire input)
+
+`decisions.rationale` è costruita internamente e non accetta stringhe "umane". Qualsiasi spiegazione classificatoria usa `evidence_json.reason_code`; i dettagli diagnostici vanno nei `events`.
 
 ### Regole di strictness
 - `PASS` / `PASS_WITH_CONDITIONS` richiedono `to_state`.
