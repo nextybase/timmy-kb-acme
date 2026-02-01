@@ -1,0 +1,38 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
+  "python.terminal.activateEnvironment": true,
+
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.nosetestsEnabled": false,
+  "python.testing.cwd": "${workspaceFolder}",
+  "python.testing.pytestArgs": ["tests", "-ra"],
+
+  "files.encoding": "utf8",
+  "files.autoGuessEncoding": false,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+
+  "editor.renderControlCharacters": true,
+  "editor.unicodeHighlight.nonBasicASCII": true,
+  "editor.unicodeHighlight.invisibleCharacters": true,
+  "editor.unicodeHighlight.ambiguousCharacters": true,
+
+  "terminal.integrated.env.windows": {
+    "PYTHONUTF8": "1",
+    "PYTHONIOENCODING": "UTF-8"
+  },
+  "terminal.integrated.env.linux": {
+    "PYTHONUTF8": "1",
+    "PYTHONIOENCODING": "UTF-8"
+  },
+  "terminal.integrated.env.osx": {
+    "PYTHONUTF8": "1",
+    "PYTHONIOENCODING": "UTF-8"
+  },
+
+  "yaml.validate": false,
+  "github-actions.actionsWarningLevel": "none",
+  "github-actions.showGitHubActionsWarnings": false
+}
