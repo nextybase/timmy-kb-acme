@@ -17,7 +17,11 @@ def main() -> None:
     render_chrome_then_require(
         allow_without_slug=True,
         title="Tools > Tuning",
-        subtitle="Interfaccia rapida per modali Vision/System Prompt e conversione PDF -> YAML.",
+        subtitle="Interfaccia operatore control-plane; usa CLI isolati per Vision/System Prompt e PDF -> YAML.",
+        strict_runtime=False,
+        control_plane_note=(
+            "Questa pagina è control-plane: tutte le azioni scrivono tramite tool CLI " "e non mutano l'ENV in-process."
+        ),
     )
     slug: Optional[str] = st.session_state.get("active_slug") or "dummy"
 

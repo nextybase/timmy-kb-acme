@@ -110,6 +110,21 @@ timmy-kb tag-onboarding ... --dummy
 > Nel ledger non compaiono stati `TAGS_*`. Dummy è riconoscibile tramite `evidence_refs`
 > (`requested_mode`, `effective_mode`, `dummy_mode`) e, quando negato, tramite `stop_code`.
 
+## Control Plane e Tools > Tuning
+
+- Ogni pagina runtime mantiene `TIMMY_BETA_STRICT=1`; l'helper `ui.utils.control_plane.ensure_runtime_strict()` viene
+  invocato durante il rendering del chrome (default di `render_chrome_then_require`) per bloccare l'esecuzione
+  quando la variabile non è presente o vale `0`.
+- L'interfaccia **Tools > Tuning** è dichiarata `strict_runtime=False` e segnalata come control plane. La pagina
+  non esegue provisioning o update direttamente: raccoglie input e invia CLI isolati (`tools/tuning_pdf_to_yaml`,
+  `tools/tuning_vision_provision`, `tools/tuning_system_prompt`) che girano con `control_plane_env(force_non_strict=True)`
+  per mantenere l'ambiente deterministico.
+- Ogni tool restituisce un JSON con schema obbligatorio (`status`, `mode`, `slug`, `action`, `errors`, `warnings`,
+  `artifacts`, `paths`, `returncode`, `timmy_beta_strict`); i `paths` sono sempre deterministici (es. `output/<slug>/config/`).
+- Gli helper `ui.utils.control_plane.run_control_plane_tool()` e `display_control_plane_result()` orchestrano la call e
+  mostrano il payload nella UI, accompagnandola con messaggi di stato/warnings/errori.
+- Qualsiasi altra pagina che girasse con `TIMMY_BETA_STRICT=0` nel runtime viene bloccata e registra l'anomalia nel ledger.
+
 ---
 
 ## Non previsto (intenzionale)

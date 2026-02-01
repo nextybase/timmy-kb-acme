@@ -8,8 +8,8 @@ from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from ui.config_store import get_vision_model
-from ui.services.vision_provision import provision_from_vision_with_config
 from ui.utils.context_cache import get_client_context
+from ui.utils.control_plane import display_control_plane_result, run_control_plane_tool
 from ui.utils.stubs import get_streamlit
 
 from .styles import apply_modal_css
@@ -84,14 +84,21 @@ def open_vision_modal(slug: str = "dummy") -> None:
     def _inner() -> None:
         apply_modal_css()
 
-        try:
-            data = load_workspace_yaml(slug)
-        except Exception as exc:
-            st.error(str(exc))
-            if st.button("Chiudi", key="ft_modal_vision_close_error"):
-                _clear_state()
-                _st_rerun()
-            return
+    try:
+        data = load_workspace_yaml(slug)
+    except Exception as exc:
+        st.error(str(exc))
+        if st.button("Chiudi", key="ft_modal_vision_close_error"):
+            _clear_state()
+            _st_rerun()
+        return
+
+    client_name_hint: str | None = None
+    try:
+        ctx_for_prompt = get_client_context(slug, require_drive_env=False)
+        client_name_hint = getattr(ctx_for_prompt, "client_name", None)
+    except Exception:
+        client_name_hint = None
 
         sections_in_file = data.get("sections") or {}
         default_state: dict[str, str] = {
@@ -115,7 +122,11 @@ def open_vision_modal(slug: str = "dummy") -> None:
         with st.expander("Mostra prompt completo (anteprima)", expanded=False):
             tmp_data = dict(data)
             tmp_data["sections"] = dict(state)
-            prompt_preview = build_prompt_from_yaml(tmp_data)
+            prompt_preview = build_prompt_from_yaml(
+                tmp_data,
+                slug=slug,
+                client_name=client_name_hint,
+            )
             st.code(prompt_preview, language="markdown")
             st.caption("Suggerimento: usa Ctrl+C per copiare il prompt.")
 
@@ -137,39 +148,40 @@ def open_vision_modal(slug: str = "dummy") -> None:
             try:
                 ctx = get_client_context(slug, require_drive_env=False)
                 pdf_path = _ensure_workspace_pdf(ctx)
-                tmp_data = dict(data)
-                tmp_data["sections"] = dict(state)
-                prompt = build_prompt_from_yaml(tmp_data)
-                result_payload: dict[str, object] | None = None
-                with st.spinner("Eseguo Vision..."):
-                    try:
-                        result_payload = provision_from_vision_with_config(
-                            ctx,
-                            logger=LOG,
-                            slug=slug,
-                            pdf_path=pdf_path,
-                            model=get_vision_model(),
-                            prepared_prompt=prompt,
-                        )
-                    except ConfigError as err:
-                        if not _is_gate_error(err):
-                            st.session_state[_SS_LAST_RESULT] = {"error": str(err)}
-                            raise
-                            result_payload = provision_from_vision_with_config(
-                                ctx,
-                                logger=LOG,
-                                slug=slug,
-                                pdf_path=pdf_path,
-                                model=get_vision_model(),
-                                prepared_prompt=prompt,
-                            )
-                st.session_state[_SS_LAST_RESULT] = result_payload
-                st.success("Vision completata correttamente.")
-                _clear_state()
-                _st_rerun()
-            except ConfigError as err:
-                st.error(str(err))
+                repo_root = ctx.repo_root_dir
+                if repo_root is None:
+                    raise ConfigError("Context del workspace incompleto.")
+                data["sections"] = dict(state)
+                save_workspace_yaml(slug, data)
+                model = get_vision_model()
             except Exception as exc:
-                st.error(f"Errore Vision: {exc}")
+                LOG.warning("ui.vision_modal.prepare_failed", extra={"slug": slug, "error": str(exc)})
+                st.error(str(exc))
+            else:
+                args: list[str] = [
+                    "--repo-root",
+                    str(repo_root),
+                    "--pdf-path",
+                    str(pdf_path),
+                    "--model",
+                    model,
+                ]
+                try:
+                    with st.spinner("Eseguo Vision..."):
+                        payload = run_control_plane_tool(
+                            tool_module="tools.tuning_vision_provision",
+                            slug=slug,
+                            action="vision_provision",
+                            args=args,
+                        )["payload"]
+                except Exception as exc:
+                    LOG.warning("ui.vision_modal.run_failed", extra={"slug": slug, "error": str(exc)})
+                    st.error(str(exc))
+                else:
+                    display_control_plane_result(st, payload, success_message="Vision completata correttamente.")
+                    if payload.get("status") == "ok":
+                        st.session_state[_SS_LAST_RESULT] = payload
+                        _clear_state()
+                        _st_rerun()
 
     _inner()

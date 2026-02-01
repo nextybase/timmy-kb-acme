@@ -142,6 +142,20 @@ Pattern unificato per aggiungere pagine Streamlit tramite `ui.pages.registry`.
   - Agiscono su un cliente: usare `render_chrome_then_require()` per ottenere/forzare lo slug.
   - In assenza di slug mostrano la CTA guidata gia gestita da `render_chrome_then_require`.
   - Registrazione nel gruppo `Tools`; mantenere messaging slug-centrico (es. 'Workspace: slug').
+
+### Pagine control-plane (Tools > Tuning)
+
+- Le pagine control-plane come **Tools > Tuning** disattivano il guard strict (`strict_runtime=False`) e mostrano un
+  `control_plane_note` per ricordare che si tratta di tooling operator-only.
+- L'interfaccia salva le modifiche locali (es. `visionstatement.yaml`) e invoca
+  `ui.utils.control_plane.run_control_plane_tool()` per lanciare i CLI dedicati
+  (`tools/tuning_pdf_to_yaml`, `tools/tuning_vision_provision`, `tools/tuning_system_prompt`). I CLI girano con
+  `control_plane_env(force_non_strict=True)` e non scrivono mai direttamente via Streamlit.
+- I payload restituiti dai tool seguono lo schema `status/mode/slug/action/errors/warnings/artifacts/paths/returncode/timmy_beta_strict`;
+  la UI li visualizza con `ui.utils.control_plane.display_control_plane_result()` e li memorizza solo per preview.
+- Ogni path che appare nei payload è workspace-scoped (`output/<slug>/config/...` per i file YAML e
+  `semantic/semantic_mapping.yaml` per il mapping); l'interfaccia non scrive altri artefatti.
+
 - **Admin pages**
   - Destinate a tooling dev/ops: non si riferiscono a un workspace cliente e non devono essere esposte agli utenti standard.
   - Registrare nel gruppo `Admin` con titoli chiari (es. `Dummy KB (Admin)`); documentare i limiti nel README di riferimento.
@@ -378,6 +392,10 @@ La semantica è disponibile da stato 'pronto' in poi e richiede Markdown present
 **Strict mode (TIMMY_BETA_STRICT=1):** la UI non deve usare fallback local-only.
 Se Drive o gli ID Drive non sono disponibili, l'onboarding si blocca con messaggio deterministico
 e un evento strutturato `ui.drive.capability_missing`.
+La guardia `ui.utils.control_plane.ensure_runtime_strict()` viene invocata dal chrome (`render_chrome_then_require`
+con `strict_runtime=True`, default) per bloccare tutte le pagine runtime quando `TIMMY_BETA_STRICT` non vale `1`;
+l'unica eccezione pubblica è la pagina control-plane Tools > Tuning, che imposta `strict_runtime=False`
+e riorienta ogni azione ai CLI specializzati.
 
 1. Calcola i gate con `ui.gating.compute_gates(os.environ)`; combina la disponibilita runtime dei servizi (`ui.services.*`) con gli override da variabili di ambiente:
     - `DRIVE=0` disabilita i flussi Drive (cartelle, cleanup, download).

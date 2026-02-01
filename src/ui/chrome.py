@@ -13,6 +13,7 @@ import streamlit as st
 from ui.clients_store import get_all as get_clients
 from ui.pages.registry import PagePaths
 from ui.theme_enhancements import inject_theme_css
+from ui.utils.control_plane import ensure_runtime_strict
 
 from .landing_slug import _request_shutdown as _shutdown  # deterministico
 from .utils import clear_active_slug, get_slug, require_active_slug
@@ -166,7 +167,12 @@ def sidebar(slug: str | None) -> None:
 
 
 def render_chrome_then_require(
-    *, allow_without_slug: bool = False, title: str | None = None, subtitle: str | None = None
+    *,
+    allow_without_slug: bool = False,
+    title: str | None = None,
+    subtitle: str | None = None,
+    strict_runtime: bool = True,
+    control_plane_note: str | None = None,
 ) -> str | None:
     """
     Renderizza header + sidebar e ritorna lo slug attivo.
@@ -175,9 +181,13 @@ def render_chrome_then_require(
         allow_without_slug: se False (default), richiede uno slug valido (blocca la pagina
             come require_active_slug). Se True, non blocca e ritorna lo slug (o None).
     """
+    if strict_runtime:
+        ensure_runtime_strict()
     slug = cast(Optional[str], get_slug())
     header(slug, title=title, subtitle=subtitle)
     sidebar(slug)
+    if control_plane_note:
+        st.info(control_plane_note)
     if allow_without_slug:
         return slug
     return cast(str, require_active_slug())

@@ -27,15 +27,16 @@ from pipeline.vision_paths import vision_yaml_workspace_path
 from pipeline.workspace_bootstrap import bootstrap_client_workspace
 from pipeline.workspace_layout import WorkspaceLayout
 from pipeline.yaml_utils import yaml_read
-from semantic.core import compile_document_to_vision_yaml
 from ui.chrome import header, sidebar
 from ui.clients_store import ClientEntry, get_registry_paths, set_state, upsert_client
+from ui.config_store import get_vision_model
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
 from ui.errors import to_user_message
 from ui.imports import getattr_if_callable, import_first
 from ui.utils import clear_active_slug, set_slug
 from ui.utils.config import resolve_ui_allow_local_only
 from ui.utils.context_cache import get_client_context, invalidate_client_context
+from ui.utils.control_plane import display_control_plane_result, run_control_plane_tool
 from ui.utils.html import esc_url_component
 from ui.utils.merge import deep_merge_dict
 from ui.utils.repo_root import get_repo_root
@@ -122,6 +123,30 @@ def _require_repo_root(ctx: Any, slug: str) -> Path:
             slug=slug,
         )
     return Path(repo_root)
+
+
+def _run_tool_with_repo_root(
+    repo_root: Path,
+    func: Callable[[], dict[str, Any]],
+    workspace_root: Path | None = None,
+) -> dict[str, Any]:
+    prev_repo = os.environ.get("REPO_ROOT_DIR")
+    prev_workspace = os.environ.get("WORKSPACE_ROOT_DIR")
+    os.environ["REPO_ROOT_DIR"] = str(repo_root)
+    if workspace_root:
+        os.environ["WORKSPACE_ROOT_DIR"] = str(workspace_root)
+    try:
+        return func()
+    finally:
+        if prev_repo is None:
+            os.environ.pop("REPO_ROOT_DIR", None)
+        else:
+            os.environ["REPO_ROOT_DIR"] = prev_repo
+        if workspace_root:
+            if prev_workspace is None:
+                os.environ.pop("WORKSPACE_ROOT_DIR", None)
+            else:
+                os.environ["WORKSPACE_ROOT_DIR"] = prev_workspace
 
 
 # --------- helper ---------
@@ -269,6 +294,69 @@ def _mirror_repo_config_into_client(
             slug=slug,
             file_path=str(dst_cfg),
         ) from exc
+
+
+def _run_pdf_to_yaml_control_plane(slug: str, layout: WorkspaceLayout) -> dict[str, Any]:
+    workspace_root_dir = layout.repo_root_dir
+    if workspace_root_dir is None:
+        raise ConfigError(
+            "Repo root del workspace non disponibile: ricrea il workspace prima di proseguire.",
+            slug=slug,
+        )
+    repo_root = Path(get_repo_root(allow_env=False))
+    pdf_path = _client_pdf_path(slug, layout=layout)
+    payload = _run_tool_with_repo_root(
+        repo_root,
+        lambda: run_control_plane_tool(
+            tool_module="tools.tuning_pdf_to_yaml",
+            slug=slug,
+            action="pdf_to_yaml",
+            args=["--pdf-path", str(pdf_path)],
+        ),
+        workspace_root=Path(workspace_root_dir),
+    )["payload"]
+    display_control_plane_result(
+        st,
+        payload,
+        success_message="VisionStatement.yaml aggiornato nel workspace.",
+    )
+    if payload.get("status") != "ok":
+        error_msg = "; ".join(map(str, payload.get("errors", [])))
+        raise ConfigError(
+            f"Conversione PDF -> YAML fallita: {error_msg or 'errore sconosciuto'}.",
+            slug=slug,
+            file_path=str(pdf_path),
+        )
+    return payload
+
+
+def _run_vision_control_plane(slug: str, layout: WorkspaceLayout) -> dict[str, Any]:
+    workspace_root_dir = layout.repo_root_dir
+    if workspace_root_dir is None:
+        raise ConfigError(
+            "Repo root del workspace non disponibile: ricrea il workspace prima di proseguire.",
+            slug=slug,
+        )
+    repo_root = Path(get_repo_root(allow_env=False))
+    args = ["--repo-root", str(workspace_root_dir), "--model", get_vision_model()]
+    payload = _run_tool_with_repo_root(
+        repo_root,
+        lambda: run_control_plane_tool(
+            tool_module="tools.tuning_vision_provision",
+            slug=slug,
+            action="vision_provision",
+            args=args,
+        ),
+        workspace_root=Path(workspace_root_dir),
+    )["payload"]
+    display_control_plane_result(st, payload, success_message="Vision completata correttamente.")
+    if payload.get("status") != "ok":
+        raise ConfigError(
+            f"Provisioning Vision fallito: {'; '.join(map(str, payload.get('errors', []))) or 'errore sconosciuto'}.",
+            slug=slug,
+            file_path=str(repo_root / "config" / "VisionStatement.pdf"),
+        )
+    return payload
 
 
 def _ui_logger() -> logging.Logger:
@@ -484,6 +572,8 @@ preview_prompt = st.checkbox(
     help="Visualizza il testo generato e conferma con 'Prosegui' prima di inviare la richiesta.",
     disabled=(current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED)),
 )
+if preview_prompt:
+    st.info("Anteprima prompt Vision non disponibile nel flusso control-plane; usa Tools > Tuning per la preview.")
 
 # Slug determinato localmente (non cambiamo fasi/stati finché non premi i pulsanti)
 candidate_slug = (slug or "").strip()
@@ -585,9 +675,8 @@ if current_phase == UI_PHASE_INIT:
                     invalidate_client_context(s)
                     ctx = get_client_context(s, require_drive_env=False, force_reload=True)
                     _require_repo_root(ctx, s)
-                yaml_target = _client_vision_yaml_path(s, layout=layout)
                 try:
-                    compile_document_to_vision_yaml(_client_pdf_path(s, layout=layout), yaml_target)
+                    _run_pdf_to_yaml_control_plane(s, layout)
                 except Exception as exc:
                     LOGGER.warning(
                         "ui.new_client.vision_yaml_generation_failed",
@@ -678,14 +767,7 @@ if current_phase == UI_PHASE_INIT:
                 try:
                     step_progress = st.progress(0, text="Preparazione Vision...")
                     progress.progress(80, text="Eseguo Vision...")
-                    vision_result = run_vision(
-                        ctx,
-                        slug=s,
-                        pdf_path=_client_pdf_path(s, layout=layout),
-                        logger=ui_logger,
-                        preview_prompt=preview_prompt,
-                    )
-                    vision_payload = vision_result if isinstance(vision_result, dict) else {}
+                    vision_payload = _run_vision_control_plane(s, layout)
                     if status is not None and hasattr(status, "update"):
                         status.update(label="Vision completata.", state="complete")
                     step_progress.progress(100, text="Vision completata.")
@@ -733,85 +815,8 @@ if current_phase == UI_PHASE_INIT:
                     )
                     if status is not None and hasattr(status, "update"):
                         status.update(label=body, state="error")
-                    # Se è un gate "forza rigenerazione", offri il pulsante per proseguire
-                    if isinstance(exc, ConfigError) and "Forza rigenerazione" in str(exc):
-
-                        def _force_and_retry() -> bool:
-                            try:
-                                if status is not None and hasattr(status, "update"):
-                                    status.update(label="Forzo rigenerazione Vision...", state="running")
-                                step_progress.progress(10, text="Forzo rigenerazione Vision...")
-                                progress.progress(80, text="Eseguo Vision (forzata)...")
-                                forced_result = run_vision(
-                                    ctx,
-                                    slug=s,
-                                    pdf_path=_client_pdf_path(s, layout=layout),
-                                    logger=ui_logger,
-                                    preview_prompt=preview_prompt,
-                                    force=True,
-                                )
-                                forced_payload = forced_result if isinstance(forced_result, dict) else {}
-                                if status is not None and hasattr(status, "update"):
-                                    status.update(label="Vision completata (forzata).", state="complete")
-                                step_progress.progress(100, text="Vision completata (forzata).")
-                                progress.progress(100, text="Vision completata.")
-                                _warn_drive_raw_skipped(
-                                    s,
-                                    mapping_path=_semantic_dir_client(s, layout=layout) / "semantic_mapping.yaml",
-                                    raw_info=cast(Optional[Dict[str, Any]], forced_payload.get("raw_structure")),
-                                    strict=is_beta_strict(),
-                                )
-                                old_root = ctx.repo_root_dir
-                                invalidate_client_context(s)
-                                ctx_reloaded = get_client_context(s, require_drive_env=False, force_reload=True)
-                                if ctx_reloaded.repo_root_dir != old_root:
-                                    msg = (
-                                        f"Workspace root drift rilevato per slug={s}. "
-                                        f"Prima: {old_root} | Dopo: {ctx_reloaded.repo_root_dir}. "
-                                        "Controlla REPO_ROOT_DIR / WORKSPACE_ROOT_DIR e riavvia l'app."
-                                    )
-                                    LOGGER.error(
-                                        "workspace_root_drift",
-                                        extra={
-                                            "slug": s,
-                                            "old_root": str(old_root),
-                                            "new_root": str(ctx_reloaded.repo_root_dir),
-                                        },
-                                    )
-                                    st.error(msg)
-                                    st.stop()
-                                if ctx_reloaded.repo_root_dir is None:
-                                    raise ConfigError(
-                                        "Context privo di repo_root_dir dopo Vision.",
-                                        slug=s,
-                                    )
-                                if _exists_semantic_files(s, layout=layout):
-                                    display_name = (name or "").strip() or s
-                                    _register_client_after_vision(s, display_name)
-                                    set_slug(s)
-                                    st.session_state[slug_state_key] = s
-                                    st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
-                                    st.session_state["client_name"] = display_name
-                                return True
-                            except Exception as inner:
-                                try:
-                                    step_progress.progress(0, text="Errore durante Vision (forzata).")
-                                except Exception:
-                                    pass
-                                st.error(f"Forza rigenerazione fallita: {inner}")
-                            return False
-
-                        _open_error_modal(
-                            title,
-                            body,
-                            caption=caption,
-                            on_force=_force_and_retry,
-                            force_label="Forza rigenerazione e prosegui",
-                        )
-                        st.stop()
-                    else:
-                        _open_error_modal(title, body, caption=caption)
-                        st.stop()
+                    _open_error_modal(title, body, caption=caption)
+                    st.stop()
 
             # 6) Controllo file semantici e avanzamento fase
             if _exists_semantic_files(s, layout=layout):

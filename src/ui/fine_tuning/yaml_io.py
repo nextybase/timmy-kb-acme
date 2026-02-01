@@ -50,10 +50,19 @@ def save_workspace_yaml(slug: str, data: Dict[str, Any]) -> Path:
     return ypath
 
 
-def build_prompt_from_yaml(data: Dict[str, Any]) -> str:
+def build_prompt_from_yaml(
+    data: Dict[str, Any],
+    *,
+    slug: str | None = None,
+    client_name: str | None = None,
+) -> str:
     client = data.get("client") or {}
-    slug = str(client.get("slug") or "dummy").strip()
-    client_name = str(client.get("client_name") or "Dummy").strip()
+    slug_value = str(slug or client.get("slug") or "").strip()
+    if not slug_value:
+        slug_value = "dummy"
+    client_name_value = str(client_name or client.get("client_name") or "").strip()
+    if not client_name_value:
+        client_name_value = "Dummy"
 
     sections = data.get("sections") or {}
 
@@ -70,8 +79,8 @@ def build_prompt_from_yaml(data: Dict[str, Any]) -> str:
 
     lines = [
         "Contesto cliente:",
-        f"- slug: {slug}",
-        f"- client_name: {client_name}",
+        f"- slug: {slug_value}",
+        f"- client_name: {client_name_value}",
         "",
         "Vision Statement (usa SOLO i blocchi sottostanti):",
     ]

@@ -7,11 +7,10 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from pipeline import ontology
-from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import read_text_safe
+from ui.utils.control_plane import display_control_plane_result, run_control_plane_tool
 from ui.utils.stubs import get_streamlit
 
-from .pdf_tools import run_pdf_to_yaml_config
 from .system_prompt_modal import open_system_prompt_modal
 from .vision_modal import open_vision_modal
 
@@ -20,7 +19,6 @@ try:
 except Exception:  # pragma: no cover
     yaml = None  # type: ignore[assignment]
 
-LOG = get_structured_logger("ui.tools_check")
 
 SS_VISION_OPEN = "ft_open_vision_modal"
 SS_SYS_OPEN = "ft_open_system_prompt"
@@ -55,15 +53,9 @@ def _consume_flag(st_module: Any, flag_key: str) -> bool:
     return False
 
 
-def render_controls(
-    slug: str,
-    *,
-    st_module: Any | None = None,
-    logger: Any | None = None,
-) -> None:
+def render_controls(slug: str, *, st_module: Any | None = None) -> None:
     """Renderizza i controlli principali della pagina tools_check."""
     st = st_module or get_streamlit()
-    log = logger or LOG
 
     col_vision, col_pdf, col_sys = st.columns([1, 1, 1])
     with col_vision:
@@ -77,12 +69,25 @@ def render_controls(
             key="btn_pdf_to_yaml",
             help="Converte VisionStatement.pdf in output/<workspace>/config/visionstatement.yaml",
         ):
-            try:
-                run_pdf_to_yaml_config(slug)
-            except Exception as exc:  # pragma: no cover
-                if log:
-                    log.warning("ui.tools_check.pdf_to_yaml_error", extra={"err": str(exc)})
-                st.error(f"Errore durante la conversione: {exc}")
+            payload = run_control_plane_tool(
+                tool_module="tools.tuning_pdf_to_yaml",
+                slug=slug,
+                action="pdf_to_yaml",
+            )["payload"]
+            display_control_plane_result(
+                st,
+                payload,
+                success_message="VisionStatement.yaml aggiornato nel workspace.",
+            )
+            if payload.get("status") == "ok":
+                paths = payload.get("paths") or {}
+                yaml_path = paths.get("vision_yaml")
+                if yaml_path:
+                    try:
+                        preview = read_text_safe(Path(yaml_path).parent, Path(yaml_path))
+                        st.code(preview, language="yaml")
+                    except Exception:
+                        st.warning("Impossibile mostrare l'anteprima YAML.")
 
     with col_sys:
         if st.button("Apri System Prompt", key="btn_open_system_prompt"):

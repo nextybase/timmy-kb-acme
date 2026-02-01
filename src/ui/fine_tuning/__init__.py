@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from .pdf_tools import run_pdf_to_yaml_config
 from .styles import apply_modal_css
 from .system_prompt_modal import open_system_prompt_modal
 from .tools_check_sections import (
@@ -19,7 +18,6 @@ __all__ = [
     "load_workspace_yaml",
     "open_system_prompt_modal",
     "open_vision_modal",
-    "run_pdf_to_yaml_config",
     "render_advanced_options",
     "render_controls",
     "render_vision_output",

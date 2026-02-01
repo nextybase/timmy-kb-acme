@@ -68,7 +68,7 @@ def _load_manage_module(
     import ui.chrome
     import ui.utils.workspace
 
-    monkeypatch.setattr(ui.chrome, "render_chrome_then_require", lambda allow_without_slug: slug)
+    monkeypatch.setattr(ui.chrome, "render_chrome_then_require", lambda *args, **kwargs: slug)
     base_dir = Path("output") / f"timmy-kb-{slug}"
     layout = WorkspaceLayout.from_workspace(workspace=base_dir, slug=slug)
     normalized_result_path = (

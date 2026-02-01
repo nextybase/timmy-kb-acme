@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Iterable
 
 import pytest
 
@@ -50,17 +50,39 @@ def test_render_controls_triggers_system_prompt(monkeypatch: pytest.MonkeyPatch)
     assert calls["open_system_prompt_modal"] == 1
 
 
-def test_render_controls_runs_pdf_conversion(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_render_controls_runs_pdf_conversion(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     st_stub = install_streamlit_stub(monkeypatch)
     module = importlib.import_module("ui.fine_tuning.tools_check_sections")
 
     st_stub.register_button_sequence("btn_pdf_to_yaml", [True])
 
-    calls = _capture_calls(monkeypatch, module, "run_pdf_to_yaml_config")
+    stub_yaml = tmp_path / "visionstatement.yaml"
+    stub_yaml.write_text("ai: vision", encoding="utf-8")
+
+    calls = {"run": 0}
+
+    def _fake_run(*, tool_module: str, slug: str, action: str, args: Iterable[str] | None = None) -> dict[str, Any]:
+        calls["run"] += 1
+        return {
+            "payload": {
+                "status": "ok",
+                "mode": "control_plane",
+                "slug": slug,
+                "action": action,
+                "errors": [],
+                "warnings": [],
+                "artifacts": [str(stub_yaml)],
+                "paths": {"vision_yaml": str(stub_yaml)},
+                "returncode": 0,
+                "timmy_beta_strict": "0",
+            }
+        }
+
+    monkeypatch.setattr(module, "run_control_plane_tool", _fake_run, raising=False)
 
     module.render_controls(slug="dummy", st_module=st_stub)
 
-    assert calls["run_pdf_to_yaml_config"] == 1
+    assert calls["run"] == 1
 
 
 def test_render_vision_output_reads_mapping(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
