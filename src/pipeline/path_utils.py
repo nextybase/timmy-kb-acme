@@ -688,6 +688,10 @@ def sanitize_filename(
         raise FilenameSanitizeError("Errore sanitizzazione nome file") from exc
 
 
+_KEBAB_DISALLOWED_RE = re.compile(r"[^a-z0-9-]+")
+_KEBAB_MULTI_HYPHEN_RE = re.compile(r"-{2,}")
+
+
 def to_kebab(s: str) -> str:
     """Normalizza una stringa in kebab-case stabile per nomi cartella.
 
@@ -697,23 +701,24 @@ def to_kebab(s: str) -> str:
     - rimuove caratteri non [a-z0-9-]
     - comprime '-' ripetuti e li trimma ai lati
     """
-    try:
-        import re as _re
-
-        normalized = unicodedata.normalize("NFKD", s or "")
-        ascii_only = "".join(ch for ch in normalized if not unicodedata.combining(ch))
-        ascii_only = ascii_only.strip().lower().replace("_", "-").replace(" ", "-")
-        ascii_only = _re.sub(r"[^a-z0-9-]+", "-", ascii_only)
-        ascii_only = _re.sub(r"-{2,}", "-", ascii_only).strip("-")
-        return ascii_only
-    except Exception:
-        return str(s or "").strip().lower() or "-"
+    normalized = unicodedata.normalize("NFKD", s or "")
+    ascii_only = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    ascii_only = ascii_only.strip().lower().replace("_", "-").replace(" ", "-")
+    ascii_only = _KEBAB_DISALLOWED_RE.sub("-", ascii_only)
+    ascii_only = _KEBAB_MULTI_HYPHEN_RE.sub("-", ascii_only).strip("-")
+    return ascii_only
 
 
 def to_kebab_soft(s: str) -> str:
-    """Versione permissiva di `to_kebab` utilizzata da UI/tooling per match fuzzy."""
+    """Versione permissiva di `to_kebab` usata da UI/tooling per match fuzzy.
 
-    return to_kebab(s)
+    Se la normalizzazione canonical fallisce, restituisce stringa vuota invece di
+    un placeholder.
+    """
+    try:
+        return to_kebab(s)
+    except Exception:  # pragma: no cover (teorico, ma mantiene il gating soft)
+        return ""
 
 
 def to_kebab_strict(s: str, *, context: str) -> str:

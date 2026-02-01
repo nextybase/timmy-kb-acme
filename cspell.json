@@ -290,6 +290,7 @@
     "typechecks",
     "ufeff",
     "ufffd",
+    "unmappable",
     "unrequired",
     "unisom",
     "upserts",

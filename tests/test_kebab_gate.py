@@ -1,15 +1,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-'"""Grep gate per escludere fallback/placeholder nelle funzioni SSoT."""\n'
 from __future__ import annotations
 
-import re
-from pathlib import Path
+import pytest
+
+from pipeline.path_utils import to_kebab, to_kebab_soft
 
 
-def test_no_shim_return_patterns() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    path_utils = repo_root / "src" / "pipeline" / "path_utils.py"
-    content = path_utils.read_text()
+@pytest.mark.parametrize("candidate", ["!!!", "   ", "___", "///"])
+def test_to_kebab_soft_returns_empty_on_unmappable(candidate: str) -> None:
+    assert to_kebab_soft(candidate) == ""
 
-    assert re.search(r"except:\s*return\s*\"-\"", content) is None, "Shim '-' rilevato in path_utils"
-    assert re.search(r"except:\s*return\s*default", content) is None, "Shim 'default' rilevato in path_utils"
+
+@pytest.mark.parametrize("candidate", ["!!!", "   ", "___", "///"])
+def test_to_kebab_returns_empty_on_unmappable(candidate: str) -> None:
+    assert to_kebab(candidate) == ""
+
+
+def test_to_kebab_never_emits_placeholder_dash() -> None:
+    result = to_kebab("Hello --- WORLD!!!")
+    assert result not in {"", "-"}
