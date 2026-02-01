@@ -13,14 +13,21 @@ from pipeline.beta_flags import is_beta_strict
         ("true", True),
         ("yes", True),
         ("on", True),
-        ("", False),
+        ("", True),
         ("0", False),
         ("false", False),
+        ("no", False),
+        ("off", False),
     ),
 )
 def test_is_beta_strict_values(monkeypatch: pytest.MonkeyPatch, value: str, expected: bool) -> None:
     monkeypatch.setenv("TIMMY_BETA_STRICT", value)
     assert is_beta_strict() is expected
+
+
+def test_is_beta_strict_defaults_to_strict(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
+    assert is_beta_strict() is True
 
 
 def test_is_beta_strict_accepts_mapping() -> None:

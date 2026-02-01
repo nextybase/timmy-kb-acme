@@ -91,6 +91,8 @@ secondo la policy in `docs/developer/coding_rule.md`.
 Le credenziali non vanno in repo. Crea un file `.env` locale con:
 - `OPENAI_API_KEY` (obbligatoria per funzioni AI)
 - `SERVICE_ACCOUNT_FILE` e `DRIVE_ID` (solo se usi Drive)
+- `TIMMY_BETA_STRICT` (opzionale): l'assenza equivale a strict; impostalo su `0`,
+  `false`, `no` o `off` solo quando vuoi eseguire attività dummy/non-strict esplicite.
 
 Esempio minimo:
 ```bash
@@ -111,11 +113,11 @@ python tools/test_runner.py fast
 
 Se il comando fallisce, non procedere: risolvi prima i problemi di setup.
 
-Nota (Dummy strict): se esegui `tools/gen_dummy_kb.py` con `TIMMY_BETA_STRICT=1`,
-imposta `WORKSPACE_ROOT_DIR` al workspace canonico (es. `output/timmy-kb-<slug>`) prima del run.
-In strict è **vietato** puntare a `.../output` senza il suffisso `timmy-kb-<slug>`: il runtime richiede
-che `WORKSPACE_ROOT_DIR` risolva direttamente alla directory `output/timmy-kb-<slug>` e fallirà con
-`workspace.root.invalid` se viene passato il parent `output` o un nome diverso dallo slug atteso.
+Nota (Dummy strict): quando la dummy gira con `TIMMY_BETA_STRICT=0/false/no/off`,
+  imposta `WORKSPACE_ROOT_DIR` al workspace canonico (es. `output/timmy-kb-<slug>`) prima del run.
+  È **vietato** puntare a `.../output` senza il suffisso `timmy-kb-<slug>`: il runtime richiede che
+  `WORKSPACE_ROOT_DIR` risolva direttamente alla directory `output/timmy-kb-<slug>` e fallirà con
+  `workspace.root.invalid` se viene passato il parent `output` o un nome diverso dallo slug atteso.
 
 ## 9) Prossimi passi (comandi separati)
 

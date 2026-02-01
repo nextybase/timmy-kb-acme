@@ -9,9 +9,11 @@ governance, auditabilita' e stato del workspace.
 
 ## Perche' esistono Strict e Dummy
 
-In Beta 1.0, Timmy-KB opera per default in **Strict Mode**.
-Questo significa che l'esecuzione end-to-end della pipeline e'
-volontariamente bloccata prima delle fasi di agency completa.
+In Beta 1.0, Timmy-KB opera per default in **Strict Mode**, e la pipeline rimane
+bloccata sulle fasi di agency completa finché non viene concessa un'eccezione.
+L'assenza o la stringa vuota di `TIMMY_BETA_STRICT` viene interpretata come
+strict; solo un valore esplicitamente falsy (`0`, `false`, `no`, `off`)
+autorizza un'esecuzione non-strict mirata e auditabile.
 
 La **Dummy Mode** non e' una modalita' "piu' permissiva":
 e' un'eccezione esplicita, tracciata e auditabile, pensata esclusivamente
@@ -41,11 +43,13 @@ la risposta e' quasi sempre in questo documento.
 
 ## Modalità Strict (`TIMMY_BETA_STRICT`)
 
-### Attivazione
-Variabile d'ambiente:
+### Attivazione e default implicito
+Strict è attivo anche senza variabili:
 ```bash
 TIMMY_BETA_STRICT=1
 ```
+o, in mancanza della flag, per default. Solo valori falsy espliciti (`0`, `false`, `no`, `off`)
+disabilitano la stringa strict per quella run.
 
 ### Comportamento
 - Modalità **raccomandata di default** per la Beta.
@@ -112,9 +116,9 @@ timmy-kb tag-onboarding ... --dummy
 
 ## Control Plane e Tools > Tuning
 
-- Ogni pagina runtime mantiene `TIMMY_BETA_STRICT=1`; l'helper `ui.utils.control_plane.ensure_runtime_strict()` viene
-  invocato durante il rendering del chrome (default di `render_chrome_then_require`) per bloccare l'esecuzione
-  quando la variabile non è presente o vale `0`.
+- Ogni pagina runtime utilizza `ensure_runtime_strict()` per confermare strict: la guardia
+  considera strict anche l'assenza/valore vuoto di `TIMMY_BETA_STRICT` e blocca solo se il flag è
+  esplicitamente `0`, `false`, `no` o `off`.
 - L'interfaccia **Tools > Tuning** è dichiarata `strict_runtime=False` e segnalata come control plane. La pagina
   non esegue provisioning o update direttamente: raccoglie input e invia CLI isolati (`tools/tuning_pdf_to_yaml`,
   `tools/tuning_vision_provision`, `tools/tuning_system_prompt`) che girano con `control_plane_env(force_non_strict=True)`

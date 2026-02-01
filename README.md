@@ -42,8 +42,11 @@ Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' de
 
 ## ⚠️ Beta constraint: Strict vs Dummy mode
 
-In Beta, il flusso di onboarding è **strict-only** quando `TIMMY_BETA_STRICT=1`:
-la generazione degli stub semantici è **disabilitata**.
+In Beta, il flusso di onboarding è **strict-by-default**: l'assenza o il valore vuoto di
+`TIMMY_BETA_STRICT` equivale a strict, e la generazione degli stub semantici resta **disabilitata**.
+Solo un valore esplicitamente falsy (`0`, `false`, `no`, `off`) su `TIMMY_BETA_STRICT`,
+combinato con il flag `--dummy` e `TIMMY_ALLOW_DUMMY=1`, consente una run non-strict
+tracciata e contenuta nel ledger.
 
 Nota importante: il gate `tag_onboarding` è **intra-state** su `SEMANTIC_INGEST`
 (nessuna transizione di stato nel Decision Ledger).
@@ -56,8 +59,8 @@ rispetto all'obiettivo deterministico e a bassa entropia. Genera materiale non d
 In strict mode gli stub sono vietati dal contratto runtime e qualsiasi tentativo di forzarli deve
 portare a BLOCK. Non deve esistere (ne' essere introdotta) alcuna via laterale "comoda" nel runtime.
 
-Nota operativa: in strict (`TIMMY_BETA_STRICT=1`) la dummy richiede `WORKSPACE_ROOT_DIR` impostato
-sul workspace canonico (es. `output/timmy-kb-<slug>`). Non indicare il parent `output` senza lo slug,
+Nota operativa: quando la dummy gira con `TIMMY_BETA_STRICT=0/false/no/off`, `WORKSPACE_ROOT_DIR` deve
+punta al workspace canonico (es. `output/timmy-kb-<slug>`). Non indicare il parent `output` senza lo slug,
 è obbligatorio passare la directory finale `timmy-kb-<slug>` o il processo fallirà con `workspace.root.invalid`.
 
 👉 Dettagli operativi e implicazioni di audit:

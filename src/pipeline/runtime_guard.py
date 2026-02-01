@@ -22,7 +22,7 @@ def ensure_strict_runtime(*, env: Mapping[str, str] | None = None, context: str 
         extra={"context": context, "strict_env": source.get("TIMMY_BETA_STRICT")},
     )
     raise ConfigError(
-        "Strict-only precondition violata: imposta TIMMY_BETA_STRICT=1.",
+        "Strict disabilitato: TIMMY_BETA_STRICT è impostato su un valore non-strict.",
         code="runtime.strict_missing",
         component="pipeline.runtime_guard",
     )

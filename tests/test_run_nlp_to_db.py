@@ -78,7 +78,7 @@ def test_run_nlp_to_db_requires_repo_root_dir_in_strict(tmp_path, monkeypatch):
 
 
 def test_run_nlp_to_db_records_entities_failure_non_strict(tmp_path, monkeypatch):
-    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
     normalized_dir = tmp_path / "normalized"
     normalized_dir.mkdir(parents=True)
     db_path = tmp_path / "semantic" / "tags.db"
@@ -111,7 +111,7 @@ def test_run_nlp_to_db_entities_import_missing(strict, tmp_path, monkeypatch) ->
     if strict:
         monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
     else:
-        monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
+        monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
 
     normalized_dir, db_path = _prepare_nlp_paths(tmp_path)
     monkeypatch.setattr("semantic.nlp_runner.run_doc_terms_pipeline", lambda *_a, **_k: {"doc_terms": 0})
@@ -134,7 +134,7 @@ def test_run_nlp_to_db_entities_failure(strict, tmp_path, monkeypatch):
     if strict:
         monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
     else:
-        monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
+        monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
 
     normalized_dir, db_path = _prepare_nlp_paths(tmp_path)
     monkeypatch.setattr("semantic.nlp_runner.run_doc_terms_pipeline", lambda *_a, **_k: {"doc_terms": 0})

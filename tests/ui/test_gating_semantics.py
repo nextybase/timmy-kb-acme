@@ -136,7 +136,7 @@ def test_visible_page_specs_continues_on_normalized_ready_error(
 ) -> None:
     stub = StreamlitStub()
     monkeypatch.setitem(sys.modules, "streamlit", stub)
-    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
     monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
     monkeypatch.setattr(
         gating,
@@ -158,7 +158,7 @@ def test_visible_page_specs_continues_on_state_error(
 ) -> None:
     stub = StreamlitStub()
     monkeypatch.setitem(sys.modules, "streamlit", stub)
-    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
     monkeypatch.setattr(gating, "get_active_slug", lambda: "dummy", raising=False)
     monkeypatch.setattr(gating, "normalized_ready", lambda _slug, **_kwargs: (True, None), raising=False)
     monkeypatch.setattr(gating, "tagging_ready", lambda _slug, **_kwargs: (True, None), raising=False)

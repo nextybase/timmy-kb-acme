@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
-import json
 import shutil
 from pathlib import Path
 
@@ -26,10 +25,10 @@ def _setup_workspace(tmp_path: Path, *, create_pdf: bool = True) -> tuple[Path, 
     if create_pdf:
         pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
     yaml.write_text(
-        "client:\n"
+        "client:" + "\n"
         "  slug: dummy\n"
         "  client_name: Dummy\n"
-        "content:\n"
+        "content:" + "\n"
         "  full_text: |\n"
         "    Vision focus text\n"
         "sections:\n"

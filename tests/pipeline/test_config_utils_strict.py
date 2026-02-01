@@ -22,7 +22,7 @@ def test_refresh_context_settings_logs_on_failure(monkeypatch: pytest.MonkeyPatc
         raise RuntimeError("load failed")
 
     monkeypatch.setattr(config_utils.ContextSettings, "load", _boom)
-    monkeypatch.delenv("TIMMY_BETA_STRICT", raising=False)
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
 
     caplog.set_level(logging.WARNING, logger="pipeline.config_utils")
 

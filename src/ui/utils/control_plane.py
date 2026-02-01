@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"\"\"\"Helper per orchestrare i tool control-plane dal runtime UI.\"\"\""
+'"""Helper per orchestrare i tool control-plane dal runtime UI."""'
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ import sys
 from typing import Any, Iterable
 
 import streamlit as st
+
+from pipeline.beta_flags import is_beta_strict
 
 CONTROL_PLANE_SCHEMA_KEYS = (
     "status",
@@ -25,11 +27,12 @@ CONTROL_PLANE_SCHEMA_KEYS = (
 
 
 def ensure_runtime_strict() -> None:
-    """Blocca tutte le pagine runtime quando TIMMY_BETA_STRICT != '1'."""
-    strict_flag = os.environ.get("TIMMY_BETA_STRICT")
-    if strict_flag != "1":
-        st.error("TIMMY_BETA_STRICT deve valere '1' per tutte le pagine runtime.")
-        st.stop()
+    """Blocca tutte le pagine runtime quando TIMMY_BETA_STRICT esplicitamente disabilita strict."""
+    if is_beta_strict():
+        return
+
+    st.error("Strict disabilitato: TIMMY_BETA_STRICT è impostato su un valore non-strict.")
+    st.stop()
 
 
 def _normalize_payload(payload: dict[str, Any], *, slug: str, action: str) -> dict[str, Any]:
@@ -62,7 +65,7 @@ def run_control_plane_tool(
     env = dict(os.environ)
     env["TIMMY_BETA_STRICT"] = "0"
     try:
-        completed = subprocess.run(
+        completed = subprocess.run(  # noqa: S603 - comando derivato da tool interni e non accetta shell
             command,
             capture_output=True,
             text=True,
@@ -111,7 +114,9 @@ def run_control_plane_tool(
     return {"payload": normalized, "command": command, "completed": completed}
 
 
-def display_control_plane_result(st_module: Any, payload: dict[str, Any], *, success_message: str | None = None) -> None:
+def display_control_plane_result(
+    st_module: Any, payload: dict[str, Any], *, success_message: str | None = None
+) -> None:
     """Mostra il payload control plane nella UI con stato/warnings/errors."""
     status = payload.get("status")
     if status == "ok":

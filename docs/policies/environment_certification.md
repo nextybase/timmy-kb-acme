@@ -15,8 +15,9 @@ puo' dichiararsi conforme, garantendo determinismo operativo e auditabilita'.
 
 ## Scope: pipeline semantica
 Questa policy si applica alle esecuzioni CLI dei seguenti entrypoint:
-- `src/timmy_kb/cli/tag_onboarding.py` (orchestrator tagging; modalita' strict
-  con `TIMMY_BETA_STRICT`, flag `--nlp`, pipeline entities opzionale).
+- `src/timmy_kb/cli/tag_onboarding.py` (orchestrator tagging; strict è il default
+  anche senza `TIMMY_BETA_STRICT`, la flag viene usata solo per abilitare run non-strict
+  con valori `0/false/no/off`, flag `--nlp`, pipeline entities opzionale).
 - `src/timmy_kb/cli/semantic_headless.py` (pipeline RAW->BOOK con 4 step:
   `convert_markdown`, `require_reviewed_vocab`, `enrich_frontmatter`,
   `write_summary_and_readme`; `bootstrap_config` esplicito, default vietato).
@@ -24,7 +25,8 @@ Questa policy si applica alle esecuzioni CLI dei seguenti entrypoint:
 ## Requisiti minimi (ambiente certificato)
 - Versioni e dipendenze devono essere fissate e riproducibili (venv dedicato,
   lock o requirements coerenti con il repo).
-- `TIMMY_BETA_STRICT` deve essere allineato alla modalita' richiesta dalla run.
+- `TIMMY_BETA_STRICT` deve essere allineato alla modalita' richiesta dalla run: la sua assenza
+  equivale a strict, mentre `0`, `false`, `no`, `off` autorizzano run non-strict controllate.
 - Nessun comportamento best-effort o fallback che modifichi l'output tra macchine.
 - Se `source=drive`, l'ambiente deve includere l'extra `.[drive]` e le variabili
   `SERVICE_ACCOUNT_FILE` e `DRIVE_ID`; in assenza la run deve fallire.
@@ -34,8 +36,9 @@ Questa policy si applica alle esecuzioni CLI dei seguenti entrypoint:
 ## Non conformita' (errori)
 Esempi che devono produrre FAIL HARD in modalita' certificata:
 - **Drive missing:** `source=drive` ma extra `.[drive]` o env var mancanti.
-- **Strict disallineato:** `TIMMY_BETA_STRICT` non coerente con la modalita'
-  richiesta dalla run o dal workflow.
+- **Strict disallineato:** `TIMMY_BETA_STRICT` è impostato su un valore falsy quando
+  la run deve rimanere strict, oppure manca quando la run richiede esplicitamente
+  un non-strict tracciato.
 - **Bootstrap implicito:** avvio di `semantic_headless` con `bootstrap_config`
   non esplicito o con default vietato.
 - **Preview/placeholder headless:** qualsiasi comportamento che sostituisce
@@ -50,7 +53,7 @@ Esempi che devono produrre FAIL HARD in modalita' certificata:
 ## Evidence & Auditability
 Ogni run conforme deve produrre metadati osservabili in log strutturati e/o in
 `ledger` (es. `evidence_json`), includendo almeno:
-- `TIMMY_ENV`, `TIMMY_BETA_STRICT`, e modalita' esecuzione.
+- `TIMMY_ENV`, `TIMMY_BETA_STRICT` (o la sua assenza=strict), e modalita' esecuzione.
 - hash del codice (commit SHA) e hash della config cliente usata.
 - backend NLP effettivo e versioni (spaCy, sentence-transformers se pertinenti).
 - modello AI/embedding effettivo e versione (se usato).
@@ -63,7 +66,8 @@ Ogni run conforme deve produrre metadati osservabili in log strutturati e/o in
 
 ## Checklist pre-run (manuale)
 - [ ] Venv dedicato attivo e dipendenze allineate al repo.
-- [ ] `TIMMY_BETA_STRICT` impostato e coerente con la run.
+- [ ] `TIMMY_BETA_STRICT` impostato e coerente con la run (la sua assenza equivale a strict;
+  solo `0/false/no/off` autorizzano modalità non-strict tracciate).
 - [ ] Config cliente presente e valida (hash calcolabile).
 - [ ] `bootstrap_config` esplicito per `semantic_headless`.
 - [ ] Se `source=drive`: extra `.[drive]` installato.
