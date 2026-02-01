@@ -211,6 +211,7 @@ def test_download_drive_pdfs_to_local_aggregates_failures(tmp_path: Path, monkey
 
 
 def test_download_drive_pdfs_refreshes_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
     (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
     (tmp_path / "normalized").mkdir(parents=True, exist_ok=True)
     (tmp_path / "book").mkdir(parents=True, exist_ok=True)
@@ -243,11 +244,11 @@ def test_download_drive_pdfs_refreshes_cache(tmp_path: Path, monkeypatch: pytest
 
     monkeypatch.setattr(drv, "_download_one_pdf_atomic", _fake_download)
 
-    refreshed: list[Path] = []
+    refreshed: list[tuple[Path, bool]] = []
     monkeypatch.setattr(
         drv,
         "refresh_iter_safe_pdfs_cache_for_path",
-        lambda path, *, prewarm: refreshed.append(Path(path)),
+        lambda path, *, prewarm: refreshed.append((Path(path), prewarm)),
     )
 
     count = download_drive_pdfs_to_local(
@@ -258,7 +259,62 @@ def test_download_drive_pdfs_refreshes_cache(tmp_path: Path, monkeypatch: pytest
     )
 
     assert count == 1
-    assert refreshed == [dest]
+    assert refreshed == [(dest, False)]
+
+
+def test_download_drive_pdfs_refreshes_cache_when_non_strict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
+    (tmp_path / "raw").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "normalized").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "book").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "semantic").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config" / "config.yaml").write_text("{}", encoding="utf-8")
+    (tmp_path / "book" / "README.md").write_text("# README\n", encoding="utf-8")
+    (tmp_path / "book" / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+
+    ctx = types.SimpleNamespace(repo_root_dir=tmp_path, slug="dummy")
+    local_root = tmp_path / "raw"
+    dest = local_root / "Reports" / "report.pdf"
+    candidates = [
+        DriveCandidate(
+            category="Reports",
+            filename="report.pdf",
+            destination=dest,
+            remote_id="pdf-new",
+            remote_size=11,
+            metadata={"mimeType": MIME_PDF},
+        )
+    ]
+    monkeypatch.setattr(drv, "discover_candidates", lambda **_k: candidates)
+    monkeypatch.setattr(drv, "get_structured_logger", lambda *_a, **_k: _LoggerStub())
+
+    def _fake_download(service: Any, file_id: str, dest_path: Path, **_kwargs: Any) -> None:
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        dest_path.write_bytes(b"ok")
+
+    monkeypatch.setattr(drv, "_download_one_pdf_atomic", _fake_download)
+
+    refreshed: list[tuple[Path, bool]] = []
+    monkeypatch.setattr(
+        drv,
+        "refresh_iter_safe_pdfs_cache_for_path",
+        lambda path, *, prewarm: refreshed.append((Path(path), prewarm)),
+    )
+
+    count = download_drive_pdfs_to_local(
+        service=object(),
+        remote_root_folder_id="root",
+        local_root_dir=local_root,
+        context=ctx,
+    )
+
+    assert count == 1
+    assert refreshed == [(dest, True)]
 
 
 def test_download_one_pdf_atomic_cleans_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

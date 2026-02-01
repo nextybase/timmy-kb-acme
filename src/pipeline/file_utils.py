@@ -46,9 +46,18 @@ _logger = get_structured_logger("pipeline.file_utils")
 
 
 def _post_write_hooks(path: Path) -> None:
-    """Hook post-scrittura per mantenere coerenza cache/path utilities."""
-    if Path(path).suffix.lower() == ".pdf":
-        refresh_iter_safe_pdfs_cache_for_path(Path(path), prewarm=True)
+    """Hook post-scrittura per mantenere coerenza cache/path utilities.
+
+    In strict mode (default) non effettua il prewarm della cache per evitare dipendenze da clock.
+    In non-strict (dev/tooling/dummy) il prewarm resta attivo per UX.
+    """
+    if Path(path).suffix.lower() != ".pdf":
+        return
+
+    from .beta_flags import is_beta_strict
+
+    prewarm = not is_beta_strict()
+    refresh_iter_safe_pdfs_cache_for_path(Path(path), prewarm=prewarm)
 
 
 def _fsync_file(fd: int, *, path: Optional[Path] = None) -> None:

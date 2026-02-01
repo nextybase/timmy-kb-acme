@@ -84,12 +84,18 @@ def test_safe_write_pdf_refreshes_cache(tmp_path: Path) -> None:
 
     safe_write_bytes(pdf_two, b"%PDF-1.4\n", atomic=True)
 
+    path_utils.clear_iter_safe_pdfs_cache(root=raw_dir)
+
     original_iter_safe_paths = path_utils.iter_safe_paths
 
-    def _boom(*args: object, **kwargs: object) -> list[Path]:
-        raise AssertionError("iter_safe_paths should not be invoked when cache is prewarmed")
+    called = False
 
-    path_utils.iter_safe_paths = _boom
+    def _spy(*args: object, **kwargs: object) -> list[Path]:
+        nonlocal called
+        called = True
+        return original_iter_safe_paths(*args, **kwargs)
+
+    path_utils.iter_safe_paths = _spy
     try:
         cached_listing = list(path_utils.iter_safe_pdfs(raw_dir, use_cache=True))
     finally:
@@ -99,6 +105,34 @@ def test_safe_write_pdf_refreshes_cache(tmp_path: Path) -> None:
     assert pdf_one.resolve() in resolved_listing
     assert pdf_two.resolve() in resolved_listing
     assert len(resolved_listing) == 2
+    assert called, "iter_safe_paths should be used when strict disables prewarm"
+
+
+def test_safe_write_pdf_prewarms_cache_when_non_strict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
+    workspace = tmp_path / "client"
+    raw_dir = workspace / "raw"
+    raw_dir.mkdir(parents=True)
+
+    pdf_one = raw_dir / "doc1.pdf"
+    safe_write_bytes(pdf_one, b"%PDF-1.4\n", atomic=True)
+
+    called = False
+
+    def _boom(*args: object, **kwargs: object) -> list[Path]:
+        nonlocal called
+        called = True
+        raise AssertionError("iter_safe_paths should not be called when cache is prewarmed")
+
+    original_iter_safe_paths = path_utils.iter_safe_paths
+    path_utils.iter_safe_paths = _boom
+    try:
+        cached_listing = list(path_utils.iter_safe_pdfs(raw_dir, use_cache=True))
+    finally:
+        path_utils.iter_safe_paths = original_iter_safe_paths
+
+    assert not called, "iter_safe_paths should not be called when non-strict prewarms the cache"
+    assert pdf_one.resolve() in {item.resolve() for item in cached_listing}
 
 
 def test_iter_safe_pdfs_cache_invariant_set(tmp_path: Path) -> None:
