@@ -42,7 +42,7 @@ def test_to_kebab_idempotent(input_text: str) -> None:
         ("Hello World", "hello-world"),
         ("multi__separator--test", "multi-separator-test"),
         ("   SPACES   ", "spaces"),
-        ("\u00e0\u00e8\u00ec\u00f2\u00f9", ""),
+        ("\u00e0\u00e8\u00ec\u00f2\u00f9", "aeiou"),
         ("Already-Kebab", "already-kebab"),
     ],
 )

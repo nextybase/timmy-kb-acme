@@ -9,6 +9,7 @@ from ui.utils import backend as _backend
 
 ensure_within_and_resolve = _backend.ensure_within_and_resolve
 to_kebab = _backend.to_kebab
+to_kebab_soft = _backend.to_kebab_soft
 _safe_write_text = _backend.safe_write_text  # hook per test/monkeypatch UI
 
 

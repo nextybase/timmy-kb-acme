@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Tuple, cast
 
 from pipeline.exceptions import ConfigError, ConversionError
+from pipeline.path_utils import to_kebab
 
 # ============================
 # Types & Constraints Handling
@@ -146,31 +146,6 @@ def validate_yaml_schema(tree: Dict[str, Any], max_depth: int) -> None:
     if not isinstance(tree, dict):
         raise ConversionError("La struttura deve essere un dict")
     _validate_node(tree, depth=1, max_depth=max_depth)
-
-
-# ============================
-# Internals (pure helpers)
-# ============================
-
-_kebab_re = re.compile(r"[^a-z0-9\-]+")
-
-
-def to_kebab(s: str) -> str:
-    """
-    Converte stringa in kebab-case:
-    - lowercase
-    - rimuove accenti/diacritici
-    - spazi/underscore -> '-'
-    - rimuove caratteri non alfanumerici (eccetto '-')
-    - compatta multipli '-'
-    - trim di '-'
-    """
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(ch for ch in s if not unicodedata.combining(ch))
-    s = s.lower().replace("_", "-").replace(" ", "-")
-    s = _kebab_re.sub("-", s)
-    s = re.sub(r"-{2,}", "-", s).strip("-")
-    return s
 
 
 def _extract_terms(text: str, min_len: int = 4, top_k: int = 24) -> List[str]:

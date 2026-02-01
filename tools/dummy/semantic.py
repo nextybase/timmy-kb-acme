@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from pipeline.file_utils import safe_write_bytes
-from pipeline.path_utils import to_kebab
+from pipeline.path_utils import to_kebab_soft
 
 
 _VISION_STATEMENT_SOURCE = Path(__file__).resolve().parents[2] / "config" / "VisionStatement.pdf"
@@ -47,7 +47,7 @@ def ensure_raw_pdfs(base_dir: Path, *, categories: Optional[dict[str, dict[str, 
             candidate_dirs.add(child)
 
     for category_key in (categories or {}).keys():
-        candidate_dirs.add(raw_dir / to_kebab(category_key))
+        candidate_dirs.add(raw_dir / to_kebab_soft(category_key))
 
     for subdir in sorted(candidate_dirs):
         subdir.mkdir(parents=True, exist_ok=True)

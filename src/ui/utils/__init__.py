@@ -6,7 +6,7 @@ from importlib import import_module
 from typing import Any
 
 from .branding import get_favicon_path, render_brand_header, render_sidebar_brand
-from .core import ensure_within_and_resolve, to_kebab, yaml_dump, yaml_load
+from .core import ensure_within_and_resolve, to_kebab, to_kebab_soft, yaml_dump, yaml_load
 from .workspace import (
     get_ui_workspace_layout,
     has_normalized_markdown,
@@ -29,6 +29,7 @@ _SLUG_EXPORTS = {
 __all__: list[str] = [
     "ensure_within_and_resolve",
     "to_kebab",
+    "to_kebab_soft",
     "yaml_dump",
     "yaml_load",
     "get_favicon_path",

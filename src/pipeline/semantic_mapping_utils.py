@@ -7,7 +7,7 @@ from typing import List
 import yaml
 
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, to_kebab
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, to_kebab_strict
 from pipeline.semantic_mapping_validation import validate_area_dict, validate_area_key, validate_areas_list
 
 _RESERVED = {
@@ -64,12 +64,12 @@ def raw_categories_from_semantic_mapping(*, semantic_dir: Path, mapping_path: Pa
             key_field=_AREA_NAME_FIELD,
             error_message=f"semantic_mapping.yaml non conforme: areas[{idx}] manca del campo '{_AREA_NAME_FIELD}'.",
         )
-        k = to_kebab(raw_name)
-        if not k:
-            raise ConfigError(
-                f"semantic_mapping.yaml non conforme: areas[{idx}].{_AREA_NAME_FIELD} non valido dopo normalizzazione."
+        names.append(
+            to_kebab_strict(
+                raw_name,
+                context=f"semantic_mapping.areas[{idx}].{_AREA_NAME_FIELD}",
             )
-        names.append(k)
+        )
 
     # determinismo
     return sorted(set(names))

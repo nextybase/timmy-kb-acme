@@ -700,12 +700,41 @@ def to_kebab(s: str) -> str:
     try:
         import re as _re
 
-        s = (s or "").strip().lower().replace("_", "-").replace(" ", "-")
-        s = _re.sub(r"[^a-z0-9-]+", "-", s)
-        s = _re.sub(r"-{2,}", "-", s).strip("-")
-        return s
+        normalized = unicodedata.normalize("NFKD", s or "")
+        ascii_only = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+        ascii_only = ascii_only.strip().lower().replace("_", "-").replace(" ", "-")
+        ascii_only = _re.sub(r"[^a-z0-9-]+", "-", ascii_only)
+        ascii_only = _re.sub(r"-{2,}", "-", ascii_only).strip("-")
+        return ascii_only
     except Exception:
         return str(s or "").strip().lower() or "-"
+
+
+def to_kebab_soft(s: str) -> str:
+    """Versione permissiva di `to_kebab` utilizzata da UI/tooling per match fuzzy."""
+
+    return to_kebab(s)
+
+
+def to_kebab_strict(s: str, *, context: str) -> str:
+    """Canonicalizza la stringa in kebab-case e fallisce su slug non validi."""
+
+    slug_candidate = to_kebab(s)
+    if not slug_candidate:
+        raise InvalidSlug(
+            f"Canonicalizzazione fallita per '{s}' ({context}): nessun slug prodotto.",
+            slug=s,
+            component="path_utils.to_kebab_strict",
+        )
+
+    try:
+        return validate_slug(slug_candidate)
+    except InvalidSlug as exc:
+        raise InvalidSlug(
+            f"Slug canonicalizzato '{slug_candidate}' non valido per {context}.",
+            slug=slug_candidate,
+            component="path_utils.to_kebab_strict",
+        ) from exc
 
 
 # ----------------------------------------
@@ -836,6 +865,9 @@ __all__ = [
     "validate_slug",  # helper dominio
     "normalize_path",
     "sanitize_filename",
+    "to_kebab",
+    "to_kebab_strict",
+    "to_kebab_soft",
     "sorted_paths",  # ordinamento deterministico
     "ensure_valid_slug",  # wrapper interattivo
     "iter_safe_paths",

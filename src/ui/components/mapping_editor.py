@@ -5,10 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.file_utils import safe_write_text
-from pipeline.path_utils import validate_slug
+from pipeline.path_utils import to_kebab_strict, validate_slug
 
-from ..utils.core import ensure_within_and_resolve, to_kebab, yaml_dump, yaml_load
+from ..utils.core import ensure_within_and_resolve, to_kebab_soft, yaml_dump, yaml_load
 
 MAPPING_RESERVED = {
     "context",
@@ -74,7 +75,7 @@ def build_mapping(
         out["context"] = ctx
     # categorie
     for k, data in categories.items():
-        key = to_kebab(k) if normalize_keys else k
+        key = to_kebab_soft(k) if normalize_keys else k
         cleaned_keywords: List[str] = []
         for item in data.get("keywords") or []:
             value = str(item).strip()
@@ -91,7 +92,7 @@ def build_mapping(
 def validate_categories(categories: Dict[str, Dict[str, Any]], *, normalize_keys: bool) -> Optional[str]:
     seen = set()
     for k in categories.keys():
-        kk = to_kebab(k) if normalize_keys else k.strip()
+        kk = to_kebab_soft(k) if normalize_keys else k.strip()
         if not kk:
             return "Chiave categoria vuota."
         if kk in seen:
@@ -126,6 +127,7 @@ def save_semantic_mapping(slug: str, mapping: Dict[str, Any], *, base_root: Path
     client_root: Path = ensure_within_and_resolve(base_root, base_root / f"timmy-kb-{safe_slug}")
     sem_dir: Path = ensure_within_and_resolve(client_root, client_root / "semantic")
     path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "semantic_mapping.yaml")
+    _ensure_mapping_keys_canonical(mapping)
     safe_write_text(path, yaml_dump(mapping), encoding="utf-8", atomic=True)
     return path
 
@@ -159,7 +161,9 @@ def mapping_to_raw_structure(mapping: Dict[str, Any]) -> Dict[str, Any]:
     { 'raw': {categoria_kebab: {} ...}, 'contrattualistica': {} }
     """
     cats, _ = split_mapping(mapping)
-    raw_children: Dict[str, Dict[str, Any]] = {to_kebab(k): {} for k in sorted(cats.keys(), key=lambda x: to_kebab(x))}
+    raw_children: Dict[str, Dict[str, Any]] = {
+        to_kebab_soft(k): {} for k in sorted(cats.keys(), key=lambda x: to_kebab_soft(x))
+    }
     return {
         "raw": raw_children,
         "contrattualistica": {},
@@ -175,3 +179,25 @@ def write_raw_structure_yaml(slug: str, structure: Dict[str, Any], *, base_root:
     path: Path = ensure_within_and_resolve(sem_dir, sem_dir / "_raw_from_mapping.yaml")
     safe_write_text(path, yaml_dump(structure), encoding="utf-8", atomic=True)
     return path
+
+
+def _ensure_mapping_keys_canonical(mapping: Dict[str, Any]) -> None:
+    """Verifica che tutte le chiavi operative siano già canonical (fail-fast)."""
+    for key in mapping.keys():
+        if key in MAPPING_RESERVED:
+            continue
+        try:
+            canonical_key = to_kebab_strict(
+                key,
+                context="ui.components.mapping_editor.save_semantic_mapping",
+            )
+        except InvalidSlug as exc:
+            raise ConfigError(
+                f"Semantic mapping non valido: la chiave {key!r} non genera uno slug kebab-case canonical.",
+                hint="Normalizza le categorie (o attiva 'Normalize keys') prima di salvare.",
+            ) from exc
+        if canonical_key != key:
+            raise ConfigError(
+                f"Semantic mapping non valido: la chiave {key!r} dovrebbe essere {canonical_key!r}.",
+                hint="Aggiorna manualmente la chiave o abilita la normalizzazione prima del salvataggio.",
+            )

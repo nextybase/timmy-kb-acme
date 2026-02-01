@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 import yaml
 
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import to_kebab
+from pipeline.path_utils import to_kebab_strict
 from pipeline.semantic_mapping_validation import validate_area_dict, validate_area_key, validate_areas_list
 
 
@@ -43,7 +43,10 @@ def vision_to_semantic_mapping_yaml(data: Dict[str, Any], slug: str) -> str:
             error_message=f"Vision data: areas[{idx}].key mancante o vuoto.",
         )
         key = str(raw_key).strip()
-        key_norm = to_kebab(key)
+        key_norm = to_kebab_strict(
+            key,
+            context=f"vision.areas[{idx}].key",
+        )
         if key != key_norm:
             raise ConfigError(
                 "Vision data: areas[].key deve essere canonico kebab-case.",

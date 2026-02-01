@@ -44,7 +44,7 @@ from pipeline.logging_utils import get_structured_logger
 
 # Import locali (dev UI)
 from ..components.mapping_editor import load_semantic_mapping
-from ..utils import to_kebab  # SSoT normalizzazione + path-safety
+from ..utils import to_kebab_soft  # SSoT fuzzy match (soft normalization)
 from ..utils.context_cache import get_client_context
 
 if TYPE_CHECKING:
@@ -217,7 +217,7 @@ def _get_existing_client_folder_id(service: Any, parent_id: str, slug: str) -> O
     Confronto casefold + normalizzazione kebab per tollerare varianti di naming.
     """
     slug_clean = slug.strip()
-    target = to_kebab(slug_clean)
+    target = to_kebab_soft(slug_clean)
     accepted_names = {
         target,
         slug_clean.casefold(),
@@ -228,7 +228,7 @@ def _get_existing_client_folder_id(service: Any, parent_id: str, slug: str) -> O
         folder_id = (folder.get("id") or "").strip()
         if not name or not folder_id:
             continue
-        normalized = to_kebab(name)
+        normalized = to_kebab_soft(name)
         name_cf = name.casefold()
         if normalized in accepted_names or name_cf in accepted_names:
             return folder_id
@@ -475,7 +475,7 @@ def _extract_categories_from_mapping(
         if not isinstance(key_raw, str) or not key_raw.strip():
             raise RuntimeError("semantic_mapping.yaml non conforme: areas[].key mancante (kebab-case richiesto).")
         key = key_raw.strip()
-        key_norm = to_kebab(key)
+        key_norm = to_kebab_soft(key)
         if key != key_norm:
             raise RuntimeError(
                 "semantic_mapping.yaml non conforme: areas[].key deve essere canonico kebab-case. "
@@ -500,7 +500,7 @@ def _extract_categories_from_mapping(
         if isinstance(sys, dict):
             for sys_key, sys_val in sys.items():
                 key = str(sys_key).strip()
-                key_norm = to_kebab(key)
+                key_norm = to_kebab_soft(key)
                 if key != key_norm:
                     raise RuntimeError(
                         "semantic_mapping.yaml non conforme: system_folders key deve essere kebab-case. "
@@ -578,7 +578,7 @@ def emit_readmes_for_raw(
         if not isinstance(cat_name, str) or not cat_name.strip():
             raise RuntimeError("semantic_mapping.yaml non conforme: area key vuota o non testuale.")
         folder_k = cat_name.strip()
-        folder_norm = to_kebab(folder_k)
+        folder_norm = to_kebab_soft(folder_k)
         if folder_k != folder_norm:
             raise RuntimeError(
                 "semantic_mapping.yaml non conforme: areas[].key deve essere canonico kebab-case. "
