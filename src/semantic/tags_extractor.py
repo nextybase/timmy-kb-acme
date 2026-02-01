@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/tags_extractor.py
 # -*- coding: utf-8 -*-
 """Estrattore tag per PDF "raw" + utilità di ingest locale (Timmy-KB).

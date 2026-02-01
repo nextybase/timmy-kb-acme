@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/normalizer.py
 """Modulo per normalizzare i tag proposti dall'auto_tagger sulla base delle regole definite nel
 mapping cliente (semantic_mapping.yaml).

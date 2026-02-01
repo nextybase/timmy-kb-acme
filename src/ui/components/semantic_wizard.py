@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """
 Componenti UI per lo wizard di onboarding semantico (pagina Semantics).
 

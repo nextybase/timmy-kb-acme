@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 from semantic.core import compile_pdf_to_yaml
 from semantic.document_ingest import DocumentContent, read_document

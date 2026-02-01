@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """CLI helper per il Tag KG Builder (passo intermedio tra Tag Onboarding e Semantic Onboarding)."""
 # Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
 

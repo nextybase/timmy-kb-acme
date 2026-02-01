@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # tests/test_convert_markdown_no_pdfs_raises.py
 from pathlib import Path
 

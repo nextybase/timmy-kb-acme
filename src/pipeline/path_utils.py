@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/pipeline/path_utils.py
 """Utility di gestione path e slug per la pipeline Timmy-KB.
 

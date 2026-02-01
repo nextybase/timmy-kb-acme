@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """SSoT helpers for visionstatement.yaml paths (workspace only)."""
 
 from __future__ import annotations

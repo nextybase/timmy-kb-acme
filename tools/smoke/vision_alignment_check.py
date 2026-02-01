@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # tools/vision_alignment_check.py
 # Health-check 1:1 con il flusso Vision (Responses API), robusto e molto verboso.
 # Richiede:

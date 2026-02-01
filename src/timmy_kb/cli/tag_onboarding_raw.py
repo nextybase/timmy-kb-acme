@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Servizi di acquisizione RAW per l'orchestratore tag_onboarding."""
 
 from __future__ import annotations

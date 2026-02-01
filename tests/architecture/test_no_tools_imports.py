@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Verifica che src/ non importi nulla da tools/."""
 
 from __future__ import annotations

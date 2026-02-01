@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Gestione della cache dell'albero Drive per la UI Streamlit."""
 
 from __future__ import annotations

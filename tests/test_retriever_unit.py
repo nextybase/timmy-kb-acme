@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # tests/test_retriever_unit.py
 # Test unitari mirati per:
 # - cosine() iterator-safe (Sequence non indicizzabili, lunghezze diverse, norme nulle)

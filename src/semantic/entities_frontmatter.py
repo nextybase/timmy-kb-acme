@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/entities_frontmatter.py
 """Arricchisce il frontmatter con entità e relazioni suggerite (doc_entities).
 

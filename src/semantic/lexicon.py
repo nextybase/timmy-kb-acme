@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/lexicon.py
 """Costruzione di un lessico SpaCy a partire da semantic_mapping.yaml.
 

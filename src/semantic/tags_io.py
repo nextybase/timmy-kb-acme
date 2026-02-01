@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/tags_io.py
 # -*- coding: utf-8 -*-
 """I/O utility per il flusso di tagging (cartella `semantic/`) - Timmy-KB.

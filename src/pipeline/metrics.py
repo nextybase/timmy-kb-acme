@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """
 Metriche Prometheus opzionali per Timmy KB (hard cut 1.0 Beta).
 

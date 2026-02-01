@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/entities_review.py
 """Backend di revisione per doc_entities (SpaCy/HiTL).
 

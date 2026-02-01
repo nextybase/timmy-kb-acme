@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 from types import SimpleNamespace
 
 from pipeline.file_utils import safe_write_text

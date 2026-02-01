@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """
 Esegue QA locale in modo "safe" (auto-rimeditivo) con una smoke suite:
 1) isort (write-mode)        -> riordina import

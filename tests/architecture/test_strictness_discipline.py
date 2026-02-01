@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Guardrail: strict=False e cache TTL non ammessi nei percorsi core."""
 
 from __future__ import annotations

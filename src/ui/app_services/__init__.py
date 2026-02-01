@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Strato servizi UI (stub)."""
 
 from .drive_cache import _clear_drive_tree_cache

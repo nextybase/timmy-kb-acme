@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """
 Utilities per verificare che la cartella `book/` di un workspace
 sia pronta per l'anteprima (HonKit) e per l'uso come knowledge base.

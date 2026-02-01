@@ -18,9 +18,6 @@ sidebar(None)
 st.subheader("Benvenuto!")
 st.write("Per iniziare, crea o apri un workspace cliente.")
 
-# Navigazione affidabile alla pagina "Nuovo cliente" (SSoT)
-if hasattr(st, "page_link"):
-    st.page_link(PagePaths.NEW_CLIENT, label="Nuovo cliente", icon="➕")
-else:
-    # Fallback per versioni più vecchie: link diretto al path registrato
-    st.link_button("Nuovo cliente", url="/new?tab=new", width="stretch")
+# Navigazione basata su PagePaths (SSoT); Beta 1.0 assicura che Streamlit
+# esponga `st.page_link`, quindi non c’è fallback.
+st.page_link(PagePaths.NEW_CLIENT, label="Nuovo cliente", icon="➕")

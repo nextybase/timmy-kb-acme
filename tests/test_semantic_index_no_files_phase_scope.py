@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # tests/test_semantic_index_no_files_phase_scope.py
 import logging
 from pathlib import Path

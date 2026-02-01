@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 from ui.utils.stubs import get_streamlit
 
 _st = get_streamlit()

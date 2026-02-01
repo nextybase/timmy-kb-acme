@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Helper centralizzato per gestire tab/slug nei query params Streamlit."""
 
 from __future__ import annotations

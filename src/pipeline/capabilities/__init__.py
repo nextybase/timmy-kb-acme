@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 from .openai import get_openai_ctor
 from .otel import is_otel_available
 from .vision import load_vision_bindings

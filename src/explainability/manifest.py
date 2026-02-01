@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Strutture dati per il manifest di risposta (explainability per-risposta).
 
 Nota: nessun I/O o logging qui; il manifest viene costruito in memoria e

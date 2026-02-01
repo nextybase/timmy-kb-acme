@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # src/ui/utils/backend.py
 """Re-export delle API pubbliche pipeline/semantic usate dalla UI.
 

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
 from timmy_kb.cli.tag_onboarding_raw import _normalize_provider

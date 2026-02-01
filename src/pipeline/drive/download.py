@@ -42,7 +42,6 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from googleapiclient.http import MediaIoBaseDownload
 
-from pipeline.beta_flags import is_beta_strict
 from pipeline.drive.download_steps import discover_candidates
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger, redact_secrets, tail_path
@@ -309,6 +308,8 @@ def download_drive_pdfs_to_local(
             )
             downloaded += 1
             logger.info("download.ok", extra={"file_path": str(dest_path), "size": remote_size})
+            from pipeline.beta_flags import is_beta_strict
+
             refresh_iter_safe_pdfs_cache_for_path(dest_path, prewarm=not is_beta_strict())
         except Exception as e:
             fid = redact_secrets(file_id) if redact_logs else file_id

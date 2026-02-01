@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """
 Streamlit UI guard (cross-platform, Python)
 - Evita dipendenza da bash/WSL; coerente con gli altri check in tools/dev/*.py

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Utility per i test: crea layout workspace strict minimi."""
 
 from pathlib import Path

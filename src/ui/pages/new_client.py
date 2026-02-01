@@ -37,7 +37,6 @@ from ui.utils import clear_active_slug, set_slug
 from ui.utils.config import resolve_ui_allow_local_only
 from ui.utils.context_cache import get_client_context, invalidate_client_context
 from ui.utils.control_plane import display_control_plane_result, run_control_plane_tool
-from ui.utils.html import esc_url_component
 from ui.utils.merge import deep_merge_dict
 from ui.utils.repo_root import get_repo_root
 from ui.utils.status import status_guard
@@ -897,9 +896,5 @@ if st.session_state.get(phase_state_key) == UI_PHASE_PROVISIONED and (
     st.session_state.get(slug_state_key) or effective_slug
 ):
     eff = st.session_state.get(slug_state_key) or effective_slug
-    eff_q = esc_url_component(eff)
-    # Navigazione nativa (preferita) con degradazione
-    if hasattr(st, "page_link"):
-        st.page_link(PagePaths.MANAGE, label="Vai a Gestisci cliente")
-    else:
-        st.link_button("Vai a Gestisci cliente", url=f"/manage?slug={eff_q}")
+    # Navigazione basata su PagePaths: Beta 1.0 assume Streamlit modern.
+    st.page_link(PagePaths.MANAGE, label="Vai a Gestisci cliente")

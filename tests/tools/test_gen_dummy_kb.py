@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Test per gen_dummy_kb refactor (build_payload e parse_args)."""
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # tests/test_content_utils_no_traversal_when_safe_pdfs.py
 from dataclasses import dataclass, field
 from pathlib import Path

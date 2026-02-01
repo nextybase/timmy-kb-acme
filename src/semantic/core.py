@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Canonical semantic helpers for vision ingestion and extraction."""
 
 # All vision artefact generation must go through semantic.core.

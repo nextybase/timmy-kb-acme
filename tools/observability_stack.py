@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # tools/observability_stack.py
 """
 Helpers per avviare e fermare lo stack Grafana/Loki quando Docker è disponibile.

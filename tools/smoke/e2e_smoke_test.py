@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-or-later
 # tools/e2e_smoke_test.py
 """
 DUMMY / SMOKE SUPER-TEST ONLY
