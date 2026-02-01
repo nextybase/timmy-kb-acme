@@ -90,9 +90,9 @@ def _resolve_layout(slug: str) -> WorkspaceLayout | None:
         return None
 
 
-def _call_best_effort(fn: Callable[..., Any], **kwargs: Any) -> Any:
-    """Compat per i test esistenti: delega alla versione in manage_helpers."""
-    return manage_helpers.call_best_effort(fn, logger=LOGGER, **kwargs)
+def _call_strict(fn: Callable[..., Any], **kwargs: Any) -> Any:
+    """Compat per i test esistenti: delega alla versione strict."""
+    return manage_helpers.call_strict(fn, logger=LOGGER, **kwargs)
 
 
 def _render_missing_layout(slug: str) -> None:
@@ -402,11 +402,11 @@ if slug:
                         expanded=True,
                         error_label="Errore durante la generazione dei README",
                     ) as status_widget:
-                        result = manage_helpers.call_best_effort(
+                        result = manage_helpers.call_strict(
                             emit_fn,
                             logger=LOGGER,
                             slug=slug,
-                            require_drive_env=True,
+                            require_env=True,
                         )
                         count = len(result or {})
                         if status_widget is not None and hasattr(status_widget, "update"):

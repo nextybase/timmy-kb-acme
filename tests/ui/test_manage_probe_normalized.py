@@ -147,21 +147,33 @@ def test_manage_tags_editor_syncs_db(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert st_stub._rerun_called is True
 
 
-def test_call_best_effort_matches_signature() -> None:
+def test_call_strict_matches_signature() -> None:
     from ui.pages import manage as manage_page
 
     def _fn(*, slug: str, overwrite: bool = False) -> tuple[str, bool]:
         return slug, overwrite
 
-    result = manage_page._call_best_effort(_fn, slug="dummy", overwrite=True)
+    result = manage_page._call_strict(_fn, slug="dummy", overwrite=True)
     assert result == ("dummy", True)
 
 
-def test_call_best_effort_raises_on_mismatch() -> None:
+def test_call_strict_raises_on_mismatch() -> None:
     from ui.pages import manage as manage_page
 
     def _fn(slug: str, other: int) -> None:
         return None
 
     with pytest.raises(TypeError):
-        manage_page._call_best_effort(_fn, slug="dummy")
+        manage_page._call_strict(_fn, slug="dummy")
+
+
+def test_call_strict_rejects_unknown_kwargs() -> None:
+    from ui.pages import manage as manage_page
+
+    def _fn(slug: str, require_env: bool = False) -> tuple[str, bool]:
+        return slug, require_env
+
+    with pytest.raises(TypeError) as excinfo:
+        manage_page._call_strict(_fn, slug="dummy", require_env=True, extra="nope")
+
+    assert "Unknown kwargs" in str(excinfo.value)

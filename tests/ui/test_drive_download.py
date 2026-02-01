@@ -28,11 +28,11 @@ def test_drive_download_warns_when_overwrite_disabled(monkeypatch: pytest.Monkey
     st = StreamlitStub()
     captured: Dict[str, Any] = {}
 
-    def fake_call_best_effort(fn, *, logger, **kwargs):
+    def fake_call_strict(fn, *, logger, **kwargs):
         captured.update(kwargs)
         return ["ok"]
 
-    monkeypatch.setattr(drive, "call_best_effort", fake_call_best_effort)
+    monkeypatch.setattr(drive, "call_strict", fake_call_strict)
 
     def download_with_env(*, slug: str, overwrite: bool, require_env: bool = True) -> List[str]:
         return ["a"]
@@ -59,11 +59,11 @@ def test_drive_download_force_overwrite(monkeypatch: pytest.MonkeyPatch) -> None
     st = StreamlitStub()
     captured: Dict[str, Any] = {}
 
-    def fake_call_best_effort(fn, *, logger, **kwargs):
+    def fake_call_strict(fn, *, logger, **kwargs):
         captured.update(kwargs)
         return ["ok"]
 
-    monkeypatch.setattr(drive, "call_best_effort", fake_call_best_effort)
+    monkeypatch.setattr(drive, "call_strict", fake_call_strict)
 
     def download_with_env(*, slug: str, overwrite: bool, require_env: bool = True) -> List[str]:
         return ["a"]

@@ -44,6 +44,8 @@ def manage_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     )
     fake_workspace.count_markdown_safe = lambda *_a, **_k: 0
     fake_workspace.count_pdfs_safe = lambda *_a, **_k: 0
+    fake_workspace.normalized_ready = lambda *_a, **_k: False
+    fake_workspace.tagging_ready = lambda *_a, **_k: False
     monkeypatch.setitem(sys.modules, "ui.utils.workspace", fake_workspace)
 
     sys.modules.pop("ui.pages.manage", None)
@@ -54,11 +56,11 @@ def manage_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         sys.modules.pop("ui.pages.manage", None)
 
 
-def test_call_best_effort_signature_binding(manage_module):
+def test_call_strict_signature_binding(manage_module):
     def fn_new(sig_only, slug, require_env=False):
         return (sig_only, slug, require_env)
 
-    result = manage_module._call_best_effort(
+    result = manage_module._call_strict(
         fn_new,
         slug="dummy",
         require_env=True,
@@ -66,3 +68,19 @@ def test_call_best_effort_signature_binding(manage_module):
     )
 
     assert result == ("X", "dummy", True)
+
+
+def test_call_strict_rejects_extra_kwargs(manage_module):
+    def fn_new(sig_only, slug, *, require_env=False):
+        return (sig_only, slug, require_env)
+
+    with pytest.raises(TypeError) as excinfo:
+        manage_module._call_strict(
+            fn_new,
+            slug="dummy",
+            require_env=True,
+            sig_only="X",
+            unexpected="y",
+        )
+
+    assert "Unknown kwargs" in str(excinfo.value)

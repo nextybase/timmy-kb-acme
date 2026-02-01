@@ -4,7 +4,7 @@ from __future__ import annotations
 import inspect
 from typing import Any, Callable, ContextManager, Optional, Protocol, Sequence, cast
 
-from ui.manage._helpers import call_best_effort
+from ui.manage._helpers import call_strict
 from ui.types import StreamlitLike
 
 
@@ -20,7 +20,7 @@ def prepare_download_plan(
 ) -> tuple[list[str], list[str]]:
     if plan_fn is None:
         raise RuntimeError("plan_raw_download non disponibile in ui.services.drive_runner.")
-    result = cast(Sequence[Sequence[str]], call_best_effort(plan_fn, logger=logger, slug=slug, require_env=True))
+    result = cast(Sequence[Sequence[str]], call_strict(plan_fn, logger=logger, slug=slug, require_env=True))
     try:
         conflicts_raw, labels_raw = tuple(result)
     except (TypeError, ValueError):
@@ -91,7 +91,7 @@ def execute_drive_download(
                 signature = None
             if signature and "require_env" in signature.parameters:
                 call_args["require_env"] = True
-            paths = call_best_effort(download_fn, logger=logger, **call_args)
+            paths = call_strict(download_fn, logger=logger, **call_args)
             count = len(paths or [])
             if status_widget is not None and hasattr(status_widget, "update"):
                 status_widget.update(

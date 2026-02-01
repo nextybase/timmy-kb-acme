@@ -48,4 +48,3 @@ jobs:
         uses: github/codeql-action/upload-sarif@545ea36879f73e6aa087b5f7570ee4f25b4d3a3a # v3.26.7
         with:
           sarif_file: pip-audit.sarif
-

@@ -57,4 +57,3 @@ jobs:
             echo "Linting $file"
             hadolint "$file"
           done < dockerfiles.list
-

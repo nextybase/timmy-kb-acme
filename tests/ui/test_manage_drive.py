@@ -59,7 +59,7 @@ class _StatusStub:
 
 
 def test_prepare_download_plan_requires_tuple(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(drive, "call_best_effort", lambda *_, **__: ["only"])
+    monkeypatch.setattr(drive, "call_strict", lambda *_, **__: ["only"])
     with pytest.raises(RuntimeError):
         drive.prepare_download_plan(lambda **_: [], slug="dummy", logger=object())
 
@@ -67,11 +67,11 @@ def test_prepare_download_plan_requires_tuple(monkeypatch: pytest.MonkeyPatch) -
 def test_execute_drive_download_respects_require_env(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: List[Dict[str, Any]] = []
 
-    def fake_call_best_effort(fn, *, logger, **kwargs):
+    def fake_call_strict(fn, *, logger, **kwargs):
         captured.append(kwargs)
         return ["ok"]
 
-    monkeypatch.setattr(drive, "call_best_effort", fake_call_best_effort)
+    monkeypatch.setattr(drive, "call_strict", fake_call_strict)
 
     def status_guard(*_args: Any, **_kwargs: Any) -> _StatusStub:
         return _StatusStub()
@@ -126,11 +126,11 @@ def test_execute_drive_download_respects_require_env(monkeypatch: pytest.MonkeyP
 def test_execute_drive_download_conflicts_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: List[Dict[str, Any]] = []
 
-    def fake_call_best_effort(fn, *, logger, **kwargs):
+    def fake_call_strict(fn, *, logger, **kwargs):
         captured.append(kwargs)
         return ["ok"]
 
-    monkeypatch.setattr(drive, "call_best_effort", fake_call_best_effort)
+    monkeypatch.setattr(drive, "call_strict", fake_call_strict)
 
     def status_guard(*_args: Any, **_kwargs: Any) -> _StatusStub:
         return _StatusStub()

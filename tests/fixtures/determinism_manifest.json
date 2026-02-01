@@ -11,9 +11,9 @@
       "sha256": "d472979042ac41639fc5e45fc55464aaeefa9ec20e264099ebb7ebed728e9487"
     },
     {
-      "bytes": 1664,
+      "bytes": 1663,
       "path": "config/config.yaml",
-      "sha256": "e92d6c43bc55f804a38e5681d8c1a039c9c65383b5ade1c8f239cd46144ead58"
+      "sha256": "13af4439b69a1371526ba7dc3d479e1e977a1665e2e2c53e2b93d87ea2a08e73"
     }
   ],
   "schema_version": 1

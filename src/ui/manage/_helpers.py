@@ -68,17 +68,20 @@ def safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
         return None
 
 
-def call_best_effort(fn: Callable[..., T], *, logger: Any, **kwargs: Any) -> T:
-    """Chiama fn con kwargs garantendo corrispondenza con la firma dichiarata."""
+def call_strict(fn: Callable[..., T], *, logger: Any, **kwargs: Any) -> T:
+    """Chiama fn dopo aver validato gli kwargs contro la firma dichiarata."""
     sig = inspect.signature(fn)
-    accepted = {key: value for key, value in kwargs.items() if key in sig.parameters}
-    if len(accepted) != len(kwargs):
-        logger.error(
-            "ui.manage.signature_mismatch",
-            extra={
-                "fn": getattr(fn, "__name__", repr(fn)),
-                "kwargs": sorted(kwargs),
-                "dropped": sorted(set(kwargs) - set(accepted)),
-            },
-        )
-    return fn(**accepted)
+    allowed = list(sig.parameters.keys())
+    accepts_kwargs = any(param.kind == inspect.Parameter.VAR_KEYWORD for param in sig.parameters.values())
+
+    if not accepts_kwargs:
+        unknown = sorted(set(kwargs) - set(sig.parameters))
+        if unknown:
+            raise TypeError(f"Unknown kwargs for {getattr(fn, '__name__', repr(fn))}: {unknown}. Allowed: {allowed}")
+
+    try:
+        sig.bind(**kwargs)
+    except TypeError as exc:
+        raise TypeError(f"Signature mismatch for {getattr(fn, '__name__', repr(fn))}: {exc}") from exc
+
+    return fn(**kwargs)
