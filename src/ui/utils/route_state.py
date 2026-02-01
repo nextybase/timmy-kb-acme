@@ -40,6 +40,7 @@ def get_tab(default: str = _DEF_TAB) -> str:
     Se il parametro non esiste, restituisce `default` senza forzare l'URL.
     """
     try:
+        # TODO(Beta1.0): enforce Streamlit query_params availability and remove fallback.
         qp = getattr(st, "query_params", None)
         if qp is None:
             return default
@@ -57,6 +58,7 @@ def get_tab(default: str = _DEF_TAB) -> str:
 def set_tab(tab: str) -> None:
     """Imposta il tab nei query params."""
     try:
+        # TODO(Beta1.0): enforce Streamlit query_params availability and remove fallback.
         qp = getattr(st, "query_params", None)
         if qp is not None:
             qp["tab"] = _normalize(tab) or _DEF_TAB
@@ -71,6 +73,7 @@ def set_tab(tab: str) -> None:
 def clear_tab() -> None:
     """Rimuove il parametro `tab` dai query params (se presente)."""
     try:
+        # TODO(Beta1.0): enforce Streamlit query_params availability and remove fallback.
         qp = getattr(st, "query_params", None)
         if qp is not None and "tab" in qp:
             del qp["tab"]
@@ -88,6 +91,7 @@ def get_slug_from_qp() -> Optional[str]:
     Ritorna None se non presente o vuoto.
     """
     try:
+        # TODO(Beta1.0): enforce Streamlit query_params availability and remove fallback.
         qp = getattr(st, "query_params", None)
         if qp is None:
             return None

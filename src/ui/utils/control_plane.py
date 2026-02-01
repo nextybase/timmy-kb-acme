@@ -130,6 +130,7 @@ def display_control_plane_result(
         st_module.warning(warning)
     for error in payload.get("errors", []):
         st_module.error(error)
+    # TODO(Beta1.0): remove fallback once Streamlit json() availability is enforced.
     json_renderer = getattr(st_module, "json", None)
     if callable(json_renderer):
         json_renderer(payload)

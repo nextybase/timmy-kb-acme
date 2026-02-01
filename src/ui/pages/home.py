@@ -19,5 +19,5 @@ st.subheader("Benvenuto!")
 st.write("Per iniziare, crea o apri un workspace cliente.")
 
 # Navigazione basata su PagePaths (SSoT); Beta 1.0 assicura che Streamlit
-# esponga `st.page_link`, quindi non c’è fallback.
+# esponga `st.page_link`, quindi non c'e fallback.
 st.page_link(PagePaths.NEW_CLIENT, label="Nuovo cliente", icon="➕")

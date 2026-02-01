@@ -21,6 +21,7 @@ def enrich_log_extra(base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 def show_success(message: str) -> None:
     if st is None:
         return
+    # TODO(Beta1.0): enforce Streamlit toast() availability and remove fallback.
     toast_fn = getattr(st, "toast", None)
     if callable(toast_fn):
         try:

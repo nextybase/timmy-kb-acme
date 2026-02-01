@@ -54,7 +54,7 @@ def _normalize_theme_value(value: object | None) -> str | None:
 
 
 def get_theme_base(default: str = "light") -> str:
-    """Restituisce la base tema Streamlit ('light'/'dark') sincronizzando la sessione."""
+    """Restituisce la base tema Streamlit ('light'/'dark') usando solo API supportate."""
     try:
         import streamlit as st
     except Exception:
@@ -62,7 +62,6 @@ def get_theme_base(default: str = "light") -> str:
 
     state = getattr(st, "session_state", None)
 
-    # 1) Theme scelto dall'utente via impostazioni Streamlit
     getter = getattr(st, "get_option", None)
     option_base: str | None = None
     if callable(getter):
@@ -71,47 +70,10 @@ def get_theme_base(default: str = "light") -> str:
         except Exception:
             option_base = None
 
-    # 2) Eventuale override manuale già presente in sessione
-    session_base: str | None = None
-    if state is not None:
-        session_base = (
-            _normalize_theme_value(state.get("brand_theme"))
-            or _normalize_theme_value(state.get("_ui_theme_base"))
-            or _normalize_theme_value(state.get("theme"))
-            or _normalize_theme_value(state.get("_theme"))
-            or _normalize_theme_value(state.get("_current_theme"))
-        )
-
-    # 3) Percorso alternativo da contesto runtime (caso storico)
-    runtime_base: str | None = None
-    try:  # pragma: no cover -- Streamlit internals non disponibili in test
-        from streamlit.runtime.scriptrunner import script_run_context as _ctx_mod
-
-        ctx = getattr(_ctx_mod, "get_script_run_ctx", lambda: None)()
-    except Exception:
-        ctx = None
-    if ctx is not None:
-        session = getattr(ctx, "session", None)
-        client = getattr(session, "client", None) if session is not None else None
-        theme_obj = getattr(client, "theme", None) if client is not None else None
-        runtime_base = _normalize_theme_value(getattr(theme_obj, "base", None))
-        if runtime_base is None and isinstance(theme_obj, dict):
-            runtime_base = _normalize_theme_value(theme_obj.get("base"))
-        nested = getattr(theme_obj, "_theme", None)
-        if runtime_base is None and isinstance(nested, dict):
-            runtime_base = _normalize_theme_value(nested.get("base"))
-        if runtime_base is None:
-            runtime_base = _normalize_theme_value(getattr(theme_obj, "_user_theme", None))
-        browser_theme = getattr(client, "_browser_theme", None) if client is not None else None
-        if runtime_base is None and isinstance(browser_theme, dict):
-            runtime_base = _normalize_theme_value(browser_theme.get("base"))
-
-    # Se la configurazione è "system", preferiamo session/runtime
     if option_base == "system":
         option_base = None
 
-    # Preferisci il tema scelto dal client (session/runtime); option_base è il default da config.toml
-    base = session_base or runtime_base or option_base or _normalize_theme_value(default) or "light"
+    base = option_base or _normalize_theme_value(default) or "light"
 
     if state is not None:
         state["brand_theme"] = base

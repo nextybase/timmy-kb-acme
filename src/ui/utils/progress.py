@@ -17,6 +17,7 @@ def run_with_progress(items: Iterable[T], *, label: str, on_each: Callable[[T], 
     st = get_streamlit()
     items_list = list(items)
     total = max(len(items_list), 1)
+    # TODO(Beta1.0): enforce Streamlit progress() availability and remove fallback.
     pb = getattr(st, "progress", None)
     i = 0
     if callable(pb):
