@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+        uses: actions/checkout@v4 # v4
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -57,3 +57,4 @@ jobs:
             echo "Linting $file"
             hadolint "$file"
           done < dockerfiles.list
+

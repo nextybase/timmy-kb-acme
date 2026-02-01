@@ -41,7 +41,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+      - uses: actions/checkout@v4 # v4
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -56,7 +56,7 @@ jobs:
       - name: OIDC probe (optional)
         if: ${{ env.GITHUB_OIDC_AUDIENCE != '' }}
         run: python scripts/ci/oidc_probe.py
-      - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
+      - uses: actions/setup-python@v5 # v5
         with: { python-version: "3.11" }
       - name: Install deps
         run: |
@@ -111,13 +111,13 @@ jobs:
           python scripts/bench_embeddings_normalization.py --json bench_artifacts/bench_embeddings.json
           if [ ! -f bench_artifacts/bench_embeddings.json ]; then echo '{"status": "missing"}' > bench_artifacts/bench_embeddings.json; fi
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@a8fb1bf1f1b3edc5c079db37d1b5fb4c1b5a52b4 # v4.4.3
+        uses: actions/upload-artifact@v4 # v4.4.3
         with:
           name: coverage-xml
           path: coverage.xml
       - name: Upload benchmark artifact
         if: always()
-        uses: actions/upload-artifact@a8fb1bf1f1b3edc5c079db37d1b5fb4c1b5a52b4 # v4.4.3
+        uses: actions/upload-artifact@v4 # v4.4.3
         with:
           name: bench-embeddings
           path: bench_artifacts/bench_embeddings.json
@@ -174,11 +174,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+      - uses: actions/checkout@v4 # v4
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
+      - uses: actions/setup-python@v5 # v5
         with: { python-version: "3.11" }
       - name: Install deps
         run: |
@@ -217,11 +217,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+      - uses: actions/checkout@v4 # v4
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
+      - uses: actions/setup-python@v5 # v5
         with: { python-version: "3.11" }
       - name: Install deps
         run: |
@@ -234,7 +234,7 @@ jobs:
         run: pytest -q -m "e2e" --maxfail=1
       - name: Upload e2e artifacts
         if: failure()
-        uses: actions/upload-artifact@a8fb1bf1f1b3edc5c079db37d1b5fb4c1b5a52b4 # v4.4.3
+        uses: actions/upload-artifact@v4 # v4.4.3
         with:
           name: e2e-artifacts
           path: |
@@ -279,11 +279,11 @@ jobs:
       startsWith(github.ref, 'refs/heads/push-tests/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3df4ab11eba7bda6032f49b8222c4a59f611bc62 # v4.2.2
+      - uses: actions/checkout@v4 # v4
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-python@13b84548a520c9f0b36e3cd122184fb4b3f6e9c5 # v5.1.0
+      - uses: actions/setup-python@v5 # v5
         with: { python-version: "3.11" }
       - name: Install deps
         run: |
@@ -317,3 +317,4 @@ jobs:
           PY
           )
           curl -sSf -X POST -H 'Content-Type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
+
