@@ -12,6 +12,7 @@ from typing import Any, Iterable
 import streamlit as st
 
 from pipeline.beta_flags import is_beta_strict
+from ui.utils.streamlit_baseline import require_streamlit_feature
 
 CONTROL_PLANE_SCHEMA_KEYS = (
     "status",
@@ -130,9 +131,5 @@ def display_control_plane_result(
         st_module.warning(warning)
     for error in payload.get("errors", []):
         st_module.error(error)
-    # TODO(Beta1.0): remove fallback once Streamlit json() availability is enforced.
-    json_renderer = getattr(st_module, "json", None)
-    if callable(json_renderer):
-        json_renderer(payload)
-    else:
-        st_module.markdown(f"```json\n{payload}\n```")
+    json_renderer = require_streamlit_feature(st_module, "json")
+    json_renderer(payload)

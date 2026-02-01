@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, Iterable, TypeVar
 
+from ui.utils.streamlit_baseline import require_streamlit_feature
 from ui.utils.stubs import get_streamlit
 
 T = TypeVar("T")
@@ -17,22 +18,17 @@ def run_with_progress(items: Iterable[T], *, label: str, on_each: Callable[[T], 
     st = get_streamlit()
     items_list = list(items)
     total = max(len(items_list), 1)
-    # TODO(Beta1.0): enforce Streamlit progress() availability and remove fallback.
-    pb = getattr(st, "progress", None)
+    pb = require_streamlit_feature(st, "progress")
+    p = pb(0, text=label)
     i = 0
-    if callable(pb):
-        p = pb(0, text=label)
-        for it in items_list:
-            on_each(it)
-            i += 1
-            try:
-                p.progress(min(i, total) / total, text=f"{label} ({i}/{total})")
-            except Exception:
-                pass
+    for it in items_list:
+        on_each(it)
+        i += 1
         try:
-            p.progress(1.0, text=f"{label} (completato)")
+            p.progress(min(i, total) / total, text=f"{label} ({i}/{total})")
         except Exception:
             pass
-    else:
-        for it in items_list:
-            on_each(it)
+    try:
+        p.progress(1.0, text=f"{label} (completato)")
+    except Exception:
+        pass

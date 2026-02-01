@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any, MutableMapping, Optional
 
 from pipeline.logging_utils import get_structured_logger
+from ui.utils.streamlit_baseline import require_streamlit_feature
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
@@ -34,16 +35,17 @@ def _normalize(value: Any) -> Optional[str]:
     return None
 
 
+def _query_params() -> MutableMapping[str, Any]:
+    return require_streamlit_feature(st, "query_params", expect_callable=False)
+
+
 def get_tab(default: str = _DEF_TAB) -> str:
     """
     Ritorna il valore del tab corrente leggendo dai query params.
     Se il parametro non esiste, restituisce `default` senza forzare l'URL.
     """
     try:
-        # TODO(Beta1.0): enforce Streamlit query_params availability and remove fallback.
-        qp = getattr(st, "query_params", None)
-        if qp is None:
-            return default
+        qp = _query_params()
         val = _normalize(qp.get("tab"))
         return val or default
     except Exception as exc:
@@ -52,30 +54,28 @@ def get_tab(default: str = _DEF_TAB) -> str:
             exc,
             extra={"op": "get", "param": "tab"},
         )
-        return default
+        raise
 
 
 def set_tab(tab: str) -> None:
     """Imposta il tab nei query params."""
     try:
-        # TODO(Beta1.0): enforce Streamlit query_params availability and remove fallback.
-        qp = getattr(st, "query_params", None)
-        if qp is not None:
-            qp["tab"] = _normalize(tab) or _DEF_TAB
+        qp = _query_params()
+        qp["tab"] = _normalize(tab) or _DEF_TAB
     except Exception as exc:
         _log_route_state_failure(
             "ui.route_state.set_tab_failed",
             exc,
             extra={"op": "set", "param": "tab", "value": tab},
         )
+        raise
 
 
 def clear_tab() -> None:
     """Rimuove il parametro `tab` dai query params (se presente)."""
     try:
-        # TODO(Beta1.0): enforce Streamlit query_params availability and remove fallback.
-        qp = getattr(st, "query_params", None)
-        if qp is not None and "tab" in qp:
+        qp = _query_params()
+        if "tab" in qp:
             del qp["tab"]
     except Exception as exc:
         _log_route_state_failure(
@@ -83,6 +83,7 @@ def clear_tab() -> None:
             exc,
             extra={"op": "clear", "param": "tab"},
         )
+        raise
 
 
 def get_slug_from_qp() -> Optional[str]:
@@ -91,10 +92,7 @@ def get_slug_from_qp() -> Optional[str]:
     Ritorna None se non presente o vuoto.
     """
     try:
-        # TODO(Beta1.0): enforce Streamlit query_params availability and remove fallback.
-        qp = getattr(st, "query_params", None)
-        if qp is None:
-            return None
+        qp = _query_params()
         return _normalize(qp.get("slug"))
     except Exception as exc:
         _log_route_state_failure(
@@ -102,4 +100,4 @@ def get_slug_from_qp() -> Optional[str]:
             exc,
             extra={"op": "parse", "param": "slug"},
         )
-        return None
+        raise

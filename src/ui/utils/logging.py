@@ -3,14 +3,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-try:
-    import streamlit as st
-except Exception:  # pragma: no cover
-    st = None
+from ui.utils.streamlit_baseline import require_streamlit_feature
+from ui.utils.stubs import get_streamlit
 
 
 def enrich_log_extra(base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     extra: Dict[str, Any] = {} if base is None else dict(base)
+    st = get_streamlit()
     user_obj = getattr(st, "user", None)
     user_email = getattr(user_obj, "email", None)
     if user_email:
@@ -19,14 +18,6 @@ def enrich_log_extra(base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 
 
 def show_success(message: str) -> None:
-    if st is None:
-        return
-    # TODO(Beta1.0): enforce Streamlit toast() availability and remove fallback.
-    toast_fn = getattr(st, "toast", None)
-    if callable(toast_fn):
-        try:
-            toast_fn(message)
-            return
-        except Exception:
-            pass
-    st.success(message)
+    st = get_streamlit()
+    toast_fn = require_streamlit_feature(st, "toast")
+    toast_fn(message)
