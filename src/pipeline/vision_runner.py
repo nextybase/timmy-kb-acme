@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
+from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.drive.upload import create_drive_structure_from_names
 from pipeline.env_utils import get_env_var
@@ -218,12 +219,25 @@ def _load_last_hash(repo_root_dir: Path) -> Optional[Dict[str, Any]]:
     path = _hash_sentinel(repo_root_dir)
     if not path.exists():
         return None
+    strict_mode = is_beta_strict()
+    logger = get_structured_logger("pipeline.vision_runner")
     try:
         raw = cast(str, read_text_safe(repo_root_dir, path, encoding="utf-8"))
         data = cast(Dict[str, Any], json.loads(raw))
-        return data if isinstance(data, dict) else None
+        if not isinstance(data, dict):
+            raise ConfigError(
+                "vision_hash payload non è un oggetto JSON",
+                file_path=str(path),
+                component="vision_runner",
+            )
+        return data
     except Exception as exc:
-        logger = get_structured_logger("pipeline.vision_runner")
+        if strict_mode:
+            raise ConfigError(
+                f"Sentinel {path} incompleto o invalido: non posso procedere in strict mode.",
+                file_path=str(path),
+                component="vision_runner",
+            ) from exc
         logger.warning(
             "vision_runner.hash_read_failed",
             extra={"path": str(path), "error": str(exc)},
