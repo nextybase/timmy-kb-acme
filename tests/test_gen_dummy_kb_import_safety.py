@@ -27,7 +27,7 @@ def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) 
     (base_dir / "book").mkdir(parents=True, exist_ok=True)
     (base_dir / "raw").mkdir(parents=True, exist_ok=True)
     (base_dir / "config" / "config.yaml").write_text(
-        "meta:\n  client_name: Dummy\nops:\n  log_level: INFO\n",
+        "meta:\n  client_name: Dummy\nops:\n  log_level: INFO\nraw_ingest:\n  transformer_lock:\n    name: stub-transform\n    version: 0.0.1\n    ruleset_hash: stub-ruleset\n",
         encoding="utf-8",
     )
     (base_dir / "semantic" / "semantic_mapping.yaml").write_text("", encoding="utf-8")

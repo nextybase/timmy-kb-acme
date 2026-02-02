@@ -56,6 +56,11 @@ pipeline:
   raw_cache:
     ttl_seconds: 300
     max_entries: 8
+raw_ingest:
+  transformer_lock:
+    name: "pdf_text_v1"
+    version: "1.0.0"
+    ruleset_hash: "d0f82c97d6b206ae434c047e7a01b1356559946b8c5c46a91f6aac8c284fa729"  # pragma: allowlist secret
 security:
   oidc:
     enabled: false

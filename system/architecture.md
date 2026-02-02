@@ -72,6 +72,7 @@ All operations within the Epistemic Envelope must be:
 - strictly observable
 - reproducible and auditable
 
+The `raw_ingest` pipeline supports two provisioning modes (`drive` and `local`), but once the PDF sources are materialized in `raw/` the normalization flow remains a single deterministic process. Evidence references now capture the provisioning mode (`source:<drive|local>`) and an optional hashed local path token, enabling auditability without leaking sensitive local paths. The transformer service is explicitly locked through the configuration (name/version/ruleset_hash) and any mismatch between the deployed transformer and the lock section aborts early with failure, keeping the ingest deterministic and verifiable.
 ## Agency Engine (Control Plane)
 
 The **Agency Engine** is implemented through the Control Plane.

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from pipeline.artifact_policy import enforce_core_artifacts
+from pipeline.config_utils import get_client_config
 from pipeline.context import ClientContext
 from pipeline.env_utils import ensure_dotenv_loaded
 from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, exit_code_for
@@ -59,8 +60,11 @@ def _build_evidence_refs(
     transformer_version: str,
     ruleset_hash: str,
     stats: dict[str, int],
+    source: str,
+    local_path: Optional[str],
 ) -> list[str]:
-    return [
+    refs = [
+        f"source:{source}",
         f"path:{layout.config_path}",
         f"path:{layout.raw_dir}",
         f"path:{layout.normalized_dir}",
@@ -70,6 +74,68 @@ def _build_evidence_refs(
         f"ruleset_hash:{ruleset_hash}",
         f"stats:{json.dumps(stats, sort_keys=True, separators=(',', ':'))}",
     ]
+    if source == "local":
+        refs.append(f"local_path_provided:{'true' if local_path else 'false'}")
+        if local_path:
+            local_hash = hashlib.sha256(local_path.encode("utf-8")).hexdigest()
+            refs.append(f"local_path_hash:{local_hash}")
+    return refs
+
+
+def _read_transformer_lock(context: ClientContext) -> dict[str, str]:
+    config = get_client_config(context) or {}
+    raw_ingest_cfg = config.get("raw_ingest")
+    if not isinstance(raw_ingest_cfg, dict):
+        raise ConfigError(
+            "Sezione 'raw_ingest.transformer_lock' mancante.",
+            slug=context.slug,
+        )
+    lock_cfg = raw_ingest_cfg.get("transformer_lock")
+    if not isinstance(lock_cfg, dict):
+        raise ConfigError(
+            "Blocchetto 'transformer_lock' mancante in 'raw_ingest'.",
+            slug=context.slug,
+        )
+    expected: dict[str, str] = {}
+    for key in ("name", "version", "ruleset_hash"):
+        value = lock_cfg.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ConfigError(
+                f"Campo '{key}' mancante o vuoto in raw_ingest.transformer_lock.",
+                slug=context.slug,
+            )
+        expected[key] = value.strip()
+    return expected
+
+
+def _ensure_transformer_lock_matches(
+    expected: dict[str, str],
+    transform: object,
+    *,
+    context: ClientContext,
+) -> None:
+    metadata_map = {
+        "name": "transformer_name",
+        "version": "transformer_version",
+        "ruleset_hash": "ruleset_hash",
+    }
+    mismatches: list[str] = []
+    for attr_key, attr_name in metadata_map.items():
+        actual_raw = getattr(transform, attr_name, None)
+        if not isinstance(actual_raw, str) or not actual_raw.strip():
+            raise ConfigError(
+                f"Transform service privo di metadato '{attr_name}'.",
+                slug=context.slug,
+            )
+        actual = actual_raw.strip()
+        expected_value = expected[attr_key]
+        if actual != expected_value:
+            mismatches.append(f"{attr_key} expected={expected_value!r} actual={actual!r}")
+    if mismatches:
+        raise ConfigError(
+            "Transformer lock mismatch: " + "; ".join(mismatches),
+            slug=context.slug,
+        )
 
 
 def _parse_args() -> argparse.Namespace:
@@ -116,17 +182,21 @@ def run_raw_ingest(
     ledger_conn = decision_ledger.open_ledger(layout)
     decision_ledger.start_run(ledger_conn, run_id=run_id, slug=slug, started_at=_utc_now_iso())
 
+    transform = get_default_raw_transform_service()
+    expected_lock = _read_transformer_lock(context)
+    _ensure_transformer_lock_matches(expected_lock, transform, context=context)
+
     provider = build_ingest_provider(source)
     ingest_logger = get_structured_logger("raw_ingest.ingest", run_id=run_id, context=context, **_obs_kwargs())
+    resolved_local_path = Path(local_path).expanduser().resolve() if local_path else None
     provider.ingest_raw(
         context=context,
         raw_dir=layout.raw_dir,
         logger=ingest_logger,
         non_interactive=non_interactive,
-        local_path=Path(local_path).expanduser().resolve() if local_path else None,
+        local_path=resolved_local_path,
     )
-
-    transform = get_default_raw_transform_service()
+    local_path_for_evidence = str(resolved_local_path) if resolved_local_path else None
     records: list[NormalizedIndexRecord] = []
     ok_count = 0
     skip_count = 0
@@ -211,6 +281,8 @@ def run_raw_ingest(
                         transformer_version=getattr(transform, "transformer_version", "unknown"),
                         ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
                         stats=stats,
+                        source=source,
+                        local_path=local_path_for_evidence,
                     ),
                     *exc.evidence_refs,
                 ],
@@ -227,7 +299,7 @@ def run_raw_ingest(
             slug=slug,
             gate_name="normalize_raw",
             from_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
-            to_state=decision_ledger.STATE_WORKSPACE_BOOTSTRAP,
+            to_state=decision_ledger.STATE_SEMANTIC_INGEST,
             verdict=decision_ledger.NORMATIVE_PASS,
             subject="raw_ingest",
             decided_at=_utc_now_iso(),
@@ -238,6 +310,8 @@ def run_raw_ingest(
                 transformer_version=getattr(transform, "transformer_version", "unknown"),
                 ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
                 stats=stats,
+                source=source,
+                local_path=local_path_for_evidence,
             ),
             reason_code="ok",
         ),

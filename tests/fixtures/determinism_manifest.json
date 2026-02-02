@@ -1,20 +1,20 @@
 {
+  "schema_version": 1,
   "artifacts": [
     {
-      "bytes": 10,
       "path": "book/README.md",
-      "sha256": "c78da9afd9b3979501854652b088aacb299d9e601a07efb9f476ca98c7262c59"
+      "sha256": "c78da9afd9b3979501854652b088aacb299d9e601a07efb9f476ca98c7262c59",
+      "bytes": 10
     },
     {
-      "bytes": 9,
       "path": "book/SUMMARY.md",
-      "sha256": "d472979042ac41639fc5e45fc55464aaeefa9ec20e264099ebb7ebed728e9487"
+      "sha256": "d472979042ac41639fc5e45fc55464aaeefa9ec20e264099ebb7ebed728e9487",
+      "bytes": 9
     },
     {
-      "bytes": 1663,
       "path": "config/config.yaml",
-      "sha256": "13af4439b69a1371526ba7dc3d479e1e977a1665e2e2c53e2b93d87ea2a08e73"
+      "sha256": "87dc0d6fcb240fa2a286f4d60f6452fba3c12d5d7d70732204cf3d06d6a4d01c",
+      "bytes": 1853
     }
-  ],
-  "schema_version": 1
+  ]
 }
