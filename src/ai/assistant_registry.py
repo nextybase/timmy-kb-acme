@@ -40,19 +40,19 @@ def _optional_env(name: str) -> Optional[str]:
 
 
 def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
-    if is_beta_strict() and not isinstance(settings, (Settings, Mapping)):
-        raise ConfigError(
-            "Settings non conforme: atteso Settings o mapping.",
-            code="config.shape.invalid",
-            component="assistant_registry",
-            path=path,
-        )
     parts = path.split(".")
     if isinstance(settings, Settings):
         try:
             return settings.get_value(path, default=default)
         except KeyError:
             return default
+    if is_beta_strict():
+        raise ConfigError(
+            "Settings non conforme: atteso pipeline.settings.Settings in strict runtime.",
+            code="config.shape.invalid",
+            component="assistant_registry",
+            path=path,
+        )
     mapping: Any = None
     if hasattr(settings, "as_dict"):
         try:

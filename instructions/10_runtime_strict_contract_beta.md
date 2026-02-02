@@ -23,6 +23,10 @@ The system MUST NOT introduce:
 - auto-generated structure;
 - tolerance-based recovery paths.
 
+Configuration MUST be treated as a nested YAML mapping.
+Dotted key paths MUST be resolved via deterministic traversal (dot-notation), and flat dotted keys are forbidden.
+Missing runtime settings MUST cause hard-fail (no implicit `{}` or best-effort defaults).
+
 **Non-strict execution paths are not degradations**.
 They exist solely as **documented exceptions**, activated through explicit capability gates, and MUST:
 - be observable and traceable;

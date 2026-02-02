@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
+from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
@@ -23,12 +24,12 @@ def _require_streamlit() -> None:
         raise ConfigError("Streamlit non disponibile per il Tag KG Builder.")
 
 
-def _resolve_workspace(slug: str) -> tuple[Path, WorkspaceLayout]:
+def _resolve_workspace(slug: str) -> tuple[Path, WorkspaceLayout, ClientContext]:
     ctx = get_client_context(slug, require_drive_env=False)
     layout = WorkspaceLayout.from_context(ctx)
     candidate = layout.repo_root_dir.resolve()
     workspace: Path = ensure_within_and_resolve(candidate.parent, candidate)
-    return workspace, layout
+    return workspace, layout, ctx
 
 
 def run_tag_kg_builder(
@@ -41,13 +42,13 @@ def run_tag_kg_builder(
     _require_streamlit()
     svc_logger = logger or get_structured_logger("ui.services.tag_kg_builder")
     try:
-        workspace, layout = _resolve_workspace(slug)
+        _workspace, layout, ctx = _resolve_workspace(slug)
         semantic_dir = layout.semantic_dir
         tags_raw = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.json")
         if not tags_raw.exists():
             raise ConfigError("tags_raw.json mancante: genera prima i tag raw.")
 
-        kg: Any = build_kg_for_workspace(workspace, namespace=namespace)
+        kg: Any = build_kg_for_workspace(ctx, namespace=namespace)
         result: dict[str, int | str] = {
             "namespace": str(getattr(kg, "namespace", namespace or "")),
             "tags": len(getattr(kg, "tags", [])),

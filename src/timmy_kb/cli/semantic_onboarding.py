@@ -386,7 +386,7 @@ def main() -> int:
                 tags_raw_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.json")
                 if tags_raw_path.exists():
                     with phase_scope(logger, stage="cli.tag_kg_builder", customer=slug):
-                        build_kg_for_workspace(repo_root_dir, namespace=slug)
+                        build_kg_for_workspace(ctx, namespace=slug)
                     tag_kg_effective = "built"
                 else:
                     logger.info(

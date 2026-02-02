@@ -7,6 +7,10 @@ import ai.assistant_registry as assistant_registry
 from pipeline.exceptions import ConfigError
 
 
+def _set_kgraph_assistant(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KGRAPH_ASSISTANT_ID", "kgraph-assistant")
+
+
 def _fake_settings(mapping: dict[str, object]) -> dict[str, object]:
     return mapping
 
@@ -49,3 +53,20 @@ def test_assistant_id_empty_env_logs(monkeypatch, caplog):
     with pytest.raises(ConfigError) as excinfo:
         assistant_registry._resolve_assistant_id("MY_ASST", primary_env_name="MY_ASST")
     assert excinfo.value.code == "assistant.env.empty"
+
+
+def test_resolve_kgraph_config_strict_rejects_mapping(monkeypatch):
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    _set_kgraph_assistant(monkeypatch)
+    settings = {"ai": {"kgraph": {"model": "nested-model"}}}
+    with pytest.raises(ConfigError) as excinfo:
+        assistant_registry.resolve_kgraph_config(settings)
+    assert excinfo.value.code == "config.shape.invalid"
+
+
+def test_resolve_kgraph_config_non_strict_accepts_mapping(monkeypatch):
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
+    _set_kgraph_assistant(monkeypatch)
+    settings = {"ai": {"kgraph": {"model": "nested-model"}}}
+    cfg = assistant_registry.resolve_kgraph_config(settings)
+    assert cfg.model == "nested-model"

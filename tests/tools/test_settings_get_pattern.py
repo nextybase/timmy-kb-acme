@@ -17,6 +17,5 @@ def test_no_dotted_settings_get_usage() -> None:
     if violations:
         pytest.fail(
             "Found dotted `settings.get()` calls. "
-            "Use `_get_config_value` or explicit nested traversal instead:\n"
-            + "\n".join(violations)
+            "Use explicit nested traversal rather than dotted keys:\n" + "\n".join(violations)
         )

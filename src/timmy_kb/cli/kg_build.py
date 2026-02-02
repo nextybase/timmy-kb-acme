@@ -50,16 +50,23 @@ def _parse_args() -> argparse.Namespace:
 def _resolve_workspace(
     args: argparse.Namespace,
     run_id: str,
-) -> tuple[Path, WorkspaceLayout, Optional[ClientContext], str]:
+) -> tuple[Path, WorkspaceLayout, ClientContext, str]:
     slug_input = args.slug or args.slug_pos
-    context: Optional[ClientContext] = None
 
     if args.workspace:
         raw = Path(args.workspace).expanduser().resolve()
         workspace = ensure_within_and_resolve(REPO_ROOT, raw)
         slug = slug_input or Path(workspace).name
-        layout = WorkspaceLayout.from_workspace(workspace=workspace, slug=slug, run_id=run_id)
-        return workspace, layout, context, slug
+        context = ClientContext.load(
+            slug=slug,
+            require_drive_env=args.require_env,
+            run_id=run_id,
+            bootstrap_config=False,
+            repo_root_dir=workspace,
+        )
+        layout = WorkspaceLayout.from_context(context)
+        workspace = ensure_within_and_resolve(REPO_ROOT, layout.repo_root_dir)
+        return workspace, layout, context, layout.slug
 
     if not slug_input:
         raise ConfigError("Serve uno slug o il path workspace (--workspace).")
@@ -81,7 +88,7 @@ def _resolve_workspace(
     layout = WorkspaceLayout.from_context(context)
     workspace = layout.repo_root_dir
     workspace = ensure_within_and_resolve(REPO_ROOT, workspace)
-    return workspace, layout, context, slug
+    return workspace, layout, context, layout.slug
 
 
 def kg_build_main(
@@ -90,7 +97,7 @@ def kg_build_main(
     namespace: Optional[str],
     slug: str,
     run_id: str,
-    context: Optional[ClientContext],
+    context: ClientContext,
 ) -> None:
     layout.logs_dir.mkdir(parents=True, exist_ok=True)
     log_file = layout.log_file
@@ -102,7 +109,7 @@ def kg_build_main(
 
     try:
         with phase_scope(logger, stage="tag_kg.build", customer=slug):
-            build_kg_for_workspace(workspace, namespace=namespace)
+            build_kg_for_workspace(context, namespace=namespace)
         logger.info("cli.kg_build.completed", extra={"workspace": str(workspace)})
     except Exception as exc:  # noqa: BLE001
         logger.error("cli.kg_build.failed", extra={"error": str(exc)})

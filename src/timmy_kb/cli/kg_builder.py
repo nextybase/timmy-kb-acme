@@ -9,12 +9,11 @@ from typing import Any, List, Optional
 
 from ai.kgraph import invoke_kgraph_messages
 from kg_models import TagKnowledgeGraph
-from pipeline.env_utils import get_env_var
+from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from pipeline.settings import Settings
 from pipeline.workspace_layout import WorkspaceLayout
 
 logger = get_structured_logger("kg_builder")
@@ -203,20 +202,15 @@ def _load_tags_raw(raw_path: Path, default_namespace: str) -> tuple[list[RawTag]
     return tags_raw, str(namespace)
 
 
-def _maybe_load_contexts(contexts_path: Optional[Path]) -> Optional[str]:
-    if contexts_path is None:
-        return None
-    return read_text_safe(contexts_path.parent, contexts_path, encoding="utf-8")
-
-
 def _prepare_input(namespace: str, semantic_dir: Path) -> TagKgInput:
     tags_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.json")
-    contexts_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_context.jsonl")
+    contexts_candidate = semantic_dir / "tags_context.jsonl"
+    contexts_path = ensure_within_and_resolve(semantic_dir, contexts_candidate)
     tags_raw, resolved_namespace = _load_tags_raw(tags_path, namespace)
     return TagKgInput(
         namespace=resolved_namespace,
         tags_file=str(tags_path),
-        contexts_file=str(contexts_path) if contexts_path is not None else None,
+        contexts_file=str(contexts_path) if contexts_path.exists() else None,
         tags=tags_raw,
     )
 
@@ -224,58 +218,6 @@ def _prepare_input(namespace: str, semantic_dir: Path) -> TagKgInput:
 def _load_raw_tags(workspace_root: Path) -> TagKgInput:
     layout = WorkspaceLayout.from_workspace(workspace_root)
     return _prepare_input(layout.slug, layout.semantic_dir)
-
-
-def _get_config_value(settings: Optional[Any], dotted_key: str) -> Any | None:
-    if isinstance(settings, Settings):
-        return settings.get_value(dotted_key, default=None)
-    if isinstance(settings, Mapping):
-        current: Any = settings
-        for part in dotted_key.split("."):
-            if not isinstance(current, Mapping):
-                return None
-            current = current.get(part)
-        return current
-    return None
-
-
-def _resolve_kgraph_assistant_env(settings: Optional[Any] = None, assistant_env: Optional[str] = None) -> str:
-    if assistant_env:
-        return assistant_env
-    candidate = _get_config_value(settings, "ai.kgraph.assistant_id_env")
-    if isinstance(candidate, str) and candidate.strip():
-        return candidate.strip()
-    return "KGRAPH_ASSISTANT_ID"
-
-
-def _resolve_kgraph_assistant_id(settings: Optional[Any] = None, assistant_env: Optional[str] = None) -> str:
-    env_name = (
-        _resolve_kgraph_assistant_env(settings, assistant_env) or "KGRAPH_ASSISTANT_ID"
-    ).strip() or "KGRAPH_ASSISTANT_ID"
-    return get_env_var(env_name, required=True)
-
-
-def _resolve_kgraph_model(settings: Optional[Any] = None) -> str:
-    candidate = _get_config_value(settings, "ai.kgraph.model")
-    if isinstance(candidate, str) and candidate.strip():
-        return candidate.strip()
-    return ""
-
-
-def _resolve_model_from_assistant(client: Any, assistant_id: str) -> str:
-    assistants = getattr(client, "assistants", None)
-    if assistants is None:
-        beta = getattr(client, "beta", None)
-        assistants = getattr(beta, "assistants", None)
-    if not assistants:
-        return ""
-    try:
-        assistant = assistants.retrieve(assistant_id)
-    except Exception as exc:  # pragma: no cover
-        logger.warning("semantic.kg.assistant_model.error", extra={"assistant_id": assistant_id, "error": str(exc)})
-        return ""
-    model = getattr(assistant, "model", None)
-    return model.strip() if isinstance(model, str) else ""
 
 
 def _invoke_assistant(
@@ -291,13 +233,6 @@ def _invoke_assistant(
         assistant_env=assistant_env,
         redact_logs=redact_logs,
     )
-
-
-def call_openai_tag_kg_assistant(payload: TagKgInput, *, redact_logs: bool = False) -> TagKnowledgeGraph:
-    raw_output = _invoke_assistant(payload.to_messages(), redact_logs=redact_logs)
-    kg = TagKnowledgeGraph.from_dict(raw_output)
-    kg.namespace = payload.namespace
-    return kg
 
 
 def _save_outputs(semantic_dir: Path, kg: TagKnowledgeGraph) -> dict[str, str]:
@@ -343,19 +278,23 @@ def _save_outputs(semantic_dir: Path, kg: TagKnowledgeGraph) -> dict[str, str]:
     return {"kg_json": str(kg_json_path), "kg_md": str(kg_md_path)}
 
 
-def build_kg_for_workspace(workspace_root: Path | str, namespace: str | None = None) -> TagKnowledgeGraph:
-    layout = WorkspaceLayout.from_workspace(Path(workspace_root))
+def build_kg_for_workspace(ctx: ClientContext, *, namespace: str | None = None) -> TagKnowledgeGraph:
+    if ctx.repo_root_dir is None:
+        raise ConfigError("ClientContext privo di repo_root_dir per il Tag KG Builder.")
+    layout = WorkspaceLayout.from_context(ctx)
     namespace_resolved = namespace or layout.slug
     semantic_dir = layout.semantic_dir
 
+    repo_root = layout.repo_root_dir
+    repo_root_str = str(repo_root) if repo_root is not None else ""
     logger.info(
         "semantic.kg_builder.started",
-        extra={"workspace": str(workspace_root), "namespace": namespace_resolved},
+        extra={"workspace": repo_root_str, "namespace": namespace_resolved},
     )
 
     with phase_scope(logger, stage="semantic.tag_kg_builder", customer=namespace_resolved):
         messages = _prepare_input(namespace_resolved, semantic_dir).to_messages()
-        raw_output = _invoke_assistant(messages, redact_logs=False)
+        raw_output = _invoke_assistant(messages, redact_logs=False, settings=ctx.settings)
 
         kg = TagKnowledgeGraph.from_dict(raw_output)
         kg.namespace = namespace_resolved
@@ -364,7 +303,7 @@ def build_kg_for_workspace(workspace_root: Path | str, namespace: str | None = N
         logger.info(
             "semantic.kg_builder.completed",
             extra={
-                "workspace": str(layout.repo_root_dir),
+                "workspace": repo_root_str,
                 "namespace": namespace_resolved,
                 "kg_json": outputs["kg_json"],
                 "kg_md": outputs["kg_md"],

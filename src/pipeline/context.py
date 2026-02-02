@@ -31,7 +31,7 @@ import logging
 import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Protocol, TypedDict, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, TypedDict, runtime_checkable
 
 from pipeline.beta_flags import is_beta_strict
 
@@ -44,6 +44,8 @@ from .logging_utils import get_structured_logger
 from .path_utils import ensure_within, ensure_within_and_resolve
 from .path_utils import validate_slug as _validate_slug
 from .settings import Settings
+
+_MISSING = object()
 
 
 def validate_slug(slug: str) -> str:
@@ -79,15 +81,23 @@ class ClientSettingsDict(TypedDict, total=False):
 
 
 def _safe_settings_get(settings: Any | None, key: str) -> Any:
-    """Estrae un valore da settings (dict/oggetto) senza assumere .get presente."""
+    """Estrae un valore da settings (Settings o dict) in modo deterministico."""
     if settings is None:
         return None
-    if is_beta_strict() and not isinstance(settings, (Settings, Mapping)):
-        raise ConfigError(
-            "Settings non conforme: atteso Settings o mapping.",
-            code="config.shape.invalid",
-            component="pipeline.context",
-        )
+    if is_beta_strict():
+        if not isinstance(settings, Settings):
+            raise ConfigError(
+                "Settings non conforme: atteso pipeline.settings.Settings in strict runtime.",
+                code="config.shape.invalid",
+                component="pipeline.context",
+            )
+        value = getattr(settings, key, _MISSING)
+        if value is not _MISSING:
+            return value
+        try:
+            return settings.get_value(key, default=None)
+        except KeyError:
+            return None
     if isinstance(settings, dict):
         return settings.get(key)
     if isinstance(settings, SupportsGetItem):

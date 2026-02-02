@@ -211,6 +211,48 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert "artefatti" in a0
 
 
+def test_ensure_materializes_vision_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "vision-strict"
+    ctx = _Ctx(tmp_path)
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    pdf = config_dir / "VisionStatement.pdf"
+    pdf.write_bytes(b"%PDF-FAKE%")
+
+    full_text = (
+        "Vision\nLa visione...\n"
+        "Mission\nLa missione...\n"
+        "Goal\nObiettivi...\n"
+        "Framework Etico\nValori...\n"
+        "Contesto Operativo\nContesto...\n"
+    )
+
+    compile_calls: list[Path] = []
+
+    def fake_compile(source: Path, target: Path) -> None:
+        compile_calls.append(target)
+        payload = {"version": 1, "content": {"full_text": full_text, "pages": [full_text]}}
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+    monkeypatch.setattr(vp, "compile_document_to_vision_yaml", fake_compile)
+    monkeypatch.setattr(vp.ontology, "get_all_entities", lambda: [])
+
+    prompt = vp._ensure_vision_yaml_and_prompt_from_pdf(
+        ctx=ctx,
+        slug=slug,
+        pdf_path=pdf,
+        logger=logging.getLogger("test"),
+    )
+
+    assert compile_calls, "Vision YAML deve essere rigenerato"
+    yaml_path = pdf.parent / "visionstatement.yaml"
+    assert yaml_path.exists()
+    loaded = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    assert loaded["content"]["full_text"].strip() == full_text.strip()
+    assert "[Vision]" in prompt and "[Mission]" in prompt
+
+
 def test_provision_ignores_engine_in_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "dummy-engine"
     ctx = _Ctx(tmp_path)
