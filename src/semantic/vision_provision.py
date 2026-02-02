@@ -17,10 +17,13 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
 import yaml
 
+import semantic.document_ingest as _semantic_document_ingest
+import semantic.pdf_utils as _semantic_pdf_utils
 from ai.client_factory import make_openai_client
 from ai.responses import run_json_model
 from ai.types import AssistantConfig
 from pipeline import ontology
+from pipeline.beta_flags import is_beta_strict
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_append_text, safe_write_text
@@ -628,21 +631,23 @@ def _ensure_vision_yaml_and_prompt_from_pdf(ctx: Any, slug: str, pdf_path: Path,
     except ConfigError as exc:
         raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
     yaml_path = vision_yaml_workspace_path(Path(repo_root_dir), pdf_path=Path(safe_pdf))
-    if not yaml_path.exists():
-        try:
-            snapshot = _extract_pdf_text(safe_pdf, slug=slug, logger=logger)
-        except Exception:
-            snapshot = None
-        if snapshot:
-            return _build_prompt_from_snapshot(snapshot, slug=slug, ctx=ctx, logger=logger)
-        try:
+    strict_mode = is_beta_strict()
+    pdf_patch_orig = _semantic_pdf_utils.extract_text_from_pdf
+    doc_patch_orig = _semantic_document_ingest.extract_text_from_pdf
+    try:
+        _semantic_pdf_utils.extract_text_from_pdf = _extract_pdf_text
+        _semantic_document_ingest.extract_text_from_pdf = _extract_pdf_text
+        if strict_mode or not yaml_path.exists():
             compile_document_to_vision_yaml(safe_pdf, yaml_path)
-        except Exception as exc:
-            raise ConfigError(
-                "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
-                slug=slug,
-                file_path=str(yaml_path),
-            ) from exc
+    except Exception as exc:
+        raise ConfigError(
+            "visionstatement.yaml mancante o non leggibile: esegui prima la compilazione PDF→YAML",
+            slug=slug,
+            file_path=str(yaml_path),
+        ) from exc
+    finally:
+        _semantic_pdf_utils.extract_text_from_pdf = pdf_patch_orig
+        _semantic_document_ingest.extract_text_from_pdf = doc_patch_orig
     snapshot = _load_vision_yaml_text(Path(repo_root_dir), yaml_path, slug=slug)
     return _build_prompt_from_snapshot(snapshot, slug=slug, ctx=ctx, logger=logger)
 
