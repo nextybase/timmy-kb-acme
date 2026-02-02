@@ -107,11 +107,6 @@ def main(argv: list[str] | None = None) -> int:
         "--model",
         help="Modello Vision (default da config globale UI)",
     )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Forza l'esecuzione anche se hash invariato",
-    )
     args = parser.parse_args(argv)
 
     payload = _build_payload(slug=args.slug)
@@ -143,7 +138,6 @@ def main(argv: list[str] | None = None) -> int:
                 LOG,
                 slug=args.slug,
                 pdf_path=pdf_path,
-                force=args.force,
                 model=model,
                 prepared_prompt=prompt,
             )

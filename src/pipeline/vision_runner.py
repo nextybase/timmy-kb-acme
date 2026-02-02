@@ -261,7 +261,6 @@ def run_vision_with_gating(
     *,
     slug: str,
     pdf_path: Path,
-    force: bool = False,
     model: Optional[str] = None,
     prepared_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -289,13 +288,6 @@ def run_vision_with_gating(
     art = _artifacts_paths(repo_root_dir)
     gate_hit = (last_digest == digest) and art["mapping"].exists()
     logger.info("ui.vision.gate", extra={"slug": slug, "hit": gate_hit})
-    if gate_hit and not force:
-        _materialize_raw_structure(ctx, logger, repo_root_dir=Path(repo_root_dir), slug=slug)
-        raise ConfigError(
-            "Vision già eseguito per questo PDF. Usa la modalità 'Forza rigenerazione' per procedere.",
-            slug=slug,
-            file_path=str(_hash_sentinel(repo_root_dir)),
-        )
 
     resolved_config = resolve_vision_config(ctx, override_model=model)
     retention_days = resolve_vision_retention_days(ctx)

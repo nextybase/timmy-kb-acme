@@ -221,6 +221,7 @@ networkx==3.5
     #   yake
 nodeenv==1.9.1
     # via pre-commit
+# pinned at 1.26.4 to satisfy Windows Thinc/SpaCy ABI requirements
 numpy==1.26.4
     # via
     #   -r requirements.in

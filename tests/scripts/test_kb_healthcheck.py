@@ -35,7 +35,7 @@ def test_kb_healthcheck_sets_used_file_search_and_excerpt(tmp_path: Path, monkey
 
     monkeypatch.setattr(kb, "run_vision", _fake_run_vision)
 
-    result = kb.run_healthcheck(slug="dummy", force=False, model="gpt-test", include_prompt=False)
+    result = kb.run_healthcheck(slug="dummy", model="gpt-test", include_prompt=False)
 
     assert result["used_file_search"] is True
     assert result["assistant_text_excerpt"]
@@ -59,6 +59,6 @@ def test_kb_healthcheck_offline_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(kb, "_client_base", lambda slug: base_dir)
     monkeypatch.setattr(kb, "run_vision", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError))
 
-    result = kb.run_healthcheck(slug="dummy", force=False, model="gpt-test", include_prompt=False, offline=True)
+    result = kb.run_healthcheck(slug="dummy", model="gpt-test", include_prompt=False, offline=True)
 
     assert result["status"] == "ok_offline"

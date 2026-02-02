@@ -311,16 +311,6 @@ def _purge_previous_state(slug: str, client_name: str, logger: logging.Logger) -
             extra={"slug": slug, "error": str(exc)},
         )
 
-    sentinel = base_dir / "semantic" / ".vision_hash"
-    try:
-        if sentinel.exists():
-            sentinel.unlink()
-    except Exception as exc:
-        logger.debug(
-            "tools.gen_dummy_kb.cleanup.sentinel_unlink_failed",
-            extra={"slug": slug, "error": str(exc)},
-        )
-
 
 def _brute_reset_dummy(*, logger: logging.Logger) -> Path:
     target = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "output" / "timmy-kb-dummy")

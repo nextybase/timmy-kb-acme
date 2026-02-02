@@ -15,7 +15,6 @@ import json
 import logging
 import os
 import sys
-import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -36,12 +35,6 @@ def _optional_env(name: str) -> Optional[str]:
         return None
     except Exception:
         return None
-
-
-def _is_gate_error(exc: BaseException) -> bool:
-    """Riconosce l'eccezione del gate Vision già eseguito."""
-    normalized = unicodedata.normalize("NFKD", str(exc)).casefold()
-    return "vision" in normalized and "gia" in normalized and "eseguito" in normalized
 
 
 def _existing_vision_artifacts(base_dir: Path) -> Dict[str, str]:
@@ -286,7 +279,6 @@ def _load_client_settings(base_dir: Path, logger: logging.Logger) -> Dict[str, A
 def run_healthcheck(
     slug: str,
     *,
-    force: bool = False,
     model: Optional[str] = None,
     include_prompt: bool = False,
     offline: bool = False,
@@ -358,41 +350,35 @@ def run_healthcheck(
         else:
             prompt_requested = False
 
-    run_skipped = False
     try:
         vision_result = run_vision(
             ctx=ctx,
             slug=slug,
             pdf_path=workspace_pdf,
-            force=force,
             model=effective_model,
             logger=logger,
             preview_prompt=False,
             prepared_prompt_override=prepared_prompt,
         )
     except Exception as exc:
-        if prompt_requested and _is_gate_error(exc):
-            run_skipped = True
-            vision_result = _existing_vision_artifacts(base_dir)
-        else:
-            detail = str(exc)
-            if _should_log_runtime_diagnostics():
-                normalized = detail.casefold()
-                if "response_format" in normalized and "unexpected keyword" in normalized:
-                    detail = f"{detail} | runtime: {_runtime_diagnostics_summary()}"
-                elif (
-                    "insufficient_quota" in normalized
-                    or "exceeded your current quota" in normalized
-                    or "check your plan and billing" in normalized
-                    or "quota" in normalized
-                    or "429" in normalized
-                ):
-                    env_suffix = _runtime_project_org_summary()
-                    suffix = _runtime_diagnostics_summary()
-                    if env_suffix:
-                        suffix = f"{suffix} {env_suffix}"
-                    detail = f"{detail} | runtime: {suffix}"
-            raise HealthcheckError({"error": f"Vision failed: {detail}"}, 1)
+        detail = str(exc)
+        if _should_log_runtime_diagnostics():
+            normalized = detail.casefold()
+            if "response_format" in normalized and "unexpected keyword" in normalized:
+                detail = f"{detail} | runtime: {_runtime_diagnostics_summary()}"
+            elif (
+                "insufficient_quota" in normalized
+                or "exceeded your current quota" in normalized
+                or "check your plan and billing" in normalized
+                or "quota" in normalized
+                or "429" in normalized
+            ):
+                env_suffix = _runtime_project_org_summary()
+                suffix = _runtime_diagnostics_summary()
+                if env_suffix:
+                    suffix = f"{suffix} {env_suffix}"
+                detail = f"{detail} | runtime: {suffix}"
+        raise HealthcheckError({"error": f"Vision failed: {detail}"}, 1)
 
     used_file_search = False
     citations: List[Dict[str, Any]] = []
@@ -415,7 +401,7 @@ def run_healthcheck(
         used_file_search = True
 
     out: Dict[str, Any] = {
-        "status": "skipped" if run_skipped else "completed",
+        "status": "completed",
         "used_file_search": bool(used_file_search),
         "citations": citations,
         "assistant_text_excerpt": excerpt,
@@ -425,7 +411,7 @@ def run_healthcheck(
         "base_dir": str(base_dir),
         "mapping_yaml": vision_result.get("mapping"),
         "semantic_mapping_content": mapping_text,
-        "vision_skipped": run_skipped,
+        "vision_skipped": False,
     }
     if prompt_requested and prepared_prompt:
         out["prompt"] = prepared_prompt
@@ -438,7 +424,6 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Healthcheck E2E Vision (usa Vision reale + tracing Assistente)")
     parser.add_argument("--slug", default="dummy", help="Slug cliente (default: dummy)")
-    parser.add_argument("--force", action="store_true", help="Forza rigenerazione Vision")
     parser.add_argument(
         "--model",
         default=None,
@@ -463,7 +448,6 @@ def main() -> None:
     try:
         out = run_healthcheck(
             slug=args.slug,
-            force=bool(args.force),
             model=(args.model or get_vision_model()),
             include_prompt=bool(args.include_prompt),
             offline=bool(args.offline),
@@ -473,8 +457,6 @@ def main() -> None:
 
     print(json.dumps(out, ensure_ascii=False, indent=2))
 
-    if out.get("vision_skipped"):
-        sys.exit(0)
     if not out.get("used_file_search") and not out.get("citations"):
         sys.exit(3)
 

@@ -230,11 +230,6 @@ def normalized_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool
         return False, None
 
     # Vision gating: normalized/ non ? semanticamente rilevante finch? la Vision non ? completata
-    vision_hash = layout.semantic_dir / ".vision_hash"
-    if not vision_hash.exists():
-        # NOT_APPLICABLE: evita warning e check prematuri su normalized/
-        return True, None
-
     ready, normalized_dir = has_normalized_markdown(slug_value, strict=strict)
     # `has_normalized_markdown` gi? verifica slug/layout; il controllo su config/layout ? quindi implicito.
     if not ready:

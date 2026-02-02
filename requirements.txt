@@ -174,6 +174,7 @@ networkx==3.5
     # via
     #   torch
     #   yake
+# pinned at 1.26.4 to satisfy Windows Thinc/SpaCy ABI requirements
 numpy==1.26.4
     # via
     #   -r requirements.in

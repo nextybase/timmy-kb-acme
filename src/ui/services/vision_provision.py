@@ -2,10 +2,7 @@
 # src/ui/services/vision_provision.py
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol, cast
 
@@ -14,7 +11,6 @@ from ai.vision_config import resolve_vision_config
 from ai.vision_config import resolve_vision_retention_days as _resolve_vision_retention_days
 from pipeline.capabilities.vision import load_vision_bindings
 from pipeline.exceptions import ConfigError
-from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.vision_paths import vision_yaml_workspace_path
@@ -66,84 +62,9 @@ _provision_from_vision_yaml_with_config = VISION_BINDINGS.provision_yaml_with_co
 _prepare_prompt_yaml = VISION_BINDINGS.prepare_yaml_with_config
 
 
-@dataclass(frozen=True)
-class VisionArtifacts:
-    """Riferimenti all'artefatto SSoT prodotto da Vision."""
-
-    mapping_yaml: Path
-
-
 def resolve_vision_retention_days(ctx: Any) -> int:
     """Forward SSoT per il retention dei file Vision lato UI."""
     return _resolve_vision_retention_days(ctx)
-
-
-# -----------------------------
-# Utilità hash e idempotenza
-# -----------------------------
-def _sha256_of_file(perimeter_root: Path, path: Path, chunk_size: int = 8192) -> str:
-    """Calcola l'hash del PDF con path-safety garantita."""
-    safe_path = ensure_within_and_resolve(perimeter_root, path)
-    h = hashlib.sha256()
-    with safe_path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(chunk_size), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def _semantic_dir(repo_root_dir: Path) -> Path:
-    perimeter_root = repo_root_dir
-    sdir = ensure_within_and_resolve(perimeter_root, repo_root_dir / "semantic")
-    return cast(Path, sdir)
-
-
-def _hash_sentinel(repo_root_dir: Path) -> Path:
-    # Sentinel contrattuale dei test: .vision_hash (formato JSON)
-    semantic_dir = _semantic_dir(repo_root_dir)
-    path = ensure_within_and_resolve(semantic_dir, semantic_dir / ".vision_hash")
-    return cast(Path, path)
-
-
-def _artifacts_paths(repo_root_dir: Path) -> VisionArtifacts:
-    sdir = _semantic_dir(repo_root_dir)
-    mapping = ensure_within_and_resolve(sdir, sdir / "semantic_mapping.yaml")
-    return VisionArtifacts(mapping_yaml=cast(Path, mapping))
-
-
-def _artifacts_exist(repo_root_dir: Path) -> bool:
-    art = _artifacts_paths(repo_root_dir)
-    return art.mapping_yaml.exists()
-
-
-def _load_last_hash(repo_root_dir: Path) -> Optional[Dict[str, Any]]:
-    """
-    Legge il sentinel JSON se presente.
-    Ritorna un dict con almeno {"hash": str, "model": str, "ts": str} oppure None.
-    """
-    path = _hash_sentinel(repo_root_dir)
-    if not path.exists():
-        return None
-    try:
-        raw = cast(str, read_text_safe(repo_root_dir, path, encoding="utf-8"))
-        data = json.loads(raw)
-        return data if isinstance(data, dict) else None
-    except Exception as exc:
-        logger = get_structured_logger("ui.vision")
-        logger.warning(
-            "ui.vision.hash_read_failed",
-            extra={"path": str(path), "error": str(exc)},
-        )
-        return None
-
-
-def _save_hash(repo_root_dir: Path, *, digest: str, model: str) -> None:
-    from datetime import datetime, timezone
-
-    payload = json.dumps(
-        {"hash": digest, "model": model, "ts": datetime.now(timezone.utc).isoformat()},
-        ensure_ascii=False,
-    )
-    safe_write_text(_hash_sentinel(repo_root_dir), payload + "\n")
 
 
 def _ensure_structured_output_and_prompt(ctx: Any, *, slug: str) -> None:
@@ -193,22 +114,12 @@ def provision_from_vision_with_config(
     *,
     slug: str,
     pdf_path: str | Path,
-    force: bool = False,
     model: Optional[str] = None,
     prepared_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Esegue Vision in modo idempotente lato UI:
-    - calcola hash del PDF,
-    - se non 'force' e hash invariato con artefatti già presenti → BLOCCA con ConfigError,
-    - altrimenti invoca semantic.provision_from_vision e aggiorna sentinel JSON.
-
-    Ritorna:
-        {
-          "skipped": bool,
-          "hash": "<sha256>",
-          "mapping": "<abs path>"
-        }
+    Esegue Vision in modo deterministico lato UI: calcola hash, lavora sui file YAML
+    e invoca la routine di provisioning semantico.
     """
     repo_root_dir = getattr(ctx, "repo_root_dir", None)
     if not repo_root_dir:
@@ -223,7 +134,6 @@ def provision_from_vision_with_config(
         logger,
         slug=slug,
         pdf_path=pdf_path,
-        force=force,
         model=model,
         prepared_prompt=prepared_prompt,
     )
@@ -234,7 +144,6 @@ def run_vision(
     *,
     slug: str,
     pdf_path: Path,
-    force: bool = False,
     model: Optional[str] = None,
     logger: Optional[logging.Logger] = None,
     preview_prompt: bool = False,
@@ -300,7 +209,6 @@ def run_vision(
         logger=eff_logger,
         slug=slug,
         pdf_path=safe_pdf,
-        force=force,
         model=model,
         prepared_prompt=prepared_prompt,
     )

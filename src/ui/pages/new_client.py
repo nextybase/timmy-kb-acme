@@ -629,6 +629,9 @@ if current_phase == UI_PHASE_INIT:
                 require_drive_env=False,
                 bootstrap_config=True,
             )
+            client_name_input = (st.session_state.get("new_name") or name or "").strip()
+            if client_name_input:
+                update_config_with_drive_ids(ctx, {"meta": {"client_name": client_name_input}}, logger=LOGGER)
             with status_guard(
                 "Preparo il workspace locale...",
                 expanded=True,
@@ -665,15 +668,20 @@ if current_phase == UI_PHASE_INIT:
                         Path, ensure_within_and_resolve(layout.repo_root_dir, cfg_dir / "VisionStatement.pdf")
                     )
                     safe_write_bytes(vision_target, pdf_bytes, atomic=True)
-                    updates = {"ai": {"vision": {"vision_statement_pdf": "config/VisionStatement.pdf"}}}
-                    client_name_value = (name or s).strip()
-                    if client_name_value:
-                        updates["meta"] = {"client_name": client_name_value}
-                    update_config_with_drive_ids(ctx, updates, logger=LOGGER)
-                    # Reload immediato dopo scrittura config (pre-Vision) per evitare Context stale.
-                    invalidate_client_context(s)
-                    ctx = get_client_context(s, require_drive_env=False, force_reload=True)
-                    _require_repo_root(ctx, s)
+                updates = {"ai": {"vision": {"vision_statement_pdf": "config/VisionStatement.pdf"}}}
+                client_name_input = (st.session_state.get("new_name") or name).strip()
+                client_name_value = (client_name_input or s or "").strip()
+                if client_name_value:
+                    updates["meta"] = {"client_name": client_name_value}
+                LOGGER.debug(
+                    "ui.new_client.config_updates",
+                    extra={"slug": s, "config_updates": updates},
+                )
+                update_config_with_drive_ids(ctx, updates, logger=LOGGER)
+                # Reload immediato dopo scrittura config (pre-Vision) per evitare Context stale.
+                invalidate_client_context(s)
+                ctx = get_client_context(s, require_drive_env=False, force_reload=True)
+                _require_repo_root(ctx, s)
                 try:
                     _run_pdf_to_yaml_control_plane(s, layout)
                 except Exception as exc:
@@ -819,7 +827,7 @@ if current_phase == UI_PHASE_INIT:
 
             # 6) Controllo file semantici e avanzamento fase
             if _exists_semantic_files(s, layout=layout):
-                display_name = (name or "").strip() or s
+                display_name = (client_name_input or "").strip() or s
                 _register_client_after_vision(s, display_name)
 
                 # Aggiorna contesto UI: mostra Step 2

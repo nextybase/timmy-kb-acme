@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.exceptions import ConfigError
-from semantic import vision_parser as vp
+from tools.vision import vision_parser as vp
 
 
 def test_split_sections_no_headers_raises() -> None:

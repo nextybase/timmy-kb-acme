@@ -45,18 +45,6 @@ def _clear_state() -> None:
     st.session_state.pop(_SS_SECTIONS, None)
 
 
-def _is_gate_error(err: Exception) -> bool:
-    message = str(err).casefold()
-    if "file=vision_hash" in message:
-        return True
-    if "vision" in message and "eseguit" in message:
-        return True
-    marker = getattr(err, "file_path", None)
-    if isinstance(marker, (str, Path)) and Path(marker).name == ".vision_hash":
-        return True
-    return False
-
-
 def _ensure_workspace_pdf(ctx: ClientContext) -> Path:
     repo_root_dir = getattr(ctx, "repo_root_dir", None)
     if not repo_root_dir:

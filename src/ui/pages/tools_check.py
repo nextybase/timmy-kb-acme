@@ -7,7 +7,6 @@ from typing import Optional
 
 from ui.chrome import render_chrome_then_require
 from ui.fine_tuning import render_advanced_options, render_controls
-from ui.fine_tuning.vision_modal import _is_gate_error
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
@@ -33,4 +32,4 @@ if __name__ == "__main__":
     main()
 
 
-__all__ = ["main", "_is_gate_error"]
+__all__ = ["main"]

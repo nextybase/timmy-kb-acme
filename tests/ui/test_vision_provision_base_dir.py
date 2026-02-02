@@ -31,7 +31,6 @@ def test_provision_requires_repo_root_dir(monkeypatch: pytest.MonkeyPatch, tmp_p
             logger=object(),
             slug="prova",
             pdf_path=pdf,
-            force=True,
         )
 
     assert "repo_root_dir" in str(excinfo.value)

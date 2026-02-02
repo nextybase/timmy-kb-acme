@@ -188,10 +188,7 @@ def test_logs_namespaced_on_failure(caplog, tmp_path, monkeypatch):
     _stub_minimal_environment(monkeypatch, tmp_path, run_vision_return=_boom)
     monkeypatch.setenv("VISION_MODE", "DEEP")
     base_dir = tmp_path / "timmy-kb-dummy"
-    sentinel_path = base_dir / "semantic" / ".vision_hash"
     mapping_path = base_dir / "semantic" / "semantic_mapping.yaml"
-    if sentinel_path.exists():
-        sentinel_path.unlink()
     if mapping_path.exists():
         mapping_path.unlink()
     args = ["--slug", "dummy", "--name", "Dummy", "--no-drive"]

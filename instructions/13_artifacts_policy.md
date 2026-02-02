@@ -153,7 +153,6 @@ Nota: `visionstatement.yaml` esiste solo nel workspace (`output/timmy-kb-<slug>/
 | `src/semantic/vision_provision.py:_persist_outputs` | `output/timmy-kb-<slug>/semantic/semantic_mapping.yaml` | YAML mapping | Tagging/Semantica | CORE | Vision responses, schema valido | No |
 | `src/ui/components/mapping_editor.py:save_semantic_mapping`<br>`src/ui/components/yaml_editors.py:_write_yaml_text` | `output/timmy-kb-<slug>/semantic/semantic_mapping.yaml` | YAML mapping | Tagging/Semantica | CORE | UI + YAML valido | No |
 | `src/ui/components/mapping_editor.py:write_raw_structure_yaml` | `output/timmy-kb-<slug>/semantic/_raw_from_mapping.yaml` | YAML (struttura RAW) | Drive runner (opz.) | SERVICE | Mapping presente | No |
-| `src/pipeline/vision_runner.py:_save_hash`<br>`src/ui/services/vision_provision.py:_save_hash` | `output/timmy-kb-<slug>/semantic/.vision_hash` | JSONL sentinel | UI gating | SERVICE | Vision eseguita | No |
 | `src/semantic/vision_provision.py:_write_audit_line` | `output/timmy-kb-<slug>/logs/semantic.vision.log` | JSONL audit log | Diagnostica | SERVICE | FS write | No |
 | `src/ai/responses.py:_diagnose_json_schema_format` | `output/debug/vision_schema_sent.json` | JSON debug | Diagnostica | SERVICE | Debug locale | Yes (best-effort, warning su fallimento) |
 
