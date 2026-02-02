@@ -187,7 +187,8 @@ def _build_violation_refs(layout: WorkspaceLayout, violations: Iterable[_Artifac
         try:
             rel = violation.path.relative_to(layout.repo_root_dir).as_posix()
         except Exception:
-            rel = str(violation.path)
+            # Low-entropy invariant: never leak absolute paths or env-specific strings.
+            rel = violation.name
         refs.append(f"artifact:{rel}:{violation.reason}")
     return refs
 
