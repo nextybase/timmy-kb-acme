@@ -226,22 +226,25 @@ def _load_raw_tags(workspace_root: Path) -> TagKgInput:
     return _prepare_input(layout.slug, layout.semantic_dir)
 
 
+def _get_config_value(settings: Optional[Any], dotted_key: str) -> Any | None:
+    if isinstance(settings, Settings):
+        return settings.get_value(dotted_key, default=None)
+    if isinstance(settings, Mapping):
+        current: Any = settings
+        for part in dotted_key.split("."):
+            if not isinstance(current, Mapping):
+                return None
+            current = current.get(part)
+        return current
+    return None
+
+
 def _resolve_kgraph_assistant_env(settings: Optional[Any] = None, assistant_env: Optional[str] = None) -> str:
     if assistant_env:
         return assistant_env
-    if isinstance(settings, Settings):
-        try:
-            candidate = settings.get("ai.kgraph.assistant_id_env")
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-        except Exception:
-            pass
-    if isinstance(settings, Mapping):
-        kgraph_cfg = settings.get("ai", {}).get("kgraph") if isinstance(settings.get("ai", {}), Mapping) else None
-        if isinstance(kgraph_cfg, Mapping):
-            candidate = kgraph_cfg.get("assistant_id_env")
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
+    candidate = _get_config_value(settings, "ai.kgraph.assistant_id_env")
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
     return "KGRAPH_ASSISTANT_ID"
 
 
@@ -253,20 +256,9 @@ def _resolve_kgraph_assistant_id(settings: Optional[Any] = None, assistant_env: 
 
 
 def _resolve_kgraph_model(settings: Optional[Any] = None) -> str:
-    if isinstance(settings, Settings):
-        try:
-            candidate = settings.get("ai.kgraph.model")
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
-        except Exception:
-            pass
-    if isinstance(settings, Mapping):
-        ai_cfg = settings.get("ai", {})
-        kgraph_cfg = ai_cfg.get("kgraph") if isinstance(ai_cfg, Mapping) else None
-        if isinstance(kgraph_cfg, Mapping):
-            candidate = kgraph_cfg.get("model")
-            if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
+    candidate = _get_config_value(settings, "ai.kgraph.model")
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
     return ""
 
 

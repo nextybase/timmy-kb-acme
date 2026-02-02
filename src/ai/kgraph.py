@@ -25,7 +25,12 @@ def invoke_kgraph_messages(
         assistant_env: override del nome variabile d'ambiente per l'assistant.
         redact_logs: flag passato ai metadata per logging/telemetria.
     """
-    cfg = resolve_kgraph_config(settings or {}, assistant_env_override=assistant_env)
+    if settings is None:
+        raise ConfigError(
+            "KGraph invocation requires explicit settings.",
+            code="kgraph.settings.missing",
+        )
+    cfg = resolve_kgraph_config(settings, assistant_env_override=assistant_env)
 
     metadata: Dict[str, Any] = {
         "source": "kgraph",

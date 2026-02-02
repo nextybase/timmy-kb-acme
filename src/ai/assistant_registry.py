@@ -48,18 +48,11 @@ def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
             path=path,
         )
     parts = path.split(".")
-    if hasattr(settings, "get"):
+    if isinstance(settings, Settings):
         try:
-            value = settings.get(path)
-        except Exception as exc:
-            raise ConfigError(
-                f"Errore lettura config per '{path}'.",
-                code="config.read.failed",
-                component="assistant_registry",
-                path=path,
-            ) from exc
-        if value is not None:
-            return value
+            return settings.get_value(path, default=default)
+        except KeyError:
+            return default
     mapping: Any = None
     if hasattr(settings, "as_dict"):
         try:

@@ -70,6 +70,22 @@ def test_resolve_kgraph_config_requires_model(monkeypatch):
     assert result.model == "kgraph-model"
 
 
+def test_resolve_kgraph_config_prefers_nested_model(monkeypatch):
+    settings = {
+        "ai": {"kgraph": {"model": "nested-model", "assistant_id_env": "KGRAPH_ASSISTANT_ID"}},
+        "ai.kgraph.model": "flat-model",
+    }
+
+    def fake_env(name: str, required: bool = False) -> str:
+        if name == "KGRAPH_ASSISTANT_ID":
+            return "kgraph-assistant"
+        raise KeyError(name)
+
+    monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
+    result = resolve_kgraph_config(settings)
+    assert result.model == "nested-model"
+
+
 def test_assistant_env_precedence_settings(monkeypatch):
     class _StubSettings:
         vision_assistant_env = "settings-env"
