@@ -9,8 +9,10 @@ from typing import Any, Dict
 
 import pytest
 import yaml  # type: ignore
+from pypdf import PdfWriter
 
 import ai.vision_config as ai_config
+import semantic.document_ingest as document_ingest
 import semantic.vision_provision as vp
 from ai.types import AssistantConfig, ResponseJson
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
@@ -52,6 +54,17 @@ def _fake_pdf_text() -> str:
         "Contesto Operativo\n"
         "Descrizione del contesto operativo...\n"
     )
+
+
+def _write_dummy_pdf(path: Path) -> None:
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    with path.open("wb") as handle:
+        writer.write(handle)
+
+
+def _fake_pdf_pages() -> list[str]:
+    return [_fake_pdf_text()]
 
 
 def _ok_payload(slug: str) -> dict:
@@ -174,13 +187,13 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
     # crea file PDF vuoto (esistenza richiesta da ensure_within_and_resolve + checks)
     pdf = tmp_path / "vision.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
+    _write_dummy_pdf(pdf)
 
     # env assistant id (il codice lo legge DOPO aver letto il nome var da ctx.settings)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
 
     # patch estrazione PDF e risposta assistant
-    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+    monkeypatch.setattr(document_ingest, "extract_text_from_pdf", lambda path: _fake_pdf_pages())
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **k: _ok_payload(slug))
 
     # run
@@ -217,7 +230,7 @@ def test_ensure_materializes_vision_yaml(tmp_path: Path, monkeypatch: pytest.Mon
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     pdf = config_dir / "VisionStatement.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
+    _write_dummy_pdf(pdf)
 
     full_text = (
         "Vision\nLa visione...\n"
@@ -259,10 +272,10 @@ def test_provision_ignores_engine_in_settings(tmp_path: Path, monkeypatch: pytes
     ctx.settings["ai"]["vision"]["engine"] = "responses"
 
     pdf = tmp_path / "vision.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
+    _write_dummy_pdf(pdf)
 
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
-    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+    monkeypatch.setattr(document_ingest, "extract_text_from_pdf", lambda path: _fake_pdf_pages())
 
     captured: Dict[str, Any] = {}
 
@@ -292,10 +305,10 @@ def test_provision_retention_zero_raises(tmp_path: Path, monkeypatch: pytest.Mon
     ctx.settings["ai"]["vision"]["snapshot_retention_days"] = 0
 
     pdf = tmp_path / "vision.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
+    _write_dummy_pdf(pdf)
 
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
-    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+    monkeypatch.setattr(document_ingest, "extract_text_from_pdf", lambda path: _fake_pdf_pages())
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **_k: _ok_payload(slug))
 
     with pytest.raises(ConfigError):
@@ -306,10 +319,10 @@ def test_provision_halt_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "dummy-srl"
     ctx = _Ctx(tmp_path)
     pdf = tmp_path / "vision.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
+    _write_dummy_pdf(pdf)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
 
-    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+    monkeypatch.setattr(document_ingest, "extract_text_from_pdf", lambda path: _fake_pdf_pages())
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **k: _halt_payload(slug))
 
     config = resolve_vision_config(ctx, override_model="test-model")
@@ -334,13 +347,13 @@ def test_provision_with_prepared_prompt_skips_pdf_read(tmp_path: Path, monkeypat
     slug = "dummy-srl"
     ctx = _Ctx(tmp_path)
     pdf = tmp_path / "vision.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
+    _write_dummy_pdf(pdf)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
 
     def _fail_extract(*_args: object, **_kwargs: object) -> None:
         pytest.fail("_extract_pdf_text non dovrebbe essere invocato quando prepared_prompt è fornito.")
 
-    monkeypatch.setattr(vp, "_extract_pdf_text", _fail_extract)
+    monkeypatch.setattr(document_ingest, "extract_text_from_pdf", _fail_extract)
 
     captured: dict[str, object] = {}
 
@@ -377,7 +390,7 @@ def test_provision_with_prepared_prompt_skips_pdf_read(tmp_path: Path, monkeypat
 def test_provision_missing_assistant_id_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     ctx = _Ctx(tmp_path)
     pdf = tmp_path / "vision.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
+    _write_dummy_pdf(pdf)
 
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
 
@@ -391,11 +404,11 @@ def test_provision_with_config_skips_env(tmp_path: Path, monkeypatch: pytest.Mon
     slug = "config-only"
     ctx = _Ctx(tmp_path)
     pdf = tmp_path / "vision.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
+    _write_dummy_pdf(pdf)
 
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
 
-    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+    monkeypatch.setattr(document_ingest, "extract_text_from_pdf", lambda path: _fake_pdf_pages())
 
     captured: Dict[str, object] = {}
 
@@ -430,10 +443,10 @@ def test_semantic_with_config_does_not_reresolve_policy(tmp_path: Path, monkeypa
     slug = "config-only"
     ctx = _Ctx(tmp_path)
     pdf = tmp_path / "vision.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
+    _write_dummy_pdf(pdf)
 
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "config-asst")
-    monkeypatch.setattr(vp, "_extract_pdf_text", lambda *a, **k: _fake_pdf_text())
+    monkeypatch.setattr(document_ingest, "extract_text_from_pdf", lambda path: _fake_pdf_pages())
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **_: _ok_payload(slug))
 
     monkeypatch.setattr(
@@ -525,7 +538,7 @@ def test_analyze_vision_sections_realistic_text():
 def test_prepare_payload_sets_instructions_by_use_kb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "dummy-instructions"
     pdf = tmp_path / "vision.pdf"
-    pdf.write_bytes(b"%PDF-FAKE%")
+    _write_dummy_pdf(pdf)
     ctx = _Ctx(tmp_path)
     ctx.settings["ai"]["vision"]["model"] = "gpt-4o-mini"
 

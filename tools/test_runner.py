@@ -42,9 +42,21 @@ def _prepare_test_temp() -> None:
     PYTEST_TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _pytest_executable() -> str:
+    repo_root = Path(__file__).resolve().parents[1]
+    candidates = [
+        repo_root / ".venv" / "Scripts" / "python.exe",
+        repo_root / ".venv" / "bin" / "python",
+    ]
+    for path in candidates:
+        if path.exists():
+            return str(path)
+    return sys.executable
+
+
 def _build_pytest_command(binary: str, extra_args: list[str]) -> list[str]:
     marker_expr = BINARIES[binary]
-    cmd = [sys.executable, "-m", "pytest", "-q"]
+    cmd = [_pytest_executable(), "-m", "pytest", "-q"]
     if marker_expr:
         cmd.extend(["-m", marker_expr])
     cmd.extend(extra_args)
@@ -86,7 +98,14 @@ def main() -> int:
         extra_args = extra_args[1:]
 
     _prepare_test_temp()
+    repo_root = Path(__file__).resolve().parents[1]
+    src_path = repo_root / "src"
     subprocess_env = os.environ.copy()
+    python_path = subprocess_env.get("PYTHONPATH")
+    if python_path:
+        subprocess_env["PYTHONPATH"] = f"{python_path}{os.pathsep}{src_path}"
+    else:
+        subprocess_env["PYTHONPATH"] = str(src_path)
     if "PYTHONPATH" in os.environ and os.environ["PYTHONPATH"]:
         subprocess_env["PYTHONPATH"] = os.environ["PYTHONPATH"]
     subprocess_env["CLIENTS_DB_DIR"] = str(CLIENTS_DB_TEST_DIR.resolve())
