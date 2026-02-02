@@ -27,6 +27,8 @@ from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineEr
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.qa_evidence import qa_evidence_path
+from pipeline.qa_gate import require_qa_gate_pass
 from pipeline.runtime_guard import ensure_strict_runtime
 from pipeline.semantic_mapping_utils import raw_categories_from_semantic_mapping
 from pipeline.tracing import start_root_trace
@@ -168,6 +170,85 @@ def _require_normalize_raw_gate(
     )
 
 
+def _path_ref(path: Path, layout: WorkspaceLayout) -> str:
+    try:
+        repo_root = layout.repo_root_dir
+        rel_path = path.relative_to(repo_root).as_posix() if repo_root else path.as_posix()
+    except Exception:
+        rel_path = path.as_posix()
+    return f"path:{rel_path}"
+
+
+def _run_qa_gate_and_record(
+    conn,
+    *,
+    layout: WorkspaceLayout,
+    slug: str,
+    run_id: str,
+) -> None:
+    logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
+    if logs_dir is None:
+        raise ConfigError("Directory log mancante per QA evidence.", code="qa_evidence_invalid", slug=slug)
+    qa_path = qa_evidence_path(logs_dir)
+    decided_at = _dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        result = require_qa_gate_pass(logs_dir, slug=slug)
+    except QaGateViolation as exc:
+        evidence_refs = [
+            _path_ref(qa_path, layout),
+            "qa_status:failed",
+        ]
+        try:
+            decision_ledger.record_normative_decision(
+                conn,
+                decision_ledger.NormativeDecisionRecord(
+                    decision_id=uuid.uuid4().hex,
+                    run_id=run_id,
+                    slug=slug,
+                    gate_name="qa_gate",
+                    from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                    to_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                    verdict=decision_ledger.NORMATIVE_BLOCK,
+                    subject="qa_gate",
+                    decided_at=decided_at,
+                    actor="cli.semantic_onboarding",
+                    evidence_refs=[*evidence_refs, *(exc.evidence_refs or [])],
+                    stop_code=decision_ledger.STOP_CODE_QA_GATE_FAILED,
+                    reason_code="deny_qa_gate_failed",
+                ),
+            )
+        except Exception as ledger_exc:
+            raise PipelineError(
+                "Ledger write failed for gate=qa_gate",
+                slug=slug,
+                run_id=run_id,
+                hint=str(ledger_exc),
+            ) from ledger_exc
+        raise
+    checks_json = json.dumps(result.checks_executed, sort_keys=True, separators=(",", ":"))
+    evidence_refs = [
+        _path_ref(qa_path, layout),
+        "qa_status:pass",
+        f"checks_executed:{checks_json}",
+    ]
+    decision_ledger.record_normative_decision(
+        conn,
+        decision_ledger.NormativeDecisionRecord(
+            decision_id=uuid.uuid4().hex,
+            run_id=run_id,
+            slug=slug,
+            gate_name="qa_gate",
+            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+            to_state=decision_ledger.STATE_SEMANTIC_INGEST,
+            verdict=decision_ledger.NORMATIVE_PASS,
+            subject="qa_gate",
+            decided_at=decided_at,
+            actor="cli.semantic_onboarding",
+            evidence_refs=evidence_refs,
+        ),
+    )
+
+
 def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
     if isinstance(exc, ArtifactPolicyViolation):
         return [*base, *exc.evidence_refs]
@@ -235,6 +316,19 @@ def main() -> int:
                 tag_kg_effective: str | None = None
 
                 _require_normalize_raw_gate(ledger_conn, slug=slug, layout=layout)
+                try:
+                    _run_qa_gate_and_record(
+                        ledger_conn,
+                        layout=layout,
+                        slug=slug,
+                        run_id=run_id,
+                    )
+                except QaGateViolation as qa_exc:
+                    logger.error(
+                        "cli.semantic_onboarding.qa_gate_failed",
+                        extra={"slug": slug, "error": str(qa_exc)},
+                    )
+                    return int(exit_code_for(qa_exc))
                 repo_root_dir, _mds, touched = run_semantic_pipeline(
                     ctx,
                     logger,

@@ -8,7 +8,6 @@ from typing import Iterable
 from pipeline.exceptions import ArtifactPolicyViolation, ConfigError
 from pipeline.normalized_index import validate_index
 from pipeline.path_utils import ensure_within
-from pipeline.qa_gate import require_qa_gate_pass
 from pipeline.workspace_layout import WorkspaceLayout
 
 _MIME_BY_EXTENSION = {
@@ -193,15 +192,6 @@ def _build_violation_refs(layout: WorkspaceLayout, violations: Iterable[_Artifac
     return refs
 
 
-def _require_qa_gate(layout: WorkspaceLayout, *, phase: str) -> None:
-    if phase.strip().lower() != "semantic_onboarding":
-        return
-    logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
-    if logs_dir is None:
-        raise ConfigError("Directory log mancante per QA evidence.", code="qa_evidence_invalid")
-    require_qa_gate_pass(logs_dir, slug=layout.slug)
-
-
 def enforce_core_artifacts(
     phase: str,
     *,
@@ -209,7 +199,6 @@ def enforce_core_artifacts(
     stub_expected: bool = False,
 ) -> None:
     violations: list[_ArtifactViolation] = []
-    _require_qa_gate(layout, phase=phase)
     for spec in _expected_specs_for_phase(phase, layout, stub_expected=stub_expected):
         violations.extend(_verify_spec(layout, spec))
     if phase.strip().lower() == "raw_ingest":

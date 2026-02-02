@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import json
+import uuid
 from pathlib import Path
 
 import pytest
@@ -91,18 +93,38 @@ def _write_qa_evidence(log_dir: Path, *, qa_status: str) -> None:
     (log_dir / QA_EVIDENCE_FILENAME).write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
+def _start_run(conn, slug: str, run_id: str) -> None:
+    decision_ledger.start_run(
+        conn,
+        run_id=run_id,
+        slug=slug,
+        started_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+
+
 def test_semantic_onboarding_requires_qa_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     layout = _bootstrap_dummy_layout(tmp_path, monkeypatch)
-    (layout.book_dir / "content.md").write_text("# Content\n", encoding="utf-8")
+    conn = decision_ledger.open_ledger(layout)
+    run_id = uuid.uuid4().hex
+    _start_run(conn, slug=layout.slug, run_id=run_id)
     with pytest.raises(QaGateViolation) as exc:
-        enforce_core_artifacts("semantic_onboarding", layout=layout)
-    assert any("qa_gate" in ref for ref in exc.value.evidence_refs)
+        semantic_onboarding._run_qa_gate_and_record(conn, layout=layout, slug=layout.slug, run_id=run_id)
+    assert any(ref.startswith("qa_gate:") for ref in exc.value.evidence_refs)
+    conn.close()
 
 
 def test_semantic_onboarding_blocks_on_qa_fail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     layout = _bootstrap_dummy_layout(tmp_path, monkeypatch)
-    (layout.book_dir / "content.md").write_text("# Content\n", encoding="utf-8")
     _write_qa_evidence(layout.logs_dir, qa_status="fail")
-    with pytest.raises(QaGateViolation) as exc:
-        enforce_core_artifacts("semantic_onboarding", layout=layout)
-    assert any("qa_evidence_failed" in ref for ref in exc.value.evidence_refs)
+    conn = decision_ledger.open_ledger(layout)
+    run_id = uuid.uuid4().hex
+    _start_run(conn, slug=layout.slug, run_id=run_id)
+    with pytest.raises(QaGateViolation):
+        semantic_onboarding._run_qa_gate_and_record(conn, layout=layout, slug=layout.slug, run_id=run_id)
+    qa_rows = conn.execute(
+        "SELECT gate_name FROM decisions WHERE gate_name = ?",
+        ("qa_gate",),
+    ).fetchall()
+    assert qa_rows and len(qa_rows) == 1
+    assert qa_rows[0][0] == "qa_gate"
+    conn.close()

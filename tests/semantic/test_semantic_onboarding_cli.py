@@ -115,6 +115,15 @@ def test_main_bubbles_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setattr(sapi, "require_reviewed_vocab", _raise)
     monkeypatch.setattr(sapi, "_require_reviewed_vocab", _raise)
 
+    logs_dir = ctx.repo_root_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    qa_payload = {
+        "schema_version": 1,
+        "qa_status": "pass",
+        "checks_executed": ["pre-commit run --all-files", "pytest -q"],
+    }
+    (logs_dir / QA_EVIDENCE_FILENAME).write_text(json.dumps(qa_payload) + "\n", encoding="utf-8")
+
     exit_code = cli.main()
 
     assert exit_code == exit_code_for(ConfigError("missing", slug="dummy"))

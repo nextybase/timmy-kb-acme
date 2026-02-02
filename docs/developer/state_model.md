@@ -42,6 +42,10 @@ Decision Ledger e non guidano le transizioni runtime.
 ### Gate: tag_onboarding
 - Nessuna transizione di stato: opera intra-state su `SEMANTIC_INGEST`.
 
+### Gate: qa_gate (semantic_onboarding precondition)
+- `SEMANTIC_INGEST -> SEMANTIC_INGEST` (PASS)
+- `BLOCK`/`FAIL`: nessun avanzamento (`to_state` resta `SEMANTIC_INGEST`); la run si interrompe con stop_code `QA_GATE_FAILED`.
+
 ### Gate: semantic_onboarding
 - `SEMANTIC_INGEST -> FRONTMATTER_ENRICH` (PASS/BLOCK/FAIL)
 - `FRONTMATTER_ENRICH -> VISUALIZATION_REFRESH` (PASS/BLOCK/FAIL)
@@ -50,6 +54,7 @@ Decision Ledger e non guidano le transizioni runtime.
 ## Golden trace (esempio, run OK)
 - pre_onboarding: `WORKSPACE_BOOTSTRAP -> SEMANTIC_INGEST` (PASS)
 - normalize_raw: `WORKSPACE_BOOTSTRAP -> SEMANTIC_INGEST` (PASS)
+- qa_gate: `SEMANTIC_INGEST -> SEMANTIC_INGEST` (PASS)
 - tag_onboarding: `SEMANTIC_INGEST -> SEMANTIC_INGEST` (PASS)
 - semantic_onboarding: `SEMANTIC_INGEST -> FRONTMATTER_ENRICH` (PASS)
 - semantic_onboarding: `FRONTMATTER_ENRICH -> VISUALIZATION_REFRESH` (PASS)

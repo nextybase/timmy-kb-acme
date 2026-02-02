@@ -27,3 +27,10 @@ def test_ui_and_core_share_qa_gate_precondition() -> None:
     core_path = repo_root / "src/semantic/frontmatter_service.py"
     assert _has_call(ui_path, "require_qa_gate_pass"), "UI must use require_qa_gate_pass"
     assert _has_call(core_path, "require_qa_gate_pass"), "Core must use require_qa_gate_pass"
+
+
+def test_artifact_policy_no_longer_uses_qa_gate() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    artifact_path = repo_root / "src/pipeline/artifact_policy.py"
+    source = artifact_path.read_text(encoding="utf-8")
+    assert "require_qa_gate_pass" not in source, "artifact_policy should no longer call require_qa_gate_pass"

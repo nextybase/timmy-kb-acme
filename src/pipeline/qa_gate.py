@@ -17,10 +17,21 @@ class QaGateResult:
     checks_executed: list[str]
 
 
+def _format_evidence_path(path: Path) -> str:
+    name = path.name
+    if name == QA_EVIDENCE_FILENAME:
+        parent = path.parent.name
+        if parent:
+            return f"{parent}/{name}"
+        return name
+    return name
+
+
 def _evidence_refs(path: Path, reason: str, qa_status: str | None = None) -> list[str]:
+    safe_path = _format_evidence_path(path)
     refs = [
         f"qa_gate:{reason}",
-        f"qa_path:{path.as_posix()}",
+        f"qa_path:{safe_path}",
     ]
     if qa_status:
         refs.append(f"qa_status:{qa_status}")
@@ -62,10 +73,20 @@ def require_qa_gate_pass(log_dir: Path, *, slug: str | None = None) -> QaGateRes
             evidence_refs=_evidence_refs(path, "qa_evidence_failed", qa_status=qa_status or None),
         )
 
+    raw_checks = evidence.get("checks_executed")
+    if not isinstance(raw_checks, list) or not all(isinstance(item, str) for item in raw_checks):
+        raise QaGateViolation(
+            "QA gate failed.",
+            slug=slug,
+            file_path=path,
+            reason="qa_evidence_invalid",
+            evidence_refs=_evidence_refs(path, "qa_evidence_invalid"),
+        )
+
     return QaGateResult(
         schema_version=int(evidence.get("schema_version", 0)),
         qa_status=qa_status,
-        checks_executed=list(evidence.get("checks_executed") or []),
+        checks_executed=list(raw_checks),
     )
 
 
