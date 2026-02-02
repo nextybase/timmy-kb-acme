@@ -6,7 +6,7 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Mapping
 
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.path_utils import ensure_within_and_resolve
@@ -275,7 +275,8 @@ def record_event(
     if payload is not None:
         if not isinstance(payload, dict):
             raise TypeError("payload deve essere un dict")
-        payload_json = json.dumps(payload, sort_keys=True)
+        safe_payload = _sanitize_event_payload(payload)
+        payload_json = json.dumps(safe_payload, sort_keys=True)
     _insert_row(
         conn,
         "INSERT INTO events (event_id, run_id, slug, event_name, actor, occurred_at, payload_json) "
@@ -284,6 +285,57 @@ def record_event(
         hint="record_event",
         slug=slug,
     )
+
+
+_EVENT_SENSITIVE_SUBSTRINGS: Final[tuple[str, ...]] = (
+    "token",
+    "secret",
+    "password",
+    "authorization",
+    "api_key",
+    "apikey",
+    "key",
+    "service_account",
+    "x-access-token",
+)
+
+_EVENT_REDACTIONS: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
+    (re.compile(r"x-access-token\s*:\s*\S+", re.IGNORECASE), "x-access-token:***"),
+    (re.compile(r"Authorization\s*:\s*Basic\s+\S+", re.IGNORECASE), "Authorization: Basic ***"),
+    (re.compile(r"Authorization\s*:\s*Bearer\s+\S+", re.IGNORECASE), "Authorization: Bearer ***"),
+)
+
+
+def _redact_text(value: str) -> str:
+    out = value
+    for pattern, repl in _EVENT_REDACTIONS:
+        out = pattern.sub(repl, out)
+    if len(out) > 2048:
+        out = out[:2048] + "…"
+    return out
+
+
+def _is_sensitive_key(key: str) -> bool:
+    lk = key.lower()
+    return any(sub in lk for sub in _EVENT_SENSITIVE_SUBSTRINGS)
+
+
+def _sanitize_event_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """
+    Event ledger è non-normativo e può essere diagnostico, ma non deve diventare un deposito di segreti.
+    Redige chiavi sensibili e tronca testo libero troppo lungo.
+    """
+
+    def sanitize(v: Any) -> Any:
+        if isinstance(v, str):
+            return _redact_text(v)
+        if isinstance(v, dict):
+            return {str(k): ("***" if _is_sensitive_key(str(k)) else sanitize(val)) for k, val in v.items()}
+        if isinstance(v, list):
+            return [sanitize(x) for x in v]
+        return v
+
+    return {str(k): ("***" if _is_sensitive_key(str(k)) else sanitize(v)) for k, v in dict(payload).items()}
 
 
 def _map_normative_verdict(verdict: str) -> str:

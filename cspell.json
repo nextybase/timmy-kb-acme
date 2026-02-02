@@ -427,7 +427,9 @@
         "summarise",
         "provisiono",
         "vecs",
-        "sval"
+        "sval",
+        "apikey",
+        "redactions"
       ]
     },
     {
