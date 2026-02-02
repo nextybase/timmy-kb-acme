@@ -94,15 +94,15 @@ def _build_evidence_refs(
         effective_final["tag_kg"] = tag_kg_effective
 
     refs = [
-        f"path:{layout.config_path}",
-        f"path:{layout.semantic_dir}",
+        _path_ref(layout.config_path, layout),
+        _path_ref(layout.semantic_dir, layout),
         f"requested:{json.dumps(requested, sort_keys=True, separators=(',', ':'))}",
         f"effective:{json.dumps(effective_final, sort_keys=True, separators=(',', ':'))}",
         f"outcome:{outcome}",
     ]
     normalized_dir = getattr(layout, "normalized_dir", None)
     if normalized_dir is not None:
-        refs.append(f"path:{normalized_dir}")
+        refs.append(_path_ref(normalized_dir, layout))
     if exit_code is not None:
         refs.append(f"exit_code:{int(exit_code)}")
     if tag_kg_effective is not None:
