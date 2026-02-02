@@ -1,4 +1,6 @@
-# Timmy KB - README (v1.0 Beta)
+# Timmy KB - README (v1.9.5 Alpha, pre-1.0 Beta)
+
+Current release: 1.9.5 Alpha · Upcoming release: 1.0 Beta (pre-release coordination).
 
 Timmy-KB è un ambiente per la creazione e il governo di Timmy, strutturato su due domini epistemici distinti:
 **Epistemic Envelope** e **Agency Engine**.

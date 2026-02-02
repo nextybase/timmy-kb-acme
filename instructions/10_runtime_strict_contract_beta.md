@@ -9,20 +9,19 @@ Applies to: All Beta 1.0 executions
 
 ## 1. Contract Vision
 
-The system MUST operate in **deterministic, strict-only mode**.
-Strict-only execution is a **precondition**, not a selectable runtime option.
+The system operates in **strict-first mode**: strict execution is the default runtime behavior and the only path taken unless an explicitly documented capability gate authorizes a non-strict exception.
 
-Execution SHALL be allowed **only** when all structural and semantic prerequisites are present and verifiable.
-Any deviation from declared formats, schemas, or invariants MUST result in a **deterministic hard-fail**.
+Execution SHALL be allowed **only** when all structural and semantic prerequisites are present and verifiable; any deviation from declared formats, schemas, or invariants MUST result in a **deterministic hard-fail**.
 
   The system MUST NOT introduce:
 - silent fallbacks
 - best-effort parsing
 - auto-generated structure
 - tolerance-based recovery paths
-- any non-strict or degraded execution mode within runtime
 
-Determinism takes precedence over usability, resilience, or graceful degradation.
+Non-strict execution paths exist solely under documented, capability-gated exceptions; each such exception emits explicit observability markers and does not degrade the core strict guarantees.
+
+Determinism takes precedence over usability, resilience, or graceful degradation, except where a verified capability gate clearly signals an alternative behavior.
 
 ---
 
@@ -40,11 +39,9 @@ Any error on prerequisites or output validity MUST interrupt execution with:
 **I-3 -- No silent fallback**
 The system MUST NOT continue execution in best-effort or log-only mode after a critical error.
 
-**I-3bis -- Strict-only runtime**
-The runtime core MUST NOT support non-strict execution paths.
-Any behavior that relies on heuristics, fallbacks, partial execution,
-capability probing, or tolerance-based recovery is **out of scope for runtime**
-and MUST be implemented exclusively as external tooling.
+**I-3bis -- Strict-first runtime with capability gating**
+The runtime core preserves strict execution as default; non-strict paths are permitted only when a documented capability gate explicitly authorizes them.
+Any heuristic, fallback, partial execution, capability probing, or tolerance-based recovery MUST be either failed or handled outside the core runtime unless the capability is declared and traceable through observability.
 
 **I-4 -- Binding Ledger**
 Decision Records (ledger) are binding.
@@ -215,6 +212,16 @@ The following are NOT guaranteed and MUST NOT be implemented:
 - Non-strict or schema-less execution modes
 - Auto-generation of structural elements (placeholders, alt-keys)
 - Any non-deterministic or fallback-dependent behavior
+
+---
+
+## 6bis. Operational Definitions
+
+- **Strict-first** – Default runtime behavior where only schema-compliant inputs progress; deviations trigger hard-fail unless a capability gate explicitly approves an exception.
+- **Non-strict** – Capability-gated exception path that is always documented, observable, and produces deterministic Decision Records about the change in semantics.
+- **Degradation** – Any fallback, best-effort, or heuristic alteration of runtime semantics that would be rejected under strict mode without a capability gate.
+- **Capability-gated** – A named integration or feature with prerequisites; absence results in deterministic failure while presence may temporarily relax strict guarantees under explicit observability.
+- **Hard-fail** – Immediate termination with a deterministic error state, repeatable given the same inputs.
 
 ---
 

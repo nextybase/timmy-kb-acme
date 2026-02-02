@@ -1,4 +1,6 @@
-# Timmy-KB - Documentazione (v1.0 Beta)
+# Timmy-KB - Documentazione (v1.9.5 Alpha, pre-1.0 Beta)
+
+Current release: 1.9.5 Alpha · Upcoming release: 1.0 Beta (pre-1.0 Beta finalization).
 
 Benvenuto nella documentazione di **Timmy-KB**.
 Questo spazio raccoglie i materiali necessari a comprendere, usare e mantenere il sistema, mantenendo una separazione chiara tra **contesto concettuale**, **regole vincolanti** e **operatività tecnica**.
