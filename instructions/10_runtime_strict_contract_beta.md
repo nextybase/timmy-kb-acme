@@ -2,184 +2,195 @@
 
 Status: ACTIVE (Beta 1.0)
 Authority: OCP / C-Board
-Scope: Runtime execution, Semantic pipeline, Vision provisioning, Onboarding flows
+Scope: Runtime execution, Semantic pipeline, Vision provisioning, Onboarding and tooling flows
 Applies to: All Beta 1.0 executions
 
 ---
 
 ## 1. Contract Vision
 
-The system operates in **strict-first mode**: strict execution is the default runtime behavior and the only path taken unless an explicitly documented capability gate authorizes a non-strict exception.
+The system operates in **strict-first mode**.
 
-Execution SHALL be allowed **only** when all structural and semantic prerequisites are present and verifiable; any deviation from declared formats, schemas, or invariants MUST result in a **deterministic hard-fail**.
+Strict execution is the **default and normative runtime behavior**.
+All runtime decisions, state transitions, and canonical artefacts are governed by strict rules unless an **explicit, documented, and capability-gated exception** authorizes an alternative path.
 
-  The system MUST NOT introduce:
-- silent fallbacks
-- best-effort parsing
-- auto-generated structure
-- tolerance-based recovery paths
+Execution SHALL proceed **only** when all declared structural, semantic, and environmental prerequisites are present and verifiable.
+Any deviation from declared formats, schemas, or invariants MUST result in a **deterministic hard-fail**.
 
-Non-strict execution paths exist solely under documented, capability-gated exceptions; each such exception emits explicit observability markers and does not degrade the core strict guarantees.
+The system MUST NOT introduce:
+- silent fallbacks;
+- best-effort parsing;
+- auto-generated structure;
+- tolerance-based recovery paths.
 
-Determinism takes precedence over usability, resilience, or graceful degradation, except where a verified capability gate clearly signals an alternative behavior.
+**Non-strict execution paths are not degradations**.
+They exist solely as **documented exceptions**, activated through explicit capability gates, and MUST:
+- be observable and traceable;
+- preserve determinism;
+- never alter runtime semantics silently.
+
+Determinism takes precedence over usability, resilience, or graceful degradation, except where a verified capability gate explicitly authorizes a controlled semantic variation.
 
 ---
 
 ## 2. System Invariants
 
-**I-1 -- Strict-only execution**
-The system MUST be strict-only.
-No operational path may accept outputs that are not compliant with declared schemas.
+**I-1 — Strict-first execution**
+Strict execution is the default runtime behavior.
+No operational path may accept outputs that are not compliant with declared schemas unless a documented capability gate explicitly authorizes a non-strict exception.
 
-**I-2 -- Deterministic fail-fast**
+**I-2 — Deterministic fail-fast**
 Any error on prerequisites or output validity MUST interrupt execution with:
-- an explicit error
-- a stable, reproducible message
+- an explicit error;
+- a stable, reproducible message.
 
-**I-3 -- No silent fallback**
+**I-3 — No silent fallback**
 The system MUST NOT continue execution in best-effort or log-only mode after a critical error.
 
-**I-3bis -- Strict-first runtime with capability gating**
-The runtime core preserves strict execution as default; non-strict paths are permitted only when a documented capability gate explicitly authorizes them.
-Any heuristic, fallback, partial execution, capability probing, or tolerance-based recovery MUST be either failed or handled outside the core runtime unless the capability is declared and traceable through observability.
+**I-3bis — Capability-gated exceptions**
+The runtime core preserves strict behavior by default.
+Non-strict paths are permitted **only** when:
+- the capability is explicitly declared and documented;
+- prerequisites are verifiable;
+- the semantic deviation is observable and traceable.
 
-**I-4 -- Binding Ledger**
+Any heuristic, fallback, partial execution, or tolerance-based recovery is forbidden in the runtime core unless explicitly authorized by a capability gate.
+
+**I-4 — Binding Ledger**
 Decision Records (ledger) are binding.
 Any failure to write or validate a Decision Record MUST block state advancement.
 
-**I-5 -- Deterministic NLP semantics**
+**I-5 — Deterministic NLP semantics**
 If the required NLP backend is `spacy`:
-- SpaCy errors MUST cause hard-fail
-- missing or empty `tags.db` MUST cause hard-fail
+- SpaCy errors MUST cause hard-fail;
+- missing or empty `tags.db` MUST cause hard-fail.
 
-**I-6 -- Input-derived structure only**
+**I-6 — Input-derived structure only**
 Proposed structures MUST derive strictly from input evidence.
 Placeholders, auto-branches, or inferred nodes MUST NOT be introduced.
 
-**I-7 -- Pure Vision output**
+**I-7 — Pure Vision output**
 Vision output MUST be **pure JSON**.
 Code fences, prefixes, suffixes, or tolerant parsing MUST NOT be accepted.
 
-**I-8 -- Goal format invariant**
+**I-8 — Goal format invariant**
 The `Goal N` format MUST be present and parsable.
 Its absence MUST cause hard-fail.
 
-**I-9 -- Normative Ledger is non-diagnostic**
+**I-9 — Normative Ledger is non-diagnostic**
 Decision Records are **normative** and MUST remain **low-entropy**.
-They MUST NOT persist diagnostic/free-text content derived from runtime exceptions
-or environment-specific error messages.
 
 Allowed in Decision Records:
-- stable `stop_code` values (required for BLOCK/FAIL),
-- stable `actor` identifiers,
-- stable `gate_name` / `from_state` / `to_state`,
-- deterministic `evidence_refs[]` identifiers (artifact IDs, gate IDs, rule IDs),
-- deterministic `rationale` labels.
+- stable `stop_code` values (required for BLOCK / FAIL);
+- stable `actor` identifiers;
+- stable `gate_name`, `from_state`, `to_state`;
+- deterministic `evidence_refs[]`;
+- deterministic `reason_code` or `rationale` labels.
 
 Forbidden in Decision Records:
-- exception strings, exception summaries, stack traces,
-- host/path/environment-dependent error text,
-- any non-deterministic free text used as a substitute for `stop_code`.
+- exception strings or summaries;
+- stack traces;
+- environment-dependent diagnostics;
+- non-deterministic free text.
 
-Diagnostic details MUST be emitted only via structured logs/events.
+Diagnostic details MUST be emitted only via structured logs or events.
 
 ---
 
-## 2bis. Capabilities (Core vs Optional adapters)
+## 2bis. Capabilities (Core vs Optional Integrations)
 
-The architecture distinguishes a deterministic core from optional adapters.
-Optional integrations are capability-gated and **not** part of the runtime core.
+The architecture distinguishes a deterministic **runtime core** from **capability-gated integrations**.
 
 | Capability | Scope | Fail-fast rule |
 |---|---|---|
-| Deterministic core (pipeline, local artifacts, workspace layout, gating, ledger) | Runtime core | Strict/fail-fast; no silent fallback |
-| Optional adapters (e.g., Google Drive) | Capability-gated integrations | Explicit prerequisites; absence yields a verifiable "feature unavailable" error |
+| Deterministic core (pipeline, workspace layout, gating, ledger) | Runtime core | Strict / fail-fast |
+| Optional integrations (e.g. Google Drive) | Capability-gated | Explicit prerequisite failure |
 
 Optional adapter prerequisites (Drive):
 - extras `.[drive]`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`;
-- missing prerequisites MUST raise an explicit capability error (no degraded behavior);
-- `--dry-run` and local modes are first-class and do not depend on Drive.
+- missing prerequisites MUST raise an explicit capability error;
+- `--dry-run` and local-only modes are first-class and do not depend on Drive.
 
 ---
 
-Strict runtime guard è obbligatorio. Gli errori non sono incidenti ma esito naturale del design.
+## 2ter. Runtime vs Tooling Boundary (Beta 1.0)
 
-## 2quater. Runtime vs Tooling Boundary (Beta 1.0)
+The system enforces a strict boundary between **runtime execution** and **supporting tooling**.
 
-The architecture distinguishes **runtime strict execution** from **supporting tooling**.
-
-**Runtime (strict-only):**
+**Runtime core:**
 - executes state transitions;
-- produces Decision Records and canonical artefacts;
+- produces canonical artefacts;
+- records Decision Records;
 - enforces invariants and schemas;
 - fails fast on any missing prerequisite.
 
-**Tooling (out of runtime scope):**
-- environment checks, capability probes, provisioning helpers;
-- bootstrap, migration, or diagnostic utilities;
-- heuristic inference of paths, roots, or defaults;
-- any user-facing guidance or recovery suggestions.
+**Tooling and onboarding flows (out of runtime scope):**
+- environment validation and provisioning;
+- workspace bootstrap and migration;
+- diagnostic and administrative utilities;
+- controlled generation of scaffolding artefacts.
 
-Tooling MUST NOT produce Decision Records, advance state, or generate canonical artefacts.
+Tooling MAY perform bootstrap operations but:
+- MUST NOT advance runtime state;
+- MUST NOT bypass runtime invariants;
+- MUST NOT generate Decision Records unless explicitly specified by a gate.
 
 ---
 
-## 2ter. Strict Mode and Dummy/Stub Requests
+## 2quater. Bootstrap Authorization
 
-In Beta 1.0, strict-only execution forbids shim paths that force dummy/stub generation.
+Bootstrap behavior is **forbidden in the runtime core**.
 
-- If a user requests dummy/stub behavior while strict mode is active, the system MUST NOT
-  generate stubs.
-- If a user attempts to **force** dummy/stub behavior under strict mode, execution MUST:
-  - emit a Decision Record with verdict **BLOCK**,
-- include a stable `stop_code` (e.g. `STRICT_MODE_VIOLATION`),
-- terminate with a deterministic non-zero exit.
+Bootstrap operations are permitted **only** within onboarding or tooling flows and require an **explicit authorization gate**.
 
-_Nota_: la pagina **Dummy KB** e il tool `gen_dummy_kb.py` sono tooling DEV/ADMIN-only; l'esposizione via UI è limitata alla tab **Admin** e non rappresentano una modalità runtime alternativa o un fallback supportato negli ambienti strict.
+An explicit authorization signal (e.g. `TIMMY_ALLOW_BOOTSTRAP=1`) indicates:
+- informed consent to perform bootstrap actions;
+- execution outside the runtime core;
+- absence of implicit fallback or degradation.
+
+Bootstrap authorization is **not a preference** and **not a runtime mode**.
+It is a safety gate that prevents accidental or implicit mutation of runtime workspaces.
+
+---
 
 ## 3. Input Validity Rules
 
-**3.1 -- Vision Statement**
+**3.1 — Vision Statement**
 Required sections MUST be present and non-empty.
-Missing or empty sections invalidate the input.
 
-**3.2 -- Vision payload**
-The payload MUST comply with `VisionOutput` schema.
+**3.2 — Vision payload**
+The payload MUST comply with the `VisionOutput` schema.
 `areas` MUST be a non-empty list within the allowed range.
 
-**3.3 -- Canonical vocabulary**
-When vocab or terms are required:
-- `tags.db` MUST exist
-- `tags.db` MUST be readable
+**3.3 — Canonical vocabulary**
+When vocabulary is required:
+- `tags.db` MUST exist;
+- `tags.db` MUST be readable.
 
-**3.4 -- NLP backend availability**
+**3.4 — NLP backend availability**
 If `TAGS_NLP_BACKEND == "spacy"`, the SpaCy model MUST be available and loadable.
 
-**3.5 -- Area documents**
-Each Vision area MUST provide a non-empty `documents` list for raw folder construction.
+**3.5 — Area documents**
+Each Vision area MUST provide a non-empty `documents` list.
 
-**3.6 -- System folders**
+**3.6 — System folders**
 `identity` and `glossario` folders are valid ONLY if explicitly present in the payload.
-They MUST NOT be auto-added.
 
 ---
 
 ## 4. Output Validity Rules
 
-**4.1 -- Vision output format**
+**4.1 — Vision output format**
 Vision output MUST be valid pure JSON.
-Any non-JSON content MUST be rejected.
 
-**4.2 -- Schema compliance**
-Vision output MUST comply with `VisionOutput` schema in strict mode.
+**4.2 — Schema compliance**
+Vision output MUST comply with the `VisionOutput` schema in strict execution.
 
-**4.3 -- Layout proposals**
+**4.3 — Layout proposals**
 Layout proposals MUST NOT contain placeholders.
-All nodes MUST derive from actual input tokens.
 
-**4.4 -- Structural merge**
+**4.4 — Structural merge**
 Structural merge conflicts MUST cause hard-fail.
-Alternative or suffixed keys MUST NOT be generated.
 
 ---
 
@@ -187,71 +198,51 @@ Alternative or suffixed keys MUST NOT be generated.
 
 The system MUST hard-fail in the following cases:
 
-- `strict_output` is not `True`
-- Vision LLM output contains code fences or extra text
-- Goal parsing without valid `Goal N` blocks
-- any attempt to execute runtime logic with:
-  - missing or unresolved configuration,
-  - unavailable required capability,
-  - heuristic or fallback-derived inputs.
-- Missing, empty, or unreadable `tags.db` when required
-- `TAGS_NLP_BACKEND == "spacy"` and SpaCy is unavailable or errors
-- Failure of `doc_entities` enrichment when invoked
-- Insufficient structure for `min_children`
-- Structural merge conflicts
-- Ledger write or validation failure
+- `strict_output` is not `True`;
+- Vision output contains non-JSON content;
+- invalid or missing `Goal N` blocks;
+- execution with missing configuration or unavailable required capability;
+- missing or unreadable `tags.db` when required;
+- SpaCy errors when selected;
+- structural conflicts or insufficient hierarchy;
+- ledger write or validation failure.
 
 ---
 
 ## 6. Explicitly Out of Scope for Beta 1.0
 
-The following are NOT guaranteed and MUST NOT be implemented:
+The following are NOT supported:
 
-- Tolerance for incomplete or malformed input
-- Automatic repair of LLM output
-- Non-strict or schema-less execution modes
-- Auto-generation of structural elements (placeholders, alt-keys)
-- Any non-deterministic or fallback-dependent behavior
-
----
-
-## 6bis. Operational Definitions
-
-- **Strict-first** – Default runtime behavior where only schema-compliant inputs progress; deviations trigger hard-fail unless a capability gate explicitly approves an exception.
-- **Non-strict** – Capability-gated exception path that is always documented, observable, and produces deterministic Decision Records about the change in semantics.
-- **Degradation** – Any fallback, best-effort, or heuristic alteration of runtime semantics that would be rejected under strict mode without a capability gate.
-- **Capability-gated** – A named integration or feature with prerequisites; absence results in deterministic failure while presence may temporarily relax strict guarantees under explicit observability.
-- **Hard-fail** – Immediate termination with a deterministic error state, repeatable given the same inputs.
+- tolerance for malformed input;
+- automatic repair of model output;
+- implicit non-strict execution;
+- auto-generation of structure;
+- silent or heuristic fallback behavior.
 
 ---
 
-## 7. Normative Glossary
+## 7. Operational Definitions
 
-**Deterministic**
-Given identical input and configuration, the system MUST either:
-- produce the same output, or
-- fail with the same error.
+**Strict-first**
+Default runtime behavior enforcing schema and invariants.
 
-**Strict-only**
-Only schema-compliant output is accepted.
-Any deviation MUST cause hard-fail.
+**Non-strict**
+A documented, capability-gated exception that alters semantics explicitly and observably.
 
-**Fallback**
-Alternative behavior triggered by missing or invalid input.
-In Beta 1.0, fallbacks MUST NOT alter structure or semantics.
+**Degradation**
+Any silent fallback or best-effort behavior not authorized by a capability gate.
 
-**Best-effort**
-Tolerant parsing or recovery attempts.
-In Beta 1.0, best-effort is forbidden on structured output.
+**Capability-gated**
+A named feature requiring explicit prerequisites and authorization.
 
 **Hard-fail**
-Immediate and explicit termination with deterministic error.
+Immediate deterministic termination.
 
-**SSoT (Single Source of Truth)**
-A single authoritative source (e.g. `tags.db` for canonical vocabulary).
+**SSoT**
+Single Source of Truth.
 
 **Binding Ledger**
-State advancement is allowed ONLY after a successful Decision Record.
+State advancement occurs only after a valid Decision Record.
 
 ---
 
