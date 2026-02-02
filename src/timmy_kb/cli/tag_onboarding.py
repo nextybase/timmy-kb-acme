@@ -123,9 +123,9 @@ def _build_evidence_refs(
     effective_mode: str,
 ) -> list[str]:
     return [
-        f"path:{layout.config_path}",
-        f"path:{layout.normalized_dir}",
-        f"path:{layout.semantic_dir}",
+        _path_ref(layout.config_path, layout),
+        _path_ref(layout.normalized_dir, layout),
+        _path_ref(layout.semantic_dir, layout),
         f"dummy_mode:{str(bool(dummy_mode)).lower()}",
         f"requested_mode:{requested_mode}",
         f"strict_mode:{str(bool(strict_mode)).lower()}",
@@ -134,6 +134,15 @@ def _build_evidence_refs(
         "gate_scope:intra_state",
         "state_transition:false",
     ]
+
+
+def _path_ref(path: Path, layout: WorkspaceLayout) -> str:
+    try:
+        repo_root = layout.repo_root_dir
+        rel_path = path.relative_to(repo_root).as_posix() if repo_root else path.as_posix()
+    except Exception:
+        rel_path = path.as_posix()
+    return f"path:{rel_path}"
 
 
 def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:

@@ -202,9 +202,18 @@ def _summarize_error(exc: BaseException) -> str:
 
 def _build_evidence_refs(layout: WorkspaceLayout) -> list[str]:
     return [
-        f"path:{layout.config_path}",
-        f"path:{layout.repo_root_dir}",
+        _path_ref(layout.config_path, layout),
+        _path_ref(layout.repo_root_dir, layout),
     ]
+
+
+def _path_ref(path: Path, layout: WorkspaceLayout) -> str:
+    try:
+        repo_root = layout.repo_root_dir
+        rel_path = path.relative_to(repo_root).as_posix() if repo_root else path.as_posix()
+    except Exception:
+        rel_path = path.as_posix()
+    return f"path:{rel_path}"
 
 
 def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:

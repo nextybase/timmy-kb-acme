@@ -65,10 +65,10 @@ def _build_evidence_refs(
 ) -> list[str]:
     refs = [
         f"source:{source}",
-        f"path:{layout.config_path}",
-        f"path:{layout.raw_dir}",
-        f"path:{layout.normalized_dir}",
-        f"path:{layout.normalized_dir / 'INDEX.json'}",
+        _path_ref(layout.config_path, layout),
+        _path_ref(layout.raw_dir, layout),
+        _path_ref(layout.normalized_dir, layout),
+        _path_ref(layout.normalized_dir / "INDEX.json", layout),
         f"transformer_name:{transformer_name}",
         f"transformer_version:{transformer_version}",
         f"ruleset_hash:{ruleset_hash}",
@@ -80,6 +80,15 @@ def _build_evidence_refs(
             local_hash = hashlib.sha256(local_path.encode("utf-8")).hexdigest()
             refs.append(f"local_path_hash:{local_hash}")
     return refs
+
+
+def _path_ref(path: Path, layout: WorkspaceLayout) -> str:
+    try:
+        repo_root = layout.repo_root_dir
+        rel_path = path.relative_to(repo_root).as_posix() if repo_root else path.as_posix()
+    except Exception:
+        rel_path = path.as_posix()
+    return f"path:{rel_path}"
 
 
 def _read_transformer_lock(context: ClientContext) -> dict[str, str]:

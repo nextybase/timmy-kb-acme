@@ -80,6 +80,8 @@ Its absence MUST cause hard-fail.
 **I-9 — Normative Ledger is non-diagnostic**
 Decision Records are **normative** and MUST remain **low-entropy**.
 
+The ledger boundary enforces this: evidence_refs are normative identifiers, not environment references, and absolute paths are forbidden by definition, so diagnostic content is rejected before recording.
+
 Allowed in Decision Records:
 - stable `stop_code` values (required for BLOCK / FAIL);
 - stable `actor` identifiers;
