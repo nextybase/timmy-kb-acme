@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -226,6 +227,8 @@ def record_normative_decision(conn: sqlite3.Connection, record: NormativeDecisio
     if record.verdict == NORMATIVE_PASS_WITH_CONDITIONS and not conditions:
         raise ValueError("conditions richieste per PASS_WITH_CONDITIONS")
     evidence_refs = _normalize_str_list(record.evidence_refs, field_name="evidence_refs")
+    _validate_normative_reason_code(record.reason_code)
+    _validate_normative_evidence_refs(evidence_refs)
     if record.rationale is not None:
         raise ValueError(
             "Normative ledger forbids external rationale. "
@@ -299,6 +302,54 @@ def _normalize_str_list(value: list[str] | None, *, field_name: str) -> list[str
     if not all(isinstance(item, str) for item in value):
         raise TypeError(f"{field_name} deve contenere solo stringhe")
     return value
+
+
+_WIN_ABS_PATH = re.compile(r"^[a-zA-Z]:[\\/]")
+
+
+def _is_absolute_path_like(value: str) -> bool:
+    s = value.strip()
+    if not s:
+        return False
+    if s.startswith("/"):
+        return True
+    if s.startswith("\\\\"):
+        return True
+    if _WIN_ABS_PATH.match(s):
+        return True
+    if s.lower().startswith("file://"):
+        return True
+    return False
+
+
+def _validate_normative_evidence_refs(evidence_refs: list[str]) -> None:
+    for ref in evidence_refs:
+        if not ref:
+            raise ValueError("evidence_refs contiene un ref vuoto")
+        if "\n" in ref or "\r" in ref:
+            raise ValueError("evidence_refs contiene newline (non deterministico)")
+        if len(ref) > 256:
+            raise ValueError("evidence_refs contiene un ref troppo lungo")
+        if ref.startswith("path:"):
+            payload = ref[len("path:") :].strip()
+            if _is_absolute_path_like(payload):
+                raise ValueError("Normative ledger forbids absolute paths in evidence_refs (path:...)")
+            continue
+        if _is_absolute_path_like(ref):
+            raise ValueError("Normative ledger forbids absolute paths in evidence_refs")
+
+
+def _validate_normative_reason_code(reason_code: str | None) -> None:
+    if reason_code is None:
+        return
+    if not isinstance(reason_code, str):
+        raise TypeError("reason_code deve essere una stringa")
+    if not reason_code.strip():
+        raise ValueError("reason_code non può essere vuoto")
+    if "\n" in reason_code or "\r" in reason_code:
+        raise ValueError("reason_code contiene newline (non deterministico)")
+    if len(reason_code) > 80:
+        raise ValueError("reason_code troppo lungo")
 
 
 def _build_rationale(record: NormativeDecisionRecord, conditions: list[str]) -> str:

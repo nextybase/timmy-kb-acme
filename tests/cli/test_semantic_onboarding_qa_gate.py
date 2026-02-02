@@ -10,8 +10,8 @@ import pytest
 from pipeline.qa_evidence import write_qa_evidence
 from pipeline.qa_gate import QaGateViolation
 from storage import decision_ledger
-from timmy_kb.cli import semantic_onboarding as mod
 from tests.utils.workspace import ensure_minimal_workspace_layout
+from timmy_kb.cli import semantic_onboarding as mod
 
 
 def _create_layout(tmp_path: Path) -> Path:

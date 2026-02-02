@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
 import pytest
@@ -220,6 +221,38 @@ def test_normative_decision_record_requires_stop_code(tmp_path: Path) -> None:
             actor="gatekeeper:skeptic",
         )
         with pytest.raises(ValueError, match="stop_code"):
+            decision_ledger.record_normative_decision(conn, record)
+    finally:
+        conn.close()
+
+
+def test_normative_decision_rejects_absolute_paths_in_evidence_refs(tmp_path: Path) -> None:
+    workspace_root = _prepare_workspace(tmp_path / "acme")
+    layout = WorkspaceLayout.from_workspace(workspace_root, slug="acme")
+    conn = decision_ledger.open_ledger(layout)
+    try:
+        decision_ledger.start_run(
+            conn,
+            run_id="run-abs",
+            slug="acme",
+            started_at="2026-01-07T00:00:00Z",
+        )
+        record = decision_ledger.NormativeDecisionRecord(
+            decision_id=uuid.uuid4().hex,
+            run_id="run-abs",
+            slug="acme",
+            gate_name="evidence",
+            from_state="WORKSPACE_BOOTSTRAP",
+            to_state="SEMANTIC_INGEST",
+            verdict=decision_ledger.NORMATIVE_PASS,
+            subject="workspace",
+            decided_at="2026-01-07T00:00:01Z",
+            actor="gatekeeper:evidence",
+            evidence_refs=[
+                "path:/tmp/acme/config/config.yaml",
+            ],
+        )
+        with pytest.raises(ValueError, match="absolute paths"):
             decision_ledger.record_normative_decision(conn, record)
     finally:
         conn.close()
