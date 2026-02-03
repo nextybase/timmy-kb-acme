@@ -3,14 +3,13 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, Optional
 
 from pipeline.config_utils import update_config_with_drive_ids
 from pipeline.context import ClientContext, validate_slug
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_bytes
 from pipeline.logging_utils import get_structured_logger
-from pipeline.ownership import ensure_ownership_file
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.system_self_check import run_system_self_check
 from pipeline.vision_paths import vision_yaml_workspace_path
@@ -71,6 +70,13 @@ def _vision_pdf_path(layout: WorkspaceLayout) -> Path:
     return ensure_within_and_resolve(layout.repo_root_dir, candidate)
 
 
+def _workspace_root(repo_root: Path, safe_slug: str) -> Path:
+    return ensure_within_and_resolve(
+        repo_root,
+        repo_root / "output" / f"timmy-kb-{safe_slug}",
+    )
+
+
 def create_new_client_workspace(
     *,
     slug: str,
@@ -98,10 +104,7 @@ def create_new_client_workspace(
         )
     _notify_progress(progress, 15, "Self-check ambiente completato")
 
-    workspace_root = ensure_within_and_resolve(
-        repo_root_path,
-        repo_root_path / "output" / f"timmy-kb-{safe_slug}",
-    )
+    workspace_root = _workspace_root(repo_root_path, safe_slug)
     os.environ.setdefault("TIMMY_ALLOW_BOOTSTRAP", "1")
 
     ctx = ClientContext.load(
@@ -112,8 +115,7 @@ def create_new_client_workspace(
         logger=LOGGER,
     )
     layout = bootstrap_client_workspace(ctx)
-    ensure_ownership_file(safe_slug, layout.repo_root_dir)
-    _notify_progress(progress, 30, "Workspace creato e ownership registrata")
+    _notify_progress(progress, 30, "Workspace creato")
 
     pdf_path = _vision_pdf_path(layout)
     try:
@@ -192,6 +194,43 @@ def create_new_client_workspace(
         )
         layout = WorkspaceLayout.from_context(ctx)
 
+    vision_yaml_path = vision_yaml_workspace_path(layout.repo_root_dir, pdf_path=vision_pdf)
+    _notify_progress(progress, 90, "Workspace locale e VisionStatement YAML pronti")
+
+    return {
+        "workspace_root_dir": str(layout.repo_root_dir),
+        "config_path": str(layout.config_path),
+        "vision_pdf_path": str(vision_pdf),
+        "vision_yaml_path": str(vision_yaml_path),
+        "semantic_mapping_path": str(layout.mapping_path),
+        "drive": drive_info,
+        "pdf_to_yaml": {
+            "ok": pdf_payload.get("status") == "ok",
+            "payload_summary": _summarize_payload(pdf_payload),
+        },
+    }
+
+
+def run_vision_provision_for_client(
+    *,
+    slug: str,
+    repo_root: Path,
+    vision_model: str,
+    run_control_plane_tool: Callable[..., dict[str, Any]],
+    progress: Optional[ProgressFn] = None,
+) -> dict[str, Any]:
+    safe_slug = validate_slug(slug)
+    repo_root_path = repo_root.resolve()
+    workspace_root = _workspace_root(repo_root_path, safe_slug)
+    ctx = ClientContext.load(
+        slug=safe_slug,
+        require_drive_env=False,
+        bootstrap_config=False,
+        repo_root_dir=workspace_root,
+        logger=LOGGER,
+    )
+    layout = WorkspaceLayout.from_context(ctx)
+    _notify_progress(progress, 70, "Vision (Fase B) in corso")
     vision_payload = _run_tool_with_repo_env(
         repo_root=repo_root_path,
         workspace_root=layout.repo_root_dir,
@@ -207,6 +246,7 @@ def create_new_client_workspace(
             "Provisioning Vision fallito: " + (errors or "errore sconosciuto"),
             slug=safe_slug,
         )
+    layout = WorkspaceLayout.from_context(ctx)
     if not layout.mapping_path.exists():
         raise ConfigError(
             "semantic/semantic_mapping.yaml mancante dopo Vision",
@@ -214,24 +254,8 @@ def create_new_client_workspace(
             file_path=str(layout.mapping_path),
         )
     _notify_progress(progress, 95, "Vision completata e mapping disponibile")
-
-    vision_yaml_path = vision_yaml_workspace_path(layout.repo_root_dir, pdf_path=vision_pdf)
-    _notify_progress(progress, 100, "Nuovo cliente pronto")
-
     return {
         "workspace_root_dir": str(layout.repo_root_dir),
-        "config_path": str(layout.config_path),
-        "vision_pdf_path": str(vision_pdf),
-        "vision_yaml_path": str(vision_yaml_path),
         "semantic_mapping_path": str(layout.mapping_path),
-        "drive": drive_info,
-        "vision": {
-            "ok": vision_payload.get("status") == "ok",
-            "payload_summary": _summarize_payload(vision_payload),
-            "raw_structure": vision_payload.get("raw_structure"),
-        },
-        "pdf_to_yaml": {
-            "ok": pdf_payload.get("status") == "ok",
-            "payload_summary": _summarize_payload(pdf_payload),
-        },
+        "vision_payload": vision_payload,
     }

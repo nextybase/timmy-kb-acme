@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
 
 from pipeline.beta_flags import is_beta_strict
-from pipeline.capabilities.new_client import create_new_client_workspace
+from pipeline.capabilities.new_client import create_new_client_workspace, run_vision_provision_for_client
 from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.context import validate_slug
 from pipeline.exceptions import ConfigError
@@ -15,7 +15,7 @@ from pipeline.workspace_layout import WorkspaceLayout
 from ui.chrome import header, sidebar
 from ui.clients_store import ClientEntry, get_registry_paths, set_state, upsert_client
 from ui.config_store import get_vision_model
-from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
+from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN, UI_PHASE_VISION_PENDING
 from ui.errors import to_user_message
 from ui.imports import getattr_if_callable, import_first
 from ui.pages.registry import PagePaths
@@ -299,6 +299,11 @@ phase_state_key = "new_client.phase"
 
 current_slug = st.session_state.get(slug_state_key, "")
 current_phase = st.session_state.get(phase_state_key, UI_PHASE_INIT)
+_locked_inputs_phases = (
+    UI_PHASE_VISION_PENDING,
+    UI_PHASE_READY_TO_OPEN,
+    UI_PHASE_PROVISIONED,
+)
 
 # Input
 slug = st.text_input(
@@ -306,19 +311,19 @@ slug = st.text_input(
     placeholder="es. acme-srl",
     key="new_slug",
     value=current_slug or "",
-    disabled=(current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED)),
+    disabled=(current_phase in _locked_inputs_phases),
 )
 name = st.text_input(
     "Nome cliente (opzionale)",
     placeholder="es. ACME Srl",
     key="new_name",
-    disabled=(current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED)),
+    disabled=(current_phase in _locked_inputs_phases),
 )
 pdf = st.file_uploader(
     "Vision Statement (PDF)",
     type=["pdf"],
     key="new_vs_pdf",
-    disabled=(current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED)),
+    disabled=(current_phase in _locked_inputs_phases),
     help="Obbligatorio: sarà salvato come config/VisionStatement.pdf",
 )
 
@@ -328,7 +333,7 @@ preview_prompt = st.checkbox(
     value=False,
     key="vision_preview_prompt",
     help="Visualizza il testo generato e conferma con 'Prosegui' prima di inviare la richiesta.",
-    disabled=(current_phase in (UI_PHASE_READY_TO_OPEN, UI_PHASE_PROVISIONED)),
+    disabled=(current_phase in _locked_inputs_phases),
 )
 if preview_prompt:
     st.info("Anteprima prompt Vision non disponibile nel flusso control-plane; usa Tools > Tuning per la preview.")
@@ -452,26 +457,83 @@ if current_phase == UI_PHASE_INIT:
                 progress.progress(60, text="Drive in modalità locale (skip provisioning).")
             except Exception:
                 pass
+        st.session_state["new_client.workspace_result"] = result
+        st.session_state[phase_state_key] = UI_PHASE_VISION_PENDING
+        progress.progress(100, text="Fase A completata: workspace + VisionStatement YAML pronti.")
+        st.success("Workspace creato e VisionStatement normalizzato (YAML).")
+        st.caption("Fase A terminata: ora esegui Vision (Fase B) per generare semantic_mapping.yaml.")
 
-        mapping_path = Path(result["semantic_mapping_path"])
+elif current_phase == UI_PHASE_VISION_PENDING:
+    workspace_result = st.session_state.get("new_client.workspace_result")
+    st.info("Vision (Fase B) è un passaggio manuale: genera semantic_mapping.yaml e abilita la semantica.")
+    vision_note = (
+        "VisionStatement YAML salvato: "
+        f"{workspace_result.get('vision_yaml_path') if workspace_result else 'percorso non disponibile'}."
+    )
+    st.caption(vision_note)
+    if st.button("Esegui Vision (genera mapping)", type="primary", key="btn_run_vision", width="stretch"):
+        if workspace_result is None:
+            st.error("Dati workspace mancanti: ricarica la pagina e riprova.")
+            st.stop()
+        repo_root_dir = Path(get_repo_root(allow_env=False))
+        vision_progress = st.progress(0, text="Avvio Vision (Fase B)...")
+
+        def _vision_progress_callback(pct: int, msg: str) -> None:
+            try:
+                vision_progress.progress(pct, text=msg)
+            except Exception:
+                pass
+
+        try:
+            with status_guard(
+                "Eseguo Vision per generare semantic_mapping.yaml…",
+                expanded=True,
+                error_label="Errore durante Vision (Fase B)",
+            ) as status:
+                vision_result = run_vision_provision_for_client(
+                    slug=s,
+                    repo_root=repo_root_dir,
+                    vision_model=get_vision_model(),
+                    run_control_plane_tool=run_control_plane_tool,
+                    progress=_vision_progress_callback,
+                )
+                if status is not None and hasattr(status, "update"):
+                    status.update(label="Vision completata.", state="complete")
+        except Exception as exc:
+            title, body, caption = to_user_message(exc)
+            _log_diagnostics(
+                s,
+                "warning",
+                "ui.vision.error",
+                extra={"slug": s, "type": exc.__class__.__name__, "err": str(exc).splitlines()[:1]},
+                layout=None,
+            )
+            _open_error_modal(title, body, caption=caption)
+            st.stop()
+
+        layout = WorkspaceLayout.from_workspace(Path(workspace_result["workspace_root_dir"]), slug=s)
+        cache_key = (s or "").strip().lower()
+        if cache_key:
+            _LAYOUT_CACHE[cache_key] = layout
+
+        mapping_path = Path(vision_result["semantic_mapping_path"])
         _warn_drive_raw_skipped(
             s,
             mapping_path=mapping_path,
-            raw_info=result["vision"].get("raw_structure"),
+            raw_info=vision_result["vision_payload"].get("raw_structure"),
             strict=is_beta_strict(),
         )
 
-        if _exists_semantic_files(s, layout=layout):
-            display_name = (client_name_value or "").strip() or s
-            _register_client_after_vision(s, display_name)
-            set_slug(s)
-            st.session_state[slug_state_key] = s
-            st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
-            st.session_state["client_name"] = display_name
-            st.success("Workspace inizializzato e YAML generati.")
-            progress.progress(100, text="Vision completata.")
-        else:
-            st.error("Vision terminata ma i file attesi non sono presenti in semantic/.")
+        display_name = (st.session_state.get("new_name") or name or "").strip() or s
+        _register_client_after_vision(s, display_name)
+        set_slug(s)
+        st.session_state[slug_state_key] = s
+        st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
+        st.session_state["client_name"] = display_name
+        st.session_state.pop("new_client.workspace_result", None)
+        st.success("Vision completata e semantic_mapping.yaml disponibile.")
+        vision_progress.progress(100, text="Fase B completata.")
+
 
 # ------------------------------------------------------------------
 # STEP 2 - Apri workspace (solo Drive + finalizzazione stato)
@@ -483,7 +545,10 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
     eff = st.session_state.get(slug_state_key) or effective_slug
     layout = _require_layout(eff)
     if not _exists_semantic_files(eff, layout=layout):
-        st.error("Per aprire il workspace serve semantic/semantic_mapping.yaml. Esegui prima 'Inizializza Workspace'.")
+        st.error(
+            "Per aprire il workspace serve semantic/semantic_mapping.yaml. "
+            "Esegui la Vision (Fase B) nella sezione Nuovo cliente e riprova."
+        )
         st.stop()
 
     # Il controllo resta invariato, ma grazie al reload forzato

@@ -2,16 +2,19 @@
 # src/ui/services/drive_runner.py
 from __future__ import annotations
 
+import functools
 import io
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
+import yaml
+
 from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.constants import GDRIVE_FOLDER_MIME as MIME_FOLDER
 from pipeline.drive.download_steps import compute_created, discover_candidates, emit_progress, snapshot_existing
 from pipeline.exceptions import CapabilityUnavailableError, WorkspaceLayoutInvalid
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.workspace_layout import WorkspaceLayout
 
 create_drive_folder: Callable[..., Any] | None
@@ -44,7 +47,7 @@ from pipeline.logging_utils import get_structured_logger
 
 # Import locali (dev UI)
 from ..components.mapping_editor import load_semantic_mapping
-from ..utils import to_kebab, to_kebab_soft  # SSoT fuzzy match (soft) + canonical checks
+from ..utils import to_kebab  # SSoT canonical checks
 from ..utils.context_cache import get_client_context
 
 if TYPE_CHECKING:
@@ -144,6 +147,226 @@ def _require_drive_minimal_ui() -> None:
         )
 
 
+def _workspace_layout_spec_path() -> tuple[Path, Path]:
+    repo_root = Path(__file__).resolve().parents[3]
+    candidate = repo_root / "system" / "specs" / "workspace_layout.v1.yaml"
+    safe_path = ensure_within_and_resolve(repo_root, candidate)
+    return repo_root, safe_path
+
+
+def _collect_drive_directories(tree: dict[str, Any], *, prefix: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
+    nodes: list[tuple[str, ...]] = []
+    for name, entry in tree.items():
+        if name == "files":
+            continue
+        if not isinstance(entry, dict):
+            continue
+        drive_enabled = entry.get("drive", True)
+        if not drive_enabled:
+            continue
+        path_key = prefix + (name,)
+        nodes.append(path_key)
+        child_entries = {
+            key: value for key, value in entry.items() if key not in {"drive", "files"} and isinstance(value, dict)
+        }
+        if child_entries:
+            nodes.extend(_collect_drive_directories(child_entries, prefix=path_key))
+    return nodes
+
+
+@functools.lru_cache(maxsize=1)
+def _load_workspace_drive_folders() -> tuple[str, ...]:
+    repo_root, spec_path = _workspace_layout_spec_path()
+    if not spec_path.exists():
+        raise RuntimeError(f"Workspace layout spec manca: {spec_path}")
+    try:
+        data = yaml.safe_load(read_text_safe(repo_root, spec_path, encoding="utf-8"))
+    except Exception as exc:  # pragma: no cover - spec manutenzione
+        raise RuntimeError("Impossibile leggere workspace_layout.v1.yaml: " + str(exc)) from exc
+    layout = data.get("workspace_layout", {})
+    tree = layout.get("tree")
+    if not isinstance(tree, dict):
+        raise RuntimeError("workspace_layout.v1.yaml privo della sezione tree.")
+    nodes = _collect_drive_directories(tree)
+    if not nodes:
+        raise RuntimeError("workspace_layout.v1.yaml non definisce cartelle Drive.")
+    return tuple(sorted({node[0] for node in nodes}))
+
+
+def _ensure_client_root_folder(
+    service: Any,
+    *,
+    parent_id: str,
+    slug: str,
+    ctx: "ClientContext",
+) -> str:
+    canonical_name = f"timmy-kb-{slug}"
+    folders = _drive_list_folders(service, parent_id)
+    matches = [folder for folder in folders if (folder.get("name") or "").strip() == canonical_name]
+    if len(matches) > 1:
+        _precondition_failure(
+            ctx,
+            missing_component="client_root_conflict",
+            message=f"Troppi root Drive per slug={slug}. Rimuovi le duplicati {canonical_name} e riprova.",
+        )
+    if matches:
+        folder_id = matches[0].get("id")
+        if folder_id:
+            _get_logger(ctx).info(
+                "ui.drive.client_root.reused",
+                extra={"slug": slug, "client_folder_id": folder_id},
+            )
+            return folder_id
+    folder_id = create_drive_folder(
+        service,
+        canonical_name,
+        parent_id=parent_id,
+        redact_logs=bool(getattr(ctx, "redact_logs", False)),
+    )
+    _get_logger(ctx).info(
+        "ui.drive.client_root.created",
+        extra={"slug": slug, "client_folder_id": folder_id},
+    )
+    return folder_id
+
+
+def _ensure_drive_base_structure(
+    service: Any,
+    *,
+    client_folder_id: str,
+    required_names: Sequence[str],
+    ctx: "ClientContext",
+) -> tuple[dict[str, str], dict[str, str]]:
+    existing = _drive_list_folders(service, client_folder_id)
+    name_to_ids: dict[str, list[str]] = {}
+    for folder in existing:
+        name = (folder.get("name") or "").strip()
+        folder_id = (folder.get("id") or "").strip()
+        if not name or not folder_id:
+            continue
+        name_to_ids.setdefault(name, []).append(folder_id)
+    created: dict[str, str] = {}
+    reused: dict[str, str] = {}
+    for name in required_names:
+        ids = name_to_ids.get(name, [])
+        if len(ids) > 1:
+            _precondition_failure(
+                ctx,
+                missing_component="drive_folder_conflict",
+                message=f"Più cartelle Drive '{name}' sotto il client root. Rimuovi i duplicati e riprova.",
+            )
+        if ids:
+            reused[name] = ids[0]
+            continue
+        folder_id = create_drive_folder(
+            service,
+            name,
+            parent_id=client_folder_id,
+            redact_logs=bool(getattr(ctx, "redact_logs", False)),
+        )
+        created[name] = folder_id
+    return created, reused
+
+
+def _ensure_category_folders(
+    service: Any,
+    *,
+    raw_folder_id: str,
+    category_names: Sequence[str],
+    ctx: "ClientContext",
+) -> dict[str, str]:
+    existing = _drive_list_folders(service, raw_folder_id)
+    name_to_ids: dict[str, list[str]] = {}
+    for folder in existing:
+        name = (folder.get("name") or "").strip()
+        folder_id = (folder.get("id") or "").strip()
+        if not name or not folder_id:
+            continue
+        name_to_ids.setdefault(name, []).append(folder_id)
+
+    result: dict[str, str] = {}
+    log = _get_logger(ctx)
+    for category in category_names:
+        clean_name = category.strip()
+        if not clean_name:
+            raise RuntimeError("semantic_mapping.yaml contiene categorie vuote.")
+        ids = name_to_ids.get(clean_name, [])
+        if len(ids) > 1:
+            _precondition_failure(
+                ctx,
+                missing_component="category_conflict",
+                message=f"Più cartelle Drive '{clean_name}' sotto raw/. Elimina i duplicati e riprova.",
+            )
+        if ids:
+            result[clean_name] = ids[0]
+            log.info(
+                "ui.drive.category_folder.reused",
+                extra={"slug": getattr(ctx, "slug", None), "category": clean_name, "folder_id": ids[0]},
+            )
+            continue
+        folder_id = create_drive_folder(
+            service,
+            clean_name,
+            parent_id=raw_folder_id,
+            redact_logs=bool(getattr(ctx, "redact_logs", False)),
+        )
+        result[clean_name] = folder_id
+        log.info(
+            "ui.drive.category_folder.created",
+            extra={"slug": getattr(ctx, "slug", None), "category": clean_name, "folder_id": folder_id},
+        )
+    return result
+
+
+def _precondition_failure(
+    ctx: ClientContext,
+    *,
+    missing_component: str,
+    message: str,
+    path: str | None = None,
+) -> None:
+    log = _get_logger(ctx)
+    extra = {
+        "slug": getattr(ctx, "slug", None),
+        "missing_component": missing_component,
+    }
+    if path:
+        extra["path"] = path
+    log.error("ui.drive.readme.precondition_failed", extra=extra)
+    raise RuntimeError(message)
+
+
+def _require_semantic_mapping(ctx: ClientContext) -> Path:
+    layout = _require_layout_from_context(ctx)
+    mapping_path = layout.mapping_path
+    if not mapping_path.exists():
+        _precondition_failure(
+            ctx,
+            missing_component="semantic_mapping",
+            message="semantic/semantic_mapping.yaml mancante. Esegui Vision (Fase B) e riprova.",
+            path=str(mapping_path),
+        )
+    return mapping_path
+
+
+def _require_drive_env(ctx: ClientContext) -> None:
+    env = ctx.env or {}
+    missing = []
+    if not env.get("SERVICE_ACCOUNT_FILE"):
+        missing.append("SERVICE_ACCOUNT_FILE")
+    if not env.get("DRIVE_ID"):
+        missing.append("DRIVE_ID")
+    if missing:
+        _precondition_failure(
+            ctx,
+            missing_component="drive_env",
+            message=(
+                "Drive environment incompleto. Configura SERVICE_ACCOUNT_FILE e DRIVE_ID "
+                "prima di eseguire 'Genera struttura Drive'."
+            ),
+        )
+
+
 # =====================================================================
 # Bootstrap minimo su Drive (+ upload config e aggiornamento config.yaml)
 # =====================================================================
@@ -213,26 +436,19 @@ def _drive_list_folders(service: Any, parent_id: str) -> List[Dict[str, str]]:
 
 def _get_existing_client_folder_id(service: Any, parent_id: str, slug: str) -> Optional[str]:
     """
-    Recupera l'id della cartella cliente senza crearla.
-    Confronto casefold + normalizzazione kebab per tollerare varianti di naming.
+    Recupera l'id della cartella cliente (nome canonico) senza crearla.
+    In Beta strict accetta solo la naming convention f"timmy-kb-<slug>".
     """
-    slug_clean = slug.strip()
-    target = to_kebab_soft(slug_clean)
-    accepted_names = {
-        target,
-        slug_clean.casefold(),
-        f"timmy-kb-{target}",
-    }
+    canonical = f"timmy-kb-{slug.strip()}"
+    matches = []
     for folder in _drive_list_folders(service, parent_id):
         name = (folder.get("name") or "").strip()
         folder_id = (folder.get("id") or "").strip()
-        if not name or not folder_id:
-            continue
-        normalized = to_kebab_soft(name)
-        name_cf = name.casefold()
-        if normalized in accepted_names or name_cf in accepted_names:
-            return folder_id
-    return None
+        if name == canonical and folder_id:
+            matches.append(folder_id)
+    if len(matches) > 1:
+        raise RuntimeError("Più cartelle Drive clienti hanno lo stesso nome: elimina i duplicati e riprova.")
+    return matches[0] if matches else None
 
 
 def _drive_list_pdfs(service: Any, parent_id: str) -> List[Dict[str, str]]:
@@ -259,8 +475,8 @@ def _drive_list_pdfs(service: Any, parent_id: str) -> List[Dict[str, str]]:
     return results
 
 
-def _drive_find_child_by_name(service: Any, parent_id: str, name: str) -> Optional[str]:
-    """Ritorna l'ID del file con 'name' dentro parent_id (se esiste)."""
+def _drive_find_child_by_name(service: Any, parent_id: str, name: str) -> List[Dict[str, str]]:
+    """Ritorna la lista dei file con 'name' dentro parent_id (se esistono)."""
     q_name = name.replace("'", "\\'")
     resp = (
         service.files()
@@ -273,8 +489,7 @@ def _drive_find_child_by_name(service: Any, parent_id: str, name: str) -> Option
         )
         .execute()
     )
-    files = resp.get("files") or []
-    return files[0]["id"] if files else None
+    return resp.get("files") or []
 
 
 def _drive_upload_or_update_bytes(
@@ -284,13 +499,24 @@ def _drive_upload_or_update_bytes(
     data: bytes,
     mime: str,
     *,
+    ctx: "ClientContext",
+    category: str | None = None,
     app_properties: Optional[Dict[str, str]] = None,
 ) -> str:
     """Crea o aggiorna un file (bytes) in una cartella Drive in modo idempotente."""
     from googleapiclient.http import MediaIoBaseUpload
 
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=False)
-    existing_id = _drive_find_child_by_name(service, parent_id, name)
+    files = _drive_find_child_by_name(service, parent_id, name)
+    if len(files) > 1:
+        _precondition_failure(
+            ctx,
+            missing_component="readme_duplicate",
+            message=f"Più README con nome '{name}' sotto la stessa cartella. Rimuovi i duplicati e riprova.",
+        )
+    existing_id = files[0].get("id") if files else None
+    log = _get_logger(ctx)
+    action = "created"
     if existing_id:
         body = {"appProperties": app_properties} if app_properties else None
         file = (
@@ -304,7 +530,8 @@ def _drive_upload_or_update_bytes(
             )
             .execute()
         )
-        return str(file.get("id"))
+        file_id = str(file.get("id"))
+        action = "updated"
     else:
         body = {"name": name, "parents": [parent_id], "mimeType": mime}
         if app_properties:
@@ -319,7 +546,18 @@ def _drive_upload_or_update_bytes(
             )
             .execute()
         )
-        return str(file.get("id"))
+        file_id = str(file.get("id"))
+    log.info(
+        "ui.drive.readme.file",
+        extra={
+            "slug": getattr(ctx, "slug", None),
+            "category": category,
+            "folder_id": parent_id,
+            "file_id": file_id,
+            "action": action,
+        },
+    )
+    return file_id
 
 
 # ===== Pre-analisi Download (dry-run per la UI) =================================
@@ -542,67 +780,60 @@ def emit_readmes_for_raw(
 
     # Context & service
     ctx = get_client_context(slug, require_drive_env=require_env)
+    _require_drive_env(ctx)
+    _require_semantic_mapping(ctx)
     log = _get_logger(ctx)
     svc = get_drive_service(ctx)
+    allowed_folders = _load_workspace_drive_folders()
+
+    parent_id = (ctx.env or {}).get("DRIVE_ID")
+    if not parent_id:
+        _precondition_failure(
+            ctx,
+            missing_component="drive_id",
+            message="DRIVE_ID non impostato: configura l'ambiente e riprova.",
+        )
+
+    client_folder_id = _ensure_client_root_folder(svc, parent_id=parent_id, slug=slug, ctx=ctx)
+    created, reused = _ensure_drive_base_structure(
+        svc, client_folder_id=client_folder_id, required_names=allowed_folders, ctx=ctx
+    )
+    log.info(
+        "ui.drive.structure.ready",
+        extra={
+            "slug": slug,
+            "client_folder_id": client_folder_id,
+            "created_folders": sorted(created.keys()),
+            "reused_folders": sorted(reused.keys()),
+        },
+    )
 
     # Mapping Vision -> categorie
     mapping = load_semantic_mapping(slug, base_root=base_root)
     cats = _extract_categories_from_mapping(mapping or {}, include_system_folders=False)
+    if not cats:
+        raise RuntimeError("semantic_mapping.yaml non contiene aree Vision.")
 
-    # Cartella cliente; NON crea la struttura raw se non richiesto esplicitamente
     cfg = get_client_config(ctx) or {}
-    parent_id = ctx.env.get("DRIVE_ID")
-    if not parent_id:
-        raise RuntimeError("DRIVE_ID non impostato.")
-    client_folder_id = create_drive_folder(
-        svc,
-        slug,
-        parent_id=parent_id,
-        redact_logs=bool(getattr(ctx, "redact_logs", False)),
-    )
-    raw_id = get_drive_id(cfg, "raw_folder_id")
+    folder_ids = {**created, **reused}
+    raw_id = folder_ids.get("raw") or get_drive_id(cfg, "raw_folder_id")
     if not raw_id:
-        sub = _drive_list_folders(svc, client_folder_id)
-        name_to_id = {d["name"]: d["id"] for d in sub}
-        raw_id = name_to_id.get("raw")
-
-    if not raw_id:
-        raise RuntimeError("Cartella 'raw' non trovata/creata. Esegui 'Crea/aggiorna struttura Drive' e riprova.")
-
-    # sottocartelle RAW
-    subfolders = _drive_list_folders(svc, raw_id)
-    name_to_id = {d["name"]: d["id"] for d in subfolders}
-    # Validazione + summary: le chiavi devono già essere kebab canoniche.
-    missing_categories = []
-    for cat_name in cats.keys():
-        if not isinstance(cat_name, str) or not cat_name.strip():
-            raise RuntimeError("semantic_mapping.yaml non conforme: area key vuota o non testuale.")
-        folder_k = cat_name.strip()
-        folder_norm = to_kebab(folder_k)
-        if folder_k != folder_norm:
-            raise RuntimeError(
-                "semantic_mapping.yaml non conforme: areas[].key deve essere canonico kebab-case. "
-                f"Trovato {folder_k!r}, atteso {folder_norm!r}."
-            )
-        if folder_k not in name_to_id:
-            missing_categories.append(folder_k)
-    if missing_categories:
-        log.warning(
-            "raw.subfolder.missing.summary",
-            extra={
-                "missing_count": len(missing_categories),
-                "categories_missing": ",".join(sorted(missing_categories)),
-                "categories_missing_list": f"[{', '.join(sorted(missing_categories))}]",
-            },
+        _precondition_failure(
+            ctx,
+            missing_component="raw_folder_missing",
+            message="Cartella 'raw' non disponibile: assicurati che la structure Drive base esista e riprova.",
         )
 
+    category_names = list(cats.keys())
+    category_folder_ids = _ensure_category_folders(svc, raw_folder_id=raw_id, category_names=category_names, ctx=ctx)
+
     uploaded: Dict[str, str] = {}
-    for cat_name, meta in cats.items():
+    for cat_name in sorted(cats.keys()):
+        meta = cats[cat_name]
         folder_k = str(cat_name).strip()
-        folder_id = name_to_id.get(folder_k)
+        folder_id = category_folder_ids.get(folder_k)
         if not folder_id:
-            log.warning("raw.subfolder.missing", extra={"category": folder_k})
-            continue
+            raise RuntimeError(f"Cartella Drive per '{folder_k}' non disponibile.")
         raw_examples = meta.get("keywords") or []
         if not isinstance(raw_examples, list):
             raw_examples = [raw_examples]
@@ -618,6 +849,8 @@ def emit_readmes_for_raw(
             "README.pdf",
             data,
             mime,
+            ctx=ctx,
+            category=folder_k,
         )
         uploaded[folder_k] = file_id
 

@@ -1,0 +1,34 @@
+# system/specs/workspace_layout.v1.yaml
+workspace_layout:
+  version: "v1"
+  description: "Canonical workspace layout (SSoT). Drive backend applies exclusions deterministically."
+
+  # Canonical tree. Rules:
+  # - drive: false excludes the node and everything under it on Drive.
+  # - local is always true for canonical nodes (unless explicitly disabled, which we don't do in v1).
+  tree:
+    raw:
+      drive: true
+
+    normalized:
+      drive: false
+
+    semantic:
+      drive: false
+
+    logs:
+      drive: false
+
+    book:
+      drive: false
+      files:
+        README.md:
+          content: "# Client book\n"
+        SUMMARY.md:
+          content: "# Summary\n"
+
+    config:
+      drive: true
+      files:
+        config.yaml:
+          source: "PROJECT_TEMPLATE:config/config.yaml"

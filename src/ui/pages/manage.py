@@ -372,6 +372,8 @@ if slug:
     col_emit, col_download, col_semantic = st.columns(3)
 
     with col_emit:
+        # Contratto: fase C (manuale) della pipeline A/B/C descritta in system/ops/runbook_drive_provisioning.md.
+        # Il bottone garantisce fail-fast e publish deterministico della struttura Drive, come previsto dal doc.
         if emit_disabled:
             _warn_once(
                 "manage_readme_unavailable",
@@ -379,11 +381,12 @@ if slug:
                 extra={"slug": slug, "service": "ui.services.drive_runner:emit_readmes_for_raw"},
             )
             st.caption(
-                "Generazione README non disponibile: installa gli extra Drive e configura le credenziali richieste."
+                "Provisioning della struttura Drive non disponibile: installa gli extra Drive "
+                "e configura le credenziali richieste."
             )
         if _column_button(
             st,
-            "Genera Readme",
+            "Genera struttura Drive",
             key="btn_emit_readmes",
             type="primary",
             width="stretch",
@@ -398,9 +401,9 @@ if slug:
             else:
                 try:
                     with status_guard(
-                        "Genero i README nelle sottocartelle di raw/ su Drive…",
+                        "Provisiono la struttura Drive e pubblico i README nelle sottocartelle di raw/ su Drive…",
                         expanded=True,
-                        error_label="Errore durante la generazione dei README",
+                        error_label="Errore durante l'elaborazione della struttura Drive",
                     ) as status_widget:
                         result = manage_helpers.call_strict(
                             emit_fn,
@@ -410,15 +413,15 @@ if slug:
                         )
                         count = len(result or {})
                         if status_widget is not None and hasattr(status_widget, "update"):
-                            status_widget.update(label=f"README creati/aggiornati: {count}", state="complete")
+                            status_widget.update(label=f"README pubblicati su Drive: {count}", state="complete")
 
                     if _invalidate_drive_index is not None:
                         _invalidate_drive_index(slug)
-                    st.toast("README generati su Drive.")
+                    st.toast("Struttura Drive generata e README pubblicati su Drive.")
                     _safe_rerun()
                 except Exception as e:  # pragma: no cover
                     LOGGER.exception("ui.manage.drive.readme_failed", extra={"slug": slug, "error": str(e)})
-                    st.error(f"Impossibile generare i README: {e}")
+                    st.error(f"Impossibile generare la struttura Drive e pubblicare i README: {e}")
 
     with col_download:
         default_msg = (

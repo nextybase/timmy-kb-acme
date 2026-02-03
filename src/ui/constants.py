@@ -35,3 +35,4 @@ KNOWN_CLIENT_STATES = {"nuovo", "pronto", "arricchito", "finito"}
 UI_PHASE_INIT = "iniziale"
 UI_PHASE_READY_TO_OPEN = "pronto_apertura"
 UI_PHASE_PROVISIONED = "predisposto"
+UI_PHASE_VISION_PENDING = "vision_pendente"
