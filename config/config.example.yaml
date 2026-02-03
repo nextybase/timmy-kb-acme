@@ -4,7 +4,7 @@
 meta:
   N_VER: 0                                       # Versione config interna (int)
   DATA_VER: null                                 # Versione dataset/contrattualistica
-  client_name: "Cliente Demo"                    # Nome cliente leggibile
+  client_name: null                    # Nome cliente leggibile
 
 ui:
   skip_preflight: true

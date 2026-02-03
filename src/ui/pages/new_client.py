@@ -2,56 +2,39 @@
 # src/ui/pages/new_client.py
 from __future__ import annotations
 
-import logging
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, cast
 
-from ui.pages.registry import PagePaths
-from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
-from ui.utils.stubs import get_streamlit
-
-st = get_streamlit()
-import yaml
-
 from pipeline.beta_flags import is_beta_strict
-from pipeline.config_utils import get_client_config, get_drive_id, update_config_with_drive_ids
-from pipeline.context import ClientContext, validate_slug
-from pipeline.exceptions import ConfigError, WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
-from pipeline.file_utils import safe_write_bytes, safe_write_text
+from pipeline.capabilities.new_client import create_new_client_workspace
+from pipeline.config_utils import get_client_config, get_drive_id
+from pipeline.context import validate_slug
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
-from pipeline.ownership import ensure_ownership_file
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from pipeline.system_self_check import run_system_self_check
-from pipeline.vision_paths import vision_yaml_workspace_path
-from pipeline.workspace_bootstrap import bootstrap_client_workspace
 from pipeline.workspace_layout import WorkspaceLayout
-from pipeline.yaml_utils import yaml_read
 from ui.chrome import header, sidebar
 from ui.clients_store import ClientEntry, get_registry_paths, set_state, upsert_client
 from ui.config_store import get_vision_model
 from ui.constants import UI_PHASE_INIT, UI_PHASE_PROVISIONED, UI_PHASE_READY_TO_OPEN
 from ui.errors import to_user_message
 from ui.imports import getattr_if_callable, import_first
+from ui.pages.registry import PagePaths
 from ui.utils import clear_active_slug, set_slug
 from ui.utils.config import resolve_ui_allow_local_only
 from ui.utils.context_cache import get_client_context, invalidate_client_context
-from ui.utils.control_plane import display_control_plane_result, run_control_plane_tool
-from ui.utils.merge import deep_merge_dict
+from ui.utils.control_plane import run_control_plane_tool
 from ui.utils.repo_root import get_repo_root
+from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.status import status_guard
+from ui.utils.stubs import get_streamlit
 from ui.utils.workspace import get_ui_workspace_layout
+
+st = get_streamlit()
 
 if TYPE_CHECKING:
     from pipeline.context import ClientContext as ClientContextType
 else:  # pragma: no cover
     ClientContextType = Any  # type: ignore[misc]
-
-_vision_module = import_first(
-    "ui.services.vision_provision",
-    "src.ui.services.vision_provision",
-)
-run_vision = getattr(_vision_module, "run_vision")
 
 EnsureDriveCallable = Callable[..., Path]
 _drive_runner = import_first(
@@ -111,63 +94,9 @@ def _require_layout(slug: str, layout: WorkspaceLayout | None = None) -> Workspa
     return candidate
 
 
-def _require_repo_root(ctx: Any, slug: str) -> Path:
-    try:
-        repo_root = ctx.repo_root_dir
-    except AttributeError:
-        repo_root = None
-    if repo_root is None:
-        raise ConfigError(
-            "Context privo di repo_root_dir: impossibile proseguire.",
-            slug=slug,
-        )
-    return Path(repo_root)
-
-
-def _run_tool_with_repo_root(
-    repo_root: Path,
-    func: Callable[[], dict[str, Any]],
-    workspace_root: Path | None = None,
-) -> dict[str, Any]:
-    prev_repo = os.environ.get("REPO_ROOT_DIR")
-    prev_workspace = os.environ.get("WORKSPACE_ROOT_DIR")
-    os.environ["REPO_ROOT_DIR"] = str(repo_root)
-    if workspace_root:
-        os.environ["WORKSPACE_ROOT_DIR"] = str(workspace_root)
-    try:
-        return func()
-    finally:
-        if prev_repo is None:
-            os.environ.pop("REPO_ROOT_DIR", None)
-        else:
-            os.environ["REPO_ROOT_DIR"] = prev_repo
-        if workspace_root:
-            if prev_workspace is None:
-                os.environ.pop("WORKSPACE_ROOT_DIR", None)
-            else:
-                os.environ["WORKSPACE_ROOT_DIR"] = prev_workspace
-
-
-# --------- helper ---------
-def _config_dir_client(slug: str, layout: WorkspaceLayout | None = None) -> Path:
-    layout = _require_layout(slug, layout)
-    return cast(Path, layout.config_path.parent)
-
-
 def _semantic_dir_client(slug: str, layout: WorkspaceLayout | None = None) -> Path:
     layout = _require_layout(slug, layout)
-    return cast(Path, layout.semantic_dir)
-
-
-def _client_pdf_path(slug: str, layout: WorkspaceLayout | None = None) -> Path:
-    layout = _require_layout(slug, layout)
-    cfg_dir = layout.config_path.parent
-    return cast(Path, layout.vision_pdf or (cfg_dir / "VisionStatement.pdf"))
-
-
-def _client_vision_yaml_path(slug: str, layout: WorkspaceLayout | None = None) -> Path:
-    layout = _require_layout(slug, layout)
-    return vision_yaml_workspace_path(layout.repo_root_dir, pdf_path=_client_pdf_path(slug, layout=layout))
+    return layout.semantic_dir
 
 
 def _has_drive_ids(slug: str) -> bool:
@@ -191,177 +120,6 @@ def _has_drive_ids(slug: str) -> bool:
 def _exists_semantic_files(slug: str, layout: WorkspaceLayout | None = None) -> bool:
     sd = _semantic_dir_client(slug, layout=layout)
     return (sd / "semantic_mapping.yaml").exists()
-
-
-def _mirror_repo_config_into_client(
-    slug: str,
-    layout: WorkspaceLayout,
-    *,
-    pdf_bytes: bytes | None = None,
-) -> None:
-    """Merge del template `config/config.yaml` del repo con la config locale del cliente."""
-    if pdf_bytes is not None:
-        # Non serve fare nulla qui: il PDF viene salvato direttamente dentro la fase di bootstrap.
-        pass
-    template_cfg = get_repo_root() / "config" / "config.yaml"
-    if not template_cfg.exists():
-        LOGGER.warning(
-            "ui.new_client.config_template_missing",
-            extra={"slug": slug, "template": str(template_cfg)},
-        )
-        _log_diagnostics(
-            slug,
-            "warning",
-            "ui.new_client.config_template_missing",
-            extra={"slug": slug, "template": str(template_cfg)},
-            layout=layout,
-        )
-        raise ConfigError(
-            "Template config.yaml del repository non trovato.",
-            slug=slug,
-            file_path=str(template_cfg),
-        )
-
-    client_cfg_dir = _config_dir_client(slug, layout=layout)
-    dst_cfg = client_cfg_dir / "config.yaml"
-    if not dst_cfg.exists():
-        LOGGER.warning(
-            "ui.new_client.config_missing",
-            extra={"slug": slug, "dst": str(dst_cfg)},
-        )
-        _log_diagnostics(
-            slug,
-            "warning",
-            "ui.new_client.config_missing",
-            extra={"slug": slug, "dst": str(dst_cfg)},
-            layout=layout,
-        )
-        raise ConfigError(
-            "Config cliente non trovata al momento del merge.",
-            slug=slug,
-            file_path=str(dst_cfg),
-        )
-
-    try:
-        base_cfg = yaml_read(template_cfg.parent, template_cfg) or {}
-        current_cfg = yaml_read(client_cfg_dir, dst_cfg) or {}
-
-        if not isinstance(base_cfg, dict):
-            base_cfg = {}
-        if not isinstance(current_cfg, dict):
-            current_cfg = {}
-
-        merged_cfg = deep_merge_dict(base_cfg, current_cfg)
-        for key, value in base_cfg.items():
-            if key not in merged_cfg:
-                merged_cfg[key] = value
-        merged_text = yaml.safe_dump(merged_cfg, allow_unicode=True, sort_keys=False)
-        safe_write_text(
-            dst_cfg,
-            merged_text,
-            encoding="utf-8",
-            atomic=True,
-        )
-
-        updated_text = read_text_safe(dst_cfg.parent, dst_cfg, encoding="utf-8")
-        missing_lines = []
-        for key, value in base_cfg.items():
-            if not updated_text.strip().startswith(f"{key}:") and f"{key}:" not in updated_text:
-                missing_lines.append(f"{key}: {value}")
-        if missing_lines:
-            safe_write_text(
-                dst_cfg,
-                updated_text + "\n" + "\n".join(missing_lines),
-                encoding="utf-8",
-                atomic=True,
-            )
-    except Exception as exc:
-        # Strict: segnala e interrompe il flusso UI.
-        LOGGER.warning(
-            "ui.new_client.config_merge_failed",
-            extra={"slug": slug, "error": str(exc), "dst": str(dst_cfg)},
-        )
-        _log_diagnostics(
-            slug,
-            "warning",
-            "ui.new_client.config_merge_failed",
-            extra={"slug": slug, "error": str(exc), "dst": str(dst_cfg)},
-            layout=layout,
-        )
-        raise ConfigError(
-            "Merge del template config.yaml fallito.",
-            slug=slug,
-            file_path=str(dst_cfg),
-        ) from exc
-
-
-def _run_pdf_to_yaml_control_plane(slug: str, layout: WorkspaceLayout) -> dict[str, Any]:
-    workspace_root_dir = layout.repo_root_dir
-    if workspace_root_dir is None:
-        raise ConfigError(
-            "Repo root del workspace non disponibile: ricrea il workspace prima di proseguire.",
-            slug=slug,
-        )
-    repo_root = Path(get_repo_root(allow_env=False))
-    pdf_path = _client_pdf_path(slug, layout=layout)
-    payload = _run_tool_with_repo_root(
-        repo_root,
-        lambda: run_control_plane_tool(
-            tool_module="tools.tuning_pdf_to_yaml",
-            slug=slug,
-            action="pdf_to_yaml",
-            args=["--pdf-path", str(pdf_path)],
-        ),
-        workspace_root=Path(workspace_root_dir),
-    )["payload"]
-    display_control_plane_result(
-        st,
-        payload,
-        success_message="VisionStatement.yaml aggiornato nel workspace.",
-    )
-    if payload.get("status") != "ok":
-        error_msg = "; ".join(map(str, payload.get("errors", [])))
-        raise ConfigError(
-            f"Conversione PDF -> YAML fallita: {error_msg or 'errore sconosciuto'}.",
-            slug=slug,
-            file_path=str(pdf_path),
-        )
-    return payload
-
-
-def _run_vision_control_plane(slug: str, layout: WorkspaceLayout) -> dict[str, Any]:
-    workspace_root_dir = layout.repo_root_dir
-    if workspace_root_dir is None:
-        raise ConfigError(
-            "Repo root del workspace non disponibile: ricrea il workspace prima di proseguire.",
-            slug=slug,
-        )
-    repo_root = Path(get_repo_root(allow_env=False))
-    args = ["--repo-root", str(workspace_root_dir), "--model", get_vision_model()]
-    payload = _run_tool_with_repo_root(
-        repo_root,
-        lambda: run_control_plane_tool(
-            tool_module="tools.tuning_vision_provision",
-            slug=slug,
-            action="vision_provision",
-            args=args,
-        ),
-        workspace_root=Path(workspace_root_dir),
-    )["payload"]
-    display_control_plane_result(st, payload, success_message="Vision completata correttamente.")
-    if payload.get("status") != "ok":
-        raise ConfigError(
-            f"Provisioning Vision fallito: {'; '.join(map(str, payload.get('errors', []))) or 'errore sconosciuto'}.",
-            slug=slug,
-            file_path=str(repo_root / "config" / "VisionStatement.pdf"),
-        )
-    return payload
-
-
-def _ui_logger() -> logging.Logger:
-    """Logger minimale per Vision lato UI."""
-    log = cast(logging.Logger, get_structured_logger("ui.vision.new_client"))
-    return log
 
 
 def _open_error_modal(
@@ -415,7 +173,8 @@ def _log_diagnostics(
     Scrive un evento nel log Diagnostica (WARNING-only by convention).
     Usiamo sempre livelli >= warning quando invochiamo questa funzione.
     """
-    _require_layout(slug, layout)
+    if layout is not None:
+        _require_layout(slug, layout)
     logger = get_structured_logger("ui.diagnostics")
     log_method = getattr(logger, level, None)
     if callable(log_method):
@@ -613,241 +372,106 @@ if current_phase == UI_PHASE_INIT:
         if not pdf_bytes:
             st.error("Il file PDF caricato è vuoto o non leggibile.")
             st.stop()
-        # 2b) Self-check ambiente prima di procedere
-        report = run_system_self_check()
-        if not report.ok:
-            messages = "; ".join(f"{item.name}: {item.message}" for item in report.items if not item.ok)
-            raise ConfigError(
-                f"Self-check fallito: {messages}",
-                slug=s or "-",
-                file_path="config/config.yaml",
-            )
+
+        client_name_value = (st.session_state.get("new_name") or name or "").strip()
+        local_only_mode = ui_allow_local_only_enabled()
+        enable_drive = not local_only_mode
+
+        repo_root_dir = Path(get_repo_root(allow_env=False))
+
+        def _progress_callback(pct: int, message: str) -> None:
+            try:
+                progress.progress(pct, text=message)
+            except Exception:
+                pass
+
+        result: dict[str, Any]
         try:
-            os.environ.setdefault("TIMMY_ALLOW_BOOTSTRAP", "1")
-            ctx = ClientContext.load(
-                slug=s,
-                require_drive_env=False,
-                bootstrap_config=True,
-            )
-            client_name_input = (st.session_state.get("new_name") or name or "").strip()
-            if client_name_input:
-                update_config_with_drive_ids(ctx, {"meta": {"client_name": client_name_input}}, logger=LOGGER)
             with status_guard(
                 "Preparo il workspace locale...",
                 expanded=True,
                 error_label="Errore durante la preparazione del workspace",
             ) as status:
-                layout = bootstrap_client_workspace(ctx)
-                invalidate_client_context(s)
-                ctx = get_client_context(s, require_drive_env=False, force_reload=True)
-                _require_repo_root(ctx, s)
-                ensure_ownership_file(s, get_repo_root())
-                if isinstance(pdf_bytes, (bytes, bytearray)) and len(pdf_bytes) > 20 * 1024 * 1024:
-                    try:
-                        _log_diagnostics(
-                            s,
-                            "warning",
-                            "ui.new_client.large_pdf",
-                            extra={"slug": s, "bytes": len(pdf_bytes)},
-                            layout=layout,
-                        )
-                    except Exception:
-                        pass
-                cache_key = (s or "").strip().lower()
-                if cache_key:
-                    _LAYOUT_CACHE[cache_key] = layout
-                cfg_dir = layout.config_path.parent if layout.config_path else layout.repo_root_dir / "config"
-                _semantic_dir_client(s, layout=layout).mkdir(parents=True, exist_ok=True)
-                try:
-                    _mirror_repo_config_into_client(s, layout, pdf_bytes=pdf_bytes)
-                except ConfigError as exc:
-                    _open_error_modal("Errore configurazione", str(exc))
-                    st.stop()
-                if pdf_bytes:
-                    vision_target = cast(
-                        Path, ensure_within_and_resolve(layout.repo_root_dir, cfg_dir / "VisionStatement.pdf")
-                    )
-                    safe_write_bytes(vision_target, pdf_bytes, atomic=True)
-                updates = {"ai": {"vision": {"vision_statement_pdf": "config/VisionStatement.pdf"}}}
-                client_name_input = (st.session_state.get("new_name") or name).strip()
-                client_name_value = (client_name_input or s or "").strip()
-                if client_name_value:
-                    updates["meta"] = {"client_name": client_name_value}
-                LOGGER.debug(
-                    "ui.new_client.config_updates",
-                    extra={"slug": s, "config_updates": updates},
+                result = create_new_client_workspace(
+                    slug=s,
+                    client_name=client_name_value,
+                    pdf_bytes=pdf_bytes,
+                    repo_root=repo_root_dir,
+                    vision_model=get_vision_model(),
+                    enable_drive=enable_drive,
+                    ui_allow_local_only=local_only_mode,
+                    ensure_drive_minimal=_ensure_drive_minimal,
+                    run_control_plane_tool=run_control_plane_tool,
+                    progress=_progress_callback,
                 )
-                update_config_with_drive_ids(ctx, updates, logger=LOGGER)
-                # Reload immediato dopo scrittura config (pre-Vision) per evitare Context stale.
-                invalidate_client_context(s)
-                ctx = get_client_context(s, require_drive_env=False, force_reload=True)
-                _require_repo_root(ctx, s)
-                try:
-                    _run_pdf_to_yaml_control_plane(s, layout)
-                except Exception as exc:
-                    LOGGER.warning(
-                        "ui.new_client.vision_yaml_generation_failed",
-                        extra={"slug": s, "error": str(exc), "pdf": str(_client_pdf_path(s, layout=layout))},
-                    )
-                    st.error("Generazione Vision fallita. Nessun artefatto epistemico è stato prodotto.")
-                    st.stop()
                 if status is not None and hasattr(status, "update"):
                     status.update(label="Workspace locale pronto.", state="complete")
-                progress.progress(30, text="Workspace locale pronto.")
+        except Exception as exc:
+            title, body, caption = to_user_message(exc)
+            _log_diagnostics(
+                s,
+                "warning",
+                "ui.vision.error",
+                extra={"slug": s, "type": exc.__class__.__name__, "err": str(exc).splitlines()[:1]},
+                layout=None,
+            )
+            _open_error_modal(title, body, caption=caption)
+            st.stop()
 
-            # 4) Provisioning minimo su Drive (obbligatorio solo quando disponibile)
-            local_only_mode = ui_allow_local_only_enabled()
-            if local_only_mode:
-                LOGGER.info(
-                    "ui.drive.provisioning_skipped",
-                    extra={"slug": s, "reason": "allow_local_only", "local_only": True},
-                )
+        layout = WorkspaceLayout.from_workspace(Path(result["workspace_root_dir"]), slug=s)
+        cache_key = (s or "").strip().lower()
+        if cache_key:
+            _LAYOUT_CACHE[cache_key] = layout
+
+        if isinstance(pdf_bytes, (bytes, bytearray)) and len(pdf_bytes) > 20 * 1024 * 1024:
+            try:
                 _log_diagnostics(
                     s,
                     "warning",
-                    "ui.drive.not_configured_local_only",
-                    extra={"slug": s, "phase": "init"},
+                    "ui.new_client.large_pdf",
+                    extra={"slug": s, "bytes": len(pdf_bytes)},
                     layout=layout,
                 )
-                progress.progress(60, text="Drive in modalità locale (skip provisioning).")
-            else:
-                if _ensure_drive_minimal is None:
-                    _log_drive_capability_missing(
-                        s,
-                        phase="init",
-                        strict=False,
-                        helper_missing=True,
-                        ids_missing=False,
-                    )
-                    st.error(
-                        "Drive non disponibile: installa gli extra `pip install .[drive]` "
-                        "o imposta `ui.allow_local_only: true` per saltare Drive."
-                    )
-                    st.stop()
-                with status_guard(
-                    "Provisioning su Google Drive...",
-                    expanded=True,
-                    error_label="Errore durante il provisioning Drive",
-                ) as status:
-                    try:
-                        _ensure_drive_minimal(slug=s, client_name=(name or None))
-                        if status is not None and hasattr(status, "update"):
-                            status.update(label="Drive pronto (cartelle + config aggiornato).", state="complete")
-                        progress.progress(60, text="Drive pronto (cartelle + config aggiornato).")
+            except Exception:
+                pass
 
-                        # NOTA IMPORTANTE:
-                        # La fase di provisioning Drive aggiorna il file config.yaml del cliente su disco
-                        # inserendo gli ID drive (integrations.drive.folder_id/raw_folder_id).
-                        # Tuttavia Streamlit e il layer di contesto possono mantenere una versione
-                        # cache-ata della configurazione in memoria.
-                        #
-                        # Senza un reload esplicito, i check successivi (_has_drive_ids)
-                        # possono leggere una config obsoleta e fallire erroneamente.
-                        #
-                        # Forziamo quindi l'invalidazione e il reload del contesto cliente
-                        # per garantire coerenza tra stato su disco e stato in memoria.
-                        invalidate_client_context(s)
-                        ctx = get_client_context(
-                            s,
-                            require_drive_env=False,
-                            force_reload=True,
-                        )
-                    except Exception as exc:
-                        if status is not None and hasattr(status, "update"):
-                            status.update(label="Errore durante il provisioning Drive.", state="error")
-                        progress.progress(0, text="Errore durante il provisioning Drive.")
-                        st.error(
-                            "Errore durante il provisioning Drive: "
-                            f"{exc}\n\n"
-                            "Verifica le variabili .env (es. SERVICE_ACCOUNT_FILE, DRIVE_ID) "
-                            "e i permessi dell'account di servizio."
-                        )
-                        st.stop()
-
-            # 5) Vision
-            ui_logger = _ui_logger()
-            with status_guard(
-                "Eseguo Vision…",
-                expanded=True,
-                error_label="Errore durante Vision",
-            ) as status:
-                try:
-                    step_progress = st.progress(0, text="Preparazione Vision...")
-                    progress.progress(80, text="Eseguo Vision...")
-                    vision_payload = _run_vision_control_plane(s, layout)
-                    if status is not None and hasattr(status, "update"):
-                        status.update(label="Vision completata.", state="complete")
-                    step_progress.progress(100, text="Vision completata.")
-                    progress.progress(100, text="Vision completata.")
-                    _warn_drive_raw_skipped(
-                        s,
-                        mapping_path=_semantic_dir_client(s, layout=layout) / "semantic_mapping.yaml",
-                        raw_info=cast(Optional[Dict[str, Any]], vision_payload.get("raw_structure")),
-                        strict=is_beta_strict(),
-                    )
-                    old_root = ctx.repo_root_dir
-                    invalidate_client_context(s)
-                    ctx_reloaded = get_client_context(s, require_drive_env=False, force_reload=True)
-                    if ctx_reloaded.repo_root_dir != old_root:
-                        msg = (
-                            f"Workspace root drift rilevato per slug={s}. "
-                            f"Prima: {old_root} | Dopo: {ctx_reloaded.repo_root_dir}. "
-                            "Controlla REPO_ROOT_DIR / WORKSPACE_ROOT_DIR e riavvia l'app."
-                        )
-                        LOGGER.error(
-                            "workspace_root_drift",
-                            extra={
-                                "slug": s,
-                                "old_root": str(old_root),
-                                "new_root": str(ctx_reloaded.repo_root_dir),
-                            },
-                        )
-                        st.error(msg)
-                        st.stop()
-                    ctx = ctx_reloaded
-                    _require_repo_root(ctx, s)
-                except Exception as exc:
-                    # Mapping unico degli errori (PR-C)
-                    try:
-                        step_progress.progress(0, text="Errore durante Vision.")
-                    except Exception:
-                        pass
-                    title, body, caption = to_user_message(exc)
-                    _log_diagnostics(
-                        s,
-                        "warning",
-                        "ui.vision.error",
-                        extra={"slug": s, "type": exc.__class__.__name__, "err": str(exc).splitlines()[:1]},
-                        layout=layout,
-                    )
-                    if status is not None and hasattr(status, "update"):
-                        status.update(label=body, state="error")
-                    _open_error_modal(title, body, caption=caption)
-                    st.stop()
-
-            # 6) Controllo file semantici e avanzamento fase
-            if _exists_semantic_files(s, layout=layout):
-                display_name = (client_name_input or "").strip() or s
-                _register_client_after_vision(s, display_name)
-
-                # Aggiorna contesto UI: mostra Step 2
-                set_slug(s)
-                st.session_state[slug_state_key] = s
-                st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
-                st.session_state["client_name"] = display_name
-                st.success("Workspace inizializzato e YAML generati.")
-            else:
-                st.error("Vision terminata ma i file attesi non sono presenti in semantic/.")
-        except (WorkspaceNotFound, WorkspaceLayoutInvalid, WorkspaceLayoutInconsistent) as exc:
-            st.error("Impossibile completare il bootstrap: il workspace risultante non è valido o è incoerente.")
-            st.caption(
-                "Il flusso Nuovo cliente usa "
-                "`pipeline.workspace_bootstrap.bootstrap_client_workspace`; verifica lo slug e ricontrolla i dati."
+        drive_info = result["drive"]
+        if drive_info.get("skipped_reason") == "local_only":
+            LOGGER.info(
+                "ui.drive.provisioning_skipped",
+                extra={"slug": s, "reason": "allow_local_only", "local_only": True},
             )
-            LOGGER.warning("ui.new_client.bootstrap_failed", extra={"slug": s, "error": str(exc)})
-        except Exception as e:  # pragma: no cover
-            # Messaggio compatto, diagnosi via pannello dedicato
-            st.error(f"Impossibile creare il workspace: {e}")
+            _log_diagnostics(
+                s,
+                "warning",
+                "ui.drive.not_configured_local_only",
+                extra={"slug": s, "phase": "init"},
+                layout=layout,
+            )
+            try:
+                progress.progress(60, text="Drive in modalità locale (skip provisioning).")
+            except Exception:
+                pass
+
+        mapping_path = Path(result["semantic_mapping_path"])
+        _warn_drive_raw_skipped(
+            s,
+            mapping_path=mapping_path,
+            raw_info=result["vision"].get("raw_structure"),
+            strict=is_beta_strict(),
+        )
+
+        if _exists_semantic_files(s, layout=layout):
+            display_name = (client_name_value or "").strip() or s
+            _register_client_after_vision(s, display_name)
+            set_slug(s)
+            st.session_state[slug_state_key] = s
+            st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
+            st.session_state["client_name"] = display_name
+            st.success("Workspace inizializzato e YAML generati.")
+            progress.progress(100, text="Vision completata.")
+        else:
+            st.error("Vision terminata ma i file attesi non sono presenti in semantic/.")
 
 # ------------------------------------------------------------------
 # STEP 2 - Apri workspace (solo Drive + finalizzazione stato)

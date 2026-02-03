@@ -1,7 +1,7 @@
 meta:
   N_VER: 0
   DATA_VER: ''
-  client_name: ''
+  client_name: null
 ui:
   skip_preflight: true
   allow_local_only: false

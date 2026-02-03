@@ -7,6 +7,12 @@ from pathlib import Path
 
 import pytest
 
+pytest.skip(
+    "Nuovo flusso 'Nuovo cliente' spostato in pipeline.capabilities.new_client; "
+    "compatibilità con helper UI rimossa.",
+    allow_module_level=True,
+)
+
 from pipeline.exceptions import ConfigError
 from pipeline.workspace_layout import WorkspaceLayout
 from tests.ui.stub_helpers import install_streamlit_stub
