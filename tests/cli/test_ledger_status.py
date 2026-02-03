@@ -29,7 +29,7 @@ def _prepare_workspace(root: Path) -> Path:
 
 def test_ledger_status_anchored_to_latest_run(tmp_path: Path, monkeypatch, capsys) -> None:
     slug = "acme"
-    workspace_root = _prepare_workspace(tmp_path / slug)
+    workspace_root = _prepare_workspace(tmp_path / f"timmy-kb-{slug}")
     monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(workspace_root))
 
     layout = WorkspaceLayout.from_workspace(workspace_root, slug=slug)
@@ -112,7 +112,7 @@ def test_ledger_status_anchored_to_latest_run(tmp_path: Path, monkeypatch, capsy
 
 def test_ledger_status_fails_fast_on_old_sqlite(tmp_path: Path, monkeypatch) -> None:
     slug = "acme"
-    workspace_root = _prepare_workspace(tmp_path / slug)
+    workspace_root = _prepare_workspace(tmp_path / f"timmy-kb-{slug}")
     monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(workspace_root))
 
     layout = WorkspaceLayout.from_workspace(workspace_root, slug=slug)

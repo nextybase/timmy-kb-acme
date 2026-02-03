@@ -246,7 +246,7 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
     """
     Wrapper patchabile che carica i 'canonici' da tags.db e li adatta alla shape attesa.
 
-    Se il modulo reale non è disponibile → {} (enrichment opzionale).
+    Se il loader non è disponibile o il DB è illeggibile → ConfigError (fail-fast).
     """
     try:
         loader = _load_tags_reviewed_or_raise()

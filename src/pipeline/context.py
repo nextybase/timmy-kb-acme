@@ -31,13 +31,13 @@ import logging
 import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, TypedDict, runtime_checkable
+from typing import Any, Dict, List, Optional
 
 from pipeline.beta_flags import is_beta_strict
 
 from .constants import SEMANTIC_DIR_NAME, SEMANTIC_MAPPING_FILE
 from .env_constants import REPO_ROOT_ENV, WORKSPACE_ROOT_ENV
-from .env_utils import compute_redact_flag, get_bool, get_env_var
+from .env_utils import compute_redact_flag, get_env_var
 from .exceptions import ConfigError, InvalidSlug
 from .file_utils import safe_write_text
 from .logging_utils import get_structured_logger
@@ -67,56 +67,6 @@ def validate_slug(slug: str) -> str:
         raise ConfigError(str(e), slug=slug) from e
 
 
-@runtime_checkable
-class SupportsGetItem(Protocol):
-    def __getitem__(self, key: str) -> Any: ...
-
-    def get(self, key: str, default: Any | None = None) -> Any: ...
-
-
-class ClientSettingsDict(TypedDict, total=False):
-    client_name: str
-    slug: str
-    ops_log_level: str
-
-
-def _safe_settings_get(settings: Any | None, key: str) -> Any:
-    """Estrae un valore da settings (Settings o dict) in modo deterministico."""
-    if settings is None:
-        return None
-    if is_beta_strict():
-        if not isinstance(settings, Settings):
-            raise ConfigError(
-                "Settings non conforme: atteso pipeline.settings.Settings in strict runtime.",
-                code="config.shape.invalid",
-                component="pipeline.context",
-            )
-        value = getattr(settings, key, _MISSING)
-        if value is not _MISSING:
-            return value
-        try:
-            return settings.get_value(key, default=None)
-        except KeyError:
-            return None
-    if isinstance(settings, dict):
-        return settings.get(key)
-    if isinstance(settings, SupportsGetItem):
-        try:
-            return settings.get(key)
-        except Exception:
-            try:
-                return settings[key]
-            except Exception:
-                return None
-    getter = getattr(settings, "get", None)
-    if callable(getter):
-        try:
-            return getter(key)
-        except Exception:
-            return None
-    return getattr(settings, key, None)
-
-
 @dataclass(slots=True)
 class ClientContext:
     """Contesto unificato per le pipeline Timmy-KB.
@@ -144,7 +94,7 @@ class ClientContext:
     repo_root_dir: Path | None = None  # single source of truth
 
     # Configurazione e path
-    settings: Settings | Dict[str, Any] = field(default_factory=dict)
+    settings: Optional[Settings] = None
     config_path: Optional[Path] = None
     config_dir: Optional[Path] = None
     mapping_path: Optional[Path] = None
@@ -258,7 +208,7 @@ class ClientContext:
 
         return cls(
             slug=slug,
-            client_name=_safe_settings_get(settings, "client_name"),
+            client_name=settings.client_name,
             repo_root_dir=repo_root,
             settings=settings,
             env=env_vars,
@@ -362,20 +312,14 @@ class ClientContext:
                 raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {workspace_env}", slug=slug) from e
             expected = f"timmy-kb-{slug}"
             canonical = root
-            if is_beta_strict():
-                if canonical.name != expected:
-                    raise ConfigError(
-                        f"{WORKSPACE_ROOT_ENV} in strict deve puntare direttamente al workspace canonico "
-                        f"'.../timmy-kb-{slug}' (trovato: {canonical})",
-                        code="workspace.root.invalid",
-                        component="pipeline.context",
-                        slug=slug,
-                    )
-            else:
-                if canonical.name == "output":
-                    canonical = canonical / expected
-                elif canonical.name.startswith("timmy-kb-") and canonical.name != expected:
-                    canonical = canonical.parent / expected
+            if canonical.name != expected:
+                raise ConfigError(
+                    f"{WORKSPACE_ROOT_ENV} deve puntare direttamente al workspace canonico "
+                    f"'.../timmy-kb-{slug}' (trovato: {canonical})",
+                    code="workspace.root.invalid",
+                    component="pipeline.context",
+                    slug=slug,
+                )
             _reject_workspace_sentinels(canonical)
             logger.info(
                 "context.workspace_root_dir_env",
@@ -499,9 +443,6 @@ class ClientContext:
         env_vars[WORKSPACE_ROOT_ENV] = get_env_var(WORKSPACE_ROOT_ENV, default=None)
 
         # Versione booleana di CI per chiamanti storici
-        env_vars["_CI_BOOL"] = get_bool("CI", default=False)
-        env_vars["_VISION_SAVE_SNAPSHOT_BOOL"] = get_bool("VISION_SAVE_SNAPSHOT", default=True)
-
         return env_vars
 
     # -------------------------- Utility per tracking stato --------------------------

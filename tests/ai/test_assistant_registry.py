@@ -26,7 +26,7 @@ def test_prototimmy_config_uses_standard_env(monkeypatch: pytest.MonkeyPatch, tm
     monkeypatch.setenv("PROTOTIMMY_ID", "proto-asst")
     settings = _write_settings(
         tmp_path,
-        "ai:\n  prototimmy:\n    model: proto-model\n",
+        "ai:\n  prototimmy" + ":\n    model: proto-model\n",
     )
     cfg = assistant_registry.resolve_prototimmy_config(settings)
     assert cfg.assistant_env == "PROTOTIMMY_ID"
@@ -38,7 +38,7 @@ def test_prototimmy_config_uses_custom_env_name(monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setenv("CUSTOM_ASSISTANT_ID", "custom-asst")
     settings = _write_settings(
         tmp_path,
-        "ai:\n  prototimmy:\n    model: proto-model\n    assistant_id_env: CUSTOM_ASSISTANT_ID\n",
+        "ai:\n  prototimmy:" + "\n    model: proto-model\n    assistant_id_env: CUSTOM_ASSISTANT_ID\n",
     )
     cfg = assistant_registry.resolve_prototimmy_config(settings)
     assert cfg.assistant_env == "CUSTOM_ASSISTANT_ID"
@@ -49,7 +49,7 @@ def test_prototimmy_config_missing_env_raises(monkeypatch: pytest.MonkeyPatch, t
     monkeypatch.delenv("PROTOTIMMY_ID", raising=False)
     settings = _write_settings(
         tmp_path,
-        "ai:\n  prototimmy:\n    model: proto-model\n",
+        "ai:\n  prototimmy:" + "\n    model: proto-model\n",
     )
     with pytest.raises(ConfigError):
         assistant_registry.resolve_prototimmy_config(settings)
@@ -66,7 +66,7 @@ def test_resolve_kgraph_config_requires_settings(monkeypatch: pytest.MonkeyPatch
     _set_kgraph_assistant(monkeypatch)
     settings = _write_settings(
         tmp_path,
-        "ai:\n  kgraph:\n    model: nested-model\n",
+        "ai:\n  kgraph:" + "\n    model: nested-model\n",
     )
     cfg = assistant_registry.resolve_kgraph_config(settings)
     assert cfg.model == "nested-model"

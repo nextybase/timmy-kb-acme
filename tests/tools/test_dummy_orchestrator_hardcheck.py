@@ -123,7 +123,8 @@ def test_deep_compiles_yaml_before_vision(
     (repo_root / "config").mkdir(parents=True, exist_ok=True)
     (repo_root / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
 
-    base_dir = tmp_path / "workspace"
+    slug = "dummy"
+    base_dir = tmp_path / f"timmy-kb-{slug}"
     (base_dir / "config").mkdir(parents=True, exist_ok=True)
     (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
 
@@ -201,7 +202,8 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
     (repo_root / "config").mkdir(parents=True, exist_ok=True)
     (repo_root / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
 
-    base_dir = tmp_path / "workspace"
+    slug = "dummy"
+    base_dir = tmp_path / f"timmy-kb-{slug}"
     (base_dir / "config").mkdir(parents=True, exist_ok=True)
     (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
 

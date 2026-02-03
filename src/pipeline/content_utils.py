@@ -206,7 +206,7 @@ def _filter_safe_pdfs(
                         extra={"slug": slug, "file_path": str(p)},
                     )
                 continue
-            safe_p = ensure_within_and_resolve(raw_root, p)
+            safe_p = _ensure_safe(raw_root, p, slug=slug)
         except Exception as e:  # pragma: no cover (error path)
             with start_decision_span(
                 "filter",

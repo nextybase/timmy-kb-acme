@@ -42,7 +42,7 @@ def test_compute_repo_root_dir_repo_root_env_derives_output(tmp_path: Path) -> N
 def test_compute_repo_root_dir_workspace_root_env_placeholder(tmp_path: Path) -> None:
     env_vars = {
         REPO_ROOT_ENV: None,
-        WORKSPACE_ROOT_ENV: str(tmp_path / "output"),
+        WORKSPACE_ROOT_ENV: str(tmp_path / "output" / "timmy-kb-<slug>"),
     }
     logger = logging.getLogger("test.workspace_root_env")
     root = ClientContext._compute_repo_root_dir("acme", env_vars, logger)
@@ -61,7 +61,7 @@ def test_compute_repo_root_dir_rejects_workspace_with_sentinel(tmp_path: Path) -
         ClientContext._compute_repo_root_dir("acme", env_vars, logger)
 
 
-def test_compute_repo_root_dir_strict_rejects_output_parent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_compute_repo_root_dir_strict_rejects_noncanonical(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
     env_vars = {
         REPO_ROOT_ENV: None,

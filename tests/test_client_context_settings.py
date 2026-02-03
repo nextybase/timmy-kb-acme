@@ -17,7 +17,7 @@ pytestmark = pytest.mark.pipeline
 
 @pytest.fixture()
 def repo_with_config(tmp_path: Path) -> Path:
-    repo_root = tmp_path / "workspace"
+    repo_root = tmp_path / f"timmy-kb-{DUMMY_SLUG}"
     config_dir = repo_root / "config"
     semantic_dir = repo_root / "semantic"
     config_dir.mkdir(parents=True, exist_ok=True)

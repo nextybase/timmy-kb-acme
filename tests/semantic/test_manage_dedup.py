@@ -8,7 +8,7 @@ from pathlib import Path
 def _load_manage(monkeypatch, tmp_path: Path):
     # Evita che la pagina richieda un workspace reale all'import.
     monkeypatch.setattr("ui.chrome.render_chrome_then_require", lambda *args, **kwargs: "")
-    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(tmp_path / "dummy-workspace"))
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(tmp_path / "timmy-kb-dummy-workspace"))
     return importlib.reload(importlib.import_module("ui.pages.manage"))
 
 
