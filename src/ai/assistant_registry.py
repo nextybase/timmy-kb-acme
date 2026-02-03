@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Mapping, Optional
+from typing import Mapping, Optional
 
 import pipeline.env_utils as env_utils
 from pipeline.beta_flags import is_beta_strict
@@ -39,8 +39,7 @@ def _optional_env(name: str) -> Optional[str]:
     return value.strip() if isinstance(value, str) else None
 
 
-def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
-    parts = path.split(".")
+def _get_from_settings(settings: object, path: str, default: object = None) -> object:
     if isinstance(settings, Settings):
         try:
             return settings.get_value(path, default=default)
@@ -53,10 +52,10 @@ def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
             component="assistant_registry",
             path=path,
         )
-    mapping: Any = None
+    mapping: object | None = None
     if hasattr(settings, "as_dict"):
         try:
-            mapping = settings.as_dict()
+            mapping = settings.as_dict()  # type: ignore[no-any-return]
         except Exception as exc:
             raise ConfigError(
                 f"Errore lettura config per '{path}'.",
@@ -80,8 +79,8 @@ def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
             component="assistant_registry",
             path=path,
         )
-    current: Any = mapping
-    for part in parts:
+    current: object = mapping
+    for part in path.split("."):
         if isinstance(current, Mapping) and part in current:
             current = current.get(part)
         else:
@@ -89,33 +88,10 @@ def _get_from_settings(settings: Any, path: str, default: Any = None) -> Any:
     return current
 
 
-def _ai_section_name_from_path(path: str) -> Optional[str]:
-    parts = path.split(".")
-    if len(parts) >= 2 and parts[0] == "ai":
-        return parts[1]
-    return None
-
-
-def _resolve_assistant_env_name(settings: Any, path: str, default_env: str) -> str:
+def _resolve_assistant_env_name(settings: Settings, path: str, default_env: str) -> str:
     settings_value = _get_from_settings(settings, path)
-    payload_value: Optional[str] = None
-    section_name = _ai_section_name_from_path(path)
-    if section_name:
-        section_cfg = _get_from_settings(settings, f"ai.{section_name}", None)
-        if isinstance(section_cfg, Mapping):
-            candidate = section_cfg.get("assistant_id_env")
-            if isinstance(candidate, str):
-                payload_value = candidate
-            elif candidate is not None:
-                LOGGER.warning(
-                    "ai.assistant_registry.payload_env_invalid",
-                    extra={
-                        "path": f"ai.{section_name}.assistant_id_env",
-                        "type": type(candidate).__name__,
-                    },
-                )
     settings_candidate = settings_value if isinstance(settings_value, str) else None
-    return resolve_assistant_env(settings_candidate, payload_value, default_env)
+    return resolve_assistant_env(settings_candidate, None, default_env)
 
 
 def _resolve_assistant_id(env_name: str, *, primary_env_name: str) -> str:
@@ -132,7 +108,7 @@ def _resolve_assistant_id(env_name: str, *, primary_env_name: str) -> str:
     )
 
 
-def _resolve_model(settings: Any, path: str, *, default: Optional[str] = None) -> str:
+def _resolve_model(settings: Settings, path: str, *, default: Optional[str] = None) -> str:
     candidate = _get_from_settings(settings, path)
     if isinstance(candidate, str) and candidate.strip():
         return candidate.strip()
@@ -145,7 +121,7 @@ def _resolve_model(settings: Any, path: str, *, default: Optional[str] = None) -
     )
 
 
-def _resolve_bool(settings: Any, path: str, default: Optional[bool]) -> Optional[bool]:
+def _resolve_bool(settings: Settings, path: str, default: Optional[bool]) -> Optional[bool]:
     candidate = _get_from_settings(settings, path)
     if isinstance(candidate, bool):
         return candidate
@@ -154,7 +130,7 @@ def _resolve_bool(settings: Any, path: str, default: Optional[bool]) -> Optional
 
 def _build_assistant_config(
     *,
-    settings: Any,
+    settings: Settings,
     model_path: str,
     assistant_env_path: str,
     default_env: str,
@@ -165,8 +141,8 @@ def _build_assistant_config(
     model_default: Optional[str] = None,
 ) -> AssistantConfig:
     assistant_env = _resolve_assistant_env_name(settings, assistant_env_path, default_env)
-    model = _resolve_model(settings, model_path, default=model_default)
     assistant_id = _resolve_assistant_id(assistant_env, primary_env_name=assistant_env)
+    model = _resolve_model(settings, model_path, default=model_default)
     use_kb = (
         resolve_boolean_flag(None, _resolve_bool(settings, use_kb_path, default_use_kb), None, default=True)
         if use_kb_path
@@ -188,29 +164,23 @@ def _build_assistant_config(
     )
 
 
-def resolve_kgraph_config(settings: Any, assistant_env_override: Optional[str] = None) -> AssistantConfig:
-    assistant_env = assistant_env_override or _resolve_assistant_env_name(
-        settings, "ai.kgraph.assistant_id_env", "KGRAPH_ASSISTANT_ID"
+def resolve_kgraph_config(settings: Settings, assistant_env_override: Optional[str] = None) -> AssistantConfig:
+    assistant_env_path = "ai.kgraph.assistant_id_env"
+    default_env = "KGRAPH_ASSISTANT_ID"
+    if assistant_env_override:
+        assistant_env = resolve_assistant_env(assistant_env_override, None, default_env)
+        assistant_id = _resolve_assistant_id(assistant_env, primary_env_name=assistant_env)
+        model = _resolve_model(settings, "ai.kgraph.model")
+        return AssistantConfig(model=model, assistant_id=assistant_id, assistant_env=assistant_env)
+    return _build_assistant_config(
+        settings=settings,
+        model_path="ai.kgraph.model",
+        assistant_env_path=assistant_env_path,
+        default_env=default_env,
     )
-    assistant_id = _optional_env(assistant_env)
-    if not assistant_id:
-        raise ConfigError(
-            f"Assistant ID mancante: imposta {assistant_env} nell'ambiente.",
-            code="assistant.id.missing",
-            component="assistant_registry",
-        )
-    raw_model = _get_from_settings(settings, "ai.kgraph.model")
-    model = raw_model.strip() if isinstance(raw_model, str) else ""
-    if not model:
-        raise ConfigError(
-            "Modello KGraph non configurato: imposta ai.kgraph.model nel config.",
-            code="assistant.kgraph.model.missing",
-            component="assistant_registry",
-        )
-    return AssistantConfig(model=model, assistant_id=assistant_id, assistant_env=assistant_env)
 
 
-def resolve_prototimmy_config(settings: Any) -> AssistantConfig:
+def resolve_prototimmy_config(settings: Settings) -> AssistantConfig:
     return _build_assistant_config(
         settings=settings,
         model_path="ai.prototimmy.model",
@@ -221,7 +191,7 @@ def resolve_prototimmy_config(settings: Any) -> AssistantConfig:
     )
 
 
-def resolve_planner_config(settings: Any) -> AssistantConfig:
+def resolve_planner_config(settings: Settings) -> AssistantConfig:
     return _build_assistant_config(
         settings=settings,
         model_path="ai.planner_assistant.model",
@@ -232,7 +202,7 @@ def resolve_planner_config(settings: Any) -> AssistantConfig:
     )
 
 
-def resolve_ocp_executor_config(settings: Any) -> AssistantConfig:
+def resolve_ocp_executor_config(settings: Settings) -> AssistantConfig:
     return _build_assistant_config(
         settings=settings,
         model_path="ai.ocp_executor.model",
@@ -243,7 +213,7 @@ def resolve_ocp_executor_config(settings: Any) -> AssistantConfig:
     )
 
 
-def resolve_audit_assistant_config(settings: Any) -> AssistantConfig:
+def resolve_audit_assistant_config(settings: Settings) -> AssistantConfig:
     assistant_env = _resolve_assistant_env_name(settings, "ai.audit_assistant.assistant_id_env", "AUDIT_ASSISTANT_ID")
     assistant_id = _resolve_assistant_id(assistant_env, primary_env_name=assistant_env)
     model = _resolve_model(settings, "ai.audit_assistant.model")

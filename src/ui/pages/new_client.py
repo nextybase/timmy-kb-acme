@@ -299,6 +299,96 @@ phase_state_key = "new_client.phase"
 
 current_slug = st.session_state.get(slug_state_key, "")
 current_phase = st.session_state.get(phase_state_key, UI_PHASE_INIT)
+
+
+def _render_phase_b_gate(
+    slug_value: str,
+    workspace_result: dict[str, Any] | None,
+    *,
+    name_value: str,
+) -> None:
+    layout = _layout_for_slug(slug_value)
+    if layout is None and workspace_result:
+        layout = WorkspaceLayout.from_workspace(Path(workspace_result["workspace_root_dir"]), slug=slug_value)
+    if layout is None:
+        st.error("Workspace non disponibile: ricarica la pagina e riprova.")
+        st.stop()
+
+    if _exists_semantic_files(slug_value, layout=layout):
+        st.success("Fase B già completata: semantic_mapping.yaml presente.")
+        st.caption("Ora puoi aprire il workspace.")
+        return
+
+    st.info("Vision (Fase B) è un passaggio manuale: genera semantic_mapping.yaml e abilita la semantica.")
+    vision_note = (
+        "VisionStatement YAML salvato: "
+        f"{workspace_result.get('vision_yaml_path') if workspace_result else 'percorso non disponibile'}."
+    )
+    st.caption(vision_note)
+    if st.button("Esegui Vision (genera mapping)", type="primary", key="btn_run_vision", width="stretch"):
+        if workspace_result is None:
+            st.error("Dati workspace mancanti: ricarica la pagina e riprova.")
+            st.stop()
+        repo_root_dir = Path(get_repo_root(allow_env=False))
+        vision_progress = st.progress(0, text="Avvio Vision (Fase B)...")
+
+        def _vision_progress_callback(pct: int, msg: str) -> None:
+            try:
+                vision_progress.progress(pct, text=msg)
+            except Exception:
+                pass
+
+        try:
+            with status_guard(
+                "Eseguo Vision per generare semantic_mapping.yaml…",
+                expanded=True,
+                error_label="Errore durante Vision (Fase B)",
+            ) as status:
+                vision_result = run_vision_provision_for_client(
+                    slug=slug_value,
+                    repo_root=repo_root_dir,
+                    vision_model=get_vision_model(),
+                    run_control_plane_tool=run_control_plane_tool,
+                    progress=_vision_progress_callback,
+                )
+                if status is not None and hasattr(status, "update"):
+                    status.update(label="Vision completata.", state="complete")
+        except Exception as exc:
+            title, body, caption = to_user_message(exc)
+            _log_diagnostics(
+                slug_value,
+                "warning",
+                "ui.vision.error",
+                extra={"slug": slug_value, "type": exc.__class__.__name__, "err": str(exc).splitlines()[:1]},
+                layout=None,
+            )
+            _open_error_modal(title, body, caption=caption)
+            st.stop()
+
+        layout = WorkspaceLayout.from_workspace(Path(workspace_result["workspace_root_dir"]), slug=slug_value)
+        cache_key = (slug_value or "").strip().lower()
+        if cache_key:
+            _LAYOUT_CACHE[cache_key] = layout
+
+        mapping_path = Path(vision_result["semantic_mapping_path"])
+        _warn_drive_raw_skipped(
+            slug_value,
+            mapping_path=mapping_path,
+            raw_info=vision_result["vision_payload"].get("raw_structure"),
+            strict=is_beta_strict(),
+        )
+
+        display_name = (st.session_state.get("new_name") or name_value or "").strip() or slug_value
+        _register_client_after_vision(slug_value, display_name)
+        set_slug(slug_value)
+        st.session_state[slug_state_key] = slug_value
+        st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
+        st.session_state["client_name"] = display_name
+        st.session_state.pop("new_client.workspace_result", None)
+        st.success("Vision completata e semantic_mapping.yaml disponibile.")
+        vision_progress.progress(100, text="Fase B completata.")
+
+
 _locked_inputs_phases = (
     UI_PHASE_VISION_PENDING,
     UI_PHASE_READY_TO_OPEN,
@@ -462,77 +552,19 @@ if current_phase == UI_PHASE_INIT:
         progress.progress(100, text="Fase A completata: workspace + VisionStatement YAML pronti.")
         st.success("Workspace creato e VisionStatement normalizzato (YAML).")
         st.caption("Fase A terminata: ora esegui Vision (Fase B) per generare semantic_mapping.yaml.")
+        _render_phase_b_gate(
+            slug_value=s,
+            workspace_result=result,
+            name_value=name,
+        )
 
 elif current_phase == UI_PHASE_VISION_PENDING:
     workspace_result = st.session_state.get("new_client.workspace_result")
-    st.info("Vision (Fase B) è un passaggio manuale: genera semantic_mapping.yaml e abilita la semantica.")
-    vision_note = (
-        "VisionStatement YAML salvato: "
-        f"{workspace_result.get('vision_yaml_path') if workspace_result else 'percorso non disponibile'}."
+    _render_phase_b_gate(
+        slug_value=st.session_state.get(slug_state_key) or "",
+        workspace_result=workspace_result,
+        name_value=name,
     )
-    st.caption(vision_note)
-    if st.button("Esegui Vision (genera mapping)", type="primary", key="btn_run_vision", width="stretch"):
-        if workspace_result is None:
-            st.error("Dati workspace mancanti: ricarica la pagina e riprova.")
-            st.stop()
-        repo_root_dir = Path(get_repo_root(allow_env=False))
-        vision_progress = st.progress(0, text="Avvio Vision (Fase B)...")
-
-        def _vision_progress_callback(pct: int, msg: str) -> None:
-            try:
-                vision_progress.progress(pct, text=msg)
-            except Exception:
-                pass
-
-        try:
-            with status_guard(
-                "Eseguo Vision per generare semantic_mapping.yaml…",
-                expanded=True,
-                error_label="Errore durante Vision (Fase B)",
-            ) as status:
-                vision_result = run_vision_provision_for_client(
-                    slug=s,
-                    repo_root=repo_root_dir,
-                    vision_model=get_vision_model(),
-                    run_control_plane_tool=run_control_plane_tool,
-                    progress=_vision_progress_callback,
-                )
-                if status is not None and hasattr(status, "update"):
-                    status.update(label="Vision completata.", state="complete")
-        except Exception as exc:
-            title, body, caption = to_user_message(exc)
-            _log_diagnostics(
-                s,
-                "warning",
-                "ui.vision.error",
-                extra={"slug": s, "type": exc.__class__.__name__, "err": str(exc).splitlines()[:1]},
-                layout=None,
-            )
-            _open_error_modal(title, body, caption=caption)
-            st.stop()
-
-        layout = WorkspaceLayout.from_workspace(Path(workspace_result["workspace_root_dir"]), slug=s)
-        cache_key = (s or "").strip().lower()
-        if cache_key:
-            _LAYOUT_CACHE[cache_key] = layout
-
-        mapping_path = Path(vision_result["semantic_mapping_path"])
-        _warn_drive_raw_skipped(
-            s,
-            mapping_path=mapping_path,
-            raw_info=vision_result["vision_payload"].get("raw_structure"),
-            strict=is_beta_strict(),
-        )
-
-        display_name = (st.session_state.get("new_name") or name or "").strip() or s
-        _register_client_after_vision(s, display_name)
-        set_slug(s)
-        st.session_state[slug_state_key] = s
-        st.session_state[phase_state_key] = UI_PHASE_READY_TO_OPEN
-        st.session_state["client_name"] = display_name
-        st.session_state.pop("new_client.workspace_result", None)
-        st.success("Vision completata e semantic_mapping.yaml disponibile.")
-        vision_progress.progress(100, text="Fase B completata.")
 
 
 # ------------------------------------------------------------------

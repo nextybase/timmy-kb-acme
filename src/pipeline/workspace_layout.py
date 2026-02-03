@@ -140,7 +140,6 @@ class WorkspaceLayout:
         *,
         slug: str | None = None,
         _run_id: str | None = None,
-        skip_validation: bool = False,
     ) -> "WorkspaceLayout":
         """Costruisce il layout da una directory workspace già esistente in modo fail-fast.
 

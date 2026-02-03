@@ -143,7 +143,9 @@ def test_drive_upload_or_update_bytes_idempotent(monkeypatch):
 
 
 def test_emit_readmes_missing_mapping(monkeypatch):
-    monkeypatch.setattr(dr, "_require_semantic_mapping", lambda ctx: (_ for _ in ()).throw(RuntimeError("semantic missing")))
+    monkeypatch.setattr(
+        dr, "_require_semantic_mapping", lambda ctx: (_ for _ in ()).throw(RuntimeError("semantic missing"))
+    )
     monkeypatch.setattr(dr, "_require_drive_env", lambda ctx: None)
     monkeypatch.setattr(dr, "get_client_context", lambda slug, require_drive_env: DummyCtx(slug))
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: None)
