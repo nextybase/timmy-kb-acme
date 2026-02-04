@@ -10,6 +10,7 @@ import numpy as np
 import semantic.embedding_service as emb_service
 from semantic.api import index_markdown_to_db
 from storage.kb_db import fetch_candidates
+from tests._helpers.workspace_paths import local_workspace_dir, local_workspace_name
 from tests.utils.workspace import ensure_minimal_workspace_layout
 
 
@@ -37,8 +38,19 @@ def _ctx(repo_root_dir: Path) -> C:
     )
 
 
+CLIENT_SLUG = "dummy"
+LOCAL_WORKSPACE_NAME = local_workspace_name(CLIENT_SLUG)
+
+
+def _dummy_workspace_root(tmp_path: Path) -> Path:
+    base_parent = tmp_path / "output"
+    base = local_workspace_dir(base_parent, CLIENT_SLUG)
+    assert base.name == LOCAL_WORKSPACE_NAME
+    return base
+
+
 def test_index_markdown_to_db_inserts_rows(tmp_path):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = _dummy_workspace_root(tmp_path)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
@@ -63,7 +75,7 @@ def test_index_markdown_to_db_inserts_rows(tmp_path):
 
 
 def test_index_markdown_to_db_numpy_array(tmp_path):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = _dummy_workspace_root(tmp_path)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
@@ -90,7 +102,7 @@ def test_index_markdown_to_db_numpy_array(tmp_path):
 
 
 def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = _dummy_workspace_root(tmp_path)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
@@ -147,7 +159,7 @@ def test_index_markdown_to_db_list_of_numpy_arrays(tmp_path):
 
     import numpy as np
 
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = _dummy_workspace_root(tmp_path)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
@@ -177,7 +189,7 @@ def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog)
 
     import numpy as np
 
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = _dummy_workspace_root(tmp_path)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
@@ -216,7 +228,7 @@ def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog)
 
 
 def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, monkeypatch):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = _dummy_workspace_root(tmp_path)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
@@ -253,7 +265,7 @@ def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, mon
 
 
 def test_index_excludes_readme_and_summary(tmp_path):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = _dummy_workspace_root(tmp_path)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
@@ -282,7 +294,7 @@ def test_index_excludes_readme_and_summary(tmp_path):
 
 
 def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = _dummy_workspace_root(tmp_path)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
@@ -315,7 +327,7 @@ def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
 
 
 def test_index_preserves_frontmatter_and_metadata(tmp_path):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = _dummy_workspace_root(tmp_path)
     book = base / "book"
     (book / "guide").mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
@@ -361,7 +373,7 @@ Contenuto principale del capitolo.
 
 
 def test_lineage_persisted_in_markdown_index(tmp_path):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = _dummy_workspace_root(tmp_path)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"

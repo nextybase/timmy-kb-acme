@@ -7,6 +7,7 @@ from pipeline import workspace_bootstrap
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.workspace_layout import WorkspaceLayout
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def test_workspace_bootstrap_module_importable() -> None:
@@ -45,7 +46,7 @@ def test_bootstrap_dummy_workspace_invalid_after_corruption(tmp_path: Path, monk
 
 
 def _make_client_context(tmp_path: Path, slug: str) -> ClientContext:
-    base = tmp_path / "output" / f"timmy-kb-{slug}"
+    base = local_workspace_dir(tmp_path / "output", slug)
     return ClientContext(slug=slug, repo_root_dir=base)
 
 
@@ -53,7 +54,7 @@ def test_bootstrap_client_workspace_creates_valid_layout(tmp_path: Path) -> None
     slug = "test-client"
     context = _make_client_context(tmp_path, slug)
     layout = workspace_bootstrap.bootstrap_client_workspace(context)
-    workspace = tmp_path / "output" / f"timmy-kb-{slug}"
+    workspace = local_workspace_dir(tmp_path / "output", slug)
     assert workspace.exists()
     assert (workspace / "config" / "config.yaml").is_file()
     assert (workspace / "book" / "README.md").is_file()
@@ -70,7 +71,7 @@ def test_bootstrap_client_workspace_is_idempotent(tmp_path: Path) -> None:
     context = _make_client_context(tmp_path, slug)
     workspace_bootstrap.bootstrap_client_workspace(context)
     second_layout = workspace_bootstrap.bootstrap_client_workspace(context)
-    workspace = tmp_path / "output" / f"timmy-kb-{slug}"
+    workspace = local_workspace_dir(tmp_path / "output", slug)
     for text_file in (
         workspace / "config" / "config.yaml",
         workspace / "book" / "README.md",

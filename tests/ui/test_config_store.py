@@ -8,6 +8,7 @@ import pytest
 import yaml  # type: ignore
 
 from pipeline.exceptions import ConfigError
+from tests._helpers.workspace_paths import local_workspace_dir, local_workspace_name
 from ui import config_store
 
 
@@ -64,7 +65,7 @@ def test_get_retriever_settings_prefers_client_config(tmp_path: Path, monkeypatc
     repo_config_path = _setup_repo_config(tmp_path, repo_cfg)
 
     # Client config (specifico)
-    client_config_path = tmp_path / "output" / "timmy-kb-dummy" / "config" / "config.yaml"
+    client_config_path = local_workspace_dir(tmp_path / "output", "dummy") / "config" / "config.yaml"
     client_config_path.parent.mkdir(parents=True, exist_ok=True)
     client_cfg = {
         "pipeline": {
@@ -90,7 +91,7 @@ def test_get_retriever_settings_prefers_client_config(tmp_path: Path, monkeypatc
     monkeypatch.setattr(
         config_store.ClientContext,
         "load",
-        classmethod(lambda cls, **_: _StubContext(client_config_path, "timmy-kb-dummy")),
+        classmethod(lambda cls, **_: _StubContext(client_config_path, local_workspace_name("dummy"))),
     )
 
     limit, budget, auto = config_store.get_retriever_settings(slug="timmy-kb-dummy")
@@ -135,7 +136,7 @@ def test_set_retriever_settings_updates_only_client_yaml(tmp_path: Path, monkeyp
     repo_original = repo_config_path.read_text(encoding="utf-8")
 
     # Client config: deve essere l'unico file modificato
-    client_config_path = tmp_path / "output" / "timmy-kb-dummy" / "config" / "config.yaml"
+    client_config_path = local_workspace_dir(tmp_path / "output", "dummy") / "config" / "config.yaml"
     client_config_path.parent.mkdir(parents=True, exist_ok=True)
     client_cfg = {
         "pipeline": {
@@ -160,7 +161,7 @@ def test_set_retriever_settings_updates_only_client_yaml(tmp_path: Path, monkeyp
     monkeypatch.setattr(
         config_store.ClientContext,
         "load",
-        classmethod(lambda cls, **_: _StubContext(client_config_path, "timmy-kb-dummy")),
+        classmethod(lambda cls, **_: _StubContext(client_config_path, local_workspace_name("dummy"))),
     )
 
     config_store.set_retriever_settings(1234, 1800, True, slug="timmy-kb-dummy")

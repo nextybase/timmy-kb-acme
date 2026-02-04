@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.workspace_layout import WorkspaceLayout
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _prepare_workspace(slug: str, workspace_root: Path) -> WorkspaceLayout:
@@ -105,7 +106,7 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
 
     # Pre-create doc1.pdf to simulate skip
     base_root = tmp_path / "out"
-    workspace_root = base_root / "timmy-kb-dummy"
+    workspace_root = local_workspace_dir(base_root, "dummy")
     _patch_layout(monkeypatch, dr, "dummy", workspace_root)
     cat_dir = workspace_root / "raw" / "cat-a"
     cat_dir.mkdir(parents=True, exist_ok=True)
@@ -134,8 +135,8 @@ def test_download_with_progress_adapter(monkeypatch, tmp_path):
     ]
     # And written contains only updated/new (doc2, doc3)
     written_set = {p.as_posix() for p in written}
-    assert (base_root / "timmy-kb-dummy" / "raw" / "cat-a" / "doc2.pdf").as_posix() in written_set
-    assert (base_root / "timmy-kb-dummy" / "raw" / "cat-b" / "doc3.pdf").as_posix() in written_set
+    assert (workspace_root / "raw" / "cat-a" / "doc2.pdf").as_posix() in written_set
+    assert (workspace_root / "raw" / "cat-b" / "doc3.pdf").as_posix() in written_set
     assert all(p.suffix.lower() == ".pdf" for p in written)
 
 
@@ -150,7 +151,7 @@ def test_download_with_root_level_pdfs(monkeypatch, tmp_path):
     monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
     monkeypatch.setattr(dr, "get_client_context", lambda *_args, **_kwargs: Ctx())
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
-    _patch_layout(monkeypatch, dr, "dummy", tmp_path / "timmy-kb-dummy")
+    _patch_layout(monkeypatch, dr, "dummy", local_workspace_dir(tmp_path, "dummy"))
     monkeypatch.setattr(dr, "_get_existing_client_folder_id", lambda service, parent_id, slug: "CFID")
 
     def _fake_folders(service, parent_id):
@@ -197,7 +198,7 @@ def test_plan_raw_download_requires_existing_folder(monkeypatch, tmp_path):
     monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
     monkeypatch.setattr(dr, "get_client_context", lambda *_args, **_kwargs: Ctx())
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
-    _patch_layout(monkeypatch, dr, "dummy", tmp_path / "timmy-kb-dummy")
+    _patch_layout(monkeypatch, dr, "dummy", local_workspace_dir(tmp_path, "dummy"))
 
     def _fake_list_folders(service, parent_id):
         if parent_id == "PARENT":
@@ -231,7 +232,7 @@ def test_plan_raw_download_errors_when_client_folder_missing(monkeypatch, tmp_pa
     monkeypatch.setattr(dr, "ClientContext", type("_C", (), {"load": staticmethod(lambda **_: Ctx())}))
     monkeypatch.setattr(dr, "get_client_context", lambda *_args, **_kwargs: Ctx())
     monkeypatch.setattr(dr, "get_drive_service", lambda ctx: object())
-    _patch_layout(monkeypatch, dr, "dummy", tmp_path / "timmy-kb-dummy")
+    _patch_layout(monkeypatch, dr, "dummy", local_workspace_dir(tmp_path, "dummy"))
     monkeypatch.setattr(dr, "_drive_list_folders", lambda service, parent_id: [])
     monkeypatch.setattr(dr, "_get_existing_client_folder_id", lambda service, parent_id, slug: None)
 

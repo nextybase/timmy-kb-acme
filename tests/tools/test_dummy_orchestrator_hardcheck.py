@@ -12,6 +12,7 @@ import pytest
 from pipeline.context import ClientContext
 from pipeline.file_utils import safe_write_text
 from pipeline.workspace_bootstrap import bootstrap_client_workspace
+from tests._helpers.workspace_paths import local_workspace_dir
 from tools.dummy import orchestrator
 from tools.dummy.orchestrator import validate_dummy_structure
 from tools.dummy.policy import DummyPolicy
@@ -53,7 +54,7 @@ def test_dummy_validate_structure_passes_when_mapping_present(tmp_path: Path, lo
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     slug = "dummy-hc"
-    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
+    workspace_root = local_workspace_dir(repo_root / "output", slug)
     context = ClientContext(
         slug=slug,
         repo_root_dir=workspace_root,
@@ -70,7 +71,7 @@ def test_dummy_validate_structure_fails_when_mapping_missing(tmp_path: Path, log
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     slug = "dummy-hc"
-    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
+    workspace_root = local_workspace_dir(repo_root / "output", slug)
     context = ClientContext(
         slug=slug,
         repo_root_dir=workspace_root,
@@ -124,7 +125,7 @@ def test_deep_compiles_yaml_before_vision(
     (repo_root / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
 
     slug = "dummy"
-    base_dir = tmp_path / f"timmy-kb-{slug}"
+    base_dir = local_workspace_dir(tmp_path, slug)
     (base_dir / "config").mkdir(parents=True, exist_ok=True)
     (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
 
@@ -203,7 +204,7 @@ def test_deep_testing_downgrades_vision_on_quota_and_still_runs_drive(
     (repo_root / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
 
     slug = "dummy"
-    base_dir = tmp_path / f"timmy-kb-{slug}"
+    base_dir = local_workspace_dir(tmp_path, slug)
     (base_dir / "config").mkdir(parents=True, exist_ok=True)
     (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-TEST")
 
@@ -425,7 +426,7 @@ def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     slug = "dummy-pipeline"
-    workspace_root = repo_root / "output" / f"timmy-kb-{slug}"
+    workspace_root = local_workspace_dir(repo_root / "output", slug)
     context = ClientContext(
         slug=slug,
         repo_root_dir=workspace_root,

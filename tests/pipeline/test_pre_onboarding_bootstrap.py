@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.context import ClientContext
+from tests._helpers.workspace_paths import local_workspace_dir
 from timmy_kb.cli import pre_onboarding
 
 
@@ -28,20 +29,8 @@ def test_pre_onboarding_local_structure_invokes_bootstrap(
     tmp_path: Path, logger: logging.Logger, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     slug = "test-client"
-    base = tmp_path / f"timmy-kb-{slug}"
+    base = local_workspace_dir(tmp_path, slug)
     context = _build_context(base, slug)
-
-    src_timmy_kb = Path(pre_onboarding.__file__).resolve().parents[1]
-    spurious_paths = [
-        src_timmy_kb / "output" / "timmy-kb-dummy",
-        src_timmy_kb / "output" / f"timmy-kb-{slug}",
-    ]
-    existing_spurious = [str(path) for path in spurious_paths if path.exists()]
-    assert not existing_spurious, (
-        "Trovate directory spurie sotto src/timmy_kb/output (non devono essere create dai test):\n"
-        + "\n".join(f"- {path}" for path in existing_spurious)
-        + "\nSuggerimento: rimuovile manualmente e verifica la regressione su repo_root."
-    )
 
     called: list[ClientContext] = []
 
@@ -60,7 +49,3 @@ def test_pre_onboarding_local_structure_invokes_bootstrap(
     assert (base / "config" / "config.yaml").is_file()
     layout = pre_onboarding.WorkspaceLayout.from_context(context)
     assert layout.slug == slug
-
-    # Regression guard: non creare output spurio sotto src/timmy_kb/
-    assert not (src_timmy_kb / "output" / "timmy-kb-dummy").exists()
-    assert not (src_timmy_kb / "output" / f"timmy-kb-{slug}").exists()

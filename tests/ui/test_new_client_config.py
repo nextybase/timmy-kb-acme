@@ -11,6 +11,7 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 from pipeline.workspace_layout import WorkspaceLayout
+from tests._helpers.workspace_paths import local_workspace_dir
 from tests.ui.streamlit_stub import StreamlitStub
 from tests.ui.test_manage_probe_normalized import register_streamlit_runtime
 
@@ -38,7 +39,7 @@ def test_mirror_repo_config_preserves_client_fields(tmp_path: Path, monkeypatch:
     template_root = tmp_path
     (template_root / "config").mkdir(parents=True, exist_ok=True)
     (template_root / "config" / "config.yaml").write_text("client_name: Template\nfoo: bar\n", encoding="utf-8")
-    workspace_root = template_root / "output" / f"timmy-kb-{slug}"
+    workspace_root = local_workspace_dir(template_root / "output", slug)
     client_cfg_dir = workspace_root / "config"
     client_cfg_dir.mkdir(parents=True, exist_ok=True)
     (client_cfg_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
@@ -76,7 +77,7 @@ def test_mirror_repo_config_logs_failure(monkeypatch: pytest.MonkeyPatch, tmp_pa
     template_root = tmp_path
     (template_root / "config").mkdir(parents=True, exist_ok=True)
     (template_root / "config" / "config.yaml").write_text("client_name: Template\n", encoding="utf-8")
-    workspace_root = template_root / "output" / f"timmy-kb-{slug}"
+    workspace_root = local_workspace_dir(template_root / "output", slug)
     client_cfg_dir = workspace_root / "config"
     client_cfg_dir.mkdir(parents=True, exist_ok=True)
     (client_cfg_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
@@ -141,7 +142,7 @@ def test_mirror_repo_config_missing_template_is_fatal(tmp_path: Path, monkeypatc
 
     slug = "dummy"
     template_root = tmp_path
-    workspace_root = template_root / "output" / f"timmy-kb-{slug}"
+    workspace_root = local_workspace_dir(template_root / "output", slug)
     client_cfg_dir = workspace_root / "config"
     client_cfg_dir.mkdir(parents=True, exist_ok=True)
     (client_cfg_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
@@ -173,7 +174,7 @@ def test_mirror_repo_config_missing_client_config_is_fatal(tmp_path: Path, monke
     template_root = tmp_path
     (template_root / "config").mkdir(parents=True, exist_ok=True)
     (template_root / "config" / "config.yaml").write_text("client_name: Template\n", encoding="utf-8")
-    workspace_root = template_root / "output" / f"timmy-kb-{slug}"
+    workspace_root = local_workspace_dir(template_root / "output", slug)
     client_cfg_dir = workspace_root / "config"
     client_cfg_dir.mkdir(parents=True, exist_ok=True)
     (workspace_root / "book").mkdir(parents=True, exist_ok=True)

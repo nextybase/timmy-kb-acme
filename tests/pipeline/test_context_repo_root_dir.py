@@ -9,6 +9,7 @@ import pytest
 from pipeline.context import ClientContext
 from pipeline.env_constants import REPO_ROOT_ENV, WORKSPACE_ROOT_ENV
 from pipeline.exceptions import ConfigError
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _make_repo_root(tmp_path: Path) -> Path:
@@ -36,7 +37,7 @@ def test_compute_repo_root_dir_repo_root_env_derives_output(tmp_path: Path) -> N
     }
     logger = logging.getLogger("test.repo_root_env")
     root = ClientContext._compute_repo_root_dir("dummy", env_vars, logger)
-    assert root == repo / "output" / "timmy-kb-dummy"
+    assert root == local_workspace_dir(repo / "output", "dummy")
 
 
 def test_compute_repo_root_dir_workspace_root_env_placeholder(tmp_path: Path) -> None:
@@ -46,7 +47,7 @@ def test_compute_repo_root_dir_workspace_root_env_placeholder(tmp_path: Path) ->
     }
     logger = logging.getLogger("test.workspace_root_env")
     root = ClientContext._compute_repo_root_dir("acme", env_vars, logger)
-    assert root == tmp_path / "output" / "timmy-kb-acme"
+    assert root == local_workspace_dir(tmp_path / "output", "acme")
 
 
 def test_compute_repo_root_dir_rejects_workspace_with_sentinel(tmp_path: Path) -> None:
@@ -79,11 +80,11 @@ def test_compute_repo_root_dir_strict_accepts_canonical_workspace(
     monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
     env_vars = {
         REPO_ROOT_ENV: None,
-        WORKSPACE_ROOT_ENV: str(tmp_path / "output" / "timmy-kb-<slug>"),
+        WORKSPACE_ROOT_ENV: str(local_workspace_dir(tmp_path / "output", "<slug>")),
     }
     logger = logging.getLogger("test.workspace_root_env")
     root = ClientContext._compute_repo_root_dir("acme", env_vars, logger)
-    assert root == tmp_path / "output" / "timmy-kb-acme"
+    assert root == local_workspace_dir(tmp_path / "output", "acme")
 
 
 def test_compute_workspace_root_dir_resolves_slug_macro(tmp_path: Path) -> None:
