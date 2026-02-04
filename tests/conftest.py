@@ -15,6 +15,8 @@ from typing import Any, Iterable, Sequence
 
 import pytest
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEST_TEMP_DIR = REPO_ROOT / "test-temp"
 CLIENTS_TEMP_DIR = TEST_TEMP_DIR / "clients_db"
@@ -391,7 +393,7 @@ def sandbox_workspace(tmp_path_factory):
     Usato solo per l'ambiente stabile (cwd + clients_db).
     """
     base_parent = tmp_path_factory.mktemp("kb-sandbox")
-    base = Path(base_parent) / f"timmy-kb-{DUMMY_SLUG}"
+    base = local_workspace_dir(base_parent, DUMMY_SLUG)
     base.mkdir(parents=True, exist_ok=True)
 
     clients_db_file = base / "clients_db" / "clients.yaml"
@@ -427,7 +429,7 @@ def dummy_workspace(tmp_path_factory):
     (base_parent / ".git").mkdir(parents=True, exist_ok=True)
     clients_db_relative = Path("clients_db/clients.yaml")
 
-    workspace_override = base_parent / "output" / f"timmy-kb-{DUMMY_SLUG}"
+    workspace_override = local_workspace_dir(base_parent / "output", DUMMY_SLUG)
     for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
         (workspace_override / child).mkdir(parents=True, exist_ok=True)
     book_dir = workspace_override / "book"
@@ -467,9 +469,9 @@ def dummy_workspace(tmp_path_factory):
             os.environ["REPO_ROOT_DIR"] = prev_repo_root_dir
     assert rc == 0, "gen_dummy_kb.py non è riuscito a creare il workspace"
 
-    base = Path(base_parent) / "output" / f"timmy-kb-{DUMMY_SLUG}"
+    base = local_workspace_dir(base_parent / "output", DUMMY_SLUG)
     if not base.exists():
-        base = Path(base_parent) / f"timmy-kb-{DUMMY_SLUG}"
+        base = local_workspace_dir(base_parent, DUMMY_SLUG)
 
     cfg = base / "config" / "config.yaml"
     pdf = base / "config" / "VisionStatement.pdf"
