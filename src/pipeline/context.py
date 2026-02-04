@@ -246,7 +246,50 @@ class ClientContext:
                 continue
 
     @staticmethod
+    def _reject_workspace_sentinels(root: Path, slug: str) -> None:
+        if (root / ".git").exists() or (root / "pyproject.toml").exists():
+            raise ConfigError(
+                f"Workspace non valido: contiene sentinel .git/pyproject: {root}",
+                slug=slug,
+            )
+
+    @classmethod
+    def _compute_workspace_root_dir(
+        cls,
+        slug: str,
+        env_vars: Dict[str, Any],
+        logger: logging.Logger,
+    ) -> Path:
+        workspace_env = env_vars.get(WORKSPACE_ROOT_ENV)
+        if workspace_env is None:
+            raise ConfigError(
+                f"{WORKSPACE_ROOT_ENV} non impostato: impossibile determinare workspace root",
+                slug=slug,
+            )
+        try:
+            raw = cls._resolve_workspace_macro(workspace_env, slug)
+            root = Path(raw).expanduser().resolve()
+        except Exception as e:
+            raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {workspace_env}", slug=slug) from e
+        expected = f"timmy-kb-{slug}"
+        if root.name != expected:
+            raise ConfigError(
+                f"{WORKSPACE_ROOT_ENV} deve puntare direttamente al workspace canonico "
+                f"'.../timmy-kb-{slug}' (trovato: {root})",
+                code="workspace.root.invalid",
+                component="pipeline.context",
+                slug=slug,
+            )
+        cls._reject_workspace_sentinels(root, slug)
+        logger.info(
+            "context.workspace_root_dir_env",
+            extra={"slug": slug, "repo_root_dir": str(root)},
+        )
+        return root
+
+    @classmethod
     def _compute_repo_root_dir(
+        cls,
         slug: str,
         env_vars: Dict[str, Any],
         logger: logging.Logger,
@@ -262,19 +305,12 @@ class ClientContext:
         workspace_env = env_vars.get(WORKSPACE_ROOT_ENV)
         env_root = env_vars.get(REPO_ROOT_ENV)
 
-        def _reject_workspace_sentinels(root: Path) -> None:
-            if (root / ".git").exists() or (root / "pyproject.toml").exists():
-                raise ConfigError(
-                    f"Workspace non valido: contiene sentinel .git/pyproject: {root}",
-                    slug=slug,
-                )
-
         if repo_root_override:
             try:
                 root = Path(str(repo_root_override)).expanduser().resolve()
             except Exception as e:
                 raise ConfigError(f"repo_root_dir non valido: {repo_root_override}", slug=slug) from e
-            _reject_workspace_sentinels(root)
+            cls._reject_workspace_sentinels(root, slug)
             logger.info(
                 "context.repo_root_dir_override",
                 extra={"slug": slug, "repo_root_dir": str(root)},
@@ -295,7 +331,7 @@ class ClientContext:
                 )
             expected = f"timmy-kb-{slug}"
             root = base_root / "output" / expected
-            _reject_workspace_sentinels(root)
+            cls._reject_workspace_sentinels(root, slug)
             logger.info(
                 "context.repo_root_dir_env",
                 extra={"slug": slug, "repo_root_dir": str(root)},
@@ -303,29 +339,7 @@ class ClientContext:
             return root
 
         if workspace_env:
-            try:
-                raw = str(workspace_env)
-                if "<slug>" in raw:
-                    raw = raw.replace("<slug>", slug)
-                root = Path(raw).expanduser().resolve()
-            except Exception as e:
-                raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {workspace_env}", slug=slug) from e
-            expected = f"timmy-kb-{slug}"
-            canonical = root
-            if canonical.name != expected:
-                raise ConfigError(
-                    f"{WORKSPACE_ROOT_ENV} deve puntare direttamente al workspace canonico "
-                    f"'.../timmy-kb-{slug}' (trovato: {canonical})",
-                    code="workspace.root.invalid",
-                    component="pipeline.context",
-                    slug=slug,
-                )
-            _reject_workspace_sentinels(canonical)
-            logger.info(
-                "context.workspace_root_dir_env",
-                extra={"slug": slug, "repo_root_dir": str(canonical)},
-            )
-            return canonical
+            return cls._compute_workspace_root_dir(slug, env_vars, logger)
 
         raise ConfigError(
             f"{WORKSPACE_ROOT_ENV}/{REPO_ROOT_ENV} mancanti: specifica un workspace root canonico.",
@@ -444,6 +458,16 @@ class ClientContext:
 
         # Versione booleana di CI per chiamanti storici
         return env_vars
+
+    @staticmethod
+    def _resolve_workspace_macro(value: str | None, slug: str) -> str | None:
+        """Sostituisce la macro `<slug>` in WORKSPACE_ROOT_DIR quando presente."""
+        if value is None:
+            return None
+        resolved = str(value)
+        if "<slug>" in resolved:
+            resolved = resolved.replace("<slug>", slug)
+        return resolved
 
     # -------------------------- Utility per tracking stato --------------------------
 

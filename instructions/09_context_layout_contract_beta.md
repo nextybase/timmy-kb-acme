@@ -23,6 +23,16 @@ Definire il contratto definitivo "Context/Layout" per la 1.0 Beta: un solo perim
 - `base_dir` FORBIDDEN come alias/alternativa per derivare o sostituire `repo_root_dir`.
 - `md_dir` FORBIDDEN come alias/alternativa per derivare o sostituire `book_dir`.
 
+### 2.1 `WORKSPACE_ROOT_DIR` e la macro `<slug>`
+Per esigenze multi-workspace è CONSENTITO documentare `WORKSPACE_ROOT_DIR` con il placeholder `<slug>` (es. `.../timmy-kb-<slug>`), ma:
+
+- la macro viene **risolta centralmente** da `ClientContext` prima di ogni validazione;
+- la risoluzione è deterministica e non introduce fallback alternativi o logiche distribuite;
+- gli strumenti downstream **non devono** sostituire nuovamente `<slug>` (ovvero devono usare la root già risolta dal contesto);
+- la documentazione indica chiaramente che `WORKSPACE_ROOT_DIR` può contenere `<slug>`, ma la **parte runtime non usa `<slug>` direttamente**: passa per il contesto.
+
+La macro viene risolta una sola volta, prima di costruire il `WorkspaceLayout`, e fa parte del contratto (non è un comportamento di recovery silenzioso).
+
 ## 3) Path derivati (layout-first)
 - `raw_dir`, `book_dir`, `semantic_dir`, `logs_dir`, `config_dir` MUST essere ottenuti dal `WorkspaceLayout`.
 - I consumer (UI/CLI/services/tools runtime) MUST NOT:

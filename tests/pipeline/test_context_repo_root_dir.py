@@ -84,3 +84,15 @@ def test_compute_repo_root_dir_strict_accepts_canonical_workspace(
     logger = logging.getLogger("test.workspace_root_env")
     root = ClientContext._compute_repo_root_dir("acme", env_vars, logger)
     assert root == tmp_path / "output" / "timmy-kb-acme"
+
+
+def test_compute_workspace_root_dir_resolves_slug_macro(tmp_path: Path) -> None:
+    workspace_root = tmp_path / "timmy-kb-acme"
+    workspace_root.mkdir()
+    env_vars = {
+        REPO_ROOT_ENV: None,
+        WORKSPACE_ROOT_ENV: str(workspace_root).replace("acme", "<slug>"),
+    }
+    logger = logging.getLogger("test.workspace_root_env")
+    root = ClientContext._compute_workspace_root_dir("acme", env_vars, logger)
+    assert root == workspace_root
