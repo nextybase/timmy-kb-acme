@@ -200,7 +200,7 @@ def _ensure_client_root_folder(
     slug: str,
     ctx: "ClientContext",
 ) -> str:
-    canonical_name = f"timmy-kb-{slug}"
+    canonical_name = slug.strip()
     folders = _drive_list_folders(service, parent_id)
     matches = [folder for folder in folders if (folder.get("name") or "").strip() == canonical_name]
     if len(matches) > 1:
@@ -437,9 +437,9 @@ def _drive_list_folders(service: Any, parent_id: str) -> List[Dict[str, str]]:
 def _get_existing_client_folder_id(service: Any, parent_id: str, slug: str) -> Optional[str]:
     """
     Recupera l'id della cartella cliente (nome canonico) senza crearla.
-    In Beta strict accetta solo la naming convention f"timmy-kb-<slug>".
+    In Beta strict accetta solo lo slug fornito (senza prefissi).
     """
-    canonical = f"timmy-kb-{slug.strip()}"
+    canonical = slug.strip()
     matches = []
     for folder in _drive_list_folders(service, parent_id):
         name = (folder.get("name") or "").strip()
@@ -490,6 +490,21 @@ def _drive_find_child_by_name(service: Any, parent_id: str, name: str) -> List[D
         .execute()
     )
     return resp.get("files") or []
+
+
+def drive_client_root_exists(slug: str, *, require_env: bool = True) -> bool:
+    ctx = get_client_context(slug, require_drive_env=require_env)
+    if require_env:
+        _require_drive_env(ctx)
+    service = get_drive_service(ctx)
+    parent_id = (ctx.env or {}).get("DRIVE_ID")
+    if not parent_id:
+        _precondition_failure(
+            ctx,
+            missing_component="drive_id",
+            message="DRIVE_ID non impostato: configura l'ambiente e riprova.",
+        )
+    return _get_existing_client_folder_id(service, parent_id, slug) is not None
 
 
 def _drive_upload_or_update_bytes(

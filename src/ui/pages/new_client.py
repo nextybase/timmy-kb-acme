@@ -46,6 +46,11 @@ _ensure_drive_minimal_impl = cast(
     getattr_if_callable(_drive_runner, "ensure_drive_minimal_and_upload_config"),
 )
 
+
+_drive_client_root_exists = cast(
+    Optional[Callable[[str], bool]], getattr_if_callable(_drive_runner, "drive_client_root_exists")
+)
+
 _ensure_drive_minimal: Optional[EnsureDriveCallable]
 if _ensure_drive_minimal_impl:
     _ensure_drive_minimal = _ensure_drive_minimal_impl
@@ -159,6 +164,38 @@ def _open_error_modal(
         modal_runner()
     else:
         _modal()
+
+
+def _drive_overwrite_state_key(slug: str) -> str:
+    return f"new_client.drive_overwrite_confirmed.{slug}"
+
+
+def _ensure_drive_overwrite_confirmation(slug: str) -> None:
+    key = _drive_overwrite_state_key(slug)
+    if st.session_state.get(key):
+        return
+
+    def _modal() -> None:
+        st.warning(
+            "Una cartella Drive con questo slug esiste già. "
+            "Scegli 'Sovrascrivi' per proseguire aggiornando i file gestiti dal sistema "
+            "oppure 'Annulla' per fermare l'operazione."
+        )
+        col_overwrite, col_cancel = st.columns(2)
+        with col_overwrite:
+            if st.button("Sovrascrivi", key=f"drive_overwrite_ok_{slug}", type="primary"):
+                st.session_state[key] = True
+                st.experimental_rerun()
+        with col_cancel:
+            if st.button("Annulla", key=f"drive_overwrite_cancel_{slug}", type="secondary"):
+                st.session_state[key] = False
+                st.stop()
+
+    dialog = st.dialog("Cartella Drive già esistente", width="large")
+    runner = dialog(_modal)
+    if callable(runner):
+        runner()
+    st.stop()
 
 
 def _log_diagnostics(
@@ -473,6 +510,16 @@ if current_phase == UI_PHASE_INIT:
         enable_drive = not local_only_mode
 
         repo_root_dir = Path(get_repo_root(allow_env=False))
+
+        if enable_drive and _drive_client_root_exists:
+            try:
+                drive_exists = _drive_client_root_exists(s)
+            except Exception as exc:
+                title, body, caption = to_user_message(exc)
+                _open_error_modal(title, body, caption=caption)
+                st.stop()
+            if drive_exists:
+                _ensure_drive_overwrite_confirmation(s)
 
         def _progress_callback(pct: int, message: str) -> None:
             try:

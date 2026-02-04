@@ -83,15 +83,41 @@ def test_ensure_client_root_folder_creates(monkeypatch):
     monkeypatch.setattr(dr, "create_drive_folder", create_folder)
     ctx = DummyCtx("acme")
     folder_id = dr._ensure_client_root_folder(None, parent_id="root", slug="acme", ctx=ctx)
-    assert folder_id == "timmy-kb-acme-id"
-    assert created == [("timmy-kb-acme", "root")]
+    assert folder_id == "acme-id"
+    assert created == [("acme", "root")]
 
     def list_folders_conflict(_, __):
-        return [{"name": "timmy-kb-acme", "id": "one"}, {"name": "timmy-kb-acme", "id": "two"}]
+        return [{"name": "acme", "id": "one"}, {"name": "acme", "id": "two"}]
 
     monkeypatch.setattr(dr, "_drive_list_folders", list_folders_conflict)
     with pytest.raises(RuntimeError, match="Troppi root Drive per slug"):
         dr._ensure_client_root_folder(None, parent_id="root", slug="acme", ctx=ctx)
+
+
+def test_drive_client_root_exists(monkeypatch):
+    ctx = DummyCtx("acme")
+    ctx.env = {"DRIVE_ID": "drive-root"}
+
+    def fake_client_context(slug, require_drive_env=True, **_):
+        assert slug == "acme"
+        return ctx
+
+    monkeypatch.setattr(dr, "get_client_context", fake_client_context)
+    monkeypatch.setattr(dr, "_require_drive_env", lambda context: None)
+    monkeypatch.setattr(dr, "get_drive_service", lambda context: "svc")
+
+    called = []
+
+    def fake_existing(service, parent_id, slug):
+        called.append((service, parent_id, slug))
+        return "exists-id"
+
+    monkeypatch.setattr(dr, "_get_existing_client_folder_id", fake_existing)
+    assert dr.drive_client_root_exists("acme")
+    assert called[-1] == ("svc", "drive-root", "acme")
+
+    monkeypatch.setattr(dr, "_get_existing_client_folder_id", lambda *args, **kwargs: None)
+    assert not dr.drive_client_root_exists("acme")
 
 
 def test_ensure_category_folders_creates(monkeypatch):

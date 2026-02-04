@@ -201,7 +201,7 @@ def test_plan_raw_download_requires_existing_folder(monkeypatch, tmp_path):
 
     def _fake_list_folders(service, parent_id):
         if parent_id == "PARENT":
-            return [{"name": "timmy-kb-dummy", "id": "CFID"}]
+            return [{"name": "dummy", "id": "CFID"}]
         if parent_id == "CFID":
             return [{"name": "raw", "id": "RAW"}]
         return []
