@@ -56,38 +56,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     dipendono esplicitamente da stub/headless helpers.
     Rif: docs/developer/guida_codex.md (sezione "UI testing stance (Beta 1.0)").
     """
-    marker = pytest.mark.skip(reason="Test UI basato su Streamlit stub/headless: non supportato in Beta 1.0.")
-    stub_ui_test_files: set[str] = {
-        "test_admin_oauth.py",
-        "test_config_editor_sections.py",
-        "test_diff_view_sections.py",
-        "test_drive_download.py",
-        "test_landing_slug_sections.py",
-        "test_logs_panel.py",
-        "test_manage_cleanup_component.py",
-        "test_manage_drive.py",
-        "test_manage_modal_save.py",
-        "test_manage_probe_normalized.py",
-        "test_manage_tags_regression.py",
-        "test_new_client_config.py",
-        "test_new_client_flow.py",
-        "test_onboarding_ui_preflight.py",
-        "test_pages_diagnostics.py",
-        "test_pages_import.py",
-        "test_pages_prototimmy_chat.py",
-        "test_preview_stub.py",
-        "test_stubs_singleton.py",
-        "test_tools_check_sections.py",
-        "test_workspace_helpers.py",
-    }
-    for item in items:
-        nodeid = getattr(item, "nodeid", "") or ""
-        if not (nodeid.startswith("tests/ui/") or nodeid.startswith("tests\\ui\\")):
-            continue
-        fspath = getattr(item, "fspath", None)
-        filename = Path(str(fspath)).name if fspath is not None else ""
-        if filename in stub_ui_test_files:
-            item.add_marker(marker)
+    # skip logic removed after UI stub tests were deleted
 
     arch_files = {
         "test_architecture_paths.py",
@@ -633,12 +602,6 @@ def _stable_env(monkeypatch, sandbox_workspace):
         monkeypatch.setattr(_clients_store, "DB_FILE", clients_db_file)
         monkeypatch.setenv("CLIENTS_DB_DIR", clients_db_dir.as_posix())
         monkeypatch.setenv("CLIENTS_DB_FILE", clients_db_file.as_posix())
-    except Exception:
-        pass
-    try:
-        from ui.utils.stubs import reset_streamlit_stub
-
-        reset_streamlit_stub()
     except Exception:
         pass
     yield
