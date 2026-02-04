@@ -74,6 +74,12 @@ def _process_path(path_str: str, *, fix: bool) -> int:
         )
         return 2
 
+    if not resolved.exists():
+        logger.info(
+            "forbid-control-chars: file mancante (forse cancellato)",
+            extra={"file_path": str(resolved)},
+        )
+        return 0
     try:
         original = resolved.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:

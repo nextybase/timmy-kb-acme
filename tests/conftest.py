@@ -49,14 +49,6 @@ _ORIG_WRITE_SUMMARY_AND_README = _frontmatter_service.write_summary_and_readme
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """
-    Beta 1.0: nessun supporto per runtime Streamlit headless/stub.
-
-    Skip mirato (deterministico) solo per test UI che, nel repository corrente,
-    dipendono esplicitamente da stub/headless helpers.
-    Rif: docs/developer/guida_codex.md (sezione "UI testing stance (Beta 1.0)").
-    """
-    # skip logic removed after UI stub tests were deleted
 
     arch_files = {
         "test_architecture_paths.py",
