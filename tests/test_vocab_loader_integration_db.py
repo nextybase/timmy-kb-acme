@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import semantic.vocab_loader as vl
 from storage.tags_store import save_tags_reviewed
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 class _NoopLogger:

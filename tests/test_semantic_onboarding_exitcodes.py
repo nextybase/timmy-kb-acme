@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-
-from tests._helpers.workspace_paths import local_workspace_dir
 from types import SimpleNamespace
 from typing import Any
 
@@ -15,6 +13,7 @@ import pytest
 import semantic.api as sapi
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
 from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
+from tests._helpers.workspace_paths import local_workspace_dir
 from tests.utils.workspace import ensure_minimal_workspace_layout
 from timmy_kb.cli import semantic_onboarding as mod
 

@@ -3,11 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 
 from semantic.config import load_semantic_config
+from tests._helpers.workspace_paths import local_workspace_dir
 
 pytestmark = pytest.mark.semantic
 
@@ -52,7 +51,7 @@ semantic_tagger:
     config_snapshot = config_yaml.read_text(encoding="utf-8")
     mapping_snapshot = mapping_yaml.read_text(encoding="utf-8")
 
-    cfg = load_semantic_config(base_dir)
+    cfg = load_semantic_config(base_dir, slug=slug)
     assert cfg.top_k == 9
     assert cfg.score_min == 0.55
     assert "semantic_tagger" in cfg.mapping

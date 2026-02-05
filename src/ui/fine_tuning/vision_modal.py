@@ -143,7 +143,7 @@ def open_vision_modal(slug: str = "dummy") -> None:
                 save_workspace_yaml(slug, data)
                 model = get_vision_model()
             except Exception as exc:
-                LOG.warning("ui.vision_modal.prepare_failed", extra={"slug": slug, "error": str(exc)})
+                LOG.error("ui.vision_modal.prepare_failed", extra={"slug": slug, "error": str(exc)})
                 st.error(str(exc))
             else:
                 args: list[str] = [
@@ -163,7 +163,7 @@ def open_vision_modal(slug: str = "dummy") -> None:
                             args=args,
                         )["payload"]
                 except Exception as exc:
-                    LOG.warning("ui.vision_modal.run_failed", extra={"slug": slug, "error": str(exc)})
+                    LOG.error("ui.vision_modal.run_failed", extra={"slug": slug, "error": str(exc)})
                     st.error(str(exc))
                 else:
                     display_control_plane_result(st, payload, success_message="Vision completata correttamente.")

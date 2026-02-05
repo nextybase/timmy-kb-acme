@@ -47,6 +47,7 @@ def run_doc_entities_pipeline(
     raw_dir: Path,
     semantic_dir: Path,
     db_path: Path,
+    slug: str,
     logger: logging.Logger | None = None,
     max_per_area: int = 5,
     min_confidence: float = 0.4,
@@ -57,7 +58,7 @@ def run_doc_entities_pipeline(
     strict_spacy = backend_env == "spacy"
     workspace_root = repo_root_dir
     try:
-        cfg = load_semantic_config(workspace_root)
+        cfg = load_semantic_config(workspace_root, slug=slug)
     except Exception as exc:  # pragma: no cover
         if strict_spacy:
             raise ConfigError("Config semantica non caricabile.") from exc
@@ -144,7 +145,7 @@ def run_doc_entities_pipeline(
         extra={
             "count": hits_count,
             "spacy_model": cfg.spacy_model,
-            "slug": getattr(cfg, "slug", None),
+            "slug": cfg.slug,
         },
     )
     return {"entities_written": hits_count}

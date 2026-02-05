@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
+
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _make_pdf(path: Path, *, text: str, pages: int = 1, heavy: bool = False) -> None:

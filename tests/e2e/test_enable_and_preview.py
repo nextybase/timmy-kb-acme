@@ -13,8 +13,8 @@ from typing import Dict, Iterator
 import pytest
 import yaml  # type: ignore
 
-from ui.pages.registry import PagePaths, url_path_for
 from tests._helpers.workspace_paths import local_workspace_dir
+from ui.pages.registry import PagePaths, url_path_for
 
 pytest.importorskip("playwright.sync_api", reason="Playwright non disponibile: installa playwright per i test e2e.")
 from playwright.sync_api import Locator, sync_playwright  # noqa: E402

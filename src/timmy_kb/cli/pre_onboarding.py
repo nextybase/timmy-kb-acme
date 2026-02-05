@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import logging
 import os
 import uuid
@@ -55,7 +56,12 @@ from pipeline.logging_utils import (
 )
 from pipeline.metrics import start_metrics_server_once
 from pipeline.observability_config import get_observability_settings
-from pipeline.path_utils import ensure_valid_slug, ensure_within, read_text_safe  # STRONG guard SSoT
+from pipeline.path_utils import (  # STRONG guard SSoT
+    ensure_valid_slug,
+    ensure_within,
+    ensure_within_and_resolve,
+    read_text_safe,
+)
 from pipeline.runtime_guard import ensure_strict_runtime
 from pipeline.tracing import start_root_trace
 from pipeline.types import WorkflowResult
@@ -200,11 +206,14 @@ def _summarize_error(exc: BaseException) -> str:
     return f"{name}: {first_line}"
 
 
-def _build_evidence_refs(layout: WorkspaceLayout) -> list[str]:
-    return [
+def _build_evidence_refs(layout: WorkspaceLayout, *, extra_refs: list[str] | None = None) -> list[str]:
+    refs = [
         _path_ref(layout.config_path, layout),
         _path_ref(layout.repo_root_dir, layout),
     ]
+    if extra_refs:
+        refs.extend(extra_refs)
+    return refs
 
 
 def _path_ref(path: Path, layout: WorkspaceLayout) -> str:
@@ -220,6 +229,11 @@ def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
     if isinstance(exc, ArtifactPolicyViolation):
         return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_ARTIFACT_POLICY_VIOLATION
     if isinstance(exc, ConfigError):
+        exc_code = getattr(exc, "code", None)
+        if exc_code == "vision.artifact.missing":
+            return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_VISION_ARTIFACT_MISSING
+        if exc_code in ("vision.prompt.missing", "vision.prompt.write_failed"):
+            return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_VISION_PROMPT_FAILURE
         return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_CONFIG_ERROR
     if isinstance(exc, PipelineError):
         return decision_ledger.NORMATIVE_FAIL, decision_ledger.STOP_CODE_PIPELINE_ERROR
@@ -304,6 +318,55 @@ def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
     if isinstance(exc, ArtifactPolicyViolation):
         return [*base, *exc.evidence_refs]
     return base
+
+
+def _hash_file_sha256(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8192), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _resolve_vision_pdf_path(repo_root: Path, candidate: str | Path) -> Path:
+    target = Path(candidate)
+    if not target.is_absolute():
+        target = repo_root / target
+    return ensure_within_and_resolve(repo_root, target)
+
+
+def _validate_vision_artifacts(context: ClientContext, layout: WorkspaceLayout) -> list[str]:
+    repo_root = layout.repo_root_dir
+    if repo_root is None:
+        return []
+
+    config = get_client_config(context) or {}
+    vision_cfg = config.get("ai", {}).get("vision")
+    if not (isinstance(vision_cfg, dict) and vision_cfg.get("vision_statement_pdf")):
+        return []
+
+    pdf_path = _resolve_vision_pdf_path(repo_root, vision_cfg["vision_statement_pdf"])
+    if not pdf_path.exists() or not pdf_path.is_file():
+        raise ConfigError(
+            "VisionStatement.pdf mancante o non leggibile nel workspace.",
+            slug=context.slug,
+            file_path=str(pdf_path),
+            code="vision.artifact.missing",
+        )
+
+    prompt_path = layout.config_path.parent / "assistant_vision_system_prompt.txt"
+    if not prompt_path.exists() or not prompt_path.is_file():
+        raise ConfigError(
+            "System prompt Vision mancante nel workspace.",
+            slug=context.slug,
+            file_path=str(prompt_path),
+            code="vision.prompt.missing",
+        )
+
+    return [
+        f"vision_pdf_sha256:{_hash_file_sha256(pdf_path)}",
+        f"vision_prompt_sha256:{_hash_file_sha256(prompt_path)}",
+    ]
 
 
 # ---- Entry point minimale per la UI (landing solo slug) ----------------------
@@ -395,20 +458,36 @@ def ensure_local_workspace_for_ui(
         ) from e
 
     # Copia il system prompt Vision nel workspace (serve per test/casi con REPO_ROOT_DIR override)
+    prompt_dest = layout.config_path.parent / "assistant_vision_system_prompt.txt"
     try:
         repo_root = Path(__file__).resolve().parents[1]
         prompt_src = repo_root / "config" / "assistant_vision_system_prompt.txt"
-        if prompt_src.exists():
-            prompt_dest = layout.config_path.parent / "assistant_vision_system_prompt.txt"
-            prompt_dest.parent.mkdir(parents=True, exist_ok=True)
-            ensure_within(layout.repo_root_dir, prompt_dest)
-            source_text = read_text_safe(prompt_src.parent, prompt_src, encoding="utf-8")
-            safe_write_text(prompt_dest, source_text, encoding="utf-8", atomic=True)
+        if not prompt_src.exists():
+            raise ConfigError(
+                "System prompt Vision mancante: allinea config/assistant_vision_system_prompt.txt.",
+                slug=context.slug,
+                file_path=str(prompt_src),
+                code="vision.prompt.missing",
+            )
+        prompt_dest.parent.mkdir(parents=True, exist_ok=True)
+        ensure_within(layout.repo_root_dir, prompt_dest)
+        source_text = read_text_safe(prompt_src.parent, prompt_src, encoding="utf-8")
+        safe_write_text(prompt_dest, source_text, encoding="utf-8", atomic=True)
+    except ConfigError:
+        raise
     except Exception as exc:
-        logger.warning(
+        logger.error(
             "cli.pre_onboarding.prompt_copy_failed",
             extra={"slug": context.slug, "error": str(exc)},
         )
+        raise ConfigError(
+            "Copia del system prompt Vision fallita.",
+            slug=context.slug,
+            file_path=str(prompt_dest),
+            code="vision.prompt.write_failed",
+        ) from exc
+
+    _validate_vision_artifacts(context, layout)
 
     logger.info(
         "cli.pre_onboarding.workspace.created",
@@ -561,8 +640,11 @@ def pre_onboarding_main(
     )
 
     current_stage = "local_structure"
+    vision_evidence_refs: list[str] = []
     try:
         config_path = _create_local_structure(context, logger, client_name=client_name)
+        layout = WorkspaceLayout.from_context(context)
+        vision_evidence_refs = _validate_vision_artifacts(context, layout)
 
         local_only_mode = _is_local_only_mode(context, dry_run=dry_run)
         if local_only_mode:
@@ -594,7 +676,7 @@ def pre_onboarding_main(
                     subject="workspace_bootstrap",
                     decided_at=_utc_now_iso(),
                     actor="cli.pre_onboarding",
-                    evidence_refs=_build_evidence_refs(layout),
+                    evidence_refs=_build_evidence_refs(layout, extra_refs=vision_evidence_refs),
                     reason_code="local_only",
                 ),
             )
@@ -625,7 +707,7 @@ def pre_onboarding_main(
                 subject="workspace_bootstrap",
                 decided_at=_utc_now_iso(),
                 actor="cli.pre_onboarding",
-                evidence_refs=_build_evidence_refs(layout),
+                evidence_refs=_build_evidence_refs(layout, extra_refs=vision_evidence_refs),
                 reason_code="ok",
             ),
         )
@@ -646,7 +728,10 @@ def pre_onboarding_main(
                     subject="workspace_bootstrap",
                     decided_at=_utc_now_iso(),
                     actor="cli.pre_onboarding",
-                    evidence_refs=_merge_evidence_refs(_build_evidence_refs(layout), exc),
+                    evidence_refs=_merge_evidence_refs(
+                        _build_evidence_refs(layout, extra_refs=vision_evidence_refs),
+                        exc,
+                    ),
                     stop_code=stop_code,
                     reason_code=_deny_rationale(exc),
                 ),

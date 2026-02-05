@@ -4,10 +4,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 import yaml  # type: ignore
+
+from tests._helpers.workspace_paths import local_workspace_dir
 
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF")
 

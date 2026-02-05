@@ -1,0 +1,13 @@
+*** Begin Patch
+*** Update File: tests/test_ui_paths_box.py
+@@
+-from types import SimpleNamespace
+-from typing import Any
+-
+-from tests._helpers.workspace_paths import local_workspace_dir
++from tests._helpers.workspace_paths import local_workspace_dir
++from types import SimpleNamespace
++from typing import Any
+@@
+-    print(" DEBUG JSON CALLS:\, dummy.json_calls)
+*** End Patch

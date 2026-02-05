@@ -235,7 +235,7 @@ def _convert_normalized_markdown(
     *,
     logger: logging.Logger,
 ) -> List[Path]:
-    cfg = load_semantic_config(paths.repo_root_dir)
+    cfg = load_semantic_config(paths.repo_root_dir, slug=paths.slug)
     candidates = extract_semantic_candidates(paths.normalized_dir, cfg)
     written: list[Path] = []
     for md_path in safe_mds:

@@ -172,7 +172,13 @@ def extract_spacy_tags(
 
     Ritorna un dict: relative_path -> {tags, entities, keyphrases, score, sources}
     """
-    layout = WorkspaceLayout.from_workspace(cfg.repo_root_dir)
+    slug_value = cfg.slug
+    if not slug_value:
+        raise ConfigError(
+            "Slug semantico mancante: impossibile risolvere il layout.",
+            file_path=str(cfg.repo_root_dir),
+        )
+    layout = WorkspaceLayout.from_workspace(cfg.repo_root_dir, slug=slug_value)
     normalized_dir = layout.normalized_dir
     lexicon = build_lexicon(cfg.mapping)
     if not lexicon:

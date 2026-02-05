@@ -434,6 +434,7 @@ def run_nlp_to_db(
                 raw_dir=normalized_dir_path,
                 semantic_dir=repo_root_dir_path / "semantic",
                 db_path=db_path_path,
+                slug=slug,
                 logger=log,
             )
             stats = {**stats, **ent_stats}

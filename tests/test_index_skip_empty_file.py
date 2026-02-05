@@ -4,12 +4,11 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 
 import semantic.api as sapi
 from pipeline.logging_utils import get_structured_logger
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 class _Emb:

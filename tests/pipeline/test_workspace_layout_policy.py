@@ -11,7 +11,7 @@ from tests._helpers.workspace_paths import local_workspace_dir
 def test_from_workspace_missing_directory_raises_workspace_not_found(tmp_path: Path) -> None:
     missing_root = local_workspace_dir(tmp_path, "missing")
     with pytest.raises(WorkspaceNotFound):
-        WorkspaceLayout.from_workspace(missing_root)
+        WorkspaceLayout.from_workspace(missing_root, slug="missing")
 
 
 def test_from_workspace_missing_config_file_triggers_workspace_layout_invalid(tmp_path: Path) -> None:
@@ -32,7 +32,7 @@ def test_from_workspace_missing_config_file_triggers_workspace_layout_invalid(tm
     # intentionally omit config/config.yaml
 
     with pytest.raises(WorkspaceLayoutInvalid):
-        WorkspaceLayout.from_workspace(workspace)
+        WorkspaceLayout.from_workspace(workspace, slug="invalid-config")
 
     assert not (config_dir / "config.yaml").exists()
 
@@ -55,6 +55,6 @@ def test_from_workspace_missing_book_readme_triggers_workspace_layout_invalid(tm
     # README intentionally missing
 
     with pytest.raises(WorkspaceLayoutInvalid):
-        WorkspaceLayout.from_workspace(workspace)
+        WorkspaceLayout.from_workspace(workspace, slug="missing-readme")
 
     assert not (book_dir / "README.md").exists()

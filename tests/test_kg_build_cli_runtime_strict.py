@@ -4,11 +4,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 
 from pipeline.exceptions import ConfigError
+from tests._helpers.workspace_paths import local_workspace_dir
 from tests.conftest import DUMMY_SLUG
 from timmy_kb.cli import kg_build
 

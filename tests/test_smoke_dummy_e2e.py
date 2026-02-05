@@ -7,9 +7,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
+
+from tests._helpers.workspace_paths import local_workspace_dir
 
 pytestmark = pytest.mark.slow
 

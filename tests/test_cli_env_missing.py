@@ -6,9 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 from pipeline.exceptions import ConfigError, exit_code_for
+from tests._helpers.workspace_paths import local_workspace_dir
 
 PY = sys.executable
 

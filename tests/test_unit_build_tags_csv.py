@@ -10,8 +10,8 @@ import pytest
 from pipeline.exceptions import PathTraversalError
 from semantic.api import build_tags_csv
 from storage.tags_store import derive_db_path_from_yaml_path, ensure_schema_v2
-from tests.support.contexts import TestClientCtx
 from tests._helpers.workspace_paths import local_workspace_dir
+from tests.support.contexts import TestClientCtx
 
 
 def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None:

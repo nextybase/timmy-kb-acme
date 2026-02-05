@@ -7,11 +7,10 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 
 from pipeline.file_utils import safe_write_text
+from tests._helpers.workspace_paths import local_workspace_dir
 from tools import gen_dummy_kb
 from tools.dummy import orchestrator
 

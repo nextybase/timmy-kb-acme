@@ -8,8 +8,8 @@ import sys
 import pipeline.raw_transform_service as _raw_transform_sale
 import tools.gen_dummy_kb as gen_dummy_mod
 from pipeline.raw_transform_service import STATUS_OK
-from tools.gen_dummy_kb import main as gen_dummy_main
 from tests._helpers.workspace_paths import local_workspace_dir
+from tools.gen_dummy_kb import main as gen_dummy_main
 from ui.utils.workspace import clear_base_cache
 
 

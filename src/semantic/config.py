@@ -81,6 +81,7 @@ class SemanticConfig:
     repo_root_dir: Path = Path(".")  # workspace root (resolve in load)
     semantic_dir: Path = Path("semantic")  # repo_root_dir / "semantic" (resolve in load)
     raw_dir: Path = Path("raw")  # repo_root_dir / "raw" (resolve in load)
+    slug: str | None = None
 
     # Mapping completo (cliente-specifico) caricato da semantic_mapping.yaml
     mapping: dict[str, Any] = field(default_factory=dict)
@@ -188,15 +189,25 @@ def _merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 
 
 # ----------------------------- API pubblica ---------------------------------- #
-def _resolve_layout(context_or_root: Path | Any) -> WorkspaceLayout:
+def _resolve_layout(context_or_root: Path | Any, *, slug: str | None = None) -> WorkspaceLayout:
     if ClientContext is not None and isinstance(context_or_root, ClientContext):
         return WorkspaceLayout.from_context(context_or_root)
-    return WorkspaceLayout.from_workspace(Path(context_or_root).resolve())
+    repo_root_attr = getattr(context_or_root, "repo_root_dir", None)
+    slug_attr = getattr(context_or_root, "slug", None)
+    slug_value = slug or slug_attr
+    if repo_root_attr and slug_value:
+        return WorkspaceLayout.from_workspace(Path(repo_root_attr).resolve(), slug=slug_value)
+    if slug is None:
+        raise ConfigError(
+            "Slug richiesto per risolvere il layout dal workspace root.",
+            file_path=str(context_or_root),
+        )
+    return WorkspaceLayout.from_workspace(Path(context_or_root).resolve(), slug=slug)
 
 
-def _load_client_settings(context_or_root: Path | Any) -> dict[str, Any]:
+def _load_client_settings(context_or_root: Path | Any, *, slug: str | None = None) -> dict[str, Any]:
     """Carica config.yaml del cliente tramite loader centralizzato (SSoT)."""
-    layout = _resolve_layout(context_or_root)
+    layout = _resolve_layout(context_or_root, slug=slug)
     if ClientContext is not None and isinstance(context_or_root, ClientContext):
         try:
             settings = load_client_settings(context_or_root)
@@ -220,21 +231,28 @@ def _load_client_settings(context_or_root: Path | Any) -> dict[str, Any]:
         raise ConfigError("Errore lettura config.yaml.", file_path=str(layout.config_path)) from exc
 
 
-def load_semantic_config(context_or_root: Path | Any, *, overrides: Optional[dict[str, Any]] = None) -> SemanticConfig:
+def load_semantic_config(
+    context_or_root: Path | Any,
+    *,
+    overrides: Optional[dict[str, Any]] = None,
+    slug: str | None = None,
+) -> SemanticConfig:
     """Carica la configurazione semantica per il cliente sotto la workspace root.
 
     Parametri:
       - context_or_root: workspace root canonica oppure ClientContext
       - overrides: dict opzionale con parametri espliciti (massima precedenza)
+      - slug: slug identificativo richiesto quando si risolve senza ClientContext
 
     Ritorna:
       - SemanticConfig con parametri finali e mapping completo (da semantic_mapping.yaml)
     """
-    layout = _resolve_layout(context_or_root)
+    layout = _resolve_layout(context_or_root, slug=slug)
     repo_root_dir = layout.repo_root_dir
     semantic_dir = layout.semantic_dir
     raw_dir = layout.raw_dir
     config_path = layout.config_path
+    resolved_slug = layout.slug
 
     # semantic_mapping.yaml -> strict: deve esistere e validare prima dei merge
     mapping_path = layout.mapping_path
@@ -244,7 +262,7 @@ def load_semantic_config(context_or_root: Path | Any, *, overrides: Optional[dic
     acc: dict[str, Any] = dict(_DEFAULTS)
 
     # 2) config.yaml -> semantic_defaults (chiavi ammesse in _ALLOWED_KEYS)
-    cfg_all = _load_client_settings(context_or_root)
+    cfg_all = _load_client_settings(context_or_root, slug=resolved_slug)
     if (
         isinstance(cfg_all, dict)
         and "semantic_defaults" in cfg_all
@@ -287,5 +305,6 @@ def load_semantic_config(context_or_root: Path | Any, *, overrides: Optional[dic
         semantic_dir=semantic_dir,
         raw_dir=raw_dir,
         mapping=mapping_all if isinstance(mapping_all, dict) else {},
+        slug=resolved_slug,
     )
     return cfg

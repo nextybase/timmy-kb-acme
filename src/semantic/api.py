@@ -107,7 +107,7 @@ def _require_reviewed_vocab(
     vocab = load_reviewed_vocab(repo_root_dir, logger)
     if vocab:
         return vocab
-    layout = WorkspaceLayout.from_workspace(repo_root_dir)
+    layout = WorkspaceLayout.from_workspace(repo_root_dir, slug=slug)
     tags_db = layout.semantic_dir / "tags.db"
     raise ConfigError(
         "Vocabolario canonico assente. Esegui l'estrazione tag per popolare semantic/tags.db.",
@@ -138,6 +138,7 @@ def export_tags_yaml_from_db(
     *,
     context: ClientContextType | None = None,
     workspace_base: Path | None = None,
+    slug: str | None = None,
     limit: int = 200,
     min_weight: float = 0.0,
     keep_only_listed: bool = True,
@@ -153,7 +154,12 @@ def export_tags_yaml_from_db(
             )
         layout = WorkspaceLayout.from_context(cast(Any, context))
     elif workspace_base is not None:
-        layout = WorkspaceLayout.from_workspace(Path(workspace_base).resolve())
+        if slug is None:
+            raise ConfigError(
+                "Slug richiesto per esportare tags_reviewed.yaml dal workspace base.",
+                file_path=str(semantic_dir),
+            )
+        layout = WorkspaceLayout.from_workspace(Path(workspace_base).resolve(), slug=slug)
     else:
         raise ConfigError(
             "workspace_base o context richiesti per esportare tags_reviewed.yaml.",

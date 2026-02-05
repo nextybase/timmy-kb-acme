@@ -4,11 +4,10 @@ import logging
 import os
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 
 from pipeline.exceptions import ConfigError
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _reset_store(tmp_path):

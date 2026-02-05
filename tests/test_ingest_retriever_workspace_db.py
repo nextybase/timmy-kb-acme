@@ -11,8 +11,8 @@ import timmy_kb.cli.ingest as ingest_mod
 from pipeline.file_utils import safe_write_text
 from storage.kb_db import fetch_candidates
 from storage.kb_store import KbStore
-from timmy_kb.cli.ingest import ingest_path
 from tests._helpers.workspace_paths import local_workspace_dir
+from timmy_kb.cli.ingest import ingest_path
 from timmy_kb.cli.retriever import MIN_CANDIDATE_LIMIT, QueryParams, search
 
 

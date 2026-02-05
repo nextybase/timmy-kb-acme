@@ -138,7 +138,7 @@ class WorkspaceLayout:
         cls,
         workspace: Path,
         *,
-        slug: str | None = None,
+        slug: str,
         _run_id: str | None = None,
     ) -> "WorkspaceLayout":
         """Costruisce il layout da una directory workspace già esistente in modo fail-fast.
@@ -146,11 +146,10 @@ class WorkspaceLayout:
         Non vengono creati né modificati asset: in caso di mancanza viene
         sollevato WorkspaceNotFound o WorkspaceLayoutInvalid e le riparazioni
         restano responsabilità dei flussi bootstrap/migrazione."""
+        validate_slug(slug)
         if not workspace.exists():
             raise WorkspaceNotFound("Workspace esplicito non esiste", file_path=workspace)
         repo_root = workspace.resolve()
-        resolved_slug = slug or repo_root.name
-        validate_slug(resolved_slug)
 
         raw_dir = repo_root / "raw"
         normalized_dir = repo_root / "normalized"
@@ -171,7 +170,7 @@ class WorkspaceLayout:
         config_dir = config_path.parent
 
         _validate_layout_assets(
-            slug=resolved_slug,
+            slug=slug,
             workspace_root=repo_root,
             raw_dir=raw_dir,
             normalized_dir=normalized_dir,
@@ -187,7 +186,7 @@ class WorkspaceLayout:
         vision_pdf = _derive_child_path(config_dir, "VisionStatement.pdf")
 
         return cls(
-            slug=resolved_slug,
+            slug=slug,
             repo_root_dir=repo_root,
             raw_dir=raw_dir,
             normalized_dir=normalized_dir,

@@ -4,9 +4,9 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
+
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _setup_workspace(tmp_path: Path, *, create_pdf: bool = True) -> tuple[Path, Path, Path]:

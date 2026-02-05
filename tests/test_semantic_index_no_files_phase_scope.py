@@ -3,9 +3,8 @@
 import logging
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import semantic.api as api
+from tests._helpers.workspace_paths import local_workspace_dir
 from tests.support.contexts import TestClientCtx
 from tests.utils.workspace import ensure_minimal_workspace_layout
 

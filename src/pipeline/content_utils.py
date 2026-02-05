@@ -617,7 +617,7 @@ def generate_readme_markdown(ctx: _ReadmeCtx, book_dir: Path | None = None) -> P
     )
     logger = get_structured_logger("pipeline.content_utils")
     try:
-        cfg = load_semantic_config(ctx.repo_root_dir)
+        cfg = load_semantic_config(ctx)
         areas_data = cfg.mapping.get("areas") if isinstance(cfg.mapping, dict) else None
         iterable: Iterable[tuple[str, Any]]
         if isinstance(areas_data, dict):
@@ -731,7 +731,7 @@ def convert_files_to_structured_markdown(
             file_path=str(raw_root),
         )
 
-    cfg = load_semantic_config(ctx.repo_root_dir)
+    cfg = load_semantic_config(ctx)
     candidates = extract_semantic_candidates(raw_root, cfg)
 
     written: set[Path] = set()

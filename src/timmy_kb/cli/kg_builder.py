@@ -215,8 +215,8 @@ def _prepare_input(namespace: str, semantic_dir: Path) -> TagKgInput:
     )
 
 
-def _load_raw_tags(workspace_root: Path) -> TagKgInput:
-    layout = WorkspaceLayout.from_workspace(workspace_root)
+def _load_raw_tags(workspace_root: Path, *, slug: str) -> TagKgInput:
+    layout = WorkspaceLayout.from_workspace(workspace_root, slug=slug)
     return _prepare_input(layout.slug, layout.semantic_dir)
 
 

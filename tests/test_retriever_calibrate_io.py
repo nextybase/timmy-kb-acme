@@ -9,6 +9,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 
 def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
     qfile = tmp_path / "queries.jsonl"

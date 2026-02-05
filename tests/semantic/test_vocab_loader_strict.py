@@ -3,12 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 
 from pipeline.exceptions import ConfigError
 from semantic import vocab_loader as vl
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 class _NoopLogger:

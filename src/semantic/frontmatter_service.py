@@ -202,7 +202,7 @@ def _dump_layout_yaml(data: Dict[str, Any]) -> str | None:
 def _persist_layout_proposal(layout: WorkspaceLayout, logger: logging.Logger, *, slug: str) -> None:
     repo_root_dir = layout.repo_root_dir
     try:
-        cfg = load_semantic_config(repo_root_dir)
+        cfg = load_semantic_config(repo_root_dir, slug=slug)
     except Exception as exc:
         logger.debug(
             "semantic.layout_proposal.config_failed",
@@ -294,7 +294,7 @@ def enrich_frontmatter(
     layout_keys = _read_layout_top_levels(repo_root_dir / "semantic" / "layout_proposal.yaml")
     mapping_all: Dict[str, Any] = {}
     try:
-        cfg = load_semantic_config(context.repo_root_dir)
+        cfg = load_semantic_config(context)
         mapping_all = cfg.mapping if isinstance(cfg.mapping, dict) else {}
     except Exception:
         mapping_all = {}

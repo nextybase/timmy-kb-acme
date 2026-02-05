@@ -5,9 +5,8 @@ import os
 import time
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 from security.retention import purge_old_artifacts
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def test_purge_old_artifacts_removes_old_snapshot(tmp_path: Path) -> None:

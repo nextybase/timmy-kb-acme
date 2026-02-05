@@ -74,7 +74,7 @@ def test_load_raw_tags_handles_list_structure(tmp_path: Path) -> None:
     context_file = semantic / "tags_context.jsonl"
     context_file.write_text('{"context": "value"}\n', encoding="utf-8")
 
-    result = _load_raw_tags(workspace)
+    result = _load_raw_tags(workspace, slug="dummy")
 
     assert result.namespace == "dummy"
     assert result.contexts_file.endswith("tags_context.jsonl")
@@ -98,7 +98,7 @@ def test_load_raw_tags_handles_dict_structure(tmp_path: Path) -> None:
     }
     _write_json(semantic / "tags_raw.json", payload)
 
-    result = _load_raw_tags(workspace)
+    result = _load_raw_tags(workspace, slug="dummy")
 
     labels = {tag.raw_label for tag in result.tags}
     assert "raw/A" in labels

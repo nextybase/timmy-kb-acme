@@ -3,12 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 
 import semantic.vision_provision as S
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
+from tests._helpers.workspace_paths import local_workspace_dir
 
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF")
 

@@ -27,6 +27,8 @@ __all__ = [
     "STOP_CODE_CAPABILITY_DUMMY_FORBIDDEN",
     "STOP_CODE_ARTIFACT_POLICY_VIOLATION",
     "STOP_CODE_QA_GATE_FAILED",
+    "STOP_CODE_VISION_ARTIFACT_MISSING",
+    "STOP_CODE_VISION_PROMPT_FAILURE",
     "NormativeDecisionRecord",
     "ledger_path_from_layout",
     "open_ledger",
@@ -63,6 +65,8 @@ STOP_CODE_STRICT_MODE_VIOLATION: Final[str] = "STRICT_MODE_VIOLATION"
 STOP_CODE_CAPABILITY_DUMMY_FORBIDDEN: Final[str] = "CAPABILITY_DUMMY_FORBIDDEN"
 STOP_CODE_ARTIFACT_POLICY_VIOLATION: Final[str] = "ARTIFACT_POLICY_VIOLATION"
 STOP_CODE_QA_GATE_FAILED: Final[str] = "QA_GATE_FAILED"
+STOP_CODE_VISION_ARTIFACT_MISSING: Final[str] = "VISION_ARTIFACT_MISSING"
+STOP_CODE_VISION_PROMPT_FAILURE: Final[str] = "VISION_PROMPT_FAILURE"
 _NORMATIVE_ALLOW: Final[set[str]] = {NORMATIVE_PASS, NORMATIVE_PASS_WITH_CONDITIONS}
 _NORMATIVE_DENY: Final[set[str]] = {NORMATIVE_BLOCK, NORMATIVE_FAIL}
 
@@ -83,6 +87,7 @@ CREATE TABLE IF NOT EXISTS decisions (
     from_state TEXT NOT NULL,
     to_state TEXT NOT NULL,
     verdict TEXT NOT NULL CHECK (verdict IN ('ALLOW', 'DENY')),
+    stop_code TEXT,
     subject TEXT NOT NULL,
     decided_at TEXT NOT NULL,
     evidence_json TEXT,
@@ -178,6 +183,7 @@ def record_decision(
     verdict: str,
     subject: str,
     decided_at: str,
+    stop_code: str | None = None,
     evidence_json: str | None = None,
     rationale: str | None = None,
 ) -> None:
@@ -188,8 +194,9 @@ def record_decision(
     _insert_row(
         conn,
         "INSERT INTO decisions ("
-        "decision_id, run_id, gate_name, from_state, to_state, verdict, subject, decided_at, evidence_json, rationale"
-        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "decision_id, run_id, gate_name, from_state, to_state, verdict, stop_code, "
+        "subject, decided_at, evidence_json, rationale"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             decision_id,
             run_id,
@@ -197,6 +204,7 @@ def record_decision(
             from_state,
             to_state,
             verdict,
+            stop_code,
             subject,
             decided_at,
             evidence_json,
@@ -221,6 +229,8 @@ def record_normative_decision(conn: sqlite3.Connection, record: NormativeDecisio
         raise ValueError("to_state richiesto per la persistenza nel ledger")
     if not record.actor:
         raise ValueError("actor richiesto per il Decision Record normativo")
+    if not record.slug:
+        raise ValueError("slug richiesto per il Decision Record normativo")
     if record.verdict in _NORMATIVE_DENY and not record.stop_code:
         raise ValueError("stop_code richiesto per BLOCK/FAIL")
     conditions = _normalize_str_list(record.conditions, field_name="conditions")
@@ -247,6 +257,7 @@ def record_normative_decision(conn: sqlite3.Connection, record: NormativeDecisio
         verdict=ledger_verdict,
         subject=record.subject,
         decided_at=record.decided_at,
+        stop_code=record.stop_code,
         evidence_json=evidence_json,
         rationale=rationale,
     )

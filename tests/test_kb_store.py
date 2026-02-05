@@ -2,12 +2,11 @@
 # tests/test_kb_store.py
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 
 from pipeline.exceptions import ConfigError
 from storage.kb_store import KbStore
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def test_workspace_path_semantic_dir(tmp_path: Path) -> None:

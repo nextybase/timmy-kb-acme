@@ -2,12 +2,11 @@
 import logging
 from types import SimpleNamespace
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 
 from pipeline.exceptions import CapabilityUnavailableError
 from pipeline.ingest import provider as ingest_provider
+from tests._helpers.workspace_paths import local_workspace_dir
 from timmy_kb.cli import tag_onboarding_raw as raw_mod
 
 

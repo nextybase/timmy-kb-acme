@@ -155,7 +155,7 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
 
     with phase_scope(logger, stage="build_tags_csv", customer=slug) as m:
         semantic_dir.mkdir(parents=True, exist_ok=True)
-        cfg = _load_semantic_config(repo_root_dir)
+        cfg = _load_semantic_config(context)
         candidates = extract_semantic_candidates(normalized_dir, cfg)
         candidates = _normalize_tags(candidates, cfg.mapping)
         doc_entities = _collect_doc_entities(candidates)

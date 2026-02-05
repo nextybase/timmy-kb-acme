@@ -346,6 +346,7 @@ def enable_tags_service(
             db_path,
             logger,
             workspace_base=semantic_dir.parent,
+            slug=slug,
         )
         tagging_ok, _ = tagging_ready(slug)
         target_state = "arricchito" if tagging_ok else "pronto"

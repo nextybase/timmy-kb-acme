@@ -42,6 +42,7 @@ def test_export_tags_yaml_honors_workspace_base(tmp_path, monkeypatch):
         db_path=db_path,
         logger=SimpleNamespace(info=lambda *a, **k: None),
         workspace_base=workspace,
+        slug="dummy",
         version="2",
     )
 
@@ -63,4 +64,5 @@ def test_export_tags_yaml_rejects_mismatched_db(tmp_path):
             db_path=db_path,
             logger=SimpleNamespace(info=lambda *a, **k: None),
             workspace_base=workspace,
+            slug="dummy",
         )

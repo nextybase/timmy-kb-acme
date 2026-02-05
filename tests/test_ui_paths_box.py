@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-
-from tests._helpers.workspace_paths import local_workspace_dir
 from types import SimpleNamespace
 from typing import Any
+
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Path):

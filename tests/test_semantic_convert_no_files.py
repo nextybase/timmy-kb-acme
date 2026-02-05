@@ -5,13 +5,12 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from tests._helpers.workspace_paths import local_workspace_dir
-
 import pytest
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from semantic import convert_service
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 @dataclass

@@ -10,8 +10,8 @@ import pytest
 import semantic.api as sapi
 import timmy_kb.cli.ingest as ingest_mod
 from pipeline.logging_utils import get_structured_logger
-from timmy_kb.cli.ingest import ingest_path
 from tests._helpers.workspace_paths import local_workspace_dir
+from timmy_kb.cli.ingest import ingest_path
 
 
 class _BoomEmb:
