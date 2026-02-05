@@ -219,7 +219,7 @@ preshed==3.0.10
     #   thinc
 proto-plus==1.26.1
     # via google-api-core
-protobuf==6.33.4
+protobuf==6.33.5
     # via
     #   -r requirements.in
     #   google-api-core
