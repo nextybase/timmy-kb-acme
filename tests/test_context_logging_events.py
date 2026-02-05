@@ -9,6 +9,7 @@ import pytest
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
+from tests._helpers.workspace_paths import local_workspace_dir
 from tests.conftest import DUMMY_SLUG
 
 
@@ -36,7 +37,7 @@ def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
 
     # require_drive_env=False per non dipendere da variabili esterne
     ctx = ClientContext.load(DUMMY_SLUG, logger=lg, require_drive_env=False, bootstrap_config=True)
-    expected_root = repo_root / "output" / f"timmy-kb-{DUMMY_SLUG}"
+    expected_root = local_workspace_dir(repo_root / "output", DUMMY_SLUG)
     assert ctx.repo_root_dir == expected_root.resolve()
 
     # Verifica eventi

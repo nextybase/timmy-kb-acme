@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 
@@ -28,7 +30,7 @@ def _make_pdf(path: Path, *, text: str, pages: int = 1, heavy: bool = False) -> 
 def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Workspace isolato nell'area temporanea
     slug = "dummy"
-    workspace = tmp_path / f"timmy-kb-{slug}"
+    workspace = local_workspace_dir(tmp_path, slug)
     raw = workspace / "raw"
     book = workspace / "book"
     semantic = workspace / "semantic"

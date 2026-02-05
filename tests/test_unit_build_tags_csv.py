@@ -11,12 +11,13 @@ from pipeline.exceptions import PathTraversalError
 from semantic.api import build_tags_csv
 from storage.tags_store import derive_db_path_from_yaml_path, ensure_schema_v2
 from tests.support.contexts import TestClientCtx
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None:
     slug = "dummy"
     base_root = tmp_path / "output"
-    base_dir = base_root / f"timmy-kb-{slug}"
+    base_dir = local_workspace_dir(base_root, slug)
     normalized = base_dir / "normalized"
     raw_dir = base_dir / "raw"
     sem = base_dir / "semantic"
@@ -78,7 +79,7 @@ def test_build_tags_csv_generates_posix_paths_and_header(tmp_path: Path) -> None
 def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     slug = "dummy"
     base_root = tmp_path / "output"
-    base_dir = base_root / f"timmy-kb-{slug}"
+    base_dir = local_workspace_dir(base_root, slug)
     normalized = base_dir / "normalized"
     raw_dir = base_dir / "raw"
     sem = base_dir / "semantic"
@@ -120,7 +121,7 @@ def test_build_tags_csv_rejects_tags_db_outside_semantic(tmp_path: Path, monkeyp
 def test_build_tags_csv_writes_doc_entities_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     slug = "dummy"
     base_root = tmp_path / "output"
-    base_dir = base_root / f"timmy-kb-{slug}"
+    base_dir = local_workspace_dir(base_root, slug)
     normalized = base_dir / "normalized"
     raw_dir = base_dir / "raw"
     sem = base_dir / "semantic"

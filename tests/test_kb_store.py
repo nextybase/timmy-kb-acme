@@ -2,6 +2,8 @@
 # tests/test_kb_store.py
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 from pipeline.exceptions import ConfigError
@@ -9,7 +11,7 @@ from storage.kb_store import KbStore
 
 
 def test_workspace_path_semantic_dir(tmp_path: Path) -> None:
-    workspace = tmp_path / "output" / "timmy-kb-dummy"
+    workspace = local_workspace_dir(tmp_path / "output", "dummy")
     workspace.mkdir(parents=True, exist_ok=True)
     store = KbStore.for_slug("dummy", repo_root_dir=workspace)
     expected = (workspace / "semantic" / "kb.sqlite").resolve()

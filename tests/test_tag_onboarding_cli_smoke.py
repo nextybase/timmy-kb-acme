@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 PY = sys.executable
@@ -70,7 +72,7 @@ def _run(cmd, *, env, cwd):
 @pytest.mark.slow
 def test_tag_onboarding_cli_scan_raw_and_nlp_respect_context(tmp_path: Path):
     slug = "dummy"
-    client_dir = tmp_path / f"timmy-kb-{slug}"
+    client_dir = local_workspace_dir(tmp_path, slug)
     raw_dir = client_dir / "raw"
     semantic_dir = client_dir / "semantic"
     logs_dir = client_dir / "logs"

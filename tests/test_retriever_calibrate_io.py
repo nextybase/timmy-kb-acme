@@ -22,7 +22,7 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
 
         @classmethod
         def load(cls, *, slug: str, **_kwargs: Any) -> "_Ctx":
-            base = tmp_path / "output" / f"timmy-kb-{slug}"
+            base = local_workspace_dir(tmp_path / "output", slug)
             return cls(slug, base)
 
     log_info_calls: list[tuple[str, dict[str, Any] | None]] = []
@@ -161,7 +161,7 @@ def test_dump_is_written_atomically_and_within_root(tmp_path, monkeypatch):
     assert created_params
     first_params = created_params[0]
     assert first_params == {
-        "db_path": (tmp_path / "output" / "timmy-kb-dummy" / "semantic" / "kb.sqlite").resolve(),
+        "db_path": (local_workspace_dir(tmp_path / "output", "dummy") / "semantic" / "kb.sqlite").resolve(),
         "slug": "dummy",
         "scope": "faq",
         "query": "hello",

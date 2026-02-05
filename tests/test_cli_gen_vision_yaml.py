@@ -12,10 +12,11 @@ import pytest
 import tools.gen_vision_yaml as cli
 from pipeline.exceptions import ConfigError
 from semantic.vision_provision import HaltError
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _make_pdf(tmp_path: Path, name: str = "vision.pdf") -> Path:
-    base_dir = tmp_path / "output" / "timmy-kb-dummy-srl"
+    base_dir = local_workspace_dir(tmp_path / "output", "dummy-srl")
     base_dir.mkdir(parents=True, exist_ok=True)
     p = base_dir / name
     # Non serve un PDF valido: il CLI verifica solo l'esistenza del file,
@@ -141,7 +142,7 @@ def test_cli_missing_pdf_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyP
     PDF non esistente → exit code 1 (il CLI fa il controllo prima di chiamare provision).
     """
     monkeypatch.chdir(tmp_path)
-    missing = tmp_path / "output" / "timmy-kb-dummy-srl" / "missing.pdf"
+    missing = local_workspace_dir(tmp_path / "output", "dummy-srl") / "missing.pdf"
 
     # Anche se patchiamo provision, NON deve essere chiamato quando il file manca
     called = {"value": False}

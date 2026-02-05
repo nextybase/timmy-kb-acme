@@ -14,6 +14,7 @@ import pytest
 import yaml  # type: ignore
 
 from ui.pages.registry import PagePaths, url_path_for
+from tests._helpers.workspace_paths import local_workspace_dir
 
 pytest.importorskip("playwright.sync_api", reason="Playwright non disponibile: installa playwright per i test e2e.")
 from playwright.sync_api import Locator, sync_playwright  # noqa: E402
@@ -52,7 +53,7 @@ def e2e_environment(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Dict[s
         encoding="utf-8",
     )
 
-    workspace = sandbox / "output" / f"timmy-kb-{slug}"
+    workspace = local_workspace_dir(sandbox / "output", slug)
     raw_dir = workspace / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
     (workspace / "semantic").mkdir(parents=True, exist_ok=True)

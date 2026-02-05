@@ -17,11 +17,11 @@ def test_workspace_exceptions_are_config_errors() -> None:
 def test_workspace_exception_str_contains_context() -> None:
     exc = WorkspaceNotFound(
         "workspace root mancante",
-        slug="timmy-kb-acme",
+        slug="dummy",
         file_path=Path("config/config.yaml"),
     )
     text = str(exc)
-    assert "slug=timmy-kb-acme" in text
+    assert "slug=dummy" in text
     assert "file=config.yaml" in text
 
 

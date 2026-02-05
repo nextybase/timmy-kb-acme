@@ -9,17 +9,18 @@ import pipeline.raw_transform_service as _raw_transform_sale
 import tools.gen_dummy_kb as gen_dummy_mod
 from pipeline.raw_transform_service import STATUS_OK
 from tools.gen_dummy_kb import main as gen_dummy_main
+from tests._helpers.workspace_paths import local_workspace_dir
 from ui.utils.workspace import clear_base_cache
 
 
 def _stub_minimal_environment(monkeypatch, tmp_path, *, run_vision_return=None) -> None:
     monkeypatch.setattr(gen_dummy_mod, "ensure_local_workspace_for_ui", lambda **_: None)
-    monkeypatch.setattr(gen_dummy_mod, "_client_base", lambda slug: tmp_path / f"timmy-kb-{slug}")
+    monkeypatch.setattr(gen_dummy_mod, "_client_base", lambda slug: local_workspace_dir(tmp_path, slug))
     # SpaCy non è il focus di questi test: bypassiamo l'hard check
     import tools.dummy.orchestrator as dummy_orch
 
     monkeypatch.setattr(dummy_orch, "_ensure_spacy_available", lambda policy: None)
-    base_dir = tmp_path / "timmy-kb-dummy"
+    base_dir = local_workspace_dir(tmp_path, "dummy")
     monkeypatch.setattr(gen_dummy_mod, "_pdf_path", lambda slug: base_dir / "config" / "VisionStatement.pdf")
     (base_dir / "config").mkdir(parents=True, exist_ok=True)
     (base_dir / "config" / "VisionStatement.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
@@ -187,7 +188,7 @@ def test_logs_namespaced_on_failure(caplog, tmp_path, monkeypatch):
 
     _stub_minimal_environment(monkeypatch, tmp_path, run_vision_return=_boom)
     monkeypatch.setenv("VISION_MODE", "DEEP")
-    base_dir = tmp_path / "timmy-kb-dummy"
+    base_dir = local_workspace_dir(tmp_path, "dummy")
     mapping_path = base_dir / "semantic" / "semantic_mapping.yaml"
     if mapping_path.exists():
         mapping_path.unlink()

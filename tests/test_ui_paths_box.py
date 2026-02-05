@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+
+from tests._helpers.workspace_paths import local_workspace_dir
 from types import SimpleNamespace
 from typing import Any
 
@@ -10,7 +12,7 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
     import ui.landing_slug as landing
 
     # Prepara workspace
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
 

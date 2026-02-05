@@ -43,7 +43,7 @@ def test_compute_repo_root_dir_repo_root_env_derives_output(tmp_path: Path) -> N
 def test_compute_repo_root_dir_workspace_root_env_placeholder(tmp_path: Path) -> None:
     env_vars = {
         REPO_ROOT_ENV: None,
-        WORKSPACE_ROOT_ENV: str(tmp_path / "output" / "timmy-kb-<slug>"),
+        WORKSPACE_ROOT_ENV: str(local_workspace_dir(tmp_path / "output", "<slug>")),
     }
     logger = logging.getLogger("test.workspace_root_env")
     root = ClientContext._compute_repo_root_dir("acme", env_vars, logger)
@@ -51,7 +51,7 @@ def test_compute_repo_root_dir_workspace_root_env_placeholder(tmp_path: Path) ->
 
 
 def test_compute_repo_root_dir_rejects_workspace_with_sentinel(tmp_path: Path) -> None:
-    workspace_root = tmp_path / "timmy-kb-acme"
+    workspace_root = local_workspace_dir(tmp_path, "acme")
     (workspace_root / ".git").mkdir(parents=True, exist_ok=True)
     env_vars = {
         REPO_ROOT_ENV: None,
@@ -88,7 +88,7 @@ def test_compute_repo_root_dir_strict_accepts_canonical_workspace(
 
 
 def test_compute_workspace_root_dir_resolves_slug_macro(tmp_path: Path) -> None:
-    workspace_root = tmp_path / "timmy-kb-acme"
+    workspace_root = local_workspace_dir(tmp_path, "acme")
     workspace_root.mkdir()
     env_vars = {
         REPO_ROOT_ENV: None,

@@ -10,6 +10,7 @@ import pytest
 
 from pipeline.context import ClientContext
 from pipeline.settings import Settings
+from tests._helpers.workspace_paths import local_workspace_dir
 from tests.conftest import DUMMY_SLUG
 
 pytestmark = pytest.mark.pipeline
@@ -17,7 +18,7 @@ pytestmark = pytest.mark.pipeline
 
 @pytest.fixture()
 def repo_with_config(tmp_path: Path) -> Path:
-    repo_root = tmp_path / f"timmy-kb-{DUMMY_SLUG}"
+    repo_root = local_workspace_dir(tmp_path, DUMMY_SLUG)
     config_dir = repo_root / "config"
     semantic_dir = repo_root / "semantic"
     config_dir.mkdir(parents=True, exist_ok=True)

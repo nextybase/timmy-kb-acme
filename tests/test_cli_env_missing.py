@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 from pipeline.exceptions import ConfigError, exit_code_for
 
 PY = sys.executable
@@ -13,7 +15,7 @@ PY = sys.executable
 
 def test_tag_onboarding_cli_missing_env_returns_configerror_code(tmp_path: Path) -> None:
     slug = "dummy"
-    client_dir = tmp_path / f"timmy-kb-{slug}"
+    client_dir = local_workspace_dir(tmp_path, slug)
     client_dir.mkdir(parents=True, exist_ok=True)
 
     env = dict(os.environ)

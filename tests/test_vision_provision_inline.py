@@ -4,6 +4,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 import yaml  # type: ignore
 
@@ -62,7 +64,7 @@ def _vision_retention_for(ctx: DummyCtx) -> int:
 
 @pytest.fixture
 def tmp_workspace(tmp_path: Path) -> Path:
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
     pdf = base / "config" / "VisionStatement.pdf"

@@ -5,6 +5,8 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 from pipeline.exceptions import ConfigError
@@ -33,7 +35,7 @@ def _write_minimal_layout(base: Path) -> None:
 
 
 def test_convert_no_files_logs_event_and_raises(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     raw = base / "raw"
     book = base / "book"
     raw.mkdir(parents=True, exist_ok=True)

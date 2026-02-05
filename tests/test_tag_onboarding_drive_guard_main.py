@@ -2,6 +2,8 @@
 import logging
 from types import SimpleNamespace
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 from pipeline.exceptions import CapabilityUnavailableError
@@ -15,7 +17,7 @@ def test_tag_onboarding_main_raises_capability_error_when_drive_utils_missing(tm
     il ramo source=="drive" deve sollevare ConfigError con istruzioni chiare,
     non TypeError da chiamata su None.
     """
-    client_root = tmp_path / "timmy-kb-dummy"
+    client_root = local_workspace_dir(tmp_path, "dummy")
     raw_dir = client_root / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 

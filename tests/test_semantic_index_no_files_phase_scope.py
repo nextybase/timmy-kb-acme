@@ -3,6 +3,8 @@
 import logging
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import semantic.api as api
 from tests.support.contexts import TestClientCtx
 from tests.utils.workspace import ensure_minimal_workspace_layout
@@ -24,7 +26,7 @@ def _ctx(base: Path, book: Path) -> TestClientCtx:
 
 
 def test_index_markdown_no_files_emits_phase_and_artifacts_zero(tmp_path, caplog):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     ensure_minimal_workspace_layout(base, client_name="dummy")
     book = base / "book"
     semantic_dir = base / "semantic"

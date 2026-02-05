@@ -4,6 +4,8 @@ import logging
 import os
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 from pipeline.exceptions import ConfigError
@@ -155,7 +157,7 @@ def test_parse_entries_rejects_invalid_payloads(store, payload):
 
 def test_base_repo_root_ignores_workspace_root_dir(tmp_path, monkeypatch, caplog):
     module = _reset_store(tmp_path)
-    workspace_root = tmp_path / "output" / "timmy-kb-prova"
+    workspace_root = local_workspace_dir(tmp_path / "output", "prova")
     monkeypatch.setenv(module.WORKSPACE_ROOT_ENV, workspace_root.as_posix())
     monkeypatch.delenv(module.REPO_ROOT_ENV, raising=False)
     module.REPO_ROOT = tmp_path

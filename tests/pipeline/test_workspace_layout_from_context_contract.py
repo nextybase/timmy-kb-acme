@@ -6,6 +6,7 @@ import pytest
 
 from pipeline.exceptions import WorkspaceNotFound
 from pipeline.workspace_layout import WorkspaceLayout
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _write_minimal_workspace(root: Path) -> None:
@@ -22,7 +23,7 @@ def _write_minimal_workspace(root: Path) -> None:
 
 
 def test_from_context_ignores_context_dir_overrides(tmp_path: Path) -> None:
-    workspace_root = tmp_path / "timmy-kb-dummy"
+    workspace_root = local_workspace_dir(tmp_path, "dummy")
     _write_minimal_workspace(workspace_root)
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -49,7 +50,7 @@ def test_from_context_ignores_context_dir_overrides(tmp_path: Path) -> None:
 
 
 def test_from_context_requires_repo_root_dir(tmp_path: Path) -> None:
-    workspace_root = tmp_path / "timmy-kb-dummy"
+    workspace_root = local_workspace_dir(tmp_path, "dummy")
     _write_minimal_workspace(workspace_root)
     ctx = SimpleNamespace(slug="dummy", repo_root_dir=None)
     with pytest.raises(WorkspaceNotFound):

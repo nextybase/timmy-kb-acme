@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 pytestmark = pytest.mark.slow
@@ -22,7 +24,7 @@ def test_gen_dummy_kb_writes_inside_tmp_path(tmp_path: Path) -> None:
     """
     slug = "dummy"
     clients_db_relative = Path("clients_db/clients.yaml")
-    workspace_root = tmp_path / f"timmy-kb-{slug}"
+    workspace_root = local_workspace_dir(tmp_path, slug)
 
     # Esegui lo script con base dir forzata al tmp_path del test
     repo_root = Path(__file__).resolve().parents[1]

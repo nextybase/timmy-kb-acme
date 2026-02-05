@@ -7,6 +7,7 @@ import pytest
 
 from pipeline.exceptions import PathTraversalError
 from semantic.auto_tagger import render_tags_csv
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _candidates_min() -> dict[str, dict[str, object]]:
@@ -22,7 +23,7 @@ def _candidates_min() -> dict[str, dict[str, object]]:
 
 
 def test_render_tags_csv_happy_path(tmp_path: Path):
-    base = tmp_path / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path, "dummy")
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
     csv_path = sem / "tags_raw.csv"
@@ -36,7 +37,7 @@ def test_render_tags_csv_happy_path(tmp_path: Path):
 
 
 def test_render_tags_csv_blocks_outside_base(tmp_path: Path):
-    base = tmp_path / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path, "dummy")
     base.mkdir(parents=True, exist_ok=True)
     outside_csv = base.parent / "outside.csv"
 

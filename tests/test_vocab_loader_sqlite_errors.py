@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 import semantic.vocab_loader as vl
@@ -17,7 +19,7 @@ class _NoopLogger:
 
 
 def _mk_semantic_db_placeholder(tmp_path: Path) -> Path:
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     sem = base / "semantic"
     sem.mkdir(parents=True, exist_ok=True)
     db = sem / "tags.db"

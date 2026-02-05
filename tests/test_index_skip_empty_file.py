@@ -4,6 +4,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 import semantic.api as sapi
@@ -28,7 +30,7 @@ def _ensure_minimal_workspace(base: Path) -> None:
 
 
 def test_index_logs_skip_empty_file(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     _ensure_minimal_workspace(base)
     book = base / "book"
     db_path = base / "kb.sqlite"

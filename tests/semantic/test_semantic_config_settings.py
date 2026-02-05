@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 from semantic.config import load_semantic_config
@@ -17,7 +19,7 @@ def _write_file(path: Path, content: str) -> None:
 
 def test_semantic_config_merges_settings(tmp_path: Path) -> None:
     slug = "dummy"
-    base_dir = tmp_path / "output" / f"timmy-kb-{slug}"
+    base_dir = local_workspace_dir(tmp_path / "output", slug)
     base_dir.mkdir(parents=True, exist_ok=True)
     (base_dir / "raw").mkdir(parents=True, exist_ok=True)
     (base_dir / "normalized").mkdir(parents=True, exist_ok=True)

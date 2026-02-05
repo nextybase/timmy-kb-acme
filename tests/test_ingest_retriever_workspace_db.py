@@ -12,6 +12,7 @@ from pipeline.file_utils import safe_write_text
 from storage.kb_db import fetch_candidates
 from storage.kb_store import KbStore
 from timmy_kb.cli.ingest import ingest_path
+from tests._helpers.workspace_paths import local_workspace_dir
 from timmy_kb.cli.retriever import MIN_CANDIDATE_LIMIT, QueryParams, search
 
 
@@ -41,7 +42,7 @@ def _prepare_workspace(base: Path) -> None:
 
 def test_ingest_and_search_use_workspace_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     slug = "dummy"
-    base = tmp_path / f"timmy-kb-{slug}"
+    base = local_workspace_dir(tmp_path, slug)
     ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
     _prepare_workspace(base)
 
@@ -89,7 +90,7 @@ def test_ingest_and_search_use_workspace_db(tmp_path: Path, monkeypatch: pytest.
 
 def test_lineage_persisted_in_ingest_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     slug = "dummy"
-    base = tmp_path / f"timmy-kb-{slug}"
+    base = local_workspace_dir(tmp_path, slug)
     ctx = SimpleNamespace(repo_root_dir=base, slug=slug)
     _prepare_workspace(base)
 

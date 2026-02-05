@@ -5,16 +5,17 @@ import pytest
 
 from pipeline.exceptions import WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.workspace_layout import WorkspaceLayout
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def test_from_workspace_missing_directory_raises_workspace_not_found(tmp_path: Path) -> None:
-    missing_root = tmp_path / "timmy-kb-missing"
+    missing_root = local_workspace_dir(tmp_path, "missing")
     with pytest.raises(WorkspaceNotFound):
         WorkspaceLayout.from_workspace(missing_root)
 
 
 def test_from_workspace_missing_config_file_triggers_workspace_layout_invalid(tmp_path: Path) -> None:
-    workspace = tmp_path / "timmy-kb-invalid-config"
+    workspace = local_workspace_dir(tmp_path, "invalid-config")
     raw_dir = workspace / "raw"
     book_dir = workspace / "book"
     semantic_dir = workspace / "semantic"
@@ -37,7 +38,7 @@ def test_from_workspace_missing_config_file_triggers_workspace_layout_invalid(tm
 
 
 def test_from_workspace_missing_book_readme_triggers_workspace_layout_invalid(tmp_path: Path) -> None:
-    workspace = tmp_path / "timmy-kb-missing-readme"
+    workspace = local_workspace_dir(tmp_path, "missing-readme")
     raw_dir = workspace / "raw"
     book_dir = workspace / "book"
     semantic_dir = workspace / "semantic"

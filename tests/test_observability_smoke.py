@@ -13,6 +13,7 @@ import semantic.convert_service as conv
 import semantic.embedding_service as semb
 import semantic.frontmatter_service as front
 from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 @dataclass
@@ -51,7 +52,7 @@ def _write_minimal_layout(base: Path) -> None:
 
 def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
     # Setup workspace minimo con 2 file MD
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     _write_minimal_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
@@ -92,7 +93,7 @@ def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
 
 def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
     # Patch pipeline per generare rapidamente 2 MD
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     _write_minimal_layout(base)
     raw = base / "raw"
     book = base / "book"
@@ -144,7 +145,7 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
 
 
 def test_observability_indexing_failure_emits_error(monkeypatch, tmp_path, caplog):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     _write_minimal_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)

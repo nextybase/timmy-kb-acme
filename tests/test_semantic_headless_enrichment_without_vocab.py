@@ -7,6 +7,7 @@ from pipeline.exceptions import ConfigError
 from semantic import api as sapi
 from semantic import convert_service
 from tests.support.contexts import TestClientCtx
+from tests._helpers.workspace_paths import local_workspace_dir
 from timmy_kb.cli import semantic_headless as sh
 
 
@@ -16,7 +17,7 @@ def strict_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_headless_fails_without_vocab(tmp_path, monkeypatch):
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     book = base / "book"
     raw = base / "raw"
     for d in (book, raw):

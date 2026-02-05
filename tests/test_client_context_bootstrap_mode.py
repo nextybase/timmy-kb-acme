@@ -7,6 +7,7 @@ import pytest
 
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError
+from tests._helpers.workspace_paths import local_workspace_dir
 from tests.conftest import DUMMY_SLUG
 
 
@@ -16,7 +17,7 @@ def test_load_without_bootstrap_requires_config(monkeypatch: pytest.MonkeyPatch,
     (repo_root / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
 
-    workspace_root = repo_root / "output" / f"timmy-kb-{DUMMY_SLUG}"
+    workspace_root = local_workspace_dir(repo_root / "output", DUMMY_SLUG)
     expected_path = workspace_root / "config" / "config.yaml"
     with pytest.raises(ConfigError) as exc_info:
         ClientContext.load(

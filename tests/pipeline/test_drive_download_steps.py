@@ -8,6 +8,7 @@ from typing import Any, Dict
 import pytest
 
 from pipeline.workspace_layout import WorkspaceLayout
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _prepare_workspace(slug: str, workspace_root: Path) -> WorkspaceLayout:
@@ -31,7 +32,7 @@ def test_download_with_progress_accepts_optional_overwrite(monkeypatch: pytest.M
     import ui.services.drive_runner as dr
 
     ctx = SimpleNamespace(slug="dummy", redact_logs=False, env={"DRIVE_ID": "parent"})
-    workspace_root = tmp_path / f"timmy-kb-{ctx.slug}"
+    workspace_root = local_workspace_dir(tmp_path, ctx.slug)
     workspace_root.mkdir(parents=True, exist_ok=True)
     raw_dir = workspace_root / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)

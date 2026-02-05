@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+
+from tests._helpers.workspace_paths import local_workspace_dir
 from types import SimpleNamespace
 from typing import Any
 
@@ -30,7 +32,7 @@ class _DummyCtx(SimpleNamespace):
 
 
 def _make_ctx(tmp_path: Path, slug: str = "dummy") -> _DummyCtx:
-    base = tmp_path / "output" / f"timmy-kb-{slug}"
+    base = local_workspace_dir(tmp_path / "output", slug)
     ensure_minimal_workspace_layout(base, client_name=slug)
     book = base / "book"
     config_dir = base / "config"

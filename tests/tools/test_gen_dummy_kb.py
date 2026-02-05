@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 from pipeline.file_utils import safe_write_text
@@ -388,7 +390,7 @@ def test_build_payload_deep_fails_on_vision_error(monkeypatch: pytest.MonkeyPatc
 
 def test_main_brute_reset_deletes_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     repo_root = _setup_repo_root(tmp_path)
-    output_dir = repo_root / "output" / "timmy-kb-dummy"
+    output_dir = local_workspace_dir(repo_root / "output", "dummy")
     output_dir.mkdir(parents=True, exist_ok=True)
     safe_write_text(output_dir / "marker.txt", "cleanup", encoding="utf-8", atomic=True)
 

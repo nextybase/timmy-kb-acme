@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 from pipeline.exceptions import ConfigError
@@ -11,7 +13,7 @@ from timmy_kb.cli import pre_onboarding
 
 def test_ensure_local_workspace_for_ui_merge_failure_is_fatal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     slug = "dummy"
-    workspace_root = tmp_path / f"timmy-kb-{slug}"
+    workspace_root = local_workspace_dir(tmp_path, slug)
     template_root = tmp_path / "template"
     (template_root / "config").mkdir(parents=True, exist_ok=True)
     (template_root / "config" / "config.yaml").write_text("client_name: Template\n", encoding="utf-8")

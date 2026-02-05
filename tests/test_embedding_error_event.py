@@ -11,6 +11,7 @@ import semantic.api as sapi
 import timmy_kb.cli.ingest as ingest_mod
 from pipeline.logging_utils import get_structured_logger
 from timmy_kb.cli.ingest import ingest_path
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 class _BoomEmb:
@@ -38,7 +39,7 @@ def _prepare_workspace(base: Path, *, slug: str) -> SimpleNamespace:
 
 
 def test_embedding_error_is_logged_and_fall_back(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     book = base / "book"
     db_path = base / "kb.sqlite"
     book.mkdir(parents=True, exist_ok=True)
@@ -66,7 +67,7 @@ def test_embedding_error_is_logged_and_fall_back(tmp_path: Path, caplog: pytest.
 def test_explainability_events_emitted(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     ctx = _prepare_workspace(base, slug="dummy")
     raw_dir = base / "raw"
     db_path = base / "kb.sqlite"

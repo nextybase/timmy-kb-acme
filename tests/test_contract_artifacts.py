@@ -10,10 +10,11 @@ from pipeline.content_utils import generate_readme_markdown, generate_summary_ma
 from pipeline.logging_utils import get_structured_logger
 from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
 from semantic.frontmatter_service import write_summary_and_readme
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _make_context(tmp_path: Path, slug: str):
-    base_dir = tmp_path / f"timmy-kb-{slug}"
+    base_dir = local_workspace_dir(tmp_path, slug)
     book_dir = base_dir / "book"
     semantic_dir = base_dir / "semantic"
     raw_dir = base_dir / "raw"
@@ -73,7 +74,7 @@ ops:
 
 def test_book_artifacts_are_generated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "dummy"
-    base_dir = tmp_path / f"timmy-kb-{slug}"
+    base_dir = local_workspace_dir(tmp_path, slug)
     monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
     monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(base_dir))
 

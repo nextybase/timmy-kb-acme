@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 from pipeline import workspace_bootstrap
@@ -25,7 +27,7 @@ def test_bootstrap_client_workspace_requires_repo_root_dir() -> None:
 def test_bootstrap_dummy_workspace_creates_minimal_layout(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TIMMY_KB_DUMMY_OUTPUT_ROOT", str(tmp_path))
     layout = workspace_bootstrap.bootstrap_dummy_workspace("dummy")
-    workspace = tmp_path / "output" / "timmy-kb-dummy"
+    workspace = local_workspace_dir(tmp_path / "output", "dummy")
     assert workspace.exists()
     assert (workspace / "config" / "config.yaml").is_file()
     assert (workspace / "book" / "README.md").is_file()

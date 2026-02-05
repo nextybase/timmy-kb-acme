@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 import semantic.vision_provision as S
@@ -35,7 +37,7 @@ def _write_pdf(path: Path, txt: str):
 
 @pytest.fixture
 def tmp_ws(tmp_path: Path) -> Path:
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
     pdf = base / "config" / "VisionStatement.pdf"

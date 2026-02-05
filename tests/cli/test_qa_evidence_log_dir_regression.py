@@ -8,6 +8,7 @@ from pipeline.env_constants import WORKSPACE_ROOT_ENV
 from pipeline.qa_evidence import QA_EVIDENCE_FILENAME, write_qa_evidence
 from pipeline.workspace_bootstrap import bootstrap_dummy_workspace
 from pipeline.workspace_layout import WorkspaceLayout
+from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _resolve_logs_dir(layout: WorkspaceLayout) -> Path:
@@ -28,7 +29,7 @@ def test_cli_qa_evidence_writes_in_logs_dir(tmp_path: Path, monkeypatch) -> None
     bootstrap_dummy_workspace(slug=slug)
 
     # Workspace creato sotto: <tmp>/output/timmy-kb-<slug>
-    workspace_dir = tmp_path / "output" / f"timmy-kb-{slug}"
+    workspace_dir = local_workspace_dir(tmp_path / "output", slug)
     assert workspace_dir.exists()
 
     # 2) Fai puntare il loader al workspace (senza repo_root/output heuristics)

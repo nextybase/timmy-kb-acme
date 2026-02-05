@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from tests._helpers.workspace_paths import local_workspace_dir
+
 import pytest
 
 from pipeline.exceptions import ConfigError
@@ -32,7 +34,7 @@ def test_kg_build_cli_fails_without_config_and_does_not_bootstrap(
     with pytest.raises(ConfigError):
         kg_build.main(args)
 
-    workspace_root = repo_root / "output" / f"timmy-kb-{DUMMY_SLUG}"
+    workspace_root = local_workspace_dir(repo_root / "output", DUMMY_SLUG)
     config_dir = workspace_root / "config"
     config_path = config_dir / "config.yaml"
     assert not config_dir.exists()
