@@ -26,14 +26,21 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
 
     class _DummySt:
         def __init__(self):
+            workflow = {
+                "slug": "dummy",
+                "verified": True,
+                "needs_creation": True,
+                "pdf_bytes": b"%PDF",
+                "client_name": "Dummy",
+                "workspace_created": False,
+                "repo_root_dir": str(base),
+                "yaml_paths": {},
+            }
             self.session_state = {
-                "vision_workflow": {
-                    "slug": "dummy",
-                    "verified": True,
-                    "needs_creation": True,
-                    "pdf_bytes": b"%PDF",
-                    "client_name": "Dummy",
-                }
+                "slug": "dummy",
+                "ui.slug": "dummy",
+                "vision_workflow": workflow,
+                "ui.vision_workflow": workflow.copy(),
             }
             self.buttons: list[str] = []
             self.json_calls: list[dict[str, Any]] = []
@@ -69,7 +76,8 @@ def test_landing_shows_absolute_paths_after_provision(monkeypatch, tmp_path: Pat
 
         def button(self, label: str, *a, **k):
             self.buttons.append(label)
-            # Attiva solo il bottone di creazione
+            if k.get("disabled"):
+                return False
             return label == "Crea workspace + carica PDF"
 
         def file_uploader(self, *a, **k):
