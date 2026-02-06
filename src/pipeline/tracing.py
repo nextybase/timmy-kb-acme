@@ -4,23 +4,25 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import random
-from typing import Any, ContextManager, Iterator, Literal, Mapping
+from typing import Any, ContextManager, Iterator, Literal, Mapping, Optional
 
-from pipeline.logging_utils import get_structured_logger
 from pipeline.observability_config import get_tracing_state
 
-_log = get_structured_logger("pipeline.observability")
+# NB: niente get_structured_logger a import-time, altrimenti --help triggera ensure_tracer().
+_log = logging.getLogger("pipeline.observability")
 _TRACING_DISABLED_EMITTED: set[str] = set()
-_TRACING_DISABLED_LOGGED = False
+_OTEL_IMPORT_OK = True
+_OTEL_IMPORT_REASON: Optional[str] = None
+_OTEL_DISABLED_LOGGED = False
 
 
 def _log_tracing_disabled(reason: str, extra: Mapping[str, Any] | None = None) -> None:
-    global _TRACING_DISABLED_LOGGED
-    if _TRACING_DISABLED_LOGGED:
+    # Logga al massimo una volta per ciascun "reason" (no spam, ma diagnostica utile).
+    if reason in _TRACING_DISABLED_EMITTED:
         return
-    _TRACING_DISABLED_LOGGED = True
     _TRACING_DISABLED_EMITTED.add(reason)
     payload = {"reason": reason}
     if extra:
@@ -38,7 +40,7 @@ try:
     _OTEL_IMPORT_OK = True
 except Exception:  # pragma: no cover
     _OTEL_IMPORT_OK = False
-    _log_tracing_disabled("opentelemetry_missing")
+    _OTEL_IMPORT_REASON = "opentelemetry_missing"
 
 _TRACING_READY = False
 _TRACER_NAME = "timmy_kb"
@@ -51,7 +53,6 @@ except ValueError:
 
 def _is_enabled() -> bool:
     if not _OTEL_IMPORT_OK:
-        _log_tracing_disabled("opentelemetry_missing")
         return False
     state = get_tracing_state()
     enabled = bool(getattr(state, "effective_enabled", False))
@@ -62,7 +63,13 @@ def _is_enabled() -> bool:
 
 def ensure_tracer(*, context: Mapping[str, Any] | None = None, enable_tracing: bool = True) -> None:
     """Inizializza il tracer globale (idempotente)."""
-    global _TRACING_READY
+    global _TRACING_READY, _OTEL_DISABLED_LOGGED
+    if not _OTEL_IMPORT_OK:
+        # Logga solo quando qualcuno prova davvero a usare tracing (non su --help / import)
+        if not _OTEL_DISABLED_LOGGED:
+            _log_tracing_disabled(_OTEL_IMPORT_REASON or "opentelemetry_missing")
+            _OTEL_DISABLED_LOGGED = True
+        return None
     if not enable_tracing:
         _log_tracing_disabled("disabled_by_flag", extra={"context_provided": bool(context)})
         return

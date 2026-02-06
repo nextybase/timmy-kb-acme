@@ -262,13 +262,16 @@ def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
 
 
 def main() -> int:
-    # ENTRYPOINT BOOTSTRAP - consentito: CLI standalone usa la repo root per il workspace.
-    ensure_strict_runtime(context="cli.semantic_onboarding")
-    get_repo_root()
+    # Parse args FIRST: evita side-effects (log/init) quando l'utente chiede solo --help.
     args = _parse_args()
     slug: str = args.slug.strip()
     if not slug:
         raise ConfigError("Slug vuoto non valido per semantic_onboarding.")
+
+    # ENTRYPOINT BOOTSTRAP - consentito: CLI standalone usa la repo root per il workspace.
+    # (dopo argparse, così --help resta quiet)
+    ensure_strict_runtime(context="cli.semantic_onboarding")
+    get_repo_root()
     run_id = uuid.uuid4().hex
     settings = get_observability_settings()
     logger = get_structured_logger(
