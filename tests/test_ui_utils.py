@@ -11,7 +11,6 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 from storage.tags_store import save_tags_reviewed
-from ui.utils import ensure_within_and_resolve
 from ui.utils import workspace as ws
 
 

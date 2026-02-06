@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import read_text_safe
 
 pytestmark = pytest.mark.unit
 
