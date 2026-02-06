@@ -47,7 +47,7 @@ def import_from_candidates(
         try:
             module = importlib.import_module(module_name, package=package)
             return getattr(module, attr) if sep else module
-        except Exception as exc:  # pragma: no cover - logging/fallback
+        except Exception as exc:  # pragma: no cover - logging/try-next-candidate
             last_exc = exc
             log.debug(
                 "import.candidate.failed",

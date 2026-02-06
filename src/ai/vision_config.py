@@ -231,13 +231,13 @@ def _resolve_vision_strict_output(
     if isinstance(raw, bool):
         payload_flag = raw
 
-    fallback_flag: Optional[bool] = None
+    repo_settings_flag: Optional[bool] = None
     if repo_root_dir:
-        fallback_settings = _load_settings_cached(str(repo_root_dir))
-        if fallback_settings is not None:
-            fallback_flag = bool(fallback_settings.vision_settings.strict_output)
+        repo_settings = _load_settings_cached(str(repo_root_dir))
+        if repo_settings is not None:
+            repo_settings_flag = bool(repo_settings.vision_settings.strict_output)
 
-    default_value = fallback_flag if fallback_flag is not None else True
+    default_value = repo_settings_flag if repo_settings_flag is not None else True
     return resolution.resolve_boolean_flag(None, settings_flag, payload_flag, default=default_value)
 
 
