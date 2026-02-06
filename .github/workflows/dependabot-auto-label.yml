@@ -1,0 +1,28 @@
+name: Dependabot Auto Label
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label Dependabot PRs
+        if: github.actor == 'dependabot[bot]'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title.toLowerCase();
+
+            let label =  deps:runtime;
+            if (title.includes(security)) label = deps:security;
+            if (title.includes(ruff) || title.includes(pre-commit) || title.includes(types-))
+              label = deps:tooling;
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: [label, maintenance],
+            });
