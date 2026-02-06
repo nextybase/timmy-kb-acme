@@ -13,16 +13,17 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const title = context.payload.pull_request.title.toLowerCase();
+            const title = (context.payload.pull_request.title || "").toLowerCase();
 
-            let label =  deps:runtime;
-            if (title.includes(security)) label = deps:security;
-            if (title.includes(ruff) || title.includes(pre-commit) || title.includes(types-))
-              label = deps:tooling;
+            let label = "deps:runtime";
+            if (title.includes("security")) label = "deps:security";
+            if (title.includes("ruff") || title.includes("pre-commit") || title.includes("types-")) {
+              label = "deps:tooling";
+            }
 
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              labels: [label, maintenance],
+              labels: [label, "maintenance"],
             });
