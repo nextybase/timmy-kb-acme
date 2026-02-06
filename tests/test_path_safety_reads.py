@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.exceptions import ConfigError
-from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 pytestmark = pytest.mark.unit
 
@@ -15,9 +15,8 @@ def test_resolve_allows_file_within_base(tmp_path: Path) -> None:
     base.mkdir()
     f = base / "ok.txt"
     f.write_text("hello", encoding="utf-8")
-    safe = ensure_within_and_resolve(base, f)
-    assert safe.exists()
-    assert safe.read_text(encoding="utf-8") == "hello"
+    safe = read_text_safe(base, f, encoding="utf-8")
+    assert safe == "hello"
 
 
 def test_blocks_path_traversal_outside_base(tmp_path: Path) -> None:
@@ -28,7 +27,7 @@ def test_blocks_path_traversal_outside_base(tmp_path: Path) -> None:
 
     p = base / ".." / "outside.txt"
     with pytest.raises(ConfigError):
-        ensure_within_and_resolve(base, p)
+        read_text_safe(base, p, encoding="utf-8")
 
 
 def test_blocks_symlink_pointing_outside(tmp_path: Path) -> None:
@@ -49,4 +48,4 @@ def test_blocks_symlink_pointing_outside(tmp_path: Path) -> None:
         pytest.skip(f"symlink not supported on this platform: {e}")
 
     with pytest.raises(ConfigError):
-        ensure_within_and_resolve(base, link)
+        read_text_safe(base, link, encoding="utf-8")
