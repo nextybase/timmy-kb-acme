@@ -10,12 +10,13 @@ import pytest
 from pipeline.qa_evidence import write_qa_evidence
 from pipeline.qa_gate import QaGateViolation
 from storage import decision_ledger
+from tests._helpers.workspace_paths import local_workspace_dir
 from tests.utils.workspace import ensure_minimal_workspace_layout
 from timmy_kb.cli import semantic_onboarding as mod
 
 
 def _create_layout(tmp_path: Path) -> Path:
-    base = tmp_path / "output" / "timmy-kb-dummy"
+    base = local_workspace_dir(tmp_path / "output", "dummy")
     ensure_minimal_workspace_layout(base, client_name="dummy")
     return base
 
