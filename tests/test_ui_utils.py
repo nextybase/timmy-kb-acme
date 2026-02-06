@@ -1,4 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Focus: UI contract behavior only.
+# This suite exercises UI-level helpers; it must not retest backend path-safety invariants
+# (owned by tests/test_path_utils.py) unless the UI introduces genuinely distinct behavior.
 from __future__ import annotations
 
 from pathlib import Path

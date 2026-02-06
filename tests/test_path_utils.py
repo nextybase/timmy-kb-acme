@@ -1,4 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+"""
+SSoT: Path safety invariants
+This suite owns the unit-level guarantees for `ensure_within` and
+`ensure_within_and_resolve`:
+- prevent directory traversal via `..`
+- resolve symlinks/links according to policy (OS skips included)
+Other suites should not duplicate these invariants.
+"""
 from __future__ import annotations
 
 import os

@@ -1,4 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Focus: I/O confinement for read_text_safe.
+# This suite validates actual reads that `read_text_safe` performs while
+# enforcing base-directory confinement. Pure path invariants (e.g., `ensure_within`)
+# are owned by tests/test_path_utils.py and must not be duplicated here.
 import os
 from pathlib import Path
 
