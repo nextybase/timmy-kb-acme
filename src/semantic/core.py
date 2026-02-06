@@ -126,7 +126,7 @@ def load_semantic_mapping(context: _CtxProto, logger: Optional[logging.Logger] =
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
     repo_root_dir = layout.repo_root_dir
     log = logger or get_structured_logger("semantic.extraction", context=context)
-    vocab = load_reviewed_vocab(repo_root_dir, log)
+    vocab = load_reviewed_vocab(repo_root_dir, log, slug=getattr(context, "slug", None))
     if not vocab:
         raise PipelineError(
             "Vocabolario canonico assente: esegui l'estrazione tag",

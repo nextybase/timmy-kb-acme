@@ -30,7 +30,7 @@ def test_load_reviewed_vocab_unreadable_db(tmp_path: Path) -> None:
     base = _mk_semantic_db_placeholder(tmp_path)
 
     with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
-        _ = vl.load_reviewed_vocab(base, _NoopLogger())
+        _ = vl.load_reviewed_vocab(base, _NoopLogger(), slug="dummy")
 
     err = ei.value
     assert getattr(err, "file_path", None) == str(base / "semantic" / "tags.db")

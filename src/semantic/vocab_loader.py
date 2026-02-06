@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence, Set, cast
 
 import pipeline.path_utils as ppath  # late-bound per testability
-from pipeline.constants import REPO_NAME_PREFIX
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 
@@ -264,23 +263,11 @@ def _semantic_dir(repo_root_dir: Path) -> Path:
     return repo_root_dir / "semantic"
 
 
-def _derive_slug(repo_root_dir: Path) -> str | None:
-    name = Path(repo_root_dir).name
-    if not name:
-        return None
-    prefix = REPO_NAME_PREFIX
-    if prefix and name.startswith(prefix):
-        stripped = name[len(prefix) :]
-        if stripped:
-            return stripped
-    return name
-
-
 def _log_vocab_event(
     logger: logging.Logger,
     event: str,
     *,
-    slug: str | None,
+    slug: str | None = None,
     file_path: Path,
     canon_count: int,
 ) -> None:
@@ -304,13 +291,13 @@ def _log_vocab_event(
 def load_reviewed_vocab(
     repo_root_dir: Path,
     logger: logging.Logger,
+    *,
+    slug: str | None = None,
 ) -> Dict[str, Dict[str, list[str]]]:
     """Get reviewed vocab from tags.db (SSoT)."""
     repo_root_dir = Path(repo_root_dir)
     perimeter_root = repo_root_dir
     sem_dir = ppath.ensure_within_and_resolve(perimeter_root, _semantic_dir(repo_root_dir))
-    slug = _derive_slug(repo_root_dir)
-
     db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
     if not db_path.exists():
         _log_vocab_event(

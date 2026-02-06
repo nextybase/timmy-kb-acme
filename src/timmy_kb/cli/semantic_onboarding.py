@@ -93,7 +93,11 @@ def _build_evidence_refs(
     if tag_kg_effective is not None:
         effective_final["tag_kg"] = tag_kg_effective
 
+    slug_value = layout.slug
+    if not slug_value:
+        raise ConfigError("Slug mancante nel layout durante la costruzione dell'evidence.", slug=slug_value)
     refs = [
+        f"slug:{slug_value}",
         _path_ref(layout.config_path, layout),
         _path_ref(layout.semantic_dir, layout),
         f"requested:{json.dumps(requested, sort_keys=True, separators=(',', ':'))}",

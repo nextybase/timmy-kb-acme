@@ -94,7 +94,7 @@ def test_build_markdown_book_uses_context_base_dir_for_vocab(tmp_path: Path, mon
     # intercetta la base_dir passata a load_reviewed_vocab
     seen_base: Dict[str, str] = {}
 
-    def _fake_load_vocab(base_dir: Path, logger) -> Dict[str, Dict[str, set]]:
+    def _fake_load_vocab(base_dir: Path, logger, *, slug: str | None = None) -> Dict[str, Dict[str, set]]:
         seen_base["path"] = str(base_dir)
         # ritorna vocab non vuoto per forzare enrich_frontmatter
         return {"ai": {"aliases": {"artificial intelligence"}}}

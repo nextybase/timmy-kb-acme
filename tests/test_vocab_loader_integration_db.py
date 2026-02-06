@@ -39,7 +39,7 @@ def test_loads_reviewed_vocab_from_db(tmp_path: Path):
         },
     )
 
-    vocab = vl.load_reviewed_vocab(base, _NoopLogger())
+    vocab = vl.load_reviewed_vocab(base, _NoopLogger(), slug="dummy")
     assert "canon" in vocab
     assert "aliases" in vocab["canon"]
     assert vocab["canon"]["aliases"] == ["alias1", "alias2"]

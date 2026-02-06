@@ -86,8 +86,10 @@ def get_paths(slug: str) -> Dict[str, Path]:
     }
 
 
-def load_reviewed_vocab(repo_root_dir: Path, logger: logging.Logger) -> Dict[str, Dict[str, Sequence[str]]]:
-    return cast(Dict[str, Dict[str, Sequence[str]]], _load_reviewed_vocab(repo_root_dir, logger))
+def load_reviewed_vocab(
+    repo_root_dir: Path, logger: logging.Logger, *, slug: str | None = None
+) -> Dict[str, Dict[str, Sequence[str]]]:
+    return cast(Dict[str, Dict[str, Sequence[str]]], _load_reviewed_vocab(repo_root_dir, logger, slug=slug))
 
 
 def require_reviewed_vocab(
@@ -104,7 +106,7 @@ def _require_reviewed_vocab(
     slug: str,
 ) -> Dict[str, Dict[str, Sequence[str]]]:
     """Restituisce il vocabolario canonico o solleva ConfigError se assente (fail-fast)."""
-    vocab = load_reviewed_vocab(repo_root_dir, logger)
+    vocab = load_reviewed_vocab(repo_root_dir, logger, slug=slug)
     if vocab:
         return vocab
     layout = WorkspaceLayout.from_workspace(repo_root_dir, slug=slug)

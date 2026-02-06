@@ -10,7 +10,7 @@ import pytest
 from pipeline.exceptions import ConfigError
 from pipeline.workspace_layout import WorkspaceLayout
 from storage import decision_ledger
-from tests._helpers.workspace_paths import local_workspace_dir
+from tests._helpers.workspace_paths import local_workspace_dir, local_workspace_name
 from timmy_kb.cli import pre_onboarding
 
 
@@ -36,7 +36,7 @@ def test_ensure_local_workspace_for_ui_merge_failure_is_fatal(tmp_path: Path, mo
 
 def test_blank_slug_blocks_pre_onboarding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Verifica che uno slug vuoto blocchi il pre-onboarding senza effetti collaterali."""
-    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(tmp_path / "timmy-kb-"))
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(tmp_path / local_workspace_name("")))
 
     with pytest.raises(ConfigError):
         pre_onboarding.ensure_local_workspace_for_ui("", client_name="NoSlug")
@@ -47,7 +47,7 @@ def test_blank_slug_blocks_pre_onboarding(tmp_path: Path, monkeypatch: pytest.Mo
 def test_pre_onboarding_blocks_when_vision_pdf_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Se VisionStatement.pdf è dichiarato nel template ma non presente, la run blocca."""
     slug = "vision"
-    workspace_template = tmp_path / "timmy-kb-<slug>"
+    workspace_template = tmp_path / local_workspace_name("<slug>")
     monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
     monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(workspace_template))
 
@@ -83,5 +83,6 @@ def test_pre_onboarding_blocks_when_vision_pdf_missing(tmp_path: Path, monkeypat
         assert row[2] is not None
         evidence = json.loads(row[2])
         assert evidence.get("normative_verdict") == decision_ledger.NORMATIVE_BLOCK
+        assert f"slug:{slug}" in evidence.get("evidence_refs", [])
     finally:
         conn.close()

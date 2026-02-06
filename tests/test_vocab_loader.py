@@ -25,7 +25,7 @@ def test_load_vocab_missing_db_logs(tmp_path: Path, caplog: pytest.LogCaptureFix
     caplog.clear()
     caplog.set_level(logging.INFO)
     with pytest.raises(ConfigError, match="tags.db missing or unreadable"):
-        load_reviewed_vocab(base, logger)
+        load_reviewed_vocab(base, logger, slug="dummy")
     assert any(rec.getMessage() == "semantic.vocab.db_missing" for rec in caplog.records)
 
 
@@ -47,6 +47,6 @@ def test_load_vocab_valid_db_logs(tmp_path: Path, caplog: pytest.LogCaptureFixtu
     logger = get_structured_logger("test.vocab.invalid")
     caplog.clear()
     caplog.set_level(logging.INFO)
-    vocab = load_reviewed_vocab(base, logger)
+    vocab = load_reviewed_vocab(base, logger, slug="dummy")
     assert vocab["analytics"]["aliases"] == ["alias"]
     assert any(rec.getMessage() == "semantic.vocab.loaded" for rec in caplog.records)

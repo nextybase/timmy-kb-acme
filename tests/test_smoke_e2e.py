@@ -103,7 +103,7 @@ def test_smoke_e2e_bad_pdfs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     # 2) Arricchimento frontmatter (vocabolario potrebbe essere vuoto -> no-op)
     base = Path(ctx.base_dir)
-    vocab = load_reviewed_vocab(base, logger)
+    vocab = load_reviewed_vocab(base, logger, slug=slug)
     touched = enrich_frontmatter(ctx, logger, vocab, slug=slug)
     assert isinstance(touched, list)
 

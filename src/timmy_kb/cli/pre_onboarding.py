@@ -207,7 +207,11 @@ def _summarize_error(exc: BaseException) -> str:
 
 
 def _build_evidence_refs(layout: WorkspaceLayout, *, extra_refs: list[str] | None = None) -> list[str]:
+    slug_value = layout.slug
+    if not slug_value:
+        raise ConfigError("Slug mancante nel layout durante la costruzione dell'evidence.", slug=slug_value)
     refs = [
+        f"slug:{slug_value}",
         _path_ref(layout.config_path, layout),
         _path_ref(layout.repo_root_dir, layout),
     ]

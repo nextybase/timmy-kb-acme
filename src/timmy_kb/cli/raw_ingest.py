@@ -63,7 +63,11 @@ def _build_evidence_refs(
     source: str,
     local_path: Optional[str],
 ) -> list[str]:
+    slug_value = layout.slug
+    if not slug_value:
+        raise ConfigError("Slug mancante nel layout durante la costruzione dell'evidence.", slug=slug_value)
     refs = [
+        f"slug:{slug_value}",
         f"source:{source}",
         _path_ref(layout.config_path, layout),
         _path_ref(layout.raw_dir, layout),

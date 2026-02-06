@@ -43,7 +43,11 @@ def test_build_markdown_book_no_success_if_enrich_fails(tmp_path, caplog, monkey
     (book / "alpha.md").write_text("# A\n\n", encoding="utf-8")
 
     # Monkeypatch: vocabolario presente e enrich che fallisce
-    monkeypatch.setattr(sapi, "load_reviewed_vocab", lambda base_dir, logger: {"canon": {"aliases": set()}})
+    monkeypatch.setattr(
+        sapi,
+        "load_reviewed_vocab",
+        lambda base_dir, logger, *, slug: {"canon": {"aliases": set()}},
+    )
 
     def _boom(*args, **kwargs):
         raise ConversionError("boom", slug="obs", file_path=book)
