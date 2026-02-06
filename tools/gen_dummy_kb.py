@@ -41,6 +41,22 @@ from tools.control_plane_env import control_plane_env
 REPO_ROOT = get_repo_root(allow_env=False)
 
 
+def _force_utf8_stdio() -> None:
+    """Assicura che stdout/stderr usino UTF-8 (usato anche nei test legacy)."""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+    os.environ.setdefault("PYTHONIOENCODING", "UTF-8")
+    os.environ.setdefault("PYTHONUTF8", "1")
+
+
+_force_utf8_stdio()
+
+
 class _PayloadPaths(TypedDict):
     base: str
     config: str
