@@ -36,10 +36,6 @@ def constraints_dict():
     }
 
 
-def test_to_kebab_normalization():
-    assert to_kebab("Analisi Dati_AI!") == "analisi-dati-ai"
-    assert to_kebab("  STRATEGIA__GO-TO Market  ") == "strategia-go-to-market"
-
 
 def test_constraints_from_dict(constraints_dict):
     c = Constraints.from_dict(constraints_dict)

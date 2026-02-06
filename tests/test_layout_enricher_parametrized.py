@@ -8,18 +8,6 @@ from semantic.layout_enricher import suggest_layout, to_kebab
 
 
 @pytest.mark.parametrize(
-    "raw,expected",
-    [
-        ("Analisi Dati_AI!", "analisi-dati-ai"),
-        ("  STRATEGIA__GO-TO Market  ", "strategia-go-to-market"),
-        ("Operazioni & Processi", "operazioni-processi"),
-    ],
-)
-def test_to_kebab_cases(raw, expected):
-    assert to_kebab(raw) == expected
-
-
-@pytest.mark.parametrize(
     "vision_text,allowed_prefixes",
     [
         (

@@ -48,3 +48,8 @@ def test_to_kebab_idempotent(input_text: str) -> None:
 )
 def test_to_kebab_examples(raw: str, expected: str) -> None:
     assert to_kebab(raw) == expected
+
+
+@pytest.mark.parametrize("candidate", ["!!!", "   ", "___", "///"])
+def test_to_kebab_returns_empty_on_unmappable(candidate: str) -> None:
+    assert to_kebab(candidate) == ""

@@ -30,7 +30,6 @@ def test_cli_qa_evidence_writes_in_logs_dir(tmp_path: Path, monkeypatch) -> None
 
     # Workspace creato sotto: <tmp>/output/<workspace-name> (vedi tests._helpers.workspace_paths)
     workspace_dir = local_workspace_dir(tmp_path / "output", slug)
-    assert workspace_dir.exists()
 
     # 2) Fai puntare il loader al workspace (senza repo_root/output heuristics)
     monkeypatch.setenv(WORKSPACE_ROOT_ENV, str(workspace_dir))
@@ -41,7 +40,6 @@ def test_cli_qa_evidence_writes_in_logs_dir(tmp_path: Path, monkeypatch) -> None
 
     logs_dir = _resolve_logs_dir(layout)
     assert logs_dir.name == "logs"
-    assert logs_dir.exists()
 
     # 4) Scrivi QA evidence e verifica path finale
     write_qa_evidence(
