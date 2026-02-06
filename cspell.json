@@ -347,7 +347,8 @@
     "virtualenv",
     "riorienta",
     "pinnare",
-    "raw_ingest"
+    "raw_ingest",
+    "triggera"
   ],
   "flagWords": [
     "�",

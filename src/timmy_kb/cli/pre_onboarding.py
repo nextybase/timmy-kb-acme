@@ -794,10 +794,8 @@ def _parse_args() -> argparse.Namespace:
 
 def main(args: argparse.Namespace) -> None:
     """Entrypoint CLI orchestrato via `run_cli_orchestrator`."""
-    ensure_strict_runtime(context="cli.pre_onboarding")
     run_id = uuid.uuid4().hex
-    start_metrics_server_once()
-    early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
+    bootstrap_logger = logging.getLogger("pre_onboarding")
 
     unresolved_slug = args.slug_pos or args.slug
     resolved_slug: Optional[str] = None
@@ -808,7 +806,7 @@ def main(args: argparse.Namespace) -> None:
         return {"slug": slug_ref, "mode": mode, "dry_run": bool(args.dry_run), "err": err_value, "run_id": run_id}
 
     if not unresolved_slug and args.non_interactive:
-        early_logger.error(
+        bootstrap_logger.error(
             "cli.pre_onboarding.exit.config_error",
             extra=_error_extra(["Missing slug in non-interactive mode"], slug_value=None),
         )
@@ -818,9 +816,14 @@ def main(args: argparse.Namespace) -> None:
         unresolved_slug,
         interactive=not args.non_interactive,
         prompt=_prompt,
-        logger=early_logger,
+        logger=None,
     )
     resolved_slug = slug
+
+    # Bootstrap solo dopo parse+slug valido (no side-effects su --help)
+    ensure_strict_runtime(context="cli.pre_onboarding")
+    start_metrics_server_once()
+    early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 
     env = get_env_var("TIMMY_ENV", default="dev")
     with start_root_trace(

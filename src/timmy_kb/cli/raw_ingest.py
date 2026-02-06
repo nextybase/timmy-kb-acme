@@ -333,8 +333,8 @@ def run_raw_ingest(
 
 
 def main() -> int:
-    ensure_strict_runtime(context="cli.raw_ingest")
     args = _parse_args()
+    ensure_strict_runtime(context="cli.raw_ingest")
     slug = (args.slug_pos or args.slug or "").strip()
     if not slug:
         raise ConfigError("Slug mancante per raw_ingest.")

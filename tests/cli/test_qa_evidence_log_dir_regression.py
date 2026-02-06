@@ -28,7 +28,7 @@ def test_cli_qa_evidence_writes_in_logs_dir(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setenv("TIMMY_KB_DUMMY_OUTPUT_ROOT", str(tmp_path))
     bootstrap_dummy_workspace(slug=slug)
 
-    # Workspace creato sotto: <tmp>/output/timmy-kb-<slug>
+    # Workspace creato sotto: <tmp>/output/<workspace-name> (vedi tests._helpers.workspace_paths)
     workspace_dir = local_workspace_dir(tmp_path / "output", slug)
     assert workspace_dir.exists()
 

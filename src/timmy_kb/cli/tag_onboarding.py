@@ -973,22 +973,28 @@ def _parse_args() -> argparse.Namespace:
 
 def main(args: argparse.Namespace) -> int | None:
     """Entrypoint CLI orchestrato via `run_cli_orchestrator`."""
-    ensure_strict_runtime(context="cli.tag_onboarding")
     run_id = uuid.uuid4().hex
-    start_metrics_server_once()
-    early_logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
+    bootstrap_logger = logging.getLogger("tag_onboarding")
 
     unresolved_slug = args.slug_pos or args.slug
     if not unresolved_slug and args.non_interactive:
-        early_logger.error("cli.tag_onboarding.missing_slug", extra={"slug": None})
+        bootstrap_logger.error(
+            "cli.tag_onboarding.missing_slug",
+            extra={"slug": None, "run_id": run_id},
+        )
         raise ConfigError("Missing slug in non-interactive mode")
 
     slug = ensure_valid_slug(
         unresolved_slug,
         interactive=not args.non_interactive,
         prompt=_prompt,
-        logger=early_logger,
+        logger=bootstrap_logger,
     )
+
+    ensure_strict_runtime(context="cli.tag_onboarding")
+    start_metrics_server_once()
+    early_logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
+    early_logger.info("cli.tag_onboarding.bootstrap_ready", extra={"slug": slug})
 
     env = os.getenv("TIMMY_ENV", "dev")
     with start_root_trace(

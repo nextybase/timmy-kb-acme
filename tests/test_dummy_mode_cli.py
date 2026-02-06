@@ -61,7 +61,7 @@ def test_dummy_capability_forbidden_is_blocked_and_recorded(tmp_path: Path, monk
     monkeypatch.setenv("SERVICE_ACCOUNT_FILE", str(saf))
     monkeypatch.setenv("DRIVE_ID", "DUMMY_DRIVE_ID")
 
-    # Bootstrap dummy workspace: crea output/timmy-kb-<slug> + config/book/logs dirs
+    # Bootstrap dummy workspace: crea output/<workspace-name> + config/book/logs dirs
     # (non è runtime: è tooling/test)
     from pipeline.workspace_bootstrap import bootstrap_dummy_workspace
 
