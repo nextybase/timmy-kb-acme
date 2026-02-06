@@ -45,6 +45,6 @@ jobs:
           pip-audit -r requirements.txt -r requirements-dev.txt --progress-spinner off --format sarif --output pip-audit.sarif
 
       - name: Upload SARIF results
-        uses: github/codeql-action/upload-sarif@545ea36879f73e6aa087b5f7570ee4f25b4d3a3a # v3.26.7
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: pip-audit.sarif

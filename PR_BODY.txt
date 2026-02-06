@@ -1,4 +1,4 @@
-﻿Adds standard labels (deps:security, deps:tooling, deps:runtime, maintenance)
+Adds standard labels (deps:security, deps:tooling, deps:runtime, maintenance)
 
 Sync labels via workflow
 
