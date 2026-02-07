@@ -91,10 +91,10 @@ gitleaks detect --source . --no-git
 
 ## Dependency Scanning
 
-- Workflow `.github/workflows/dependency-scan.yml`:
-  - esegue `pip-audit` su `requirements.txt` e `requirements-dev.txt`,
-  - su ogni PR verso `main`/`dev` e su base settimanale.
-- Il job fallisce in presenza di CVE non ignorate.
+- Workflow `.github/workflows/security-audit.yml` (nome: Dependency Audit (pip-audit)):
+  - esegue `pip-audit` in modalità deterministica (JSON) su `requirements.txt`/`requirements-dev.txt` o ambiente installato,
+  - attivo su ogni PR verso `main`/`dev`, su push su `main` e con schedule settimanale.
+- Il job fallisce in presenza di CVE critiche non ignorate, ma lascia PASS sulle PR in mancanza di CVE.
 
 ### Gestione eccezioni
 - I falsi positivi vanno dichiarati in `.pip-audit-ignore`
@@ -217,7 +217,7 @@ La divergenza tra comportamento e questa guida
 
 - **Enforcement:**
   - CI workflows: [secret-scan](../../.github/workflows/secret-scan.yml),
-    [dependency-scan](../../.github/workflows/dependency-scan.yml),
+    [dependency-audit](../../.github/workflows/security-audit.yml),
     [docker-lint](../../.github/workflows/docker-lint.yml).
   - Pre-commit hooks: [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml).
   - Branch protection e required checks su `main` (processo repo).

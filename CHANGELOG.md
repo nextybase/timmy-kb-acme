@@ -3,6 +3,7 @@
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 Il formato segue *Keep a Changelog* e *Semantic Versioning*.
 
+
 TODO (pre-1.0 Beta): audit duplicazione test (post-normalizzazione)
 - Avviare audit mirato sui test non-skippati con alta densità (es. area `tests/ai/`, `tests/semantic/`, `tests/retriever*`) per individuare duplicazioni reali o near-duplicazioni.
 - Distinguere tra:
