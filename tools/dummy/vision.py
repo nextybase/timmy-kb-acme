@@ -38,6 +38,16 @@ class _Ctx:
                 "config_path": str(config_path),
             },
         )
+        strict_env = os.environ.get("TIMMY_BETA_STRICT")
+        logger.info(
+            "tools.gen_dummy_kb.vision.strict_scope",
+            extra={
+                "step": "vision_enrichment",
+                "reason_code": "vision_enrichment",
+                "strict_env": strict_env,
+                "strict_output": False,
+            },
+        )
         if not config_path.exists():
             template = Path(__file__).resolve().parents[2] / "config" / "config.yaml"
             if template.exists():

@@ -17,7 +17,7 @@ from pipeline.vision_paths import vision_yaml_workspace_path
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.core import compile_document_to_vision_yaml
 
-from tools.control_plane_env import control_plane_env
+from tools.non_strict_step import non_strict_step
 
 LOG = get_structured_logger("tools.tuning_pdf_to_yaml")
 
@@ -73,15 +73,15 @@ def main(argv: List[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     payload = _build_payload(slug=args.slug)
-    with control_plane_env(force_non_strict=True):
+    ctx = ClientContext.load(slug=args.slug, require_drive_env=False)
+    repo_root = ctx.repo_root_dir
+    if repo_root is None:
+        raise ConfigError("Repo root non determinato per lo slug", slug=args.slug)
+    layout = WorkspaceLayout.from_context(ctx)
+    pdf_override = Path(args.pdf_path).expanduser().resolve() if args.pdf_path else None
+    pdf_path = _resolve_pdf_path(layout=layout, repo_root=repo_root, override=pdf_override)
+    with non_strict_step("pdf_to_yaml_tuning", logger=LOG, slug=args.slug, base_dir=repo_root):
         try:
-            ctx = ClientContext.load(slug=args.slug, require_drive_env=False)
-            repo_root = ctx.repo_root_dir
-            if repo_root is None:
-                raise ConfigError("Repo root non determinato per lo slug", slug=args.slug)
-            layout = WorkspaceLayout.from_context(ctx)
-            pdf_override = Path(args.pdf_path).expanduser().resolve() if args.pdf_path else None
-            pdf_path = _resolve_pdf_path(layout=layout, repo_root=repo_root, override=pdf_override)
             if not pdf_path.exists():
                 raise ConfigError(f"PDF non trovato: {pdf_path}", slug=args.slug, file_path=str(pdf_path))
             yaml_path = vision_yaml_workspace_path(repo_root, pdf_path=pdf_path)

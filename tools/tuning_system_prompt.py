@@ -16,7 +16,7 @@ from pipeline.system_prompt_api import (
     save_remote_system_prompt,
 )
 
-from tools.control_plane_env import control_plane_env
+from tools.non_strict_step import non_strict_step
 
 LOG = get_structured_logger("tools.tuning_system_prompt")
 
@@ -105,7 +105,7 @@ def main(argv: List[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     payload = _build_payload(slug=args.slug, action=f"system_prompt.{args.mode}")
-    with control_plane_env(force_non_strict=True):
+    with non_strict_step("prompt_tuning", logger=LOG, slug=args.slug):
         try:
             assistant_id = _resolve_assistant_id(args)
             client = build_openai_client()

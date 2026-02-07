@@ -45,11 +45,18 @@ _START_PREVIEW: StartPreviewFn | None = None
 _STOP_PREVIEW: StopPreviewFn | None = None
 
 
+def _stub_allowed() -> bool:
+    return bool(os.getenv("CI") or os.getenv("PYTEST_CURRENT_TEST"))
+
+
 def _load_preview_impl() -> bool:
     """Import lazy degli adapter preview per evitare side-effect a import-time."""
     global _START_PREVIEW, _STOP_PREVIEW, _PREVIEW_MODE, _PREVIEW_IMPORT_ERROR
     if _PREVIEW_MODE == "stub":
-        _PREVIEW_IMPORT_ERROR = "PREVIEW_MODE=stub"
+        if not _stub_allowed():
+            _PREVIEW_IMPORT_ERROR = "PREVIEW_MODE=stub (CI/test only)"
+        else:
+            _PREVIEW_IMPORT_ERROR = "PREVIEW_MODE=stub"
         return False
     if _START_PREVIEW and _STOP_PREVIEW:
         return True
@@ -66,7 +73,8 @@ def _load_preview_impl() -> bool:
 
 def _preview_unavailable_reason() -> str | None:
     if _PREVIEW_MODE == "stub":
-        return "Preview disabilitata (PREVIEW_MODE=stub)."
+        suffix = f" ({_PREVIEW_IMPORT_ERROR})" if _PREVIEW_IMPORT_ERROR else ""
+        return f"Preview disabilitata (PREVIEW_MODE=stub){suffix}."
     if not _load_preview_impl():
         detail = f" Dettaglio: {_PREVIEW_IMPORT_ERROR}" if _PREVIEW_IMPORT_ERROR else ""
         return f"Adapter preview non disponibile.{detail}"

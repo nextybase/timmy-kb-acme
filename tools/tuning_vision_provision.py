@@ -19,7 +19,7 @@ from ui.config_store import get_vision_model
 from ui.fine_tuning.yaml_io import build_prompt_from_yaml, load_workspace_yaml
 from ui.services.vision_provision import provision_from_vision_with_config
 
-from tools.control_plane_env import control_plane_env
+from tools.non_strict_step import non_strict_step
 
 LOG = get_structured_logger("tools.tuning_vision_provision")
 
@@ -112,18 +112,18 @@ def main(argv: list[str] | None = None) -> int:
     payload = _build_payload(slug=args.slug)
     repo_override = Path(args.repo_root).expanduser().resolve() if args.repo_root else None
     try:
-        with control_plane_env(force_non_strict=True):
-            ctx = ClientContext.load(
-                slug=args.slug,
-                require_drive_env=False,
-                repo_root_dir=repo_override,
-            )
-            repo_root = ctx.repo_root_dir
-            if repo_root is None:
-                raise ConfigError("Repo root non determinato per lo slug.", slug=args.slug)
-            layout = WorkspaceLayout.from_context(ctx)
-            pdf_override = Path(args.pdf_path).expanduser().resolve() if args.pdf_path else None
-            pdf_path = _resolve_pdf_path(layout=layout, repo_root=repo_root, override=pdf_override)
+        ctx = ClientContext.load(
+            slug=args.slug,
+            require_drive_env=False,
+            repo_root_dir=repo_override,
+        )
+        repo_root = ctx.repo_root_dir
+        if repo_root is None:
+            raise ConfigError("Repo root non determinato per lo slug.", slug=args.slug)
+        layout = WorkspaceLayout.from_context(ctx)
+        pdf_override = Path(args.pdf_path).expanduser().resolve() if args.pdf_path else None
+        pdf_path = _resolve_pdf_path(layout=layout, repo_root=repo_root, override=pdf_override)
+        with non_strict_step("vision_enrichment", logger=LOG, slug=args.slug, base_dir=repo_root):
             yaml_path = vision_yaml_workspace_path(repo_root, pdf_path=pdf_path)
             data = load_workspace_yaml(args.slug)
             client_name = getattr(ctx, "client_name", None)

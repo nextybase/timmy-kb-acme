@@ -114,20 +114,33 @@ timmy-kb tag-onboarding ... --dummy
 > Nel ledger non compaiono stati `TAGS_*`. Dummy è riconoscibile tramite `evidence_refs`
 > (`requested_mode`, `effective_mode`, `dummy_mode`) e, quando negato, tramite `stop_code`.
 
+## Policy Beta A
+- **Strict per default:** l'assenza della variabile `TIMMY_BETA_STRICT` o una stringa vuota equivale a strict; solo valori falsy espliciti (`0`, `false`, `no`, `off`) disattivano la modalità strict per lo step corrente.
+- **Tool non manipolano il flag:** nessun tool modifica `TIMMY_BETA_STRICT` globalmente. Le deroghe sono sempre step-scoped e limitate al contesto del tool.
+- **Deroghe auditabili:** quando serve un contesto non-strict si invoca `tools/non_strict_step.py` con gli step whitelist (`vision_enrichment`, `prompt_tuning`, `pdf_to_yaml_tuning`); l'helper registra `non_strict_step` nel ledger se il layout è disponibile, altrimenti emette log strutturati con gli stessi campi (`step`, `reason_code`, `strict_output`, `status`).
+- **Bootstrap deterministic default:** quando il `ClientContext` non è disponibile (es. prima di creare il workspace) la decisione `decisions.vision_strict_output` mantiene `effective=true` e `rationale="default_true_bootstrap_phase"` con `source="bootstrap_default"` per evidenziare che si tratta di un default intenzionale e non di un errore.
+
 ## Control Plane e Tools > Tuning
 
 - Ogni pagina runtime utilizza `ensure_runtime_strict()` per confermare strict: la guardia
   considera strict anche l'assenza/valore vuoto di `TIMMY_BETA_STRICT` e blocca solo se il flag è
   esplicitamente `0`, `false`, `no` o `off`.
 - L'interfaccia **Tools > Tuning** è dichiarata `strict_runtime=False` e segnalata come control plane. La pagina
-  non esegue provisioning o update direttamente: raccoglie input e invia CLI isolati (`tools/tuning_pdf_to_yaml`,
-  `tools/tuning_vision_provision`, `tools/tuning_system_prompt`) che girano con `control_plane_env(force_non_strict=True)`
-  per mantenere l'ambiente deterministico.
+  raccoglie input e invia CLI isolati (`tools/tuning_pdf_to_yaml`, `tools/tuning_vision_provision`, `tools/tuning_system_prompt`)
+  senza mai modificare `TIMMY_BETA_STRICT`. Quando serve un contesto non-strict viene usato `tools/non_strict_step.py`
+  con gli step whitelist (`vision_enrichment`, `prompt_tuning`, `pdf_to_yaml_tuning`); l'eccezione è confinata allo step,
+  tracciata nel ledger (`non_strict_step`) quando il layout è disponibile o, in assenza di workspace, con log strutturati.
 - Ogni tool restituisce un JSON con schema obbligatorio (`status`, `mode`, `slug`, `action`, `errors`, `warnings`,
   `artifacts`, `paths`, `returncode`, `timmy_beta_strict`); i `paths` sono sempre deterministici (es. `output/<slug>/config/`).
 - Gli helper `ui.utils.control_plane.run_control_plane_tool()` e `display_control_plane_result()` orchestrano la call e
   mostrano il payload nella UI, accompagnandola con messaggi di stato/warnings/errori.
-- Qualsiasi altra pagina che girasse con `TIMMY_BETA_STRICT=0` nel runtime viene bloccata e registra l'anomalia nel ledger.
+-- Qualsiasi altra pagina che girasse con `TIMMY_BETA_STRICT=0` nel runtime viene bloccata e registra l'anomalia nel ledger.
+
+## CI vs Local/Test harness
+- **CI import-smoke:** il gate `Guard strict runtime` in `.github/workflows/import-smoke.yml` blocca qualsiasi valore non consentito di `TIMMY_BETA_STRICT`, garantendo che il flag resti un invariante nelle run di import.
+- **Local e Tools > Tuning:** la UI control-plane non disattiva `TIMMY_BETA_STRICT`; ogni deroga viene eseguita attraverso `tools/non_strict_step.py`, rimanendo step-scoped e lasciando traccia (`non_strict_step`) nel ledger o nei log strutturati quando il layout/slug non è disponibile.
+- **Test harness:** alcune suite (per esempio `tools/test_runner.py`) impostano `TIMMY_BETA_STRICT=0` per coprire branch non-strict, ma quel comportamento è confinato ai test e **non** deve essere replicato dai tool di runtime o dalla UI.
+ - **Dummy health metrics:** il payload dummy espone `health.local_readmes_count`, `health.drive_readmes_count` e `health.readmes_count` (il totale); `drive_readmes` contiene il dettaglio raccolto da Drive mentre `local_readmes` raccoglie i file creati internamente, così i contatori rimangono coerenti anche con i dati Telemetry.
 
 ---
 

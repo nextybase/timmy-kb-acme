@@ -45,7 +45,8 @@ def test_semantic_toggle_skips_artifact_calls(tmp_path: Path, monkeypatch: pytes
     def _book_skeleton(_base_dir: Path) -> None:
         raise AssertionError("ensure_book_skeleton non dovrebbe essere invocata nel dummy deterministico")
 
-    monkeypatch.setattr(orchestrator, "pre_onboarding_main", lambda **_: None)
+    if hasattr(orchestrator, "pre_onboarding_main"):
+        monkeypatch.setattr(orchestrator, "pre_onboarding_main", lambda **_: None)
 
     payload = orchestrator.build_dummy_payload(
         slug="dummy",

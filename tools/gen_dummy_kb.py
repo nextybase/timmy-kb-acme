@@ -7,9 +7,9 @@ Usa gli stessi entry point della UI (pre_onboarding + Vision + Drive opzionale)
 per produrre artefatti deterministici destinati solo all'operatore.
 
 Regola Beta 1.0:
-- UI standard (runtime) = sempre strict (TIMMY_BETA_STRICT=1).
-- Tooling/Admin (control-plane) = può operare in non-strict, ma in modo esplicito.
-Questo tool è CONTROL PLANE: forza sempre TIMMY_BETA_STRICT=0 *solo* per la durata della run del tool.
+- UI standard (runtime) = sempre strict (TIMMY_BETA_STRICT=1) e il flag è un invariante non modificabile dai tool.
+- Tooling/Admin può eseguire step non-strict solo se isolati, espliciti e tracciati (es. vision_enrichment).
+- Questo tool mantiene il flag strict durante tutta la run e delega ogni deroga puntuale a un audit nel ledger.
 """
 
 from __future__ import annotations
@@ -36,8 +36,6 @@ from types import ModuleType
 from typing import Any, Dict, List, Optional, TextIO, TypedDict
 
 from pipeline.paths import get_repo_root
-from tools.control_plane_env import control_plane_env
-
 REPO_ROOT = get_repo_root(allow_env=False)
 
 
@@ -617,105 +615,104 @@ def main(argv: Optional[list[str]] = None) -> int:
     workspace_override: Optional[Path] = None
 
     try:
-        # CONTROL PLANE: forza sempre non-strict per l'intera run del tool (ripristino automatico a fine blocco).
-        with control_plane_env(force_non_strict=True):
-            if not enable_vision and prev_vision_mode is None:
-                os.environ["VISION_MODE"] = "SMOKE"
+        # CONTROL PLANE: manteniamo TIMMY_BETA_STRICT=1 e confiniamo eventuali deroghe a step locali.
+        if not enable_vision and prev_vision_mode is None:
+            os.environ["VISION_MODE"] = "SMOKE"
 
-            if args.base_dir:
-                base_override = Path(args.base_dir).expanduser().resolve()
-                workspace_override = base_override / f"timmy-kb-{slug}"
-                os.environ["WORKSPACE_ROOT_DIR"] = str(workspace_override)
-                # Bootstrap minimale del workspace dummy: crea le cartelle base per evitare
-                # fallimenti di validazione (raw/semantic/book/logs/config).
-                for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
-                    (workspace_override / child).mkdir(parents=True, exist_ok=True)
+        if args.base_dir:
+            base_override = Path(args.base_dir).expanduser().resolve()
+            workspace_override = base_override / f"timmy-kb-{slug}"
+            os.environ["WORKSPACE_ROOT_DIR"] = str(workspace_override)
+            # Bootstrap minimale del workspace dummy: crea le cartelle base per evitare
+            # fallimenti di validazione (raw/semantic/book/logs/config).
+            for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
+                (workspace_override / child).mkdir(parents=True, exist_ok=True)
 
-            if args.clients_db:
-                clients_db_relative = _normalize_relative_path(args.clients_db, var_name="--clients-db")
-                if len(clients_db_relative.parts) < 2:
-                    raise SystemExit("--clients-db deve includere anche il nome file (es. clients_db/clients.yaml)")
-                if clients_db_relative.parts[0] != "clients_db":
-                    raise SystemExit("--clients-db deve iniziare con 'clients_db/'")
-                db_dir_override = Path(*clients_db_relative.parts[:-1])
-                db_file_override = Path(clients_db_relative.parts[-1])
-                os.environ["CLIENTS_DB_DIR"] = str(db_dir_override)
-                os.environ["CLIENTS_DB_FILE"] = str(db_file_override)
+        if args.clients_db:
+            clients_db_relative = _normalize_relative_path(args.clients_db, var_name="--clients-db")
+            if len(clients_db_relative.parts) < 2:
+                raise SystemExit("--clients-db deve includere anche il nome file (es. clients_db/clients.yaml)")
+            if clients_db_relative.parts[0] != "clients_db":
+                raise SystemExit("--clients-db deve iniziare con 'clients_db/'")
+            db_dir_override = Path(*clients_db_relative.parts[:-1])
+            db_file_override = Path(clients_db_relative.parts[-1])
+            os.environ["CLIENTS_DB_DIR"] = str(db_dir_override)
+            os.environ["CLIENTS_DB_FILE"] = str(db_file_override)
 
-            mode_label = "deep" if args.deep_testing else "smoke"
-            logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
-            logger.setLevel(logging.INFO)
+        mode_label = "deep" if args.deep_testing else "smoke"
+        logger = get_structured_logger("tools.gen_dummy_kb", context={"slug": slug})
+        logger.setLevel(logging.INFO)
 
-            logger.info(
-                "tools.gen_dummy_kb.control_plane",
-                extra={"slug": slug, "timmy_beta_strict": os.environ.get("TIMMY_BETA_STRICT")},
+        logger.info(
+            "tools.gen_dummy_kb.control_plane",
+            extra={"slug": slug, "timmy_beta_strict": os.environ.get("TIMMY_BETA_STRICT")},
+        )
+        logger.info(
+            "tools.gen_dummy_kb.mode",
+            extra={"mode": mode_label, "local_only": local_only_override},
+        )
+
+        enable_drive = not local_only_override
+
+        if workspace_override:
+            for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
+                (workspace_override / child).mkdir(parents=True, exist_ok=True)
+
+        policy = DummyPolicy(
+            mode=mode_label,
+            strict=True,  # policy interna dummy (non coincide con TIMMY_BETA_STRICT)
+            ci=args.ci,
+            allow_downgrade=args.allow_downgrade,
+            require_registry=True,
+        )
+        if policy.ci and policy.allow_downgrade:
+            msg = "--allow-downgrade non è consentito durante la CI"
+            health = build_hardcheck_health("DUMMY_POLICY_INVALID", msg, mode=policy.mode)
+            if HardCheckError is not None:
+                raise HardCheckError(msg, health)
+            raise SystemExit(msg)
+
+        try:
+            workspace_root = workspace_override or _client_base(slug)
+            _clean_local_workspace_before_generation(
+                slug=slug,
+                logger=logger,
+                workspace_override=workspace_override,
             )
-            logger.info(
-                "tools.gen_dummy_kb.mode",
-                extra={"mode": mode_label, "local_only": local_only_override},
+            for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
+                (workspace_root / child).mkdir(parents=True, exist_ok=True)
+
+            payload = build_payload(
+                slug=slug,
+                client_name=client_name,
+                enable_drive=enable_drive,
+                enable_vision=enable_vision,
+                enable_semantic=enable_semantic,
+                enable_enrichment=enable_enrichment,
+                enable_preview=enable_preview,
+                records_hint=records_hint,
+                logger=logger,
+                deep_testing=args.deep_testing,
+                policy=policy,
+                allow_local_only_override=local_only_override,
             )
-
-            enable_drive = not local_only_override
-
-            if workspace_override:
-                for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
-                    (workspace_override / child).mkdir(parents=True, exist_ok=True)
-
-            policy = DummyPolicy(
-                mode=mode_label,
-                strict=True,  # policy interna dummy (non coincide con TIMMY_BETA_STRICT)
-                ci=args.ci,
-                allow_downgrade=args.allow_downgrade,
-                require_registry=True,
-            )
-            if policy.ci and policy.allow_downgrade:
-                msg = "--allow-downgrade non è consentito durante la CI"
-                health = build_hardcheck_health("DUMMY_POLICY_INVALID", msg, mode=policy.mode)
-                if HardCheckError is not None:
-                    raise HardCheckError(msg, health)
-                raise SystemExit(msg)
-
-            try:
-                workspace_root = workspace_override or _client_base(slug)
-                _clean_local_workspace_before_generation(
-                    slug=slug,
-                    logger=logger,
-                    workspace_override=workspace_override,
-                )
-                for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
-                    (workspace_root / child).mkdir(parents=True, exist_ok=True)
-
-                payload = build_payload(
-                    slug=slug,
-                    client_name=client_name,
-                    enable_drive=enable_drive,
-                    enable_vision=enable_vision,
-                    enable_semantic=enable_semantic,
-                    enable_enrichment=enable_enrichment,
-                    enable_preview=enable_preview,
-                    records_hint=records_hint,
-                    logger=logger,
-                    deep_testing=args.deep_testing,
-                    policy=policy,
-                    allow_local_only_override=local_only_override,
-                )
-                emit_structure(payload)
-                return 0
-            except Exception as exc:
-                if HardCheckError is not None and isinstance(exc, HardCheckError):
-                    logger.error(
-                        "tools.gen_dummy_kb.hardcheck.failed",
-                        extra={"slug": slug, "error": str(exc)},
-                    )
-                    payload = {"slug": slug, "client_name": client_name, "health": exc.health}
-                    emit_structure(payload)
-                    return 1
+            emit_structure(payload)
+            return 0
+        except Exception as exc:
+            if HardCheckError is not None and isinstance(exc, HardCheckError):
                 logger.error(
-                    "tools.gen_dummy_kb.run_failed",
+                    "tools.gen_dummy_kb.hardcheck.failed",
                     extra={"slug": slug, "error": str(exc)},
                 )
-                emit_structure({"error": str(exc)}, stream=sys.stderr)
+                payload = {"slug": slug, "client_name": client_name, "health": exc.health}
+                emit_structure(payload)
                 return 1
+            logger.error(
+                "tools.gen_dummy_kb.run_failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
+            emit_structure({"error": str(exc)}, stream=sys.stderr)
+            return 1
     finally:
         # cache UI base (se importabile)
         try:
@@ -726,7 +723,6 @@ def main(argv: Optional[list[str]] = None) -> int:
             clear_base_cache(slug=slug)
 
         # Ripristina gli override locali impostati da questo tool.
-        # TIMMY_BETA_STRICT è ripristinato automaticamente dal context manager control_plane_env.
         if args.base_dir:
             if prev_repo_root_dir is None:
                 os.environ.pop("REPO_ROOT_DIR", None)

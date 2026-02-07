@@ -1,17 +1,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-'"""Helper per orchestrare i tool control-plane dal runtime UI."""'
+"""Helper per orchestrare i tool control-plane dal runtime UI."""
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import sys
+import uuid
+from contextlib import contextmanager
+from datetime import datetime
 from typing import Any, Iterable
 
 import streamlit as st
 
 from pipeline.beta_flags import is_beta_strict
+from pipeline.logging_utils import get_structured_logger
+from pipeline.workspace_layout import WorkspaceLayout
+from storage import decision_ledger
 from ui.utils.streamlit_baseline import require_streamlit_feature
 
 CONTROL_PLANE_SCHEMA_KEYS = (
@@ -25,6 +32,9 @@ CONTROL_PLANE_SCHEMA_KEYS = (
     "returncode",
     "timmy_beta_strict",
 )
+
+LOGGER = get_structured_logger("ui.control_plane")
+_ALLOWED_NON_STRICT_STEPS = {"vision_enrichment"}
 
 
 def ensure_runtime_strict() -> None:
@@ -51,12 +61,88 @@ def _normalize_payload(payload: dict[str, Any], *, slug: str, action: str) -> di
     return normalized
 
 
+def _run_command(command: list[str], *, env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run(  # noqa: S603
+        command,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def _open_layout(slug: str) -> WorkspaceLayout:
+    return WorkspaceLayout.from_slug(slug=slug, require_drive_env=False)
+
+
+def _audit_non_strict_step(*, slug: str, step_name: str, status: str, reason_code: str, strict_output: bool) -> None:
+    layout = _open_layout(slug)
+    conn = decision_ledger.open_ledger(layout)
+    try:
+        decision_ledger.record_event(
+            conn,
+            event_id=uuid.uuid4().hex,
+            slug=slug,
+            event_name="non_strict_step",
+            actor="ui_control_plane",
+            occurred_at=datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+            payload={
+                "step": step_name,
+                "reason_code": reason_code,
+                "strict_output": strict_output,
+                "status": status,
+            },
+        )
+    finally:
+        conn.close()
+
+
+@contextmanager
+def _non_strict_step(step_name: str, *, slug: str, logger: logging.Logger) -> Iterable[None]:
+    if step_name not in _ALLOWED_NON_STRICT_STEPS:
+        raise RuntimeError(f"step non-strict non autorizzato: {step_name}")
+    reason_code = step_name
+    logger.info(
+        "ui.control_plane.non_strict_step.start",
+        extra={
+            "slug": slug,
+            "step": step_name,
+            "reason_code": reason_code,
+            "strict_output": False,
+        },
+    )
+    status = "pass"
+    try:
+        yield
+    except Exception:
+        status = "error"
+        raise
+    finally:
+        logger.info(
+            "ui.control_plane.non_strict_step.complete",
+            extra={
+                "slug": slug,
+                "step": step_name,
+                "reason_code": reason_code,
+                "strict_output": False,
+                "status": status,
+            },
+        )
+        _audit_non_strict_step(
+            slug=slug,
+            step_name=step_name,
+            status=status,
+            reason_code=reason_code,
+            strict_output=False,
+        )
+
+
 def run_control_plane_tool(
     *,
     tool_module: str,
     slug: str,
     action: str,
     args: Iterable[str] | None = None,
+    non_strict_step: str | None = None,
 ) -> dict[str, Any]:
     command = [sys.executable, "-m", tool_module]
     if slug:
@@ -64,14 +150,13 @@ def run_control_plane_tool(
     if args:
         command += list(args)
     env = dict(os.environ)
-    env["TIMMY_BETA_STRICT"] = "0"
+
     try:
-        completed = subprocess.run(  # noqa: S603 - comando derivato da tool interni e non accetta shell
-            command,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
+        if non_strict_step:
+            with _non_strict_step(non_strict_step, slug=slug, logger=LOGGER):
+                completed = _run_command(command, env=env)
+        else:
+            completed = _run_command(command, env=env)
     except FileNotFoundError as exc:
         payload = {
             "status": "error",
@@ -79,7 +164,7 @@ def run_control_plane_tool(
             "warnings": [],
             "artifacts": [],
             "returncode": 1,
-            "timmy_beta_strict": "0",
+            "timmy_beta_strict": env.get("TIMMY_BETA_STRICT", "0"),
         }
         normalized = _normalize_payload(payload, slug=slug, action=action)
         normalized["errors"].append(str(exc))
@@ -97,7 +182,7 @@ def run_control_plane_tool(
                 "warnings": [],
                 "artifacts": [],
                 "returncode": completed.returncode,
-                "timmy_beta_strict": "0",
+                "timmy_beta_strict": env.get("TIMMY_BETA_STRICT", "0"),
             }
     else:
         payload = {
@@ -106,7 +191,7 @@ def run_control_plane_tool(
             "warnings": [],
             "artifacts": [],
             "returncode": completed.returncode,
-            "timmy_beta_strict": "0",
+            "timmy_beta_strict": env.get("TIMMY_BETA_STRICT", "0"),
         }
     normalized = _normalize_payload(payload, slug=slug, action=action)
     normalized["returncode"] = completed.returncode

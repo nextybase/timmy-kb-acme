@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from pipeline.context import ClientContext as PipelineClientContext
 from pipeline.config_utils import update_config_with_drive_ids
@@ -21,7 +22,6 @@ from pipeline.workspace_layout import WorkspaceLayout
 from semantic.api import convert_markdown as semantic_convert_markdown
 from semantic.api import write_summary_and_readme as semantic_write_summary_and_readme
 from semantic.core import compile_document_to_vision_yaml
-from timmy_kb.cli.pre_onboarding import pre_onboarding_main
 from timmy_kb.cli.raw_ingest import run_raw_ingest
 
 from .bootstrap import client_base, pdf_path
@@ -30,8 +30,22 @@ from .health import build_hardcheck_health
 from .policy import DummyPolicy
 from .semantic import ensure_raw_pdfs
 from .vision import run_vision_with_timeout
+from storage import decision_ledger
 
 _SEMANTIC_MAPPING_TEMPLATE = "semantic_tagger: {}\nareas: []\n"
+
+
+def _resolve_workspace_layout(base_dir: Path, slug: str) -> WorkspaceLayout:
+    layout_cls = WorkspaceLayout
+    if hasattr(layout_cls, "from_workspace"):
+        return layout_cls.from_workspace(workspace=base_dir, slug=slug)
+    context = PipelineClientContext.load(
+        slug=slug,
+        require_env=False,
+        run_id=None,
+        bootstrap_config=False,
+    )
+    return layout_cls.from_context(context)
 
 import yaml
 
@@ -40,6 +54,146 @@ class HardCheckError(Exception):
     def __init__(self, message: str, health: Dict[str, Any]):
         super().__init__(message)
         self.health = health
+
+ALLOWED_NON_STRICT_STEPS = {"vision_enrichment"}
+
+
+def _audit_non_strict_step(
+    *,
+    base_dir: Path,
+    slug: str,
+    step_name: str,
+    logger: logging.Logger,
+    status: str,
+    reason_code: str,
+    strict_output: bool,
+) -> None:
+    layout = _resolve_workspace_layout(base_dir=base_dir, slug=slug)
+    conn = decision_ledger.open_ledger(layout)
+    try:
+        decision_ledger.record_event(
+            conn,
+            event_id=uuid.uuid4().hex,
+            slug=slug,
+            event_name="non_strict_step",
+            actor="dummy_pipeline",
+            occurred_at=datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+            payload={
+                "step": step_name,
+                "reason_code": reason_code,
+                "strict_output": strict_output,
+                "status": status,
+            },
+        )
+    finally:
+        conn.close()
+
+
+def _record_dummy_bootstrap_event(
+    *,
+    base_dir: Path,
+    slug: str,
+    mode: str,
+    enable_drive: bool,
+    enable_vision: bool,
+    enable_semantic: bool,
+    enable_enrichment: bool,
+    enable_preview: bool,
+    logger: logging.Logger,
+) -> None:
+    payload = {
+        "slug": slug,
+        "mode": mode,
+        "enable_drive": enable_drive,
+        "enable_vision": enable_vision,
+        "enable_semantic": enable_semantic,
+        "enable_enrichment": enable_enrichment,
+        "enable_preview": enable_preview,
+        "strict_env": os.environ.get("TIMMY_BETA_STRICT"),
+    }
+    logger.info(
+        "tools.gen_dummy_kb.dummy_bootstrap.start",
+        extra={"slug": slug, "mode": mode, "strict_env": payload["strict_env"]},
+    )
+    status = "pass"
+    try:
+        layout = _resolve_workspace_layout(base_dir=base_dir, slug=slug)
+        conn = decision_ledger.open_ledger(layout)
+        try:
+            decision_ledger.record_event(
+                conn,
+                event_id=uuid.uuid4().hex,
+                slug=slug,
+                event_name="dummy_bootstrap",
+                actor="dummy_pipeline",
+                occurred_at=datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+                payload=payload,
+            )
+        finally:
+            conn.close()
+    except Exception:
+        status = "error"
+        logger.error(
+            "tools.gen_dummy_kb.dummy_bootstrap.failed",
+            extra={"slug": slug},
+            exc_info=True,
+        )
+        raise
+    finally:
+        logger.info(
+            "tools.gen_dummy_kb.dummy_bootstrap.complete",
+            extra={"slug": slug, "status": status},
+        )
+
+
+def _readme_counts(local_readmes: Sequence[Any], drive_readmes: Mapping[str, Any]) -> tuple[int, int, int]:
+    drive_entries = drive_readmes or {}
+    local_count = len(local_readmes)
+    drive_count = len(drive_entries)
+    return local_count, drive_count, local_count + drive_count
+
+
+@contextmanager
+def _non_strict_step(step_name: str, *, logger: logging.Logger, base_dir: Path, slug: str) -> Any:
+    if step_name not in ALLOWED_NON_STRICT_STEPS:
+        raise RuntimeError(f"step {step_name!r} non autorizzato per non-strict")
+    reason_code = step_name
+    try:
+        logger.info(
+            "tools.gen_dummy_kb.non_strict_step.start",
+            extra={
+                "step": step_name,
+                "reason_code": reason_code,
+                "strict_output": False,
+                "slug": slug,
+            },
+        )
+        status = "pass"
+        try:
+            yield
+        except Exception:
+            status = "error"
+            raise
+    finally:
+        logger.info(
+            "tools.gen_dummy_kb.non_strict_step.complete",
+            extra={
+                "step": step_name,
+                "reason_code": reason_code,
+                "strict_output": False,
+                "status": status,
+                "slug": slug,
+            },
+        )
+        _audit_non_strict_step(
+            base_dir=base_dir,
+            slug=slug,
+            step_name=step_name,
+            logger=logger,
+            status=status,
+            reason_code=reason_code,
+            strict_output=False,
+        )
 
 
 def _ensure_spacy_available(policy: DummyPolicy) -> None:
@@ -389,13 +543,18 @@ def build_dummy_payload(
             )
         except Exception:
             ctx_for_checks = None
-    strict_requested, strict_source = _get_vision_strict_output(ctx_for_checks) if ctx_for_checks else (None, "ctx_unavailable")
+    if ctx_for_checks:
+        strict_requested, strict_source = _get_vision_strict_output(ctx_for_checks)
+    else:
+        strict_requested = None
+        strict_source = "bootstrap_default"
     strict_effective = True if (deep_testing and enable_vision) else (True if strict_requested is None else bool(strict_requested))
-    strict_rationale = (
-        "deep_testing richiede strict-only"
-        if (deep_testing and enable_vision)
-        else ("default_true" if strict_requested is None else strict_source)
-    )
+    if deep_testing and enable_vision:
+        strict_rationale = "deep_testing richiede strict-only"
+    elif ctx_for_checks is None:
+        strict_rationale = "default_true_bootstrap_phase"
+    else:
+        strict_rationale = "default_true" if strict_requested is None else strict_source
     decisions: Dict[str, Any] = {
         "vision_strict_output": {
             "requested": strict_requested,
@@ -444,25 +603,17 @@ def build_dummy_payload(
 
     _merge_config_with_template(workspace_root, logger=logger)
     _apply_allow_local_only_override(workspace_root, allow=allow_local_only_override, logger=logger)
-
-    try:
-        pre_onboarding_main(
-            slug=slug,
-            client_name=client_name,
-            interactive=False,
-            dry_run=True,
-            run_id=uuid.uuid4().hex,
-        )
-    except Exception as exc:
-        msg = f"pre_onboarding fallito: {exc}"
-        raise HardCheckError(
-            msg,
-            build_hardcheck_health(
-                "pre_onboarding_hardcheck",
-                msg,
-                mode=policy.mode,
-            ),
-        ) from exc
+    _record_dummy_bootstrap_event(
+        base_dir=workspace_root,
+        slug=slug,
+        mode=policy.mode,
+        enable_drive=enable_drive,
+        enable_vision=enable_vision,
+        enable_semantic=enable_semantic,
+        enable_enrichment=enable_enrichment,
+        enable_preview=enable_preview,
+        logger=logger,
+    )
 
     try:
         try:
@@ -589,15 +740,16 @@ def build_dummy_payload(
                         mode=policy.mode,
                     ),
                 ) from exc
-        start = perf_counter()
-        success, vision_meta = run_vision_with_timeout_fn(
-            base_dir=base_dir,
-            slug=slug,
-            pdf_path=pdf_path_resolved,
-            timeout_s=120.0,
-            logger=logger,
-            run_vision=run_vision,
-        )
+        with _non_strict_step("vision_enrichment", logger=logger, base_dir=base_dir, slug=slug):
+            start = perf_counter()
+            success, vision_meta = run_vision_with_timeout_fn(
+                base_dir=base_dir,
+                slug=slug,
+                pdf_path=pdf_path_resolved,
+                timeout_s=120.0,
+                logger=logger,
+                run_vision=run_vision,
+            )
         latency_ms = int((perf_counter() - start) * 1000)
         if not success:
             message = str(vision_meta.get("error") if isinstance(vision_meta, dict) else vision_meta or "Vision fallita")
@@ -684,6 +836,11 @@ def build_dummy_payload(
 
     summary_path = base_dir / "book" / "SUMMARY.md"
     readme_path = base_dir / "book" / "README.md"
+    local_readmes: list[Dict[str, Any]] = []
+    local_readmes_count, drive_readmes_count, total_readmes = _readme_counts(
+        local_readmes,
+        drive_readmes_info,
+    )
 
     health: Dict[str, Any] = {
         "vision_status": vision_status,
@@ -691,7 +848,9 @@ def build_dummy_payload(
         "tags_count": _count_tags(base_dir),
         "mapping_valid": (semantic_dir / "semantic_mapping.yaml").exists(),
         "summary_exists": summary_path.exists(),
-        "readmes_count": 0,
+        "local_readmes_count": local_readmes_count,
+        "drive_readmes_count": drive_readmes_count,
+        "readmes_count": total_readmes,
         "status": "ok",
         "errors": [],
         "checks": [],
@@ -719,7 +878,7 @@ def build_dummy_payload(
         "config_ids": {},
         "vision_used": vision_completed,
         "drive_used": bool(enable_drive),
-        "local_readmes": [],
+        "local_readmes": local_readmes,
         "health": health,
     }
 

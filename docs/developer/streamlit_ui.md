@@ -143,14 +143,15 @@ Pattern unificato per aggiungere pagine Streamlit tramite `ui.pages.registry`.
   - In assenza di slug mostrano la CTA guidata gia gestita da `render_chrome_then_require`.
   - Registrazione nel gruppo `Tools`; mantenere messaging slug-centrico (es. 'Workspace: slug').
 
-### Pagine control-plane (Tools > Tuning)
+-### Pagine control-plane (Tools > Tuning)
 
 - Le pagine control-plane come **Tools > Tuning** disattivano il guard strict (`strict_runtime=False`) e mostrano un
   `control_plane_note` per ricordare che si tratta di tooling operator-only.
 - L'interfaccia salva le modifiche locali (es. `visionstatement.yaml`) e invoca
   `ui.utils.control_plane.run_control_plane_tool()` per lanciare i CLI dedicati
-  (`tools/tuning_pdf_to_yaml`, `tools/tuning_vision_provision`, `tools/tuning_system_prompt`). I CLI girano con
-  `control_plane_env(force_non_strict=True)` e non scrivono mai direttamente via Streamlit.
+  (`tools/tuning_pdf_to_yaml`, `tools/tuning_vision_provision`, `tools/tuning_system_prompt`). I CLI restano strict-compliant: non toccano `TIMMY_BETA_STRICT` nel runtime e, quando serve un contesto non-strict, usano `tools/non_strict_step.py`
+  per attivare la deroga (whitelist: `vision_enrichment`, `prompt_tuning`, `pdf_to_yaml_tuning`). La deroga è confinata allo step,
+  non influisce sul resto della UI e lascia traccia nel ledger (o nei log strutturati quando manca il layout).
 - I payload restituiti dai tool seguono lo schema `status/mode/slug/action/errors/warnings/artifacts/paths/returncode/timmy_beta_strict`;
   la UI li visualizza con `ui.utils.control_plane.display_control_plane_result()` e li memorizza solo per preview.
 - Ogni path che appare nei payload è workspace-scoped (`output/<slug>/config/...` per i file YAML e
@@ -395,7 +396,8 @@ e un evento strutturato `ui.drive.capability_missing`.
 La guardia `ui.utils.control_plane.ensure_runtime_strict()` viene invocata dal chrome (`render_chrome_then_require`
 con `strict_runtime=True`, default) per bloccare tutte le pagine runtime quando `TIMMY_BETA_STRICT` non vale `1`;
 l'unica eccezione pubblica è la pagina control-plane Tools > Tuning, che imposta `strict_runtime=False`
-e riorienta ogni azione ai CLI specializzati.
+e riorienta ogni azione ai CLI specializzati. Le deroghe non-strict rimangono confinate ai CLI e dipendono da
+`tools/non_strict_step.py`, mentre le pagine runtime mantengono `TIMMY_BETA_STRICT` immutato tramite `ensure_runtime_strict()`.
 
 1. Calcola i gate con `ui.gating.compute_gates(os.environ)`; combina la disponibilita runtime dei servizi (`ui.services.*`) con gli override da variabili di ambiente:
     - `DRIVE=0` disabilita i flussi Drive (cartelle, cleanup, download).
