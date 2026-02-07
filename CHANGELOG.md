@@ -6,13 +6,13 @@ Il formato segue *Keep a Changelog* e *Semantic Versioning*.
 ## TODO (prioritaria): Stabilizzare i workflow `pip-audit` (Dependency Scan / Security Audit)
 
 ### Contesto
-Nel repository sono presenti più workflow e configurazioni che usano `pip-audit` (es. `.github/workflows/dependency-scan.yml`, `.github/workflows/security-audit.yml`, `.pre-commit-config.yaml`, documentazione di security). In CI il check “Dependency Scan/pip-audit (pull_request)” risulta fallire.
+Nel repository sono presenti più workflow e configurazioni che usano `pip-audit` (es. `.github/workflows/security-audit.yml`, `.pre-commit-config.yaml`, documentazione di security). In CI il check “Dependency Scan/pip-audit (pull_request)” risulta fallire.
 
 ### Errore osservato (CI)
 Nel job `pip-audit` su GitHub Actions, durante lo step di esecuzione del comando, l’esecuzione termina con errore di parsing dei parametri:
 
 - Comando lanciato:
-  - `pip-audit -r requirements.txt -r requirements-dev.txt --progress-spinner off --format sarif --output pip-audit.sarif`
+  - `pip-audit -r requirements.txt -r requirements-dev.txt --progress-spinner off --format sarif`
 - Output rilevante:
   - `pip-audit: error: argument -f/--format: invalid OutputFormatChoice value: 'sarif'`
 - Esito:
@@ -26,13 +26,13 @@ Quindi il fallimento non deriva (almeno in questo run) da vulnerabilità trovate
 - Questo crea una discrepanza tra:
   1) formato richiesto dal comando (SARIF),
   2) formato effettivamente supportato dalla versione in esecuzione,
-  3) formato e file attesi dagli step successivi (es. presenza/assenza di `pip-audit.json`).
+  3) formato e file attesi dagli step successivi (es. `pip-audit.json` o output JSON).
 
 ### Punti da controllare (solo verifica, nessuna azione implicita)
 1. **Versione effettiva di `pip-audit` in CI**: confermare quale versione viene installata/risolta nel workflow che fallisce e se corrisponde a quella prevista nel repo.
-2. **Coerenza tra workflow**: verificare differenze tra `dependency-scan.yml` e `security-audit.yml` (opzioni CLI, formati, file di output attesi, logiche “soft gate / hard gate”).
+2. **Coerenza tra workflow**: verificare che `security-audit.yml` (ora `Dependency Audit (pip-audit)`) rispetti le opzioni CLI, i formati e i gate previsti per `pip-audit`.
 3. **Supporto formati**: verificare, per la versione effettiva usata nel job, quali valori sono accettati da `-f/--format` e se `sarif` è incluso tra questi.
-4. **Output atteso a valle**: controllare quali step (o integrazioni) assumono l’esistenza di un file specifico (`pip-audit.sarif` vs `pip-audit.json`) e come viene gestita l’assenza/empty file.
+4. **Output atteso a valle**: controllare quali step (o integrazioni) assumono l’esistenza di un file JSON (`pip-audit.json`) e come viene gestita l’assenza/empty file.
 5. **Allineamento con pre-commit e requirements**: verificare che `requirements-dev.*` e `.pre-commit-config.yaml` non impongano aspettative diverse (versione e comportamento) rispetto ai workflow CI.
 6. **Ambiente runner**: annotare OS e Python della GitHub runner usata nei run falliti (Ubuntu 24.04.x, Python 3.11.x), nel caso il comportamento sia influenzato da packaging/risoluzione dipendenze.
 
