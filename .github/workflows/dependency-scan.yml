@@ -38,8 +38,8 @@ jobs:
       - name: Install pip-audit
         run: |
           python -m pip install --upgrade pip
-          pip install pip-audit
+          pip install "pip-audit==2.7.2"
 
       - name: Run pip-audit
         run: |
-          pip-audit -r requirements.txt -r requirements-dev.txt --progress-spinner off --format json -o pip-audit.json
+          pip-audit -r requirements.txt -r requirements-dev.txt --progress-spinner off --format sarif --output pip-audit.sarif
