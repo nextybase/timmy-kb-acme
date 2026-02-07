@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import pytest
 
@@ -121,7 +121,6 @@ def test_dummy_bootstrap_records_event(monkeypatch, tmp_path: Path, logger: logg
         validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
         ensure_spacy_available_fn=lambda policy: None,
         call_drive_min_fn=lambda *_args, **_kwargs: None,
-        call_drive_emit_readmes_fn=lambda *_args, **_kwargs: None,
     )
 
     assert payload["slug"] == slug
@@ -131,6 +130,67 @@ def test_dummy_bootstrap_records_event(monkeypatch, tmp_path: Path, logger: logg
     assert event["event_name"] == "dummy_bootstrap"
     assert event["actor"] == "dummy_pipeline"
     assert event["payload"]["slug"] == slug
+    assert event["payload"]["stage"] == "skeleton"
     assert event["payload"]["enable_drive"] is False
     assert event["payload"]["enable_preview"] is False
     assert payload["paths"]["base"].endswith(str(workspace_base))
+
+
+def test_dummy_bootstrap_loads_context_exactly_once(monkeypatch, tmp_path: Path, logger: logging.Logger) -> None:
+    """
+    Contratto Beta 1.0:
+    - Dummy bootstrap deve caricare ClientContext una sola volta (post-skeleton),
+      riusandolo per precheck + config update.
+    """
+    # cspell:ignore precheck
+
+    calls: list[str | None] = []
+
+    real_load = orchestrator.PipelineClientContext.load
+
+    def _counting_load(*args: Any, **kwargs: Any) -> Any:
+        calls.append(kwargs.get("stage"))
+        return real_load(*args, **kwargs)
+
+    monkeypatch.setattr(orchestrator.PipelineClientContext, "load", _counting_load)
+
+    orchestrator.build_dummy_payload(
+        slug="dummy-bootstrap",
+        client_name="Dummy Co.",
+        enable_drive=False,
+        allow_local_only_override=False,
+        enable_vision=False,
+        enable_semantic=False,
+        enable_enrichment=False,
+        enable_preview=False,
+        records_hint=None,
+        deep_testing=False,
+        logger=logger,
+        repo_root=tmp_path,
+        ensure_local_workspace_for_ui=lambda **_: None,
+        run_vision=lambda **_: None,
+        get_env_var=lambda *_: None,
+        ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
+        open_for_read_bytes_selfguard=lambda path: path.open("rb"),
+        load_vision_template_sections=lambda: [],
+        client_base=lambda _: tmp_path,
+        pdf_path=lambda _: tmp_path / "config" / "VisionStatement.pdf",
+        register_client_fn=lambda *_a, **_k: None,
+        ClientContext=orchestrator.PipelineClientContext,
+        get_client_config=None,
+        ensure_drive_minimal_and_upload_config=None,
+        emit_readmes_for_raw=None,
+        run_vision_with_timeout_fn=lambda **_: (True, None),
+        load_mapping_categories_fn=lambda *_, **__: {},
+        ensure_minimal_tags_db_fn=lambda *_a, **_k: None,
+        ensure_raw_pdfs_fn=lambda *_a, **_k: None,
+        ensure_local_readmes_fn=lambda *_a, **_k: [],
+        ensure_book_skeleton_fn=lambda *_a, **_k: None,
+        write_basic_semantic_yaml_fn=None,
+        write_minimal_tags_raw_fn=lambda *_a, **_k: tmp_path / "semantic" / "tags_raw.json",
+        validate_dummy_structure_fn=lambda *_a, **_k: None,
+        ensure_spacy_available_fn=lambda policy: None,
+        call_drive_min_fn=lambda *_a, **_k: None,
+    )
+
+    assert calls == [orchestrator._CTX_STAGE_POST_SKELETON]

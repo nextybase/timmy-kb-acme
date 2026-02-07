@@ -1,13 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+import os
 from contextlib import contextmanager
+from pathlib import Path
 from types import SimpleNamespace
 
-import os
-from pathlib import Path
-
-import pytest
-
-from tools import non_strict_step as helper
 from tools import tuning_pdf_to_yaml as pdf_tool
 from tools import tuning_system_prompt as prompt_tool
 from tools import tuning_vision_provision as vision_tool
@@ -47,8 +43,18 @@ def test_vision_tuning_uses_non_strict_step(monkeypatch, tmp_path):
             self.repo_root_dir = repo_root_dir
             self.client_name = "dummy"
 
-    monkeypatch.setattr(vision_tool, "ClientContext", SimpleNamespace(load=lambda **kwargs: FakeContext(kwargs["repo_root_dir"])))  # type: ignore[arg-type]
-    monkeypatch.setattr(vision_tool, "WorkspaceLayout", SimpleNamespace(from_context=lambda ctx: SimpleNamespace(config_path=config_dir / "config.yaml")))  # type: ignore[assignment]
+    monkeypatch.setattr(
+        vision_tool,
+        "ClientContext",
+        SimpleNamespace(load=lambda **kwargs: FakeContext(kwargs["repo_root_dir"])),  # type: ignore[arg-type]
+    )
+    monkeypatch.setattr(
+        vision_tool,
+        "WorkspaceLayout",
+        SimpleNamespace(
+            from_context=lambda ctx: SimpleNamespace(config_path=config_dir / "config.yaml")
+        ),  # type: ignore[assignment]
+    )
     monkeypatch.setattr(vision_tool, "_resolve_pdf_path", lambda **kwargs: pdf_path)
     monkeypatch.setattr(vision_tool, "vision_yaml_workspace_path", lambda repo_root, pdf_path: vision_yaml)
     monkeypatch.setattr(vision_tool, "load_workspace_yaml", lambda slug: {})
@@ -79,7 +85,9 @@ def test_system_prompt_tool_uses_non_strict_step(monkeypatch):
     monkeypatch.setattr(prompt_tool, "build_openai_client", lambda: object())
     monkeypatch.setattr(prompt_tool, "load_remote_system_prompt", lambda assistant_id, client, allow_beta_fallback: {})
     monkeypatch.setattr(prompt_tool, "resolve_assistant_id", lambda: "A")
-    monkeypatch.setattr(prompt_tool, "save_remote_system_prompt", lambda assistant_id, instructions, client, allow_beta_fallback: None)
+    monkeypatch.setattr(
+        prompt_tool, "save_remote_system_prompt", lambda assistant_id, instructions, client, allow_beta_fallback: None
+    )
 
     ret = prompt_tool.main(["--slug", "dummy", "--mode", "get"])
     assert ret == 0
@@ -110,4 +118,16 @@ def test_pdf_to_yaml_tool_uses_non_strict_step(monkeypatch, tmp_path):
         def __init__(self, repo_root_dir: Path):
             self.repo_root_dir = repo_root_dir
 
-    monkeypatch.setattr(pdf_tool, "ClientContext", SimpleNamespace(load=lambda **kwargs: FakeContext(kwargs["slug"],) if False else FakeContext(workspace)))  # noqa: E731
+    monkeypatch.setattr(
+        pdf_tool,
+        "ClientContext",
+        SimpleNamespace(
+            load=lambda **kwargs: (
+                FakeContext(
+                    kwargs["slug"],
+                )
+                if False
+                else FakeContext(workspace)
+            )
+        ),
+    )  # noqa: E731

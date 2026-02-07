@@ -5,8 +5,6 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 from pipeline.exceptions import ConfigError
 from tests._helpers.workspace_paths import local_workspace_dir
 from tools.dummy import orchestrator

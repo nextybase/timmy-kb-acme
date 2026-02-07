@@ -8,7 +8,7 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from pipeline.context import ClientContext as PipelineClientContext
 from pipeline.config_utils import update_config_with_drive_ids
@@ -31,21 +31,33 @@ from .policy import DummyPolicy
 from .semantic import ensure_raw_pdfs
 from .vision import run_vision_with_timeout
 from storage import decision_ledger
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tools.gen_dummy_kb import _DummyPayload
 
 _SEMANTIC_MAPPING_TEMPLATE = "semantic_tagger: {}\nareas: []\n"
+_DUMMY_STAGE_SKELETON = "skeleton"
+_CTX_STAGE_POST_SKELETON = "dummy.bootstrap.skeleton"
 
 
-def _resolve_workspace_layout(base_dir: Path, slug: str) -> WorkspaceLayout:
+def _resolve_workspace_layout(
+    base_dir: Path,
+    slug: str,
+    ctx: PipelineClientContext | None = None,
+) -> WorkspaceLayout:
     layout_cls = WorkspaceLayout
     if hasattr(layout_cls, "from_workspace"):
         return layout_cls.from_workspace(workspace=base_dir, slug=slug)
-    context = PipelineClientContext.load(
+    if ctx is None:
+        ctx = PipelineClientContext.load(
         slug=slug,
         require_env=False,
         run_id=None,
         bootstrap_config=False,
+        stage="dummy.layout_resolve",
     )
-    return layout_cls.from_context(context)
+    return layout_cls.from_context(ctx)
 
 import yaml
 
@@ -67,8 +79,9 @@ def _audit_non_strict_step(
     status: str,
     reason_code: str,
     strict_output: bool,
+    ctx: PipelineClientContext | None = None,
 ) -> None:
-    layout = _resolve_workspace_layout(base_dir=base_dir, slug=slug)
+    layout = _resolve_workspace_layout(base_dir=base_dir, slug=slug, ctx=ctx)
     conn = decision_ledger.open_ledger(layout)
     try:
         decision_ledger.record_event(
@@ -103,6 +116,9 @@ def _record_dummy_bootstrap_event(
 ) -> None:
     payload = {
         "slug": slug,
+        # TODO-A (CHANGELOG): semantica formale per distinguere la fase
+        # bootstrap minima (skeleton) dal resto della pipeline.
+        "stage": _DUMMY_STAGE_SKELETON,
         "mode": mode,
         "enable_drive": enable_drive,
         "enable_vision": enable_vision,
@@ -193,6 +209,7 @@ def _non_strict_step(step_name: str, *, logger: logging.Logger, base_dir: Path, 
             status=status,
             reason_code=reason_code,
             strict_output=False,
+            ctx=getattr(logger, "_ctx_post_skeleton", None),
         )
 
 
@@ -513,7 +530,7 @@ def build_dummy_payload(
     run_vision_with_timeout_fn: Callable[..., tuple[bool, Optional[Dict[str, Any]]]] = run_vision_with_timeout,
     call_drive_min_fn: Callable[..., Optional[Dict[str, Any]]] = call_drive_min,
     call_drive_emit_readmes_fn: Callable[..., Optional[Dict[str, Any]]] = call_drive_emit_readmes,
-) -> Dict[str, Any]:
+) -> _DummyPayload:
     vision_mode = _resolve_vision_mode(get_env_var)
     del repo_root
     del ensure_within_and_resolve_fn
@@ -532,38 +549,8 @@ def build_dummy_payload(
     if enable_semantic and not enable_vision:
         logger.info("tools.gen_dummy_kb.semantic_disabled_without_vision", extra={"slug": slug})
 
-    ctx_for_checks: Any | None = None
-    if ClientContext is not None:
-        try:
-            ctx_for_checks = ClientContext.load(
-                slug=slug,
-                require_env=False,
-                run_id=None,
-                bootstrap_config=False,
-            )
-        except Exception:
-            ctx_for_checks = None
-    if ctx_for_checks:
-        strict_requested, strict_source = _get_vision_strict_output(ctx_for_checks)
-    else:
-        strict_requested = None
-        strict_source = "bootstrap_default"
-    strict_effective = True if (deep_testing and enable_vision) else (True if strict_requested is None else bool(strict_requested))
-    if deep_testing and enable_vision:
-        strict_rationale = "deep_testing richiede strict-only"
-    elif ctx_for_checks is None:
-        strict_rationale = "default_true_bootstrap_phase"
-    else:
-        strict_rationale = "default_true" if strict_requested is None else strict_source
-    decisions: Dict[str, Any] = {
-        "vision_strict_output": {
-            "requested": strict_requested,
-            "effective": strict_effective,
-            "rationale": strict_rationale,
-            "source": strict_source,
-        }
-    }
-
+    strict_requested: Optional[bool] = None
+    strict_source = "bootstrap_default"
     if records_hint:
         try:
             int(records_hint)
@@ -615,20 +602,46 @@ def build_dummy_payload(
         logger=logger,
     )
 
-    try:
+    # Single context load post-skeleton (riutilizzato per precheck + config update).
+    ctx_post_skeleton: PipelineClientContext | None = None
+    if ClientContext is not None:
         try:
-            ctx_for_config = PipelineClientContext.load(
+            ctx_post_skeleton = ClientContext.load(
                 slug=slug,
                 require_env=False,
                 run_id=None,
                 bootstrap_config=False,
+                stage=_CTX_STAGE_POST_SKELETON,
             )
-        except ConfigError as exc:
-            logger.warning(
-                "tools.gen_dummy_kb.config_update_skipped",
-                extra={"slug": slug, "reason": "config_missing"},
-            )
-            ctx_for_config = None
+        except Exception:
+            ctx_post_skeleton = None
+
+    if ctx_post_skeleton is not None:
+        strict_requested, strict_source = _get_vision_strict_output(ctx_post_skeleton)
+
+    strict_effective = True if (deep_testing and enable_vision) else (True if strict_requested is None else bool(strict_requested))
+    if deep_testing and enable_vision:
+        strict_rationale = "deep_testing richiede strict-only"
+    elif ctx_post_skeleton is None:
+        strict_rationale = "default_true_bootstrap_phase"
+    else:
+        strict_rationale = "default_true" if strict_requested is None else strict_source
+    decisions: Dict[str, Any] = {
+        "vision_strict_output": {
+            "requested": strict_requested,
+            "effective": strict_effective,
+            "rationale": strict_rationale,
+            "source": strict_source,
+        }
+    }
+
+    if ctx_post_skeleton is not None:
+        setattr(logger, "_ctx_post_skeleton", ctx_post_skeleton)
+    elif hasattr(logger, "_ctx_post_skeleton"):
+        delattr(logger, "_ctx_post_skeleton")
+
+    try:
+        ctx_for_config = ctx_post_skeleton
         if ctx_for_config is not None and not all(
             hasattr(ctx_for_config, attr) for attr in ("slug", "config_path", "repo_root_dir")
         ):
@@ -641,6 +654,11 @@ def build_dummy_payload(
                 ctx_for_config,
                 updates={"meta": {"client_name": client_name}},
                 logger=logger,
+            )
+        else:
+            logger.warning(
+                "tools.gen_dummy_kb.config_update_skipped",
+                extra={"slug": slug, "reason": "context_unavailable"},
             )
     except Exception as exc:
         msg = f"config aggiornata (client_name) fallita: {exc}"

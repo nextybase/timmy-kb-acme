@@ -1,10 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import logging
-import os
-from contextlib import contextmanager
 from pathlib import Path
-
-import pytest
 
 from tools import non_strict_step
 
