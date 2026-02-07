@@ -2,6 +2,7 @@
 # src/ui/clients_store.py
 from __future__ import annotations
 
+import hashlib
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -53,18 +54,39 @@ def _optional_env(name: str) -> Optional[str]:
 
 
 _WORKSPACE_ROOT_IGNORED_LOGGED = False
+_ENV_SUMMARY_KEYS = (WORKSPACE_ROOT_ENV, REPO_ROOT_ENV)
+
+
+def _summarise_env_value(value: Optional[str]) -> dict[str, Union[bool, str, int]]:
+    summary: dict[str, Union[bool, str, int]] = {"is_set": bool(value)}
+    if value:
+        hashed_value = hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+        summary["hash"] = hashed_value
+        summary["length"] = len(value)
+    return summary
+
+
+def _collect_env_summary() -> dict[str, dict[str, Union[bool, str, int]]]:
+    return {name: _summarise_env_value(os.environ.get(name)) for name in _ENV_SUMMARY_KEYS}
 
 
 def _log_workspace_root_ignored_once() -> None:
     global _WORKSPACE_ROOT_IGNORED_LOGGED
     if _WORKSPACE_ROOT_IGNORED_LOGGED:
         return
-    LOG.info("clients_store.workspace_root_ignored", extra={"env": WORKSPACE_ROOT_ENV})
+    LOG.info(
+        "clients_store.workspace_root_ignored",
+        extra={
+            "details": "WORKSPACE_ROOT_DIR ignored for registry by design; repo root is SSoT.",
+            "env_summary": _collect_env_summary(),
+        },
+    )
     _WORKSPACE_ROOT_IGNORED_LOGGED = True
 
 
 def _base_repo_root() -> Path:
     # WORKSPACE_ROOT_DIR resta valido per altre parti UI, ma non influenza il registry.
+    # L'evento workspace_root_ignored logga i valori (hash/length) in modo sanitizzato quando presente.
     workspace_root = _optional_env(WORKSPACE_ROOT_ENV)
     if workspace_root:
         _log_workspace_root_ignored_once()

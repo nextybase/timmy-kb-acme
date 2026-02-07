@@ -165,4 +165,11 @@ def test_base_repo_root_ignores_workspace_root_dir(tmp_path, monkeypatch, caplog
         resolved = module._base_repo_root()
 
     assert resolved == tmp_path
-    assert any(rec.getMessage() == "clients_store.workspace_root_ignored" for rec in caplog.records)
+    record = next(rec for rec in caplog.records if rec.getMessage() == "clients_store.workspace_root_ignored")
+    env_summary = getattr(record, "env_summary", None)
+    assert isinstance(env_summary, dict)
+    assert set(env_summary) == {module.WORKSPACE_ROOT_ENV, module.REPO_ROOT_ENV}
+    assert env_summary[module.WORKSPACE_ROOT_ENV]["is_set"] is True
+    assert isinstance(env_summary[module.WORKSPACE_ROOT_ENV]["hash"], str)
+    assert env_summary[module.WORKSPACE_ROOT_ENV]["length"] > 0
+    assert env_summary[module.REPO_ROOT_ENV]["is_set"] is False

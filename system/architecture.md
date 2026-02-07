@@ -201,6 +201,23 @@ Streamlit-based UI.
 Acts as a thin facade over backend functions.
 Must preserve backend signatures and semantics.
 
+### Dummy bootstrap events & semantics
+The dummy bootstrap workflow emits a single ledger event (`dummy_bootstrap`) with `stage="skeleton"`.
+It certifies a controlled minimum workspace state:
+1. the workspace skeleton is created and bootstrap directories (`raw`, `semantic`, `book`, `config`, `normalized`) exist;
+2. a minimal `config/config.yaml` is materialized (merged from template);
+3. the `ClientContext` load immediately after the skeleton (post-skeleton) is performed and reused whenever available.
+It does **not** certify that Vision, Drive, or full Semantic flows completed; those remain distinct events or logs.
+Any `non_strict_step` event is emitted separately to audit a scoped relaxed execution (e.g., `vision_enrichment`) and records only the specific step name, status, and justification.
+
+### Context load entropy policy (Dummy)
+Under the Beta contract the dummy bootstrap may call `ClientContext.load` only once in the post-skeleton phase (`_CTX_STAGE_POST_SKELETON`).
+That single load serves the strict-output precheck and any config updates; any additional reload is treated as an entropy regression and must be guarded by explicit reasoning (e.g., manual migration instrumentation) before it can be reintroduced.
+
+### Registry root SSoT
+The registry and clients store treat the repo root as the single source of truth: `REPO_ROOT_DIR` defines the registry perimeter and is never overridden by `WORKSPACE_ROOT_DIR`.
+WORKSPACE_ROOT_DIR remains valid for UI/tooling workspaces, but the registry ignores this override by design and emits a sanitized log (`workspace_root_ignored`) that reports which environment variables were seen (hashed value + length) so operators can debug without leaking deterministic paths.
+
 ### Streamlit UI Startup (Phase 0)
 Before logging, preflight, or navigation, the UI entrypoint must load `.env`
 via `pipeline.env_utils.ensure_dotenv_loaded()` to stabilize workspace resolution.
