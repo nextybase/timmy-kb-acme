@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 import pytest
 
+from pipeline.file_utils import safe_write_text
 from tests._helpers.workspace_paths import local_workspace_dir
 from tools.dummy import orchestrator
 
@@ -17,6 +18,162 @@ def _workspace_env_setter(base_dir: Path) -> Callable[..., None]:
         os.environ["WORKSPACE_ROOT_DIR"] = str(base_dir)
 
     return _setter
+
+
+def test_resolve_workspace_layout_requires_ctx(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    monkeypatch.delattr(orchestrator.WorkspaceLayout, "from_workspace", raising=False)
+
+    def fail_load(*_: Any, **__: Any) -> Any:
+        raise AssertionError("PipelineClientContext.load should not run")
+
+    monkeypatch.setattr(orchestrator.PipelineClientContext, "load", fail_load)
+
+    with pytest.raises(orchestrator.HardCheckError) as excinfo:
+        orchestrator._resolve_workspace_layout(base_dir=repo_root, slug="dummy", ctx=None)
+    assert "WorkspaceLayout resolution requires ctx" in str(excinfo.value)
+
+
+def _assert_single_context_load(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    logger: logging.Logger,
+    **overrides: object,
+) -> None:
+    calls: list[str | None] = []
+    real_load = orchestrator.PipelineClientContext.load
+
+    def _counting_load(*args: Any, **kwargs: Any) -> Any:
+        calls.append(kwargs.get("stage"))
+        return real_load(*args, **kwargs)
+
+    monkeypatch.setattr(orchestrator.PipelineClientContext, "load", _counting_load)
+    monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
+
+    workspace_base = local_workspace_dir(tmp_path / "output", "dummy-bootstrap")
+
+    payload_kwargs: dict[str, object] = {
+        "slug": "dummy-bootstrap",
+        "client_name": "Dummy Co.",
+        "enable_drive": False,
+        "allow_local_only_override": False,
+        "enable_vision": False,
+        "enable_semantic": False,
+        "enable_enrichment": False,
+        "enable_preview": False,
+        "records_hint": None,
+        "deep_testing": False,
+        "logger": logger,
+        "repo_root": tmp_path,
+        "ensure_local_workspace_for_ui": _workspace_env_setter(workspace_base),
+        "run_vision": lambda **_: None,
+        "get_env_var": lambda *_: None,
+        "ensure_within_and_resolve_fn": orchestrator.ensure_within_and_resolve,
+        "open_for_read_bytes_selfguard": lambda path: path.open("rb"),
+        "load_vision_template_sections": lambda: [],
+        "client_base": lambda _: workspace_base,
+        "pdf_path": lambda _: workspace_base / "config" / "VisionStatement.pdf",
+        "register_client_fn": lambda *_args, **_kwargs: None,
+        "ClientContext": orchestrator.PipelineClientContext,
+        "get_client_config": None,
+        "ensure_drive_minimal_and_upload_config": None,
+        "emit_readmes_for_raw": None,
+        "run_vision_with_timeout_fn": lambda **_: (True, None),
+        "load_mapping_categories_fn": lambda *_, **__: {},
+        "ensure_minimal_tags_db_fn": lambda *_args, **_kwargs: None,
+        "ensure_raw_pdfs_fn": lambda *_args, **_kwargs: None,
+        "ensure_local_readmes_fn": lambda *_args, **_kwargs: [],
+        "ensure_book_skeleton_fn": lambda *_args, **_kwargs: None,
+        "write_basic_semantic_yaml_fn": None,
+        "write_minimal_tags_raw_fn": lambda *_args, **_kwargs: workspace_base / "semantic" / "tags_raw.json",
+        "validate_dummy_structure_fn": lambda *_args, **_kwargs: None,
+        "ensure_spacy_available_fn": lambda policy: None,
+        "call_drive_min_fn": lambda *_args, **_kwargs: None,
+        "call_drive_emit_readmes_fn": lambda *_args, **_kwargs: {},
+    }
+    for key, value in overrides.items():
+        payload_kwargs[key] = value
+
+    if overrides.get("enable_semantic"):
+        monkeypatch.setattr(orchestrator, "semantic_convert_markdown", lambda *_, **__: None)
+        monkeypatch.setattr(orchestrator, "semantic_write_summary_and_readme", lambda *_, **__: None)
+        monkeypatch.setattr(orchestrator, "write_qa_evidence", lambda *_, **__: None)
+
+    if overrides.get("enable_vision"):
+        config_dir = workspace_base / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        vision_pdf = config_dir / "VisionStatement.pdf"
+        vision_pdf.write_bytes(b"%PDF-1.4\n")
+        vision_yaml = workspace_base / "config" / "visionstatement.yaml"
+        monkeypatch.setattr(
+            orchestrator,
+            "compile_document_to_vision_yaml",
+            lambda *_args, **_kwargs: safe_write_text(vision_yaml, "title: dummy\n", encoding="utf-8", atomic=True),
+        )
+
+    orchestrator.build_dummy_payload(**payload_kwargs)
+    assert calls == [orchestrator._CTX_STAGE_POST_SKELETON]
+
+
+def test_dummy_bootstrap_context_load_failure_triggers_hardcheck(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    logger: logging.Logger,
+) -> None:
+    calls: list[str | None] = []
+
+    def _failing_load(*_: Any, **kwargs: Any) -> Any:
+        calls.append(kwargs.get("stage"))
+        raise RuntimeError("fail post-skeleton")
+
+    monkeypatch.setattr(orchestrator.PipelineClientContext, "load", _failing_load)
+    monkeypatch.setattr(orchestrator, "run_raw_ingest", lambda **_: None)
+
+    workspace_base = local_workspace_dir(tmp_path / "output", "dummy-bootstrap")
+
+    with pytest.raises(orchestrator.HardCheckError) as excinfo:
+        orchestrator.build_dummy_payload(
+            slug="dummy-bootstrap",
+            client_name="Dummy Co.",
+            enable_drive=False,
+            allow_local_only_override=False,
+            enable_vision=False,
+            enable_semantic=True,
+            enable_enrichment=False,
+            enable_preview=False,
+            records_hint=None,
+            deep_testing=False,
+            logger=logger,
+            repo_root=tmp_path,
+            ensure_local_workspace_for_ui=lambda **_: None,
+            run_vision=lambda **_: None,
+            get_env_var=lambda *_: None,
+            ensure_within_and_resolve_fn=orchestrator.ensure_within_and_resolve,
+            open_for_read_bytes_selfguard=lambda path: path.open("rb"),
+            load_vision_template_sections=lambda: [],
+            client_base=lambda _: workspace_base,
+            pdf_path=lambda _: workspace_base / "config" / "VisionStatement.pdf",
+            register_client_fn=lambda *_args, **_kwargs: None,
+            ClientContext=orchestrator.PipelineClientContext,
+            get_client_config=None,
+            ensure_drive_minimal_and_upload_config=None,
+            emit_readmes_for_raw=None,
+            run_vision_with_timeout_fn=lambda **_: (True, None),
+            load_mapping_categories_fn=lambda *_, **__: {},
+            ensure_minimal_tags_db_fn=lambda *_args, **_kwargs: None,
+            ensure_raw_pdfs_fn=lambda *_args, **_kwargs: None,
+            ensure_local_readmes_fn=lambda *_args, **_kwargs: [],
+            ensure_book_skeleton_fn=lambda *_args, **_kwargs: None,
+            write_basic_semantic_yaml_fn=None,
+            write_minimal_tags_raw_fn=lambda *_args, **_kwargs: workspace_base / "semantic" / "tags_raw.json",
+            validate_dummy_structure_fn=lambda *_args, **_kwargs: None,
+            ensure_spacy_available_fn=lambda policy: None,
+            call_drive_min_fn=lambda *_args, **_kwargs: None,
+        )
+
+    assert calls == [orchestrator._CTX_STAGE_POST_SKELETON]
+    assert excinfo.value.health.get("stop_code") == "dummy_context_load_failed"
 
 
 @pytest.fixture
@@ -46,7 +203,12 @@ def test_dummy_bootstrap_records_event(monkeypatch, tmp_path: Path, logger: logg
 
     conn = DummyConn()
 
-    def _fake_resolve_workspace_layout(*, base_dir: Path, slug: str) -> object:
+    def _fake_resolve_workspace_layout(
+        *,
+        base_dir: Path,
+        slug: str,
+        ctx: Any | None = None,
+    ) -> object:
         assert base_dir == workspace_base
         assert slug == expected_slug
         return layout_marker
@@ -194,3 +356,25 @@ def test_dummy_bootstrap_loads_context_exactly_once(monkeypatch, tmp_path: Path,
     )
 
     assert calls == [orchestrator._CTX_STAGE_POST_SKELETON]
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        {"enable_semantic": True},
+        {"enable_drive": True},
+        {"enable_vision": True},
+    ],
+    ids=["semantic", "drive", "vision"],
+)
+def test_dummy_bootstrap_context_single_load_across_features(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    logger: logging.Logger,
+    flags: dict[str, bool],
+) -> None:
+    """
+    Il contratto Beta impone un solo ClientContext.load anche quando si aggiungono
+    feature come semantic, drive o vision (tutti mockati).
+    """
+    _assert_single_context_load(monkeypatch, tmp_path, logger, **flags)

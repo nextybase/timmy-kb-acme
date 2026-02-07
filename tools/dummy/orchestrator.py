@@ -10,6 +10,8 @@ from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Sequence
 
+import yaml
+
 from pipeline.context import ClientContext as PipelineClientContext
 from pipeline.config_utils import update_config_with_drive_ids
 from pipeline.exceptions import ConfigError
@@ -50,16 +52,12 @@ def _resolve_workspace_layout(
     if hasattr(layout_cls, "from_workspace"):
         return layout_cls.from_workspace(workspace=base_dir, slug=slug)
     if ctx is None:
-        ctx = PipelineClientContext.load(
-        slug=slug,
-        require_env=False,
-        run_id=None,
-        bootstrap_config=False,
-        stage="dummy.layout_resolve",
-    )
+        msg = "WorkspaceLayout resolution requires ctx when from_workspace is unavailable (Beta strict)."
+        raise HardCheckError(
+            msg,
+            build_hardcheck_health("dummy_layout_resolution_failed", msg, mode="beta"),
+        )
     return layout_cls.from_context(ctx)
-
-import yaml
 
 
 class HardCheckError(Exception):
@@ -113,6 +111,7 @@ def _record_dummy_bootstrap_event(
     enable_enrichment: bool,
     enable_preview: bool,
     logger: logging.Logger,
+    ctx: PipelineClientContext | None = None,
 ) -> None:
     payload = {
         "slug": slug,
@@ -133,7 +132,7 @@ def _record_dummy_bootstrap_event(
     )
     status = "pass"
     try:
-        layout = _resolve_workspace_layout(base_dir=base_dir, slug=slug)
+        layout = _resolve_workspace_layout(base_dir=base_dir, slug=slug, ctx=ctx)
         conn = decision_ledger.open_ledger(layout)
         try:
             decision_ledger.record_event(
@@ -590,6 +589,21 @@ def build_dummy_payload(
 
     _merge_config_with_template(workspace_root, logger=logger)
     _apply_allow_local_only_override(workspace_root, allow=allow_local_only_override, logger=logger)
+
+    ctx_post_skeleton: PipelineClientContext | None = None
+    ctx_post_skeleton_exc: Exception | None = None
+    if ClientContext is not None:
+        try:
+            ctx_post_skeleton = ClientContext.load(
+                slug=slug,
+                require_env=False,
+                run_id=None,
+                bootstrap_config=False,
+                stage=_CTX_STAGE_POST_SKELETON,
+            )
+        except Exception as exc:
+            ctx_post_skeleton_exc = exc
+
     _record_dummy_bootstrap_event(
         base_dir=workspace_root,
         slug=slug,
@@ -600,21 +614,8 @@ def build_dummy_payload(
         enable_enrichment=enable_enrichment,
         enable_preview=enable_preview,
         logger=logger,
+        ctx=ctx_post_skeleton,
     )
-
-    # Single context load post-skeleton (riutilizzato per precheck + config update).
-    ctx_post_skeleton: PipelineClientContext | None = None
-    if ClientContext is not None:
-        try:
-            ctx_post_skeleton = ClientContext.load(
-                slug=slug,
-                require_env=False,
-                run_id=None,
-                bootstrap_config=False,
-                stage=_CTX_STAGE_POST_SKELETON,
-            )
-        except Exception:
-            ctx_post_skeleton = None
 
     if ctx_post_skeleton is not None:
         strict_requested, strict_source = _get_vision_strict_output(ctx_post_skeleton)
@@ -809,13 +810,29 @@ def build_dummy_payload(
                 build_hardcheck_health("raw_ingest", msg, mode=policy.mode),
             )
 
+        if ctx_post_skeleton is None:
+            if ctx_post_skeleton_exc is not None:
+                msg = "ClientContext post-skeleton fallito; semantic non può partire."
+                raise HardCheckError(
+                    msg,
+                    build_hardcheck_health(
+                        "dummy_context_load_failed",
+                        msg,
+                        mode=policy.mode,
+                    ),
+                ) from ctx_post_skeleton_exc
+            msg = "ClientContext post-skeleton mancante; semantic non può partire."
+            raise HardCheckError(
+                msg,
+                build_hardcheck_health(
+                    "dummy_semantic_context_unavailable",
+                    msg,
+                    mode=policy.mode,
+                ),
+            )
+
         run_id = uuid.uuid4().hex
-        semantic_ctx = PipelineClientContext.load(
-            slug=slug,
-            require_env=False,
-            run_id=run_id,
-            bootstrap_config=False,
-        )
+        semantic_ctx = ctx_post_skeleton.with_run_id(run_id).with_stage("dummy.semantic")
         _ensure_semantic_mapping_has_tagger(safe_mapping_path)
         logger_semantic = get_structured_logger(
             "tools.gen_dummy_kb.semantic",

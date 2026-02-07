@@ -172,7 +172,7 @@ def test_deep_compiles_yaml_before_vision(
         client_base=lambda _: base_dir,
         pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
         register_client_fn=lambda *_args, **_kwargs: None,
-        ClientContext=None,
+        ClientContext=orchestrator.PipelineClientContext,
         get_client_config=None,
         ensure_drive_minimal_and_upload_config=None,
         emit_readmes_for_raw=None,
@@ -474,23 +474,35 @@ def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
     )
     monkeypatch.setattr(orchestrator, "semantic_convert_markdown", lambda *_, **__: None)
     monkeypatch.setattr(orchestrator, "semantic_write_summary_and_readme", lambda *_, **__: None)
-    monkeypatch.setattr(
-        orchestrator,
-        "PipelineClientContext",
-        type(
-            "DummyCtx",
-            (),
-            {
-                "load": staticmethod(
-                    lambda **__: type("Ctx", (), {"logs_dir": layout.logs_dir, "log_dir": layout.logs_dir})()
-                )
-            },
-        ),
-    )
+
+    class _DummyCtx:
+        @staticmethod
+        def load(**__: Any) -> Any:
+            class _Ctx:
+                def __init__(self) -> None:
+                    self.logs_dir = layout.logs_dir
+                    self.log_dir = layout.logs_dir
+
+                def with_run_id(self, run_id: str) -> "_Ctx":
+                    return self
+
+                def with_stage(self, stage: str) -> "_Ctx":
+                    return self
+
+            return _Ctx()
+
+    monkeypatch.setattr(orchestrator, "PipelineClientContext", _DummyCtx)
     monkeypatch.setattr(
         orchestrator,
         "WorkspaceLayout",
-        type("DummyWL", (), {"from_context": staticmethod(lambda _ctx: layout)}),
+        type(
+            "DummyWL",
+            (),
+            {
+                "from_context": staticmethod(lambda _ctx: layout),
+                "from_workspace": staticmethod(lambda workspace, slug: layout),
+            },
+        ),
     )
 
     def _vision_stub(**_: Any) -> tuple[bool, None]:
@@ -517,7 +529,7 @@ def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
         client_base=lambda _: base_dir,
         pdf_path=lambda _: base_dir / "config" / "VisionStatement.pdf",
         register_client_fn=lambda *_args, **_kwargs: None,
-        ClientContext=None,
+        ClientContext=orchestrator.PipelineClientContext,
         get_client_config=None,
         ensure_drive_minimal_and_upload_config=None,
         emit_readmes_for_raw=None,
