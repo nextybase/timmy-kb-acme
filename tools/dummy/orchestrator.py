@@ -765,7 +765,13 @@ def build_dummy_payload(
                         mode=policy.mode,
                     ),
                 ) from exc
-        with _non_strict_step("vision_enrichment", logger=logger, base_dir=base_dir, slug=slug):
+        with _non_strict_step(
+            "vision_enrichment",
+            logger=logger,
+            base_dir=base_dir,
+            slug=slug,
+            mode=policy.mode,
+        ):
             start = perf_counter()
             success, vision_meta = run_vision_with_timeout_fn(
                 base_dir=base_dir,
