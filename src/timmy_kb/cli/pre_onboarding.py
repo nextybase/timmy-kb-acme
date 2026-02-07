@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from pipeline.artifact_policy import enforce_core_artifacts
+from pipeline.beta_flags import is_beta_strict
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.config_utils import (
     get_client_config,
@@ -260,7 +261,14 @@ def _is_local_only_mode(context: ClientContext, *, dry_run: bool) -> bool:
         return True
     try:
         cfg = get_client_config(context) or {}
-    except Exception:
+    except Exception as exc:
+        if is_beta_strict():
+            raise ConfigError(
+                "Impossibile determinare la modalità local-only: configurazione non leggibile.",
+                slug=context.slug,
+                error=str(exc),
+                code="local_only.check_failed",
+            ) from exc
         return False
     ui_section = cfg.get("ui")
     if not isinstance(ui_section, dict):
@@ -651,7 +659,19 @@ def pre_onboarding_main(
         vision_evidence_refs = _validate_vision_artifacts(context, layout)
 
         local_only_mode = _is_local_only_mode(context, dry_run=dry_run)
+        strict_mode = is_beta_strict()
         if local_only_mode:
+            if strict_mode:
+                reason = "dry-run" if dry_run else "allow_local_only"
+                logger.error(
+                    "cli.pre_onboarding.local_only_disabled_strict",
+                    extra={"slug": context.slug, "mode": reason},
+                )
+                raise ConfigError(
+                    "Modalità local-only/dry-run non supportata in strict pre_onboarding.",
+                    slug=context.slug,
+                    code="local_only.strict_disallowed",
+                )
             enforce_core_artifacts("pre_onboarding", layout=layout)
             reason = "dry-run" if dry_run else "allow_local_only"
             logger.info(

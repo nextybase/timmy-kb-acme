@@ -355,7 +355,6 @@ def sandbox_workspace(tmp_path_factory):
     }
 
 
-
 @pytest.fixture
 def dummy_logger():
     """Logger silenziato per i test: evita rumore in output."""

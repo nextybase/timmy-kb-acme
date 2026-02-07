@@ -6,11 +6,13 @@ import os
 import signal
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator, Optional, cast
+from typing import Any, Callable, Iterator, Optional, cast
 
 import streamlit as st
 
+from pipeline.logging_utils import get_structured_logger
 from ui.clients_store import get_all as get_clients
+from ui.errors import to_user_message
 from ui.pages.registry import PagePaths
 from ui.theme_enhancements import inject_theme_css
 from ui.utils.control_plane import ensure_runtime_strict
@@ -19,6 +21,28 @@ from .landing_slug import _request_shutdown as _shutdown  # deterministico
 from .utils import clear_active_slug, get_slug, require_active_slug
 from .utils.branding import render_brand_header, render_sidebar_brand
 from .utils.html import esc_text
+
+_LOGGER = get_structured_logger("ui.chrome")
+
+
+def _halt_ui(action: str, exc: Exception, *, slug: str | None = None) -> None:
+    extra: dict[str, object] = {"action": action}
+    if slug:
+        extra["slug"] = slug
+    _LOGGER.exception("ui.chrome.action_failed", extra=extra, exc_info=exc)
+    title, body, caption = to_user_message(exc)
+    st.error(f"{title}: {body}")
+    if caption:
+        st.caption(caption)
+    st.stop()
+
+
+def _run_action(action: str, callback: Callable[[], Any], *, slug: str | None = None) -> Any:
+    try:
+        return callback()
+    except Exception as exc:
+        _halt_ui(action, exc, slug=slug)
+
 
 # Root repo per branding (favicon/logo)
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -82,15 +106,11 @@ def sidebar(slug: str | None) -> None:
             if callable(fn):
                 try:
                     return fn(*args, **kwargs)
-                except TypeError:
-                    if "width" in kwargs:
-                        safe_kwargs = dict(kwargs)
-                        safe_kwargs.pop("width", None)
-                        return fn(*args, **safe_kwargs)
-                    raise
-                except Exception:
-                    return None
-            return None
+                except TypeError as exc:
+                    _halt_ui(f"sidebar.{method}.type_error", exc, slug=slug)
+                except Exception as exc:
+                    _halt_ui(f"sidebar.{method}", exc, slug=slug)
+            _halt_ui(f"sidebar.{method}.missing", RuntimeError(f"sidebar method {method} missing"), slug=slug)
 
         has_slug = bool(slug)
 
@@ -108,14 +128,16 @@ def sidebar(slug: str | None) -> None:
                 width="stretch",
             )
             if btn_sel:
-                try:
-                    clear_active_slug(persist=True, update_query=True)
-                except Exception:
-                    pass
-                try:
-                    st.switch_page(PagePaths.MANAGE)
-                except Exception:
-                    pass
+                _run_action(
+                    "clear_active_slug_manage",
+                    lambda: clear_active_slug(persist=True, update_query=True),
+                    slug=slug,
+                )
+                _run_action(
+                    "switch_to_manage",
+                    lambda: st.switch_page(PagePaths.MANAGE),
+                    slug=slug,
+                )
 
         _call("subheader", "Azioni rapide")
 
@@ -127,11 +149,8 @@ def sidebar(slug: str | None) -> None:
             width="stretch",
         )
         if btn:
-            clear_active_slug()
-            try:
-                getattr(st, "rerun", lambda: None)()
-            except Exception:
-                pass
+            _run_action("clear_active_slug_home", clear_active_slug, slug=slug)
+            _run_action("rerun_page", lambda: getattr(st, "rerun")(), slug=slug)
 
         # (rimosso) Bottone "Aggiorna Drive" non più previsto dalla guida UI
 
@@ -145,25 +164,31 @@ def sidebar(slug: str | None) -> None:
         )
         if btn_exit:
             # Pulisci eventuale stato cliente, poi spegni il server
-            try:
-                clear_active_slug(persist=True, update_query=True)
-            except Exception:
-                pass
-            try:
-                st.info("Chiusura in corso…")
-            except Exception:
-                pass
+            _run_action(
+                "clear_active_slug_exit",
+                lambda: clear_active_slug(persist=True, update_query=True),
+                slug=slug,
+            )
+            _run_action("shutdown_notice", lambda: st.info("Chiusura in corso…"), slug=slug)
             try:
                 _shutdown(None)
-            except Exception:
+            except Exception as exc:
+                _LOGGER.exception(
+                    "ui.chrome.shutdown_failed",
+                    extra={"slug": slug or "<none>"},
+                    exc_info=exc,
+                )
                 try:
                     os.kill(os.getpid(), signal.SIGTERM)
-                except Exception:
+                except Exception as kill_exc:
+                    _LOGGER.exception(
+                        "ui.chrome.shutdown_kill_failed",
+                        extra={"slug": slug or "<none>"},
+                        exc_info=kill_exc,
+                    )
                     os._exit(0)
-            try:
-                st.stop()
-            except Exception:
-                pass
+                _halt_ui("shutdown", exc, slug=slug)
+            _run_action("stop_streamlit", lambda: st.stop(), slug=slug)
 
 
 def render_chrome_then_require(

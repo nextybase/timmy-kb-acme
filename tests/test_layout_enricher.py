@@ -4,7 +4,7 @@
 import pytest
 
 from pipeline.exceptions import ConversionError
-from semantic.layout_enricher import Constraints, merge_non_distruttivo, suggest_layout, to_kebab, validate_yaml_schema
+from semantic.layout_enricher import Constraints, merge_non_distruttivo, suggest_layout, validate_yaml_schema
 
 
 @pytest.fixture
@@ -34,7 +34,6 @@ def constraints_dict():
             "operations": ["ops", "operativita", "processi"],
         },
     }
-
 
 
 def test_constraints_from_dict(constraints_dict):

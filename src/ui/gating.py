@@ -10,9 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import Iterable, Literal, Mapping, Sequence
 
-from pipeline.beta_flags import is_beta_strict
 from pipeline.exceptions import CapabilityUnavailableError, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -43,7 +42,7 @@ _CAPABILITY_CACHE: dict[Path, dict[str, object]] = {}
 _CAPABILITY_SCHEMA_VERSION = 1
 _CAPABILITY_FILENAME = "gate_capabilities.json"
 _OPTIONAL_GATES = {"drive", "vision", "tags"}
-_LAST_OPTIONAL_GATES: dict[str, dict[str, bool]] = {}
+_LAST_OPTIONAL_GATES: dict[str, dict[str, str]] = {}
 
 
 def _log_gating_failure(event: str, exc: Exception, *, extra: dict[str, object] | None = None) -> None:
@@ -128,6 +127,11 @@ class GateState:
 
 
 _KNOWN_GATES = frozenset(GateState.__annotations__.keys())
+_OPTIONAL_STATUS_LABELS: dict[str, str] = {
+    "AVAILABLE": "operazione disponibile",
+    "UNAVAILABLE": "operazione non disponibile",
+    "SKIPPED": "operazione saltata (modalità local-only o flag disabilitato)",
+}
 
 
 def compute_gates(env: Mapping[str, str] | None = None) -> GateState:
@@ -167,6 +171,27 @@ def _gate_reason(
     if enabled and not module_available:
         return "env_enabled_module_missing"
     return "env_enabled" if enabled else "env_disabled"
+
+
+OptionalGateStatus = Literal["AVAILABLE", "UNAVAILABLE", "SKIPPED"]
+
+
+def _optional_gate_status(
+    name: str,
+    env: Mapping[str, str],
+    *,
+    module_available: bool,
+) -> tuple[OptionalGateStatus, str]:
+    env_var = name.upper()
+    enabled = _flag(env, env_var, module_available)
+    if enabled and module_available:
+        status: OptionalGateStatus = "AVAILABLE"
+    elif enabled and not module_available:
+        status = "UNAVAILABLE"
+    else:
+        status = "SKIPPED"
+    reason = _gate_reason(env, env_var=env_var, module_available=module_available)
+    return status, reason
 
 
 def build_gate_capability_manifest(env: Mapping[str, str] | None = None) -> dict[str, object]:
@@ -253,6 +278,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
         st.error(message)
         st.stop()
 
+    env_map = os.environ
     groups: dict[str, list[PageSpec]] = {}
     specs_by_group = page_specs()
     required_gates = {name for specs in specs_by_group.values() for spec in specs for name in _requires(spec)}
@@ -261,7 +287,6 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
     semantic_ready = False
     tagging_ready_flag = False
     state_norm = ""
-    strict_mode = is_beta_strict()
     try:
         slug = get_active_slug()
     except Exception as exc:
@@ -284,72 +309,50 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
 
     if slug:
         try:
-            ready, _path = normalized_ready(slug, strict=strict_mode)
-            normalized_ready_flag = bool(ready)
+            ready, _path = normalized_ready(slug, strict=True)
         except Exception as exc:
-            if strict_mode:
-                _stop_gating_error(
-                    "ui.gating.normalized_ready_failed",
-                    "Errore nel gating UI: normalized_ready fallito.",
-                    slug=slug,
-                    error=exc,
-                )
-            _log_gating_failure(
+            _stop_gating_error(
                 "ui.gating.normalized_ready_failed",
-                exc,
-                extra={"slug": slug, "path": "", "strict": bool(strict_mode), "reason": "exception"},
+                "Errore nel gating UI: normalized_ready fallito.",
+                slug=slug,
+                error=exc,
             )
-            normalized_ready_flag = False
+        normalized_ready_flag = bool(ready)
         try:
-            tagging_ready_flag, _ = tagging_ready(slug, strict=strict_mode)
+            tagging_ready_flag, _ = tagging_ready(slug, strict=True)
         except Exception as exc:
-            if strict_mode:
-                _stop_gating_error(
-                    "ui.gating.tagging_ready_failed",
-                    "Errore nel gating UI: tagging_ready fallito.",
-                    slug=slug,
-                    error=exc,
-                )
-            _log_gating_failure(
+            _stop_gating_error(
                 "ui.gating.tagging_ready_failed",
-                exc,
-                extra={"slug": slug, "path": "", "strict": bool(strict_mode), "reason": "exception"},
+                "Errore nel gating UI: tagging_ready fallito.",
+                slug=slug,
+                error=exc,
             )
-            tagging_ready_flag = False
         try:
             state_value = get_state(slug) or ""
-            state_norm = state_value.strip().lower()
-            semantic_ready = state_norm in SEMANTIC_READY_STATES
         except Exception as exc:
-            if strict_mode:
-                _stop_gating_error(
-                    "ui.gating.state_failed",
-                    "Errore nel gating UI: stato cliente non disponibile.",
-                    slug=slug,
-                    error=exc,
-                )
-            _log_gating_failure(
+            _stop_gating_error(
                 "ui.gating.state_failed",
-                exc,
-                extra={"slug": slug, "path": "", "strict": bool(strict_mode), "reason": "exception"},
+                "Errore nel gating UI: stato cliente non disponibile.",
+                slug=slug,
+                error=exc,
             )
-            state_norm = ""
-            semantic_ready = False
+        state_norm = state_value.strip().lower()
+        semantic_ready = state_norm in SEMANTIC_READY_STATES
     slug_key = slug or "<none>"
     last_state = _LAST_NORMALIZED_READY.get(slug_key)
     if not normalized_ready_flag and last_state is not False:
-        try:
-            _LOGGER.debug(
-                "ui.gating.sem_hidden",
-                extra={
-                    "slug": slug or "",
-                    "normalized_ready": normalized_ready_flag,
-                    "tagging_ready": tagging_ready_flag,
-                },
-            )
-        except Exception:
-            pass
+        _LOGGER.debug(
+            "ui.gating.sem_hidden",
+            extra={
+                "slug": slug or "",
+                "normalized_ready": normalized_ready_flag,
+                "tagging_ready": tagging_ready_flag,
+            },
+        )
     _LAST_NORMALIZED_READY[slug_key] = normalized_ready_flag
+    drive_avail = _module_available("ui.services.drive_runner", attr="plan_raw_download")
+    vision_avail = _module_available("ui.services.vision_provision", attr="run_vision")
+    tags_avail = _module_available("ui.services.tags_adapter", attr="run_tags_update")
     optional_required = sorted(required_gates & _OPTIONAL_GATES)
     if optional_required:
         last_optional = _LAST_OPTIONAL_GATES.get(slug_key, {})
@@ -357,22 +360,38 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
             from ui.utils.stubs import get_streamlit
 
             st = get_streamlit()
-        except Exception:
-            st = None
-        current_optional: dict[str, bool] = {}
+        except Exception as exc:
+            _stop_gating_error(
+                "ui.gating.streamlit_stub_failed",
+                "Errore nel gating UI: impossibile inizializzare Streamlit per le notifiche opzionali.",
+                slug=slug,
+                error=exc,
+            )
+        current_optional: dict[str, dict[str, str]] = {}
         for name in optional_required:
-            enabled = bool(getattr(gates, name, False))
-            current_optional[name] = enabled
-            if not enabled and last_optional.get(name) is not False:
+            module_available = {
+                "drive": drive_avail,
+                "vision": vision_avail,
+                "tags": tags_avail,
+            }[name]
+            status, reason = _optional_gate_status(name, env_map, module_available=module_available)
+            current_optional[name] = {"status": status, "reason": reason}
+            prev_entry = last_optional.get(name)
+            last_status = prev_entry.get("status") if isinstance(prev_entry, dict) else None
+            if status != "AVAILABLE":
                 _LOGGER.warning(
-                    "ui.gating.optional_gate_disabled",
-                    extra={"slug": slug or "", "gate": name},
+                    "ui.gating.optional_gate_status",
+                    extra={"slug": slug or "", "gate": name, "status": status, "reason": reason},
                 )
-                if st is not None:
-                    try:
-                        st.warning(f"Funzionalita' opzionale non disponibile: {name}.")
-                    except Exception:
-                        pass
+                if status != last_status:
+                    label = _OPTIONAL_STATUS_LABELS.get(status, status.lower())
+                    st.warning(f"Funzionalità opzionale {name}: {label} ({reason}).")
+                _stop_gating_error(
+                    "ui.gating.optional_gate_required_failed",
+                    f"Funzionalità obbligatoria {name} non disponibile: {status} ({reason})",
+                    slug=slug,
+                    error=RuntimeError(f"{name} status={status} reason={reason}"),
+                )
         _LAST_OPTIONAL_GATES[slug_key] = current_optional
     last_preview = _LAST_PREVIEW_READY.get(slug_key)
     for group, specs in specs_by_group.items():
@@ -387,18 +406,15 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
             groups[group] = allowed
     preview_visible = any(spec.path == PagePaths.PREVIEW for specs in groups.values() for spec in specs)
     if not preview_visible and last_preview is not False:
-        try:
-            _LOGGER.debug(
-                "ui.gating.preview_hidden",
-                extra={
-                    "slug": slug or "",
-                    "normalized_ready": normalized_ready_flag,
-                    "tagging_ready": tagging_ready_flag,
-                    "semantic_ready": semantic_ready,
-                    "state": state_norm,
-                },
-            )
-        except Exception:
-            pass
+        _LOGGER.debug(
+            "ui.gating.preview_hidden",
+            extra={
+                "slug": slug or "",
+                "normalized_ready": normalized_ready_flag,
+                "tagging_ready": tagging_ready_flag,
+                "semantic_ready": semantic_ready,
+                "state": state_norm,
+            },
+        )
     _LAST_PREVIEW_READY[slug_key] = preview_visible
     return groups
