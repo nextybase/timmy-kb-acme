@@ -11,7 +11,7 @@
 
 ## 2. Flag coverage vs. entropy
 
-- `enable_semantic=True` (vision flag optional): still only one `ClientContext.load`, errors before semantics now re‑raise the original loader exception via `ctx_post_skeleton_exc`.
+- `enable_semantic=True` (vision flag optional): still only one `ClientContext.load`, errors before semantics now re-raise the original loader exception via `ctx_post_skeleton_exc`.
 - `enable_drive=True`: drive helpers are stubbed in contract tests and do not trigger any additional load paths beyond the singleton context.
 - `enable_vision=True`: vision steps run through the provided `run_vision_with_timeout_fn`; `ClientContext.load` remains the single post-skeleton load because `_resolve_workspace_layout` is given the existing context and semantic helper reuses it with `with_run_id`.
 

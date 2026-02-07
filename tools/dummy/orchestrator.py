@@ -47,6 +47,8 @@ def _resolve_workspace_layout(
     base_dir: Path,
     slug: str,
     ctx: PipelineClientContext | None = None,
+    *,
+    mode: str = "beta",
 ) -> WorkspaceLayout:
     layout_cls = WorkspaceLayout
     if hasattr(layout_cls, "from_workspace"):
@@ -55,7 +57,7 @@ def _resolve_workspace_layout(
         msg = "WorkspaceLayout resolution requires ctx when from_workspace is unavailable (Beta strict)."
         raise HardCheckError(
             msg,
-            build_hardcheck_health("dummy_layout_resolution_failed", msg, mode="beta"),
+            build_hardcheck_health("dummy_layout_resolution_failed", msg, mode=mode),
         )
     return layout_cls.from_context(ctx)
 
@@ -77,9 +79,10 @@ def _audit_non_strict_step(
     status: str,
     reason_code: str,
     strict_output: bool,
+    mode: str = "beta",
     ctx: PipelineClientContext | None = None,
 ) -> None:
-    layout = _resolve_workspace_layout(base_dir=base_dir, slug=slug, ctx=ctx)
+    layout = _resolve_workspace_layout(base_dir=base_dir, slug=slug, ctx=ctx, mode=mode)
     conn = decision_ledger.open_ledger(layout)
     try:
         decision_ledger.record_event(
@@ -169,7 +172,9 @@ def _readme_counts(local_readmes: Sequence[Any], drive_readmes: Mapping[str, Any
 
 
 @contextmanager
-def _non_strict_step(step_name: str, *, logger: logging.Logger, base_dir: Path, slug: str) -> Any:
+def _non_strict_step(
+    step_name: str, *, logger: logging.Logger, base_dir: Path, slug: str, mode: str = "beta"
+) -> Any:
     if step_name not in ALLOWED_NON_STRICT_STEPS:
         raise RuntimeError(f"step {step_name!r} non autorizzato per non-strict")
     reason_code = step_name
@@ -208,6 +213,7 @@ def _non_strict_step(step_name: str, *, logger: logging.Logger, base_dir: Path, 
             status=status,
             reason_code=reason_code,
             strict_output=False,
+            mode=mode,
             ctx=getattr(logger, "_ctx_post_skeleton", None),
         )
 
