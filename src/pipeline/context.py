@@ -425,8 +425,8 @@ class ClientContext:
     def _load_env(*, require_drive_env: bool) -> Dict[str, Any]:
         """Raccoglie variabili d'ambiente rilevanti (richieste/opzionali).
 
-        Nota: qui si legge, non si redige; la policy di redazione è calcolata da
-        `compute_redact_flag`.
+        Restituisce stringhe raw da `os.environ`; i caller sono responsabili di convertire
+        eventuali flag (es. `CI`). La policy di redazione è calcolata da `compute_redact_flag`.
         """
         env_vars: Dict[str, Any] = {}
 

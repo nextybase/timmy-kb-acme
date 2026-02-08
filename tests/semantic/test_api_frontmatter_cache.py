@@ -6,8 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from pipeline.logging_utils import get_structured_logger
 
+from pipeline.logging_utils import get_structured_logger
 from semantic import api
 
 
@@ -72,9 +72,7 @@ def test_clear_frontmatter_cache_failure_logs_service_event(
 
     assert result[0] == workspace
     service_records = [
-        record
-        for record in caplog.records
-        if record.message == "semantic.frontmatter_cache.clear_failed"
+        record for record in caplog.records if record.message == "semantic.frontmatter_cache.clear_failed"
     ]
     assert len(service_records) == 1
     record = service_records[0]

@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Raw Transform Service: RAW -> normalized (plain Markdown).
 
-Contratto minimo:
 - input: file path + metadata di base
-- output: OK -> .md testo puro; SKIP -> formato non supportato; FAIL -> errore
+- output: OK -> .md testo puro; SKIP -> formato non supportato; FAIL -> non viene mai restituito.
+-   I fallimenti sono segnalati tramite `PipelineError`; l'enum è conservato per compatibilità futura, ma il
+-   comportamento attuale solleva eccezioni.
 - metadata obbligatori: transformer_name/version/ruleset_hash
 """
 

@@ -16,8 +16,9 @@ class QueryParams:
     """Parametri strutturati per la ricerca.
 
     Note:
-    - `db_path`: percorso del DB SQLite; se None, usa il default interno di
-      `fetch_candidates`.
+    - `db_path`: percorso ABSOLUTO del DB SQLite; deve essere fornito esplicitamente e
+      derivato da `WorkspaceLayout`/`ClientContext` (tipicamente `<workspace>/semantic/kb.sqlite`
+      via `KbStore`). Col valore `None` non si collegherà a nessun DB e la chiamata fallirà.
     - `slug`: progetto/spazio logico da cui recuperare i candidati.
     - `scope`: sotto-spazio o ambito (es. sezione o agente).
     - `query`: testo naturale da embeddare e confrontare con i candidati.

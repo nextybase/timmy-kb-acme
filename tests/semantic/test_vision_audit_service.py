@@ -26,9 +26,7 @@ def test_vision_audit_line_failure_logs_service_event(
 
     vp._write_audit_line(repo_root, record)
 
-    service_records = [
-        rec for rec in caplog.records if rec.message == vp._evt("audit_write_failed")
-    ]
+    service_records = [rec for rec in caplog.records if rec.message == vp._evt("audit_write_failed")]
     assert len(service_records) == 1
     rec = service_records[0]
     assert rec.slug == "test-slug"
@@ -69,9 +67,7 @@ def test_vision_audit_lock_cleanup_failure_logs_service_event(
 
     vp._write_audit_line(repo_root, record)
 
-    service_records = [
-        rec for rec in caplog.records if rec.message == vp._evt("audit_lock_cleanup_failed")
-    ]
+    service_records = [rec for rec in caplog.records if rec.message == vp._evt("audit_lock_cleanup_failed")]
     assert len(service_records) == 1
     rec = service_records[0]
     assert rec.slug == "lock-slug"

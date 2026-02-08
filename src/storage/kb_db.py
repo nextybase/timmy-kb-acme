@@ -143,7 +143,8 @@ def init_db(db_path: Optional[Path] = None) -> None:
             """
         )
         # Indice UNIQUE per idempotenza su chiave naturale (slug, scope, path, version, content)
-        # Safe-migration: se esistono già duplicati, la creazione fallisce -> log warning e prosegui.
+        # Strict init: su IntegrityError l'inizializzazione fallisce immediatamente, indicando la necessità
+        # di rigenerare il DB (non c'è recover o warn).
         try:
             con.execute(
                 """
