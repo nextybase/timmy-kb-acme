@@ -250,9 +250,14 @@ class ClientEnvSettings(_BaseSettings):
         # pyright/pylance: ok, chiamiamo super se esiste
         try:
             super().model_post_init(__context)
-        except Exception:
+        except AttributeError:
             # Nessuna azione se la super non definisce model_post_init.
             pass
+        except Exception as exc:
+            logger.debug(
+                "pipeline.config_utils.model_post_init_failed",
+                extra={"slug": getattr(self, "slug", None), "error": repr(exc)},
+            )
 
         for key in ("DRIVE_ID", "SERVICE_ACCOUNT_FILE"):
             if not getattr(self, key, None):

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 import time
 from functools import lru_cache
 from glob import iglob
@@ -355,8 +356,11 @@ def embed_and_persist(
     if inserted > 0:
         try:
             record_document_processed(slug, inserted)
-        except Exception:
-            pass
+        except Exception as log_exc:
+            try:
+                sys.stderr.write(f"ingest.record_document_processed logging_failure: {log_exc!r}\n")
+            except OSError:
+                pass
     return inserted
 
 

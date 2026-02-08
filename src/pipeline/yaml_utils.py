@@ -24,10 +24,13 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - dipendenza opzionale per ambienti limitati
     yaml = None
 
+from pipeline.logging_utils import get_structured_logger
+
 from .exceptions import ConfigError
 
 # Cache: {resolved_path: (mtime_ns, size, value)}
 _CACHE: Dict[Path, Tuple[int, int, Any]] = {}
+_logger = get_structured_logger("pipeline.yaml_utils")
 
 
 def _ensure_within_and_resolve(base: Path | str, p: Path | str) -> Path:
@@ -81,9 +84,11 @@ def yaml_read(
             cached = _CACHE.get(safe_p)
             if cached and cached[0] == mtime_ns and cached[1] == size:
                 return cached[2]
-        except Exception:
-            # Se la stat fallisce, ignora cache
-            pass
+        except Exception as stat_exc:
+            _logger.debug(
+                "yaml_utils.cache_stat_failed",
+                extra={"path": str(safe_p), "reason": str(stat_exc)},
+            )
 
     try:
         text = safe_p.read_text(encoding=encoding)
@@ -102,8 +107,11 @@ def yaml_read(
             mtime_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9)))
             size = int(st.st_size)
             _CACHE[safe_p] = (mtime_ns, size, data)
-        except Exception:
-            pass
+        except Exception as cache_exc:
+            _logger.debug(
+                "yaml_utils.cache_write_failed",
+                extra={"path": str(safe_p), "reason": str(cache_exc)},
+            )
 
     return data
 
@@ -112,8 +120,11 @@ def clear_yaml_cache() -> None:
     """Svuota la cache interna delle letture YAML."""
     try:
         _CACHE.clear()
-    except Exception:
-        pass
+    except Exception as clear_exc:
+        _logger.debug(
+            "yaml_utils.cache_clear_failed",
+            extra={"reason": str(clear_exc)},
+        )
 
 
 __all__ = [

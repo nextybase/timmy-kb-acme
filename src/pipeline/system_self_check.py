@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import List
 
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
+
+_logger = get_structured_logger("pipeline.system_self_check")
 
 
 @dataclass
@@ -51,8 +54,11 @@ def _check_output_writable(repo_root_dir: Path) -> CheckItem:
         safe_write_text(probe, "ok", encoding="utf-8", atomic=True)
         try:
             probe.unlink()
-        except Exception:
-            pass
+        except Exception as unlink_exc:
+            _logger.debug(
+                "system_self_check.probe_unlink_failed",
+                extra={"path": str(probe), "reason": str(unlink_exc)},
+            )
         return CheckItem(name="output_write", ok=True, message=f"output scrivibile: {output_dir}")
     except Exception as exc:  # pragma: no cover - dipende dal FS
         return CheckItem(

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "timmy-kb"
-version="1.9.5"
+version = "1.9.5"
 requires-python = ">=3.11"
 
 # Dipendenze runtime minime per installare il pacchetto via `pip install .`.
@@ -41,7 +41,7 @@ tests = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -65,7 +65,14 @@ line-length = 120
 target-version = "py311"
 # Allinea gli exclude a pre-commit; comunque i hook limitano a src/ e tests/
 exclude = [
-    "venv", ".venv", "node_modules", "output", "dist", "build", ".gitbook", "docs/_build"
+    "venv",
+    ".venv",
+    "node_modules",
+    "output",
+    "dist",
+    "build",
+    ".gitbook",
+    "docs/_build",
 ]
 
 [tool.ruff.lint]
@@ -73,11 +80,24 @@ select = ["E", "F", "W", "B", "S", "G"]
 ignore = ["E203", "ANN201", "ANN202", "ANN204", "B009", "B010", "B023", "B033", "B904", "E402", "S112", "S311"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S603", "S404", "B017", "S101", "ANN001", "ANN002", "ANN003", "B008"]
-"tools/**" = ["S110"]
+# Tests: tolleriamo scaffolding + best-effort
+"tests/**" = ["S110", "S603", "S404", "B017", "S101", "ANN001", "ANN002", "ANN003", "B008"]
+
+# Tooling: fuori dal runtime deterministico
+"tools/**" = ["S110", "S603", "S607", "S106", "T201"]
+
+# Eccezioni già presenti
 "src/timmy_kb/cli/tag_onboarding.py" = ["E501", "S608"]
-"src/pipeline/drive/**" = ["S110"]
 "src/pipeline/proc_utils.py" = ["S404", "S603"]
 "src/ui/app.py" = ["S404", "S603"]
 "src/storage/tags_store.py" = ["S608"]
-"tools/**" = ["S603", "S607", "S106", "T201"]
+
+# UI/Streamlit: errori cosmetici non devono bloccare
+"src/ui/**" = ["S110"]
+"src/timmy_kb/ui/**" = ["S110"]
+
+# Drive adapter: capability opzionale/best-effort
+"src/pipeline/drive/**" = ["S110"]
+
+# Logging plumbing: non deve mai bloccare (side-channel)
+"src/pipeline/logging_utils.py" = ["S110"]

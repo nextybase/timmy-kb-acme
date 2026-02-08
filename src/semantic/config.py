@@ -25,6 +25,7 @@ from typing import Any, Optional, cast
 
 from pipeline.config_utils import load_client_settings
 from pipeline.exceptions import ConfigError
+from pipeline.logging_utils import get_structured_logger
 from pipeline.settings import Settings as PipelineSettings
 from pipeline.workspace_layout import WorkspaceLayout
 from pipeline.yaml_utils import yaml_read
@@ -33,6 +34,8 @@ try:  # import condizionale per UI/CLI
     from pipeline.context import ClientContext
 except Exception:  # pragma: no cover
     ClientContext = None
+
+_logger = get_structured_logger("semantic.config")
 
 yaml: Any | None
 try:
@@ -159,13 +162,19 @@ def _normalize_tagger_section(d: dict[str, Any]) -> dict[str, Any]:
         if k in {"max_pages", "top_k"}:
             try:
                 out[k] = int(v)
-            except Exception:
-                pass
+            except Exception as exc:
+                _logger.debug(
+                    "semantic.config.coerce_int_failed",
+                    extra={"key": k, "value": str(v), "reason": str(exc)},
+                )
         elif k == "score_min":
             try:
                 out[k] = float(v)
-            except Exception:
-                pass
+            except Exception as exc:
+                _logger.debug(
+                    "semantic.config.coerce_float_failed",
+                    extra={"key": k, "value": str(v), "reason": str(exc)},
+                )
         elif k in {"ner", "keyphrases", "embeddings"}:
             out[k] = _coerce_bool(v, _DEFAULTS[k])
         elif k == "stop_tags":

@@ -8,7 +8,6 @@ from itertools import tee
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from pipeline.logging_utils import get_structured_logger
-from timmy_kb.cli import retriever_embeddings as embeddings_mod
 from timmy_kb.cli import retriever_throttle as throttle_mod
 from timmy_kb.cli import retriever_validation as validation_mod
 
@@ -16,8 +15,13 @@ LOGGER = get_structured_logger("timmy_kb.retriever")
 
 QueryParams = validation_mod.QueryParams
 SearchResult = validation_mod.SearchResult
-_coerce_candidate_vector = embeddings_mod._coerce_candidate_vector
 _deadline_exceeded = throttle_mod._deadline_exceeded
+
+
+def _coerce_candidate_vector(*args, **kwargs):
+    from timmy_kb.cli import retriever_embeddings as embeddings_mod
+
+    return embeddings_mod._coerce_candidate_vector(*args, **kwargs)
 
 
 def cosine(a: Iterable[float], b: Iterable[float]) -> float:

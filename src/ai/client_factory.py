@@ -2,6 +2,7 @@
 # src/ai/client_factory.py
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Dict
 
@@ -142,9 +143,11 @@ def _load_settings() -> Settings:
                 "openai.client.settings_load_failed",
                 extra={"error": repr(exc), "repo_root": str(_REPO_ROOT)},
             )
-        except Exception:
-            # In caso di logger non disponibile o handler rotti, non mascheriamo l'errore.
-            pass
+        except Exception as log_exc:
+            try:
+                sys.stderr.write(f"openai.client.settings_load_failed logging_failure: {log_exc!r}\\n")
+            except OSError:
+                pass
         raise ConfigError(
             "Impossibile caricare la configurazione globale (config/config.yaml). "
             "In Beta 1.0 il runtime è strict: correggi la config o il provisioning e riprova.",

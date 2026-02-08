@@ -11,6 +11,7 @@ Regole:
 - Import-safe: nessun side-effect a import-time.
 """
 
+import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, Mapping, Tuple
@@ -22,6 +23,8 @@ except Exception:  # pragma: no cover
 
 from .exceptions import ConfigError
 from .path_utils import ensure_within_and_resolve, read_text_safe
+
+LOG = logging.getLogger(__name__)
 
 # Cache: {resolved_path: (mtime_ns, size, (meta, body))}
 _CACHE: Dict[Path, Tuple[int, int, Tuple[Dict[str, Any], str]]] = {}
@@ -59,6 +62,22 @@ def dump_frontmatter(meta: Mapping[str, Any]) -> str:
         raise ConfigError("Errore dump frontmatter.") from exc
 
 
+def _stat_signature(p: Path) -> tuple[int, int] | None:
+    """Ritorna (mtime_ns, size) oppure None se non disponibile.
+
+    Nota: la cache è un'ottimizzazione; se la stat fallisce, degradiamo a "no cache"
+    ma in modo osservabile (debug).
+    """
+    try:
+        st = p.stat()
+        mtime_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9)))
+        size = int(st.st_size)
+        return mtime_ns, size
+    except Exception:
+        LOG.debug("frontmatter.cache.stat_failed", extra={"path": str(p)}, exc_info=True)
+        return None
+
+
 def read_frontmatter(
     base: Path,
     path: Path,
@@ -67,28 +86,27 @@ def read_frontmatter(
     use_cache: bool = True,
 ) -> Tuple[Dict[str, Any], str]:
     safe = ensure_within_and_resolve(base, path)
+
     if use_cache:
-        try:
-            st = safe.stat()
-            mtime_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9)))
-            size = int(st.st_size)
+        sig = _stat_signature(safe)
+        if sig is not None:
+            mtime_ns, size = sig
             cached = _CACHE.get(safe)
             if cached and cached[0] == mtime_ns and cached[1] == size:
                 return cached[2]
-        except Exception:
-            pass
 
     text = read_text_safe(safe.parent, safe, encoding=encoding)
     meta, body = parse_frontmatter(text)
 
     if use_cache:
-        try:
-            st = safe.stat()
-            mtime_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9)))
-            size = int(st.st_size)
+        sig = _stat_signature(safe)
+        if sig is not None:
+            mtime_ns, size = sig
             _CACHE[safe] = (mtime_ns, size, (meta, body))
-        except Exception:
+        else:
+            # cache write skipped (già loggato da _stat_signature)
             pass
+
     return meta, body
 
 
@@ -96,7 +114,8 @@ def clear_frontmatter_cache() -> None:
     try:
         _CACHE.clear()
     except Exception:
-        pass
+        # Anche questo è best-effort, ma non silenzioso.
+        LOG.debug("frontmatter.cache.clear_failed", exc_info=True)
 
 
 __all__ = [

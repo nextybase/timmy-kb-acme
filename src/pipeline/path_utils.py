@@ -528,8 +528,11 @@ def open_for_read(
     finally:
         try:
             f.close()
-        except Exception:
-            pass
+        except Exception as close_exc:
+            _logger.debug(
+                "path_utils.close_failed",
+                extra={"path": str(safe_p), "reason": str(close_exc)},
+            )
 
 
 @contextmanager
@@ -559,8 +562,11 @@ def open_for_read_bytes_selfguard(p: Path) -> Iterator[BinaryIO]:
     finally:
         try:
             f.close()
-        except Exception:
-            pass
+        except Exception as close_exc:
+            _logger.debug(
+                "path_utils.close_failed",
+                extra={"path": str(safe_p), "reason": str(close_exc)},
+            )
 
 
 def read_text_safe(base: Path, p: Path, *, encoding: str = "utf-8") -> str:

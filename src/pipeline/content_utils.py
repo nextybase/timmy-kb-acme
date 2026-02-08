@@ -16,8 +16,7 @@ from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
 from pipeline.frontmatter_utils import read_frontmatter
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import iter_safe_paths  # SSoT path-safety forte
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
+from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_paths, read_text_safe
 from pipeline.tracing import start_decision_span
 from pipeline.types import ChunkRecord
 from pipeline.workspace_layout import WorkspaceLayout
@@ -34,6 +33,31 @@ __all__ = [
     "log_frontmatter_cache_stats",
     "build_chunk_records_from_markdown_files",
 ]
+
+
+_FALLBACK_LOG = logging.getLogger(__name__)
+
+
+def _safe_log(logger: logging.Logger, level: str, event: str, *, extra: Mapping[str, Any] | None = None) -> None:
+    """Log best-effort ma mai silenzioso: se structured logger fallisce, degrada su stdlib logger."""
+    payload = dict(extra or {})
+    try:
+        log_fn = getattr(logger, level, None)
+        if callable(log_fn):
+            log_fn(event, extra=payload)
+            return
+    except Exception as exc:
+        _FALLBACK_LOG.warning(
+            "structured_logger_failed",
+            extra={"event": event, "level": level, "error": repr(exc), "payload_keys": list(payload.keys())},
+            exc_info=True,
+        )
+    # fallback minimale: stdlib logger, stesso event
+    try:
+        getattr(_FALLBACK_LOG, level, _FALLBACK_LOG.info)(event, extra={"payload": payload})
+    except Exception:
+        # ultimo fallback: niente altro sensato da fare senza rischiare loop
+        return
 
 
 class _ReadmeCtx(Protocol):
@@ -99,19 +123,15 @@ def log_frontmatter_cache_stats(
     slug: str | None = None,
 ) -> None:
     """Emette un log debug con le stats correnti della cache frontmatter."""
-    try:
-        stats = _FRONTMATTER_CACHE.stats()
-        extra: dict[str, Any] = {
-            "entries": stats.get("entries"),
-            "max": stats.get("max"),
-            "enabled": stats.get("enabled"),
-        }
-        if slug:
-            extra["slug"] = slug
-        logger.debug(event, extra=extra)
-    except Exception:
-        # Mai bloccare chiamanti per telemetria accessoria
-        pass
+    stats = _FRONTMATTER_CACHE.stats()
+    extra: dict[str, Any] = {
+        "entries": stats.get("entries"),
+        "max": stats.get("max"),
+        "enabled": stats.get("enabled"),
+    }
+    if slug:
+        extra["slug"] = slug
+    _safe_log(logger, "debug", event, extra=extra)
 
 
 def clear_frontmatter_cache(path: Path | None = None) -> None:
@@ -119,7 +139,6 @@ def clear_frontmatter_cache(path: Path | None = None) -> None:
 
     Usata anche dai workflow semantici (`semantic.api`) per isolare i run all'interno della stessa process.
     """
-
     _FRONTMATTER_CACHE.clear(path)
 
 
@@ -135,11 +154,7 @@ def _titleize(name: str) -> str:
 
 
 def _ensure_safe(perimeter_root: Path, candidate: Path, *, slug: str | None = None) -> Path:
-    """Path-safety SSoT: risolve e valida `candidate` entro `perimeter_root` in un'unica operazione.
-
-    Delegato a `pipeline.path_utils.ensure_within_and_resolve` per evitare TOCTOU/symlink games
-    e mantenere le eccezioni tipizzate della pipeline (es. PathTraversalError/ConfigError).
-    """
+    """Path-safety SSoT: risolve e valida `candidate` entro `perimeter_root` in un'unica operazione."""
     try:
         return cast(Path, ensure_within_and_resolve(perimeter_root, candidate))
     except PathTraversalError as exc:
@@ -147,7 +162,6 @@ def _ensure_safe(perimeter_root: Path, candidate: Path, *, slug: str | None = No
 
 
 def _sorted_pdfs(cat_dir: Path) -> list[Path]:
-    # Nota: filtrato a valle in _filter_safe_pdfs (per base/raw_root)
     return sorted(
         iter_safe_paths(cat_dir, include_dirs=False, include_files=True, suffixes=(".pdf",)),
         key=lambda p: p.relative_to(cat_dir).as_posix().lower(),
@@ -176,10 +190,7 @@ def _filter_safe_pdfs(
     slug: str | None = None,
     logger: logging.Logger | None = None,
 ) -> list[Path]:
-    """Applica path-safety per-file e scarta symlink o path fuori perimetro.
-
-    Mantiene l'ordinamento ricevuto.
-    """
+    """Applica path-safety per-file e scarta symlink o path fuori perimetro. Mantiene l'ordinamento ricevuto."""
     log = logger or get_structured_logger("pipeline.content_utils")
     out: list[Path] = []
     run_id = _run_id_from_logger(log)
@@ -202,7 +213,9 @@ def _filter_safe_pdfs(
                         "policy_id": "INGEST.SAFE_PATH",
                     },
                 ):
-                    log.warning(
+                    _safe_log(
+                        log,
+                        "warning",
                         "pipeline.content.skip_symlink",
                         extra={"slug": slug, "file_path": str(p)},
                     )
@@ -225,7 +238,9 @@ def _filter_safe_pdfs(
                     "policy_id": "INGEST.SAFE_PATH",
                 },
             ):
-                log.warning(
+                _safe_log(
+                    log,
+                    "warning",
                     "pipeline.content.skip_unsafe",
                     extra={"slug": slug, "file_path": str(p), "error": str(e)},
                 )
@@ -234,13 +249,12 @@ def _filter_safe_pdfs(
     return out
 
 
-def _dump_frontmatter(meta: dict[str, Any]) -> str:  # wrapper interno
+def _dump_frontmatter(meta: dict[str, Any]) -> str:
     meta_dict: dict[str, Any] = dict(meta)
     return cast(str, _shared_dump_frontmatter(meta_dict))
 
 
 def _normalize_excerpt(text: str) -> str:
-    """Riduce whitespace e newline del testo estratto."""
     cleaned = re.sub(r"\s+", " ", text or "")
     return cleaned.strip()
 
@@ -254,7 +268,7 @@ def _extract_pdf_text(
     """Legge tutto il testo dal PDF (normalized) con hard-fail su errori."""
     try:
         from nlp.nlp_keywords import extract_text_from_pdf
-    except Exception as exc:  # pragma: no cover - dependency error
+    except Exception as exc:  # pragma: no cover
         raise PipelineError(
             "PDF extractor dependency missing: nlp.nlp_keywords.extract_text_from_pdf not available.",
             slug=slug,
@@ -281,7 +295,6 @@ def _extract_pdf_text(
 
 
 def _chunk_pdf_text(text: str, *, chunk_chars: int = 1200, max_chunks: int = 4) -> list[str]:
-    """Divide un testo in chunk di lunghezza massima `chunk_chars`."""
     if not text:
         return []
     out: list[str] = []
@@ -315,7 +328,6 @@ def _extract_pdf_excerpt(
     text: str | None = None,
     max_chars: int = _PDF_EXCERPT_MAX_CHARS,
 ) -> str:
-    """Restituisce il testo pulito (max_chars) estratto da un PDF (hard-fail su errori)."""
     if not text:
         text = _extract_pdf_text(pdf_path, slug=slug, logger=logger)
     excerpt = text[:max_chars].rstrip()
@@ -342,22 +354,24 @@ def _write_markdown_for_pdf(
     candidate_meta = candidates.get(rel_pdf.as_posix(), {}) if candidates else {}
     tags_raw = candidate_meta.get("tags") or []
     tags_sorted = sorted({str(t).strip() for t in tags_raw if str(t).strip()})
+
     logger = get_structured_logger("pipeline.content_utils", context={"slug": slug})
     text = _extract_pdf_text(pdf_path, slug=slug, logger=logger)
     excerpt = _extract_pdf_excerpt(pdf_path, slug=slug, logger=logger, text=text)
     chunks = _chunk_pdf_text(text, chunk_chars=900, max_chunks=4)
     chunk_summaries = _build_chunk_summaries(chunks)
+
     body_parts: list[str] = []
     if excerpt:
         body_parts.append(excerpt)
     for idx, chunk in enumerate(chunks):
         body_parts.append(f"### Chunk {idx + 1}\n{chunk}")
     body_parts.append(f"*Documento sincronizzato da `{rel_pdf.as_posix()}`.*")
-    body = "\n\n".join(body_parts).rstrip()
-    body += "\n"
+    body = "\n\n".join(body_parts).rstrip() + "\n"
 
     existing_created_at: str | None = None
     existing_meta: dict[str, Any] = {}
+
     if md_path.exists():
         try:
             try:
@@ -365,6 +379,7 @@ def _write_markdown_for_pdf(
                 cache_key = (md_path, stat.st_mtime_ns, stat.st_size)
             except OSError:
                 cache_key = None
+
             cached_entry: tuple[dict[str, Any], str] | None = _FRONTMATTER_CACHE.get(cache_key) if cache_key else None
             if cached_entry:
                 existing_meta, body_prev = cached_entry
@@ -372,11 +387,14 @@ def _write_markdown_for_pdf(
                 existing_meta, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
                 if cache_key:
                     _FRONTMATTER_CACHE.set(cache_key, (existing_meta, body_prev))
+
             existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
             if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
                 return md_path
         except (OSError, PipelineError) as exc:
-            logger.warning(
+            _safe_log(
+                logger,
+                "warning",
                 "pipeline.content.frontmatter_read_failed",
                 extra={"slug": slug, "path": str(md_path), "error": str(exc)},
             )
@@ -393,23 +411,31 @@ def _write_markdown_for_pdf(
     for key, value in existing_meta.items():
         if key not in meta:
             meta[key] = value
+
     if excerpt:
         meta["excerpt"] = excerpt
     elif existing_meta.get("excerpt"):
         meta["excerpt"] = existing_meta["excerpt"]
+
     if chunk_summaries:
         meta["content_chunks"] = chunk_summaries
     elif existing_meta.get("content_chunks"):
         meta["content_chunks"] = existing_meta["content_chunks"]
+
     safe_write_text(md_path, _dump_frontmatter(meta) + body, encoding="utf-8", atomic=True)
 
-    # Aggiorna la cache locale del frontmatter con il nuovo contenuto scritto
+    # Aggiorna la cache locale del frontmatter con il nuovo contenuto scritto (best-effort ma osservabile)
     try:
         stat = md_path.stat()
         cache_key = (md_path, stat.st_mtime_ns, stat.st_size)
         _FRONTMATTER_CACHE.set(cache_key, (meta, body))
-    except OSError:
-        pass
+    except OSError as exc:
+        _safe_log(
+            logger,
+            "debug",
+            "pipeline.frontmatter_cache.update_failed",
+            extra={"slug": slug, "path": str(md_path), "error": str(exc)},
+        )
     return md_path
 
 
@@ -417,9 +443,8 @@ def _group_safe_pdfs_by_category(
     raw_root: Path,
     safe_pdfs: list[Path],
 ) -> tuple[list[Path], CategoryGroups]:
-    """Dato un elenco di PDF *già* validati (risolti dentro raw_root),
-    restituisce:
-      - (root_pdfs, [(cat_dir, pdfs_in_cat), ...]) con cat_dir = directory immediata sotto raw_root.
+    """Dato un elenco di PDF *già* validati (risolti dentro raw_root) restituisce:
+    - (root_pdfs, [(cat_dir, pdfs_in_cat), ...]) con cat_dir = directory immediata sotto raw_root.
     """
     root_pdfs = [p for p in safe_pdfs if p.parent == raw_root]
     groups: dict[Path, list[Path]] = {}
@@ -458,7 +483,9 @@ def _iter_category_pdfs(raw_root: Path) -> list[tuple[Path, list[Path]]]:
                 "status": "blocked",
             },
         ):
-            logger.warning("pipeline.content.skip_unsafe", extra={"file_path": str(path), "reason": reason})
+            _safe_log(
+                logger, "warning", "pipeline.content.skip_unsafe", extra={"file_path": str(path), "reason": reason}
+            )
 
     out: list[tuple[Path, list[Path]]] = []
     for cat_dir in iter_safe_paths(raw_root, include_dirs=True, include_files=False, on_skip=_on_skip):
@@ -478,7 +505,7 @@ def _discover_safe_pdfs(
 
     def _on_skip(path: Path, reason: str) -> None:
         event = "pipeline.content.skip_symlink" if reason == "symlink" else "pipeline.content.skip_unsafe"
-        logger.warning(event, extra={"slug": slug, "file_path": str(path), "reason": reason})
+        _safe_log(logger, "warning", event, extra={"slug": slug, "file_path": str(path), "reason": reason})
 
     root_candidates = iter_safe_paths(
         raw_root,
@@ -543,13 +570,7 @@ def _cleanup_orphan_markdown(
                 else:
                     removed += 1
     if removed > 0:
-        try:
-            log.info(
-                "pipeline.content.orphan_deleted",
-                extra={"path": str(target), "count": int(removed)},
-            )
-        except Exception:
-            pass
+        _safe_log(log, "info", "pipeline.content.orphan_deleted", extra={"path": str(target), "count": int(removed)})
 
 
 # -----------------------------
@@ -616,6 +637,7 @@ def generate_readme_markdown(ctx: _ReadmeCtx, book_dir: Path | None = None) -> P
             "aggiorna il Vision e rigenera la run Vision."
         )
     )
+
     logger = get_structured_logger("pipeline.content_utils")
     try:
         cfg = load_semantic_config(ctx)
@@ -625,10 +647,7 @@ def generate_readme_markdown(ctx: _ReadmeCtx, book_dir: Path | None = None) -> P
             iterable = list(areas_data.items())
         elif isinstance(areas_data, list):
             iterable = [
-                (
-                    str(item.get("key") or item.get("name") or f"area_{idx}"),
-                    item,
-                )
+                (str(item.get("key") or item.get("name") or f"area_{idx}"), item)
                 for idx, item in enumerate(areas_data)
                 if isinstance(item, dict)
             ]
@@ -641,22 +660,16 @@ def generate_readme_markdown(ctx: _ReadmeCtx, book_dir: Path | None = None) -> P
             if descr:
                 section_body += f"\n{descr}\n"
             sections.append(section_body.strip())
-    except Exception as exc:  # pragma: no cover - percorso di recupero controllato
-        logger.warning(
+    except Exception as exc:  # pragma: no cover
+        _safe_log(
+            logger,
+            "warning",
             "pipeline.content.mapping_failed",
-            extra={
-                "slug": getattr(ctx, "slug", None),
-                "error": str(exc),
-            },
+            extra={"slug": getattr(ctx, "slug", None), "error": str(exc)},
         )
 
     content = "\n\n".join(sections).strip() or "Contenuti generati/curati automaticamente."
-    safe_write_text(
-        readme,
-        f"# {title}\n\n{content}\n",
-        encoding="utf-8",
-        atomic=True,
-    )
+    safe_write_text(readme, f"# {title}\n\n{content}\n", encoding="utf-8", atomic=True)
     return readme
 
 
@@ -713,10 +726,8 @@ def convert_files_to_structured_markdown(
     raw_root = ctx.raw_dir
     target_input: Path = book_dir if book_dir is not None else ctx.book_dir
 
-    # sicurezza percorso per target e raw_root
     target = _ensure_safe(base, target_input, slug=getattr(ctx, "slug", None))
     raw_root = _ensure_safe(base, raw_root, slug=getattr(ctx, "slug", None))
-
     target.mkdir(parents=True, exist_ok=True)
 
     if not raw_root.exists():
@@ -734,7 +745,6 @@ def convert_files_to_structured_markdown(
 
     cfg = load_semantic_config(ctx)
     candidates = extract_semantic_candidates(raw_root, cfg)
-
     written: set[Path] = set()
 
     logger = get_structured_logger("pipeline.content_utils", context={"slug": getattr(ctx, "slug", None)})
@@ -783,11 +793,7 @@ def convert_files_to_structured_markdown(
             written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg, slug=slug))
 
     _cleanup_orphan_markdown(target, written, logger=logger)
-
-    log_frontmatter_cache_stats(
-        logger,
-        slug=slug,
-    )
+    log_frontmatter_cache_stats(logger, slug=slug)
 
 
 def build_chunk_records_from_markdown_files(
@@ -804,6 +810,7 @@ def build_chunk_records_from_markdown_files(
     records: list[ChunkRecord] = []
     base_path = Path(perimeter_root) if perimeter_root is not None else None
     resolved_base = base_path.resolve() if base_path is not None else None
+
     for raw_path in md_paths:
         path = raw_path if isinstance(raw_path, Path) else Path(raw_path)
         safe_path = path
@@ -816,12 +823,21 @@ def build_chunk_records_from_markdown_files(
                     slug=slug,
                     file_path=str(path),
                 ) from exc
+
         try:
             file_meta, body = read_frontmatter(safe_path.parent, safe_path, encoding="utf-8", use_cache=True)
             text = (body or "").lstrip("\ufeff")
-        except Exception:
+        except Exception as exc:
+            # fallback non silenzioso: segnaliamo e ripieghiamo sulla lettura raw
+            _safe_log(
+                get_structured_logger("pipeline.content_utils"),
+                "warning",
+                "pipeline.content.frontmatter_fallback",
+                extra={"slug": slug, "path": str(safe_path), "error": str(exc)},
+            )
             file_meta = {}
             text = read_text_safe(safe_path.parent, safe_path, encoding="utf-8")
+
         source_path = _format_source_path(safe_path, resolved_base)
 
         if chunking == "heading":
@@ -870,7 +886,6 @@ _HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 
 def _segment_markdown_by_heading(text: str) -> list[tuple[str | None, str]]:
     """Divide un markdown in chunk iniziando da ogni heading (#/##)."""
-
     lines = text.splitlines()
     chunks: list[tuple[str | None, str]] = []
     current_heading: str | None = None

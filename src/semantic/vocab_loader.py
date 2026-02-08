@@ -14,13 +14,31 @@ from pipeline.logging_utils import get_structured_logger
 __all__ = ["load_reviewed_vocab", "load_tags_reviewed_db"]
 
 LOGGER = get_structured_logger("semantic.vocab_loader")
+_FALLBACK_LOG = logging.getLogger(__name__)
+
+
+def _safe_structured_warning(event: str, *, extra: Mapping[str, Any]) -> None:
+    """Emette un warning strutturato senza degradazione silenziosa.
+
+    Se il logger strutturato fallisce (handler/extra non serializzabile), degrada su stdlib logger.
+    """
+    try:
+        LOGGER.warning(event, extra=dict(extra))
+    except Exception as exc:
+        # Fallback non silenzioso: stdlib logger con contesto minimizzato.
+        _FALLBACK_LOG.warning(
+            "structured_logger_failed",
+            extra={"event": event, "error": repr(exc), "payload_keys": list(extra.keys())},
+            exc_info=True,
+        )
+        _FALLBACK_LOG.warning(event, extra={"payload": dict(extra)})
 
 
 def _load_tags_reviewed_or_raise() -> Any:
     try:  # pragma: no cover - dipende dall'ambiente
         from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
     except Exception as exc:  # pragma: no cover
-        LOGGER.warning("semantic.vocab.loader_missing", extra={"error": str(exc)})
+        _safe_structured_warning("semantic.vocab.loader_missing", extra={"error": str(exc)})
         raise ConfigError("tags.db missing or unreadable") from exc
     return _load_tags_reviewed
 
@@ -117,18 +135,16 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
             existing_display = display_names.get(name)
             if existing_display and existing_display != raw_name and name not in case_conflicts:
                 case_conflicts.add(name)
-                try:
-                    LOGGER.warning(
-                        "semantic.vocab.canonical_case_conflict",
-                        extra={
-                            "canonical_norm": name,
-                            "canonical": existing_display,
-                            "canonical_new": raw_name,
-                        },
-                    )
-                except Exception:
-                    pass
+                _safe_structured_warning(
+                    "semantic.vocab.canonical_case_conflict",
+                    extra={
+                        "canonical_norm": name,
+                        "canonical": existing_display,
+                        "canonical_new": raw_name,
+                    },
+                )
             display_names.setdefault(name, raw_name)
+
             raw_action = str(row.get("action", "")).strip()
             action = raw_action.lower()
             synonym_map.setdefault(name, [])
@@ -136,6 +152,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
             raw_syns = row.get("synonyms") or row.get("aliases") or []
             for alias in _normalize_synonyms(raw_syns):
                 _record_synonym(name, alias)
+
             if action.startswith("merge_into:"):
                 parts = raw_action.split(":", 1)
                 target_raw = parts[1].strip() if len(parts) > 1 else ""
@@ -145,17 +162,14 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
                     existing_target = display_names.get(target_norm)
                     if existing_target and existing_target != target_raw and target_norm not in case_conflicts:
                         case_conflicts.add(target_norm)
-                        try:
-                            LOGGER.warning(
-                                "semantic.vocab.canonical_case_conflict",
-                                extra={
-                                    "canonical_norm": target_norm,
-                                    "canonical": existing_target,
-                                    "canonical_new": target_raw,
-                                },
-                            )
-                        except Exception:
-                            pass
+                        _safe_structured_warning(
+                            "semantic.vocab.canonical_case_conflict",
+                            extra={
+                                "canonical_norm": target_norm,
+                                "canonical": existing_target,
+                                "canonical_new": target_raw,
+                            },
+                        )
                     display_names.setdefault(target_norm, target_raw)
 
         # Deduce merge relationships for canonical entries that appear as aliases elsewhere.
@@ -198,6 +212,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
             if not result:
                 _raise_invalid()
             return result
+
         # formato storage: {"tags": [ {name, action, synonyms?}, ... ]}
         items = cast(Any, data).get("tags") if hasattr(data, "get") else None
         if isinstance(items, Sequence) and not isinstance(items, (str, bytes)):
@@ -251,7 +266,7 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
         loader = _load_tags_reviewed_or_raise()
         raw = loader(str(db_path))  # accetta str/Path
     except Exception as exc:  # errori SQLite (query/cursor)
-        LOGGER.warning(
+        _safe_structured_warning(
             "semantic.vocab.load_failed",
             extra={"file_path": str(db_path), "error": str(exc)},
         )

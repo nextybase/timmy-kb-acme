@@ -28,7 +28,7 @@ def test_run_control_plane_tool_preserves_strict_env(monkeypatch):
         action="test",
     )
     assert env_record["TIMMY_BETA_STRICT"] == "1"
-    assert payload["command"][0].endswith("python.exe")
+    assert payload["command"][0].lower().endswith("python.exe")
 
 
 def test_non_strict_step_runs_forced_context(monkeypatch):

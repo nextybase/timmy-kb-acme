@@ -27,6 +27,7 @@ from __future__ import annotations
 import csv
 import logging
 import sqlite3
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -287,6 +288,9 @@ def write_tags_reviewed_from_nlp_db(
             "semantic.tags_yaml.exported_from_nlp",
             extra={"file_path": str(out_path), "tags": len(tags_payload)},
         )
-    except Exception:
-        pass
+    except Exception as log_exc:
+        try:
+            sys.stderr.write(f"semantic.tags_yaml.exported_from_nlp logging_failure: {log_exc!r}\n")
+        except OSError:
+            pass
     return out_path

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -468,8 +469,11 @@ class ClientContext:
                     "context.config.loaded",
                     extra={"slug": slug, "file_path": str(config_path)},
                 )
-            except Exception:
-                pass
+            except Exception as log_exc:
+                try:
+                    sys.stderr.write(f"context.config.loaded logging_failure: {log_exc!r}\n")
+                except OSError:
+                    pass
             return settings
         except ConfigError:
             raise

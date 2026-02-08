@@ -95,6 +95,15 @@ def _resolve_within_base(base: Path, candidate: Path) -> Path:
     return ensure_within_and_resolve(base, candidate)
 
 
+def _best_effort_cleanup(event: str, *, extra: dict[str, object] | None = None) -> None:
+    """Cleanup best-effort, ma osservabile (no silent degradation)."""
+    try:
+        _logger.debug(event, extra=extra or {})
+    except Exception:
+        # Se anche il logger fallisce, non possiamo fare molto: ma qui siamo in cleanup non critico.
+        return
+
+
 def create_lock_file(path: Path, *, payload: str = "", mode: int = 0o600) -> None:
     """Crea un lock file esclusivo scrivendo opzionalmente un payload."""
     path = Path(path)
@@ -171,6 +180,7 @@ def safe_write_text(
 
     # Modalita atomica: temp + replace
     tmp_path: Optional[Path] = None
+    tmp_name: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
             mode="w",
@@ -192,12 +202,20 @@ def safe_write_text(
             _fsync_dir(parent_path)
         _post_write_hooks(path)
     except Exception as e:
-        # Proviamo a rimuovere il temp se esiste
-        try:
-            if tmp_path is not None and tmp_path.exists():
-                tmp_path.unlink(missing_ok=True)
-        except Exception:
-            pass
+        # Cleanup best-effort, ma osservabile
+        if tmp_path is not None:
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink(missing_ok=True)
+            except Exception as cleanup_exc:
+                _best_effort_cleanup(
+                    "file_utils.tmp_cleanup_failed",
+                    extra={
+                        "tmp_path": str(tmp_path),
+                        "target_path": str(path),
+                        "error": repr(cleanup_exc),
+                    },
+                )
         raise ConfigError("Scrittura atomica fallita.", file_path=str(path)) from e
 
 
@@ -234,6 +252,7 @@ def safe_write_bytes(
             raise ConfigError("Scrittura file (bytes) fallita.", file_path=str(path)) from e
 
     tmp_path: Optional[Path] = None
+    tmp_name: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
             mode="wb",
@@ -253,11 +272,19 @@ def safe_write_bytes(
             _fsync_dir(parent_path)
         _post_write_hooks(path)
     except Exception as e:
-        try:
-            if tmp_path is not None and tmp_path.exists():
-                tmp_path.unlink(missing_ok=True)
-        except Exception:
-            pass
+        if tmp_path is not None:
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink(missing_ok=True)
+            except Exception as cleanup_exc:
+                _best_effort_cleanup(
+                    "file_utils.tmp_cleanup_failed",
+                    extra={
+                        "tmp_path": str(tmp_path),
+                        "target_path": str(path),
+                        "error": repr(cleanup_exc),
+                    },
+                )
         raise ConfigError("Scrittura atomica (bytes) fallita.", file_path=str(path)) from e
 
 
@@ -331,8 +358,11 @@ def safe_append_text(
         if lock_fd is not None:
             try:
                 os.close(lock_fd)
-            except Exception:
-                _logger.debug("file_utils.lock_close_failed", extra={"lock_path": str(lock_path)})
+            except Exception as exc:
+                _best_effort_cleanup(
+                    "file_utils.lock_close_failed",
+                    extra={"lock_path": str(lock_path), "error": repr(exc)},
+                )
         try:
             Path(lock_path_str).unlink(missing_ok=True)
         except Exception as exc:

@@ -157,8 +157,8 @@ def _resolve_model_from_settings(settings_obj: Optional[Settings], settings_payl
             candidate = settings_obj.vision_model
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("vision_config.model_resolution_failed", extra={"error": repr(exc)})
     vision_cfg = _vision_section(settings_payload)
     candidate = vision_cfg.get("model")
     if isinstance(candidate, str) and candidate.strip():

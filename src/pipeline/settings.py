@@ -467,8 +467,11 @@ class Settings:
                             "section": dotted_key,
                         },
                     )
-                except Exception:
-                    pass
+                except Exception as map_exc:
+                    _LOGGER.debug(
+                        "settings.mapping_parse_failed",
+                        extra={"key": str(env_name), "reason": str(map_exc)},
+                    )
         return mapping
 
     @cached_property

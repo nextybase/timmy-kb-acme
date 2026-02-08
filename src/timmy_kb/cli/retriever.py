@@ -60,14 +60,38 @@ ERR_EMBEDDING_INVALID = "retriever_embedding_invalid"
 ERR_BUDGET_HIT_PARTIAL = "retriever_budget_hit_partial"
 
 
-def _log_logging_failure(event: str, exc: Exception, *, extra: Mapping[str, Any] | None = None) -> None:
-    payload = {"event": event, "error": repr(exc)}
-    if extra:
-        payload.update(extra)
+# ---------------------------
+# Safe logging (no S110: niente try/except/pass)
+# ---------------------------
+
+
+def _safe_info(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
     try:
-        LOGGER.warning("retriever.log_failed", extra=payload)
+        LOGGER.info(event, extra=dict(extra or {}))
     except Exception:
-        pass
+        return
+
+
+def _safe_warning(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
+    try:
+        LOGGER.warning(event, extra=dict(extra or {}))
+    except Exception:
+        return
+
+
+def _safe_debug(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
+    try:
+        LOGGER.debug(event, extra=dict(extra or {}))
+    except Exception:
+        return
+
+
+def _log_logging_failure(event: str, exc: Exception, *, extra: Mapping[str, Any] | None = None) -> None:
+    payload: dict[str, Any] = {"event": event, "error": repr(exc)}
+    if extra:
+        payload.update(dict(extra))
+    # best-effort e non bloccante
+    _safe_warning("retriever.log_failed", extra=payload)
 
 
 def _apply_error_context(exc: RetrieverError, *, code: str, **extra: Any) -> RetrieverError:
@@ -148,12 +172,7 @@ def _load_candidates(params: QueryParams) -> tuple[list[dict[str, Any]], float]:
 
 
 def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
-    """Recupera i candidati grezzi per calibrare il `candidate_limit`.
-
-    Il wrapper applica le validazioni dell'API di ricerca e restituisce i dict
-    raw provenienti da `fetch_candidates`, permettendo agli strumenti di
-    calibrazione di ispezionare i chunk senza dipendere dal client embedding.
-    """
+    """Recupera i candidati grezzi per calibrare il `candidate_limit`."""
     validation_mod._validate_params_logged(params)
     if params.candidate_limit == 0:
         return []
@@ -167,28 +186,20 @@ def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
         )
     )
     dt_ms = (time.time() - t0) * 1000.0
-    try:
-        LOGGER.info(
-            "retriever.raw_candidates",
-            extra={
-                "slug": params.slug,
-                "scope": params.scope,
-                "candidate_limit": int(params.candidate_limit),
-                "candidates": int(len(candidates)),
-                "ms": float(dt_ms),
-            },
-        )
-    except Exception:
-        LOGGER.debug(
-            "retriever.raw_candidates",
-            extra={
-                "slug": params.slug,
-                "scope": params.scope,
-                "candidate_limit": int(params.candidate_limit),
-                "candidates": int(len(candidates)),
-                "ms": float(dt_ms),
-            },
-        )
+
+    # best-effort: se info fallisce, fallback su debug (entrambi safe)
+    extra = {
+        "slug": params.slug,
+        "scope": params.scope,
+        "candidate_limit": int(params.candidate_limit),
+        "candidates": int(len(candidates)),
+        "ms": float(dt_ms),
+    }
+    _safe_info("retriever.raw_candidates", extra=extra)
+    if not candidates:
+        # opzionale: lasciare traccia a debug (non blocca)
+        _safe_debug("retriever.raw_candidates.empty", extra=extra)
+
     return candidates
 
 
@@ -204,25 +215,7 @@ def search(
     embedding_model: str | None = None,
     explain_base_dir: Path | None = None,
 ) -> list[SearchResult]:
-    """Esegue una ricerca vettoriale sui chunk del workspace indicato.
-
-    Args:
-        params: Query strutturata (slug, scope, query, k, candidate_limit).
-        embeddings_client: Client compatibile con `EmbeddingsClient`.
-        authorizer: Hook opzionale per autorizzare la query.
-        throttle_check: Hook opzionale per controlli aggiuntivi di throttling.
-        throttle: Configurazione di throttling (rate/deadline).
-        throttle_key: Chiave di throttling (default: slug).
-
-    Raises:
-        RetrieverError: se i parametri non rispettano i contratti.
-
-    Flusso:
-    1) Embedding della query via `embeddings_client.embed_texts([query])`.
-    2) Carica fino a `candidate_limit` candidati per `(slug, scope)`.
-    3) Similarita' coseno e ordinamento stabile per score decrescente.
-    4) Restituisce i top-`k` come lista di `SearchResult`.
-    """
+    """Esegue una ricerca vettoriale sui chunk del workspace indicato."""
     throttle_cfg = throttle_mod._normalize_throttle_settings(throttle)
     deadline = throttle_mod._deadline_from_settings(throttle_cfg)
     try:
@@ -230,34 +223,33 @@ def search(
     except RetrieverError as exc:
         _apply_error_context(exc, code="retriever_invalid_params", slug=params.slug, scope=params.scope)
         raise
+
     if throttle_mod._deadline_exceeded(deadline):
-        LOGGER.warning(
+        _safe_warning(
             "retriever.throttle.deadline",
             extra={"slug": params.slug, "scope": params.scope, "stage": "preflight"},
         )
         return []
+
     throttle_ctx = (
         _throttle_guard(throttle_key or params.slug or "retriever", throttle_cfg, deadline=deadline)
         if throttle_cfg
         else nullcontext()
     )
 
-    try:
-        LOGGER.info(
-            "retriever.query.started",
-            extra={
-                "slug": params.slug,
-                "scope": params.scope,
-                "response_id": response_id,
-                "k": int(params.k),
-                "candidate_limit": int(params.candidate_limit),
-                "latency_budget_ms": int(throttle_cfg.latency_budget_ms) if throttle_cfg else None,
-                "throttle_key": throttle_key or params.slug or "retriever",
-                "query_len": len(params.query or ""),
-            },
-        )
-    except Exception:
-        pass
+    _safe_info(
+        "retriever.query.started",
+        extra={
+            "slug": params.slug,
+            "scope": params.scope,
+            "response_id": response_id,
+            "k": int(params.k),
+            "candidate_limit": int(params.candidate_limit),
+            "latency_budget_ms": int(throttle_cfg.latency_budget_ms) if throttle_cfg else None,
+            "throttle_key": throttle_key or params.slug or "retriever",
+            "query_len": len(params.query or ""),
+        },
+    )
 
     with throttle_ctx:
         if authorizer is not None:
@@ -274,48 +266,23 @@ def search(
 
         # Soft-fail per input non utili
         if params.k == 0:
-            try:
-                LOGGER.info(
-                    "retriever.query.skipped",
-                    extra={
-                        **common_extra,
-                        "reason": "k_is_zero",
-                    },
-                )
-            except Exception as exc:
-                LOGGER.warning(
-                    "retriever.query.skipped_log_failed",
-                    extra={
-                        **common_extra,
-                        "reason": "k_is_zero",
-                        "error": repr(exc),
-                    },
-                )
+            _safe_info("retriever.query.skipped", extra={**common_extra, "reason": "k_is_zero"})
             return []
+
         if not params.query.strip():
-            LOGGER.warning(
-                "retriever.query.invalid",
-                extra={
-                    **common_extra,
-                    "reason": "empty_query",
-                },
-            )
+            _safe_warning("retriever.query.invalid", extra={**common_extra, "reason": "empty_query"})
             return []
-        budget_hit = False
 
         t_total_start = time.time()
 
         # 1) Embedding della query
         if throttle_mod._deadline_exceeded(deadline):
-            LOGGER.warning(
+            _safe_warning(
                 "retriever.latency_budget.hit",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "stage": "embedding",
-                },
+                extra={"slug": params.slug, "scope": params.scope, "stage": "embedding"},
             )
             return []
+
         try:
             query_vector, t_emb_ms = embeddings_mod._materialize_query_vector(
                 params,
@@ -324,93 +291,72 @@ def search(
             )
         except RetrieverError as exc:
             _apply_error_context(exc, code=ERR_EMBEDDING_FAILED, slug=params.slug, scope=params.scope)
-            try:
-                LOGGER.warning(
-                    "retriever.query.embed_failed",
-                    extra={
-                        **common_extra,
-                        "code": ERR_EMBEDDING_FAILED,
-                        "error": repr(getattr(exc, "__cause__", None) or exc),
-                    },
-                )
-            except Exception:
-                pass
-            return []
-        if query_vector is None:
-            try:
-                LOGGER.warning(
-                    "retriever.query.embedding_invalid.softfail",
-                    extra={
-                        **common_extra,
-                        "code": ERR_EMBEDDING_INVALID,
-                    },
-                )
-            except Exception:
-                pass
-            return []
-        try:
-            LOGGER.info(
-                "retriever.query.embedded",
+            _safe_warning(
+                "retriever.query.embed_failed",
                 extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "response_id": response_id,
-                    "ms": float(t_emb_ms),
-                    "embedding_dims": len(query_vector),
-                    "embedding_model": embedding_model
-                    or getattr(embeddings_client, "model", None)
-                    or getattr(embeddings_client, "embedding_model", None),
+                    **common_extra,
+                    "code": ERR_EMBEDDING_FAILED,
+                    "error": repr(getattr(exc, "__cause__", None) or exc),
                 },
             )
-        except Exception:
-            pass
+            return []
+
+        if query_vector is None:
+            _safe_warning(
+                "retriever.query.invalid",
+                extra={**common_extra, "reason": "empty_embedding", "code": ERR_EMBEDDING_INVALID},
+            )
+            return []
+
+        _safe_info(
+            "retriever.query.embedded",
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "response_id": response_id,
+                "ms": float(t_emb_ms),
+                "embedding_dims": len(query_vector),
+                "embedding_model": embedding_model
+                or getattr(embeddings_client, "model", None)
+                or getattr(embeddings_client, "embedding_model", None),
+            },
+        )
+
         if throttle_mod._deadline_exceeded(deadline):
-            LOGGER.warning(
+            _safe_warning(
                 "retriever.latency_budget.hit",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "stage": "embedding",
-                },
+                extra={"slug": params.slug, "scope": params.scope, "stage": "embedding"},
             )
             return []
 
         # 2) Caricamento candidati dal DB
         if throttle_mod._deadline_exceeded(deadline):
-            LOGGER.warning(
+            _safe_warning(
                 "retriever.latency_budget.hit",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "stage": "fetch_candidates",
-                },
+                extra={"slug": params.slug, "scope": params.scope, "stage": "fetch_candidates"},
             )
             return []
+
         candidates, t_fetch_ms = _load_candidates(params)
         fetch_budget_hit = throttle_mod._deadline_exceeded(deadline)
-        try:
-            LOGGER.info(
-                "retriever.candidates.fetched",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "response_id": response_id,
-                    "candidates_loaded": int(len(candidates)),
-                    "candidate_limit": int(params.candidate_limit),
-                    "ms": float(t_fetch_ms),
-                    "budget_hit": bool(fetch_budget_hit),
-                },
-            )
-        except Exception:
-            pass
+
+        _safe_info(
+            "retriever.candidates.fetched",
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "response_id": response_id,
+                "candidates_loaded": int(len(candidates)),
+                "candidate_limit": int(params.candidate_limit),
+                "ms": float(t_fetch_ms),
+                "budget_hit": bool(fetch_budget_hit),
+            },
+        )
+
         if throttle_mod._deadline_exceeded(deadline):
-            LOGGER.warning(
+            _safe_warning(
                 "retriever.latency_budget.hit",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "stage": "fetch_candidates",
-                },
+                extra={"slug": params.slug, "scope": params.scope, "stage": "fetch_candidates"},
             )
             return []
 
@@ -429,18 +375,17 @@ def search(
             deadline=deadline,
             abort_if_deadline=True,
         )
+
         budget_hit = rank_budget_hit
-        # Policy: budget hit => evento + soft-fail deterministico (nessuna eccezione, nessun "partial")
+
+        # Policy: budget hit => evento + soft-fail deterministico
         if budget_hit:
-            LOGGER.warning(
+            _safe_warning(
                 "retriever.latency_budget.hit",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "stage": "ranking",
-                },
+                extra={"slug": params.slug, "scope": params.scope, "stage": "ranking"},
             )
             return []
+
         total_ms = (time.time() - t_total_start) * 1000.0
         ranking_mod._log_retriever_metrics(
             params=params,
@@ -480,32 +425,20 @@ def search(
         )
 
         if throttle_cfg:
-            try:
-                LOGGER.info(
-                    "retriever.throttle.metrics",
-                    extra={
-                        "slug": params.slug,
-                        "scope": params.scope,
-                        "throttle": {
-                            "latency_budget_ms": int(throttle_cfg.latency_budget_ms),
-                            "parallelism": int(throttle_cfg.parallelism),
-                            "sleep_ms_between_calls": int(throttle_cfg.sleep_ms_between_calls),
-                            "budget_hit": bool(budget_hit),
-                            "evaluated": int(evaluated_count),
-                        },
+            _safe_info(
+                "retriever.throttle.metrics",
+                extra={
+                    "slug": params.slug,
+                    "scope": params.scope,
+                    "throttle": {
+                        "latency_budget_ms": int(throttle_cfg.latency_budget_ms),
+                        "parallelism": int(throttle_cfg.parallelism),
+                        "sleep_ms_between_calls": int(throttle_cfg.sleep_ms_between_calls),
+                        "budget_hit": bool(budget_hit),
+                        "evaluated": int(evaluated_count),
                     },
-                )
-            except Exception:
-                pass
-            if budget_hit:
-                LOGGER.warning(
-                    "retriever.latency_budget.hit",
-                    extra={
-                        "slug": params.slug,
-                        "scope": params.scope,
-                        "stage": "ranking",
-                    },
-                )
+                },
+            )
 
         return scored_items
 
@@ -514,30 +447,12 @@ def with_config_candidate_limit(
     params: QueryParams,
     config: Optional[Mapping[str, Any] | RetrieverConfig],
 ) -> QueryParams:
-    """Ritorna una copia applicando `candidate_limit` da config se opportuno.
-
-    Precedenza:
-      - Se il chiamante ha personalizzato `params.candidate_limit` (diverso dal
-        default del dataclass), NON viene sovrascritto.
-      - Se è rimasto al default, e il config contiene `retriever.throttle.candidate_limit`
-        valido (>0), viene applicato.
-
-    Nota: se il chiamante imposta esplicitamente il valore uguale al default
-    (4000), questa funzione non può distinguerlo dal caso 'non impostato' e
-    applicherà il config. In tal caso, evitare questa funzione oppure passare un
-    valore diverso dal default per esprimere l'intento.
-    """
+    """Ritorna una copia applicando `candidate_limit` da config se opportuno."""
     default_lim = _default_candidate_limit()
 
     # Se il caller ha cambiato il limite, non toccare
     if int(params.candidate_limit) != int(default_lim):
-        try:
-            LOGGER.info(
-                "retriever.limit.source",
-                extra={"source": "explicit", "limit": int(params.candidate_limit)},
-            )
-        except Exception:
-            pass
+        _safe_info("retriever.limit.source", extra={"source": "explicit", "limit": int(params.candidate_limit)})
         return params
 
     retr = throttle_mod._coerce_retriever_section(config)
@@ -550,40 +465,18 @@ def with_config_candidate_limit(
 
     if cfg_lim is not None and cfg_lim > 0:
         safe_lim = max(MIN_CANDIDATE_LIMIT, min(int(cfg_lim), MAX_CANDIDATE_LIMIT))
-        try:
-            LOGGER.info(
-                "retriever.limit.source",
-                extra={
-                    "source": "config",
-                    "limit": int(safe_lim),
-                    "limit_requested": int(cfg_lim),
-                },
-            )
-        except Exception:
-            pass
-        return replace(params, candidate_limit=int(safe_lim))
-    try:
-        LOGGER.info(
+        _safe_info(
             "retriever.limit.source",
-            extra={"source": "default", "limit": int(default_lim)},
+            extra={"source": "config", "limit": int(safe_lim), "limit_requested": int(cfg_lim)},
         )
-    except Exception:
-        pass
+        return replace(params, candidate_limit=int(safe_lim))
+
+    _safe_info("retriever.limit.source", extra={"source": "default", "limit": int(default_lim)})
     return params
 
 
 def choose_limit_for_budget(budget_ms: int) -> int:
-    """Euristica: mappa il budget di latenza (ms) su candidate_limit.
-
-    Soglie:
-    - <= 180ms  -> 1000
-    - <= 280ms  -> 2000
-    - <= 420ms  -> 4000
-    - >  420ms  -> 8000
-
-    Nota: valori iniziali; verificare su dataset reali. Vedi
-    `tools/retriever_calibrate.py` per calibrazione futura.
-    """
+    """Euristica: mappa il budget di latenza (ms) su candidate_limit."""
     try:
         b = int(budget_ms)
     except Exception:
@@ -600,25 +493,11 @@ def choose_limit_for_budget(budget_ms: int) -> int:
 
 
 def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any]]) -> QueryParams:
-    """Applica candidate_limit da config, con supporto auto by budget se abilitato.
-
-    Precedenza:
-      - Parametro esplicito (params.candidate_limit != default) mantiene il valore.
-      - Se `retriever.auto_by_budget` è true e `retriever.throttle.latency_budget_ms` > 0 ->
-        usa choose_limit_for_budget.
-      - Altrimenti, se `retriever.throttle.candidate_limit` > 0 -> usa quello.
-      - Fallback: lascia il default del dataclass.
-    """
+    """Applica candidate_limit da config, con supporto auto by budget se abilitato."""
     default_lim = _default_candidate_limit()
 
     if int(params.candidate_limit) != int(default_lim):
-        try:
-            LOGGER.info(
-                "retriever.limit.source",
-                extra={"source": "explicit", "limit": int(params.candidate_limit)},
-            )
-        except Exception:
-            pass
+        _safe_info("retriever.limit.source", extra={"source": "explicit", "limit": int(params.candidate_limit)})
         return params
 
     retr = throttle_mod._coerce_retriever_section(config)
@@ -628,25 +507,17 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
         budget = int(throttle.get("latency_budget_ms", retr.get("latency_budget_ms", 0)) or 0)
     except Exception:
         budget = 0
+
     if auto and budget > 0:
         chosen = choose_limit_for_budget(budget)
         safe_chosen = max(MIN_CANDIDATE_LIMIT, min(int(chosen), MAX_CANDIDATE_LIMIT))
         if int(safe_chosen) != int(chosen):
-            LOGGER.warning(
-                "limit.clamped",
-                extra={"provided": int(chosen), "effective": int(safe_chosen)},
-            )
-        try:
-            LOGGER.info(
-                "retriever.limit.source",
-                extra={
-                    "source": "auto_by_budget",
-                    "budget_ms": int(budget),
-                    "limit": int(safe_chosen),
-                },
-            )
-        except Exception:
-            pass
+            _safe_warning("limit.clamped", extra={"provided": int(chosen), "effective": int(safe_chosen)})
+
+        _safe_info(
+            "retriever.limit.source",
+            extra={"source": "auto_by_budget", "budget_ms": int(budget), "limit": int(safe_chosen)},
+        )
         return replace(params, candidate_limit=int(safe_chosen))
 
     try:
@@ -654,40 +525,28 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
         lim = int(raw) if raw is not None else None
     except Exception:
         lim = None
+
     if lim and lim > 0:
         safe_lim = max(MIN_CANDIDATE_LIMIT, min(int(lim), MAX_CANDIDATE_LIMIT))
         try:
-            LOGGER.info(
+            _safe_info(
                 "retriever.limit.source",
-                extra={
-                    "source": "config",
-                    "limit": int(safe_lim),
-                    "limit_requested": int(lim),
-                },
+                extra={"source": "config", "limit": int(safe_lim), "limit_requested": int(lim)},
             )
         except Exception as exc:
+            # in realtà _safe_info non dovrebbe mai alzare, ma teniamolo difensivo
             _log_logging_failure(
                 "retriever.limit.source",
                 exc,
-                extra={
-                    "source": "config",
-                    "limit": int(safe_lim),
-                    "limit_requested": int(lim),
-                },
+                extra={"source": "config", "limit": int(safe_lim), "limit_requested": int(lim)},
             )
+
         if safe_lim != int(lim):
-            LOGGER.warning(
-                "limit.clamped",
-                extra={"provided": int(lim), "effective": safe_lim},
-            )
+            _safe_warning("limit.clamped", extra={"provided": int(lim), "effective": int(safe_lim)})
+
         return replace(params, candidate_limit=safe_lim)
-    try:
-        LOGGER.info(
-            "retriever.limit.source",
-            extra={"source": "default", "limit": int(default_lim)},
-        )
-    except Exception:
-        pass
+
+    _safe_info("retriever.limit.source", extra={"source": "default", "limit": int(default_lim)})
     return params
 
 
@@ -704,15 +563,7 @@ def search_with_config(
     response_id: str | None = None,
     embedding_model: str | None = None,
 ) -> list[SearchResult]:
-    """Esegue `with_config_or_budget(...)` e poi `search(...)`.
-
-    Uso consigliato nei call-site reali per garantire che il limite effettivo
-    sia allineato a config/budget e che i log `limit.source=...` vengano emessi.
-
-    Esempio:
-        params = QueryParams(db_path=None, slug="acme", scope="kb", query=q)
-        results = search_with_config(params, cfg, embeddings)
-    """
+    """Esegue `with_config_or_budget(...)` e poi `search(...)`."""
     effective = with_config_or_budget(params, config)
     throttle_cfg = throttle_mod._normalize_throttle_settings(throttle_mod._build_throttle_settings(config))
     throttle_key = f"{params.slug}::{params.scope}"
@@ -732,12 +583,7 @@ def preview_effective_candidate_limit(
     params: QueryParams,
     config: Optional[Mapping[str, Any]],
 ) -> tuple[int, str, int]:
-    """Calcola il `candidate_limit` effettivo senza mutare `params` e senza loggare.
-
-    Ritorna (limit, source, budget_ms) dove `source`
-    {"explicit", "auto_by_budget", "config", "default"}.
-    Utile per la UI per mostrare un'etichetta: "Limite stimato: N".
-    """
+    """Calcola il `candidate_limit` effettivo senza mutare `params` e senza loggare."""
     default_lim = _default_candidate_limit()
 
     # 1) Esplicito
@@ -745,6 +591,7 @@ def preview_effective_candidate_limit(
         return int(params.candidate_limit), "explicit", 0
 
     retr = throttle_mod._coerce_retriever_section(config)
+
     # 2) Auto by budget
     try:
         auto = bool(retr.get("auto_by_budget", False))
@@ -753,8 +600,10 @@ def preview_effective_candidate_limit(
     except Exception:
         auto = False
         budget_ms = 0
+
     if auto and budget_ms > 0:
         return choose_limit_for_budget(budget_ms), "auto_by_budget", int(budget_ms)
+
     # 3) Config
     throttle = throttle_mod._coerce_throttle_section(retr)
     try:
@@ -764,6 +613,7 @@ def preview_effective_candidate_limit(
         lim = None
     if lim and lim > 0:
         return int(lim), "config", 0
+
     # 4) Default
     return int(default_lim), "default", 0
 

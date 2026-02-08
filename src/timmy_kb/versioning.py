@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import sys
 from importlib import metadata
 from typing import Any
 
@@ -55,8 +56,11 @@ def _best_effort_git_sha() -> str | None:
         if res.returncode == 0:
             sha = (res.stdout or "").strip()
             return sha or None
-    except Exception:
-        pass
+    except Exception as log_exc:
+        try:
+            sys.stderr.write(f"versioning._best_effort_git_sha logging_failure: {log_exc!r}\n")
+        except OSError:
+            pass
     return None
 
 
