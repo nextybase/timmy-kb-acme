@@ -335,5 +335,8 @@ def safe_append_text(
                 _logger.debug("file_utils.lock_close_failed", extra={"lock_path": str(lock_path)})
         try:
             Path(lock_path_str).unlink(missing_ok=True)
-        except Exception:
-            _logger.debug("file_utils.lock_remove_failed", extra={"lock_path": str(lock_path)})
+        except Exception as exc:
+            _logger.warning(
+                "file_utils.lock_remove_failed",
+                extra={"lock_path": str(lock_path), "reason": str(exc)},
+            )

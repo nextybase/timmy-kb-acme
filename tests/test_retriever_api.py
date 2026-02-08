@@ -138,6 +138,40 @@ def test_search_empty_query_embedding_returns_empty(monkeypatch):
     assert out == []
 
 
+def test_search_budget_exceeded_returns_empty(monkeypatch):
+    """Se il budget/clock del throttle indica deadline exceeded, search() deve soft-fail con []."""
+
+    def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
+        yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}
+
+    monkeypatch.setattr(retr, "fetch_candidates", stub_fetch_candidates)
+    monkeypatch.setattr(retr.throttle_mod, "_deadline_exceeded", lambda deadline: True)
+
+    class FakeEmb:
+        def embed_texts(self, texts: Sequence[str], *, model: str | None = None):
+            return [[1.0, 0.0]]
+
+    params = QueryParams(
+        db_path=None,
+        slug=DUMMY_SLUG,
+        scope="kb",
+        query="hello",
+        k=1,
+        candidate_limit=retr.MIN_CANDIDATE_LIMIT,
+    )
+    throttle_settings = retr.throttle_mod.ThrottleSettings(
+        latency_budget_ms=1,
+        parallelism=1,
+        sleep_ms_between_calls=0,
+    )
+    out = retr.search(
+        params,
+        FakeEmb(),
+        throttle=retr.throttle_mod._normalize_throttle_settings(throttle_settings),
+    )
+    assert out == []
+
+
 def test_search_accepts_deque_embedding(monkeypatch):
     """Client che ritorna deque o generatore come singolo vettore."""
     from collections import deque

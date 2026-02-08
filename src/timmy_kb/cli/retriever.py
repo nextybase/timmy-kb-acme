@@ -235,13 +235,7 @@ def search(
             "retriever.throttle.deadline",
             extra={"slug": params.slug, "scope": params.scope, "stage": "preflight"},
         )
-        _raise_retriever_error(
-            "latency budget exceeded",
-            code=ERR_DEADLINE_EXCEEDED,
-            slug=params.slug,
-            scope=params.scope,
-            stage="preflight",
-        )
+        return []
     throttle_ctx = (
         _throttle_guard(throttle_key or params.slug or "retriever", throttle_cfg, deadline=deadline)
         if throttle_cfg
@@ -317,13 +311,7 @@ def search(
                     "stage": "embedding",
                 },
             )
-            _raise_retriever_error(
-                "latency budget exceeded",
-                code=ERR_DEADLINE_EXCEEDED,
-                slug=params.slug,
-                scope=params.scope,
-                stage="embedding",
-            )
+            return []
         try:
             query_vector, t_emb_ms = embeddings_mod._materialize_query_vector(
                 params,
@@ -383,13 +371,7 @@ def search(
                     "stage": "embedding",
                 },
             )
-            _raise_retriever_error(
-                "latency budget exceeded",
-                code=ERR_DEADLINE_EXCEEDED,
-                slug=params.slug,
-                scope=params.scope,
-                stage="embedding",
-            )
+            return []
 
         # 2) Caricamento candidati dal DB
         if throttle_mod._deadline_exceeded(deadline):
@@ -401,13 +383,7 @@ def search(
                     "stage": "fetch_candidates",
                 },
             )
-            _raise_retriever_error(
-                "latency budget exceeded",
-                code=ERR_DEADLINE_EXCEEDED,
-                slug=params.slug,
-                scope=params.scope,
-                stage="fetch_candidates",
-            )
+            return []
         candidates, t_fetch_ms = _load_candidates(params)
         fetch_budget_hit = throttle_mod._deadline_exceeded(deadline)
         try:
@@ -434,13 +410,7 @@ def search(
                     "stage": "fetch_candidates",
                 },
             )
-            _raise_retriever_error(
-                "latency budget exceeded",
-                code=ERR_DEADLINE_EXCEEDED,
-                slug=params.slug,
-                scope=params.scope,
-                stage="fetch_candidates",
-            )
+            return []
 
         # 3) Scoring + ranking deterministico
         (
@@ -458,6 +428,17 @@ def search(
             abort_if_deadline=True,
         )
         budget_hit = rank_budget_hit
+        # Policy: budget hit => evento + soft-fail deterministico (nessuna eccezione, nessun "partial")
+        if budget_hit:
+            LOGGER.warning(
+                "retriever.latency_budget.hit",
+                extra={
+                    "slug": params.slug,
+                    "scope": params.scope,
+                    "stage": "ranking",
+                },
+            )
+            return []
         total_ms = (time.time() - t_total_start) * 1000.0
         ranking_mod._log_retriever_metrics(
             params=params,
@@ -523,16 +504,6 @@ def search(
                         "stage": "ranking",
                     },
                 )
-
-        if budget_hit:
-            _raise_retriever_error(
-                "latency budget exceeded during ranking",
-                code=ERR_BUDGET_HIT_PARTIAL,
-                slug=params.slug,
-                scope=params.scope,
-                stage="ranking",
-                partial_results=scored_items,
-            )
 
         return scored_items
 
@@ -657,14 +628,24 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
         budget = 0
     if auto and budget > 0:
         chosen = choose_limit_for_budget(budget)
+        safe_chosen = max(MIN_CANDIDATE_LIMIT, min(int(chosen), MAX_CANDIDATE_LIMIT))
+        if int(safe_chosen) != int(chosen):
+            LOGGER.warning(
+                "limit.clamped",
+                extra={"provided": int(chosen), "effective": int(safe_chosen)},
+            )
         try:
             LOGGER.info(
                 "retriever.limit.source",
-                extra={"source": "auto_by_budget", "budget_ms": int(budget), "limit": int(chosen)},
+                extra={
+                    "source": "auto_by_budget",
+                    "budget_ms": int(budget),
+                    "limit": int(safe_chosen),
+                },
             )
         except Exception:
             pass
-        return replace(params, candidate_limit=chosen)
+        return replace(params, candidate_limit=int(safe_chosen))
 
     try:
         raw = throttle.get("candidate_limit", retr.get("candidate_limit"))

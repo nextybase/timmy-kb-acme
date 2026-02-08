@@ -153,7 +153,7 @@ Nota: `visionstatement.yaml` esiste solo nel workspace (`output/timmy-kb-<slug>/
 | `src/semantic/vision_provision.py:_persist_outputs` | `output/timmy-kb-<slug>/semantic/semantic_mapping.yaml` | YAML mapping | Tagging/Semantica | CORE | Vision responses, schema valido | No |
 | `src/ui/components/mapping_editor.py:save_semantic_mapping`<br>`src/ui/components/yaml_editors.py:_write_yaml_text` | `output/timmy-kb-<slug>/semantic/semantic_mapping.yaml` | YAML mapping | Tagging/Semantica | CORE | UI + YAML valido | No |
 | `src/ui/components/mapping_editor.py:write_raw_structure_yaml` | `output/timmy-kb-<slug>/semantic/_raw_from_mapping.yaml` | YAML (struttura RAW) | Drive runner (opz.) | SERVICE | Mapping presente | No |
-| `src/semantic/vision_provision.py:_write_audit_line` | `output/timmy-kb-<slug>/logs/semantic.vision.log` | JSONL audit log | Diagnostica | SERVICE | FS write | No |
+| `src/semantic/vision_provision.py:_write_audit_line` | `output/timmy-kb-<slug>/logs/semantic.vision.log` | JSONL audit log | Diagnostica | SERVICE | FS write | `best-effort (SERVICE_ONLY)` - failure registra l'evento strutturato `semantic.vision.audit_write_failed` (scene=service, service_only=True, operation=audit_append), scrive warning ma non blocca Vision; la regressione è coperta da `tests/contract/test_service_only_audit_log.py`. |
 | `src/ai/responses.py:_diagnose_json_schema_format` | `output/debug/vision_schema_sent.json` | JSON debug | Diagnostica | SERVICE | Debug locale | Yes (best-effort, warning su fallimento) |
 
 ### A.3 Raw ingest

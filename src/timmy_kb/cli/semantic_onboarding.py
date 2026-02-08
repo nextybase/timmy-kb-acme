@@ -364,29 +364,6 @@ def main() -> int:
                         parent_folder_id=drive_raw_id,
                         log=logger,
                     )
-                decision_ledger.record_normative_decision(
-                    ledger_conn,
-                    decision_ledger.NormativeDecisionRecord(
-                        decision_id=uuid.uuid4().hex,
-                        run_id=run_id,
-                        slug=slug,
-                        gate_name="semantic_onboarding",
-                        from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                        to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                        verdict=decision_ledger.NORMATIVE_PASS,
-                        subject="semantic_onboarding",
-                        decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        actor="cli.semantic_onboarding",
-                        evidence_refs=_build_evidence_refs(
-                            layout=layout,
-                            requested=requested,
-                            effective=effective,
-                            outcome="ok",
-                        ),
-                        reason_code="ok",
-                    ),
-                )
-
                 # 3) Costruisci il Knowledge Graph dei tag (Tag KG Builder)
                 semantic_dir = layout.semantic_dir
                 # Path-safety: blocca traversal/symlink fuori semantic_dir.
@@ -428,6 +405,58 @@ def main() -> int:
                                 reason_code="ok",
                             ),
                         )
+                    else:
+                        logger.error("cli.tag_kg_builder.outputs_missing", extra={"slug": slug})
+                        decision_ledger.record_normative_decision(
+                            ledger_conn,
+                            decision_ledger.NormativeDecisionRecord(
+                                decision_id=uuid.uuid4().hex,
+                                run_id=run_id,
+                                slug=slug,
+                                gate_name="semantic_onboarding",
+                                from_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                                to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                                verdict=decision_ledger.NORMATIVE_BLOCK,
+                                subject="tag_kg_builder",
+                                decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                actor="cli.semantic_onboarding",
+                                evidence_refs=[
+                                    _path_ref(kg_json, layout),
+                                    _path_ref(kg_md, layout),
+                                    "tag_kg:missing_outputs",
+                                ],
+                                stop_code=decision_ledger.STOP_CODE_PIPELINE_ERROR,
+                                reason_code="deny_kg_outputs_missing",
+                            ),
+                        )
+                        raise ConfigError(
+                            "Tag KG builder ha prodotto output incompleti (kg.tags.json/kg.tags.md mancanti).",
+                            slug=slug,
+                        )
+                # PASS del gate semantic_onboarding SOLO a valle anche del KG (built o skipped)
+                decision_ledger.record_normative_decision(
+                    ledger_conn,
+                    decision_ledger.NormativeDecisionRecord(
+                        decision_id=uuid.uuid4().hex,
+                        run_id=run_id,
+                        slug=slug,
+                        gate_name="semantic_onboarding",
+                        from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                        to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                        verdict=decision_ledger.NORMATIVE_PASS,
+                        subject="semantic_onboarding",
+                        decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        actor="cli.semantic_onboarding",
+                        evidence_refs=_build_evidence_refs(
+                            layout=layout,
+                            requested=requested,
+                            effective=effective,
+                            outcome="ok",
+                            tag_kg_effective=tag_kg_effective,
+                        ),
+                        reason_code="ok",
+                    ),
+                )
             except (ConfigError, PipelineError) as exc:
                 # Mappa verso exit code deterministici (no traceback non gestiti)
                 original_error = _summarize_error(exc)

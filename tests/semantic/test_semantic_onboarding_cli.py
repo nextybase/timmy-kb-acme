@@ -156,6 +156,8 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
     (layout.book_dir / "doc.md").write_text("content", encoding="utf-8")
     (ctx.config_dir / "ledger.db").write_text("", encoding="utf-8")
     (layout.semantic_dir / "tags_raw.json").write_text("{}", encoding="utf-8")
+    (layout.semantic_dir / "kg.tags.json").write_text("{}", encoding="utf-8")
+    (layout.semantic_dir / "kg.tags.md").write_text("dummy", encoding="utf-8")
     layout.logs_dir.mkdir(parents=True, exist_ok=True)
     qa_payload = {
         "schema_version": 1,

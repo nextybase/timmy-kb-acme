@@ -224,6 +224,49 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert "artefatti" in a0
 
 
+def test_audit_log_failure_is_service_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    slug = "dummy-service"
+    ctx = _Ctx(tmp_path)
+    pdf = tmp_path / "vision.pdf"
+    _write_dummy_pdf(pdf)
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
+    monkeypatch.setattr(document_ingest, "extract_text_from_pdf", lambda path: _fake_pdf_pages())
+    monkeypatch.setattr(vp, "_call_assistant_json", lambda **_: _ok_payload(slug))
+    caplog.set_level(logging.WARNING, logger=vp.EVENT)
+
+    def _fail_append(*_: Any, **__: Any) -> None:
+        raise ConfigError("lock unavailable", file_path="logs/semantic.vision.log")
+
+    from pipeline import file_utils as file_utils_module
+
+    monkeypatch.setattr(file_utils_module, "safe_append_text", _fail_append)
+    monkeypatch.setattr(vp, "safe_append_text", _fail_append)
+
+    config = resolve_vision_config(ctx, override_model="test-model")
+    retention_days = resolve_vision_retention_days(ctx)
+    res = vp.provision_from_vision_with_config(
+        ctx,
+        logger=logging.getLogger("test"),
+        slug=slug,
+        pdf_path=pdf,
+        config=config,
+        retention_days=retention_days,
+    )
+
+    mapping = Path(res["mapping"])
+    assert mapping.exists(), "CORE artifact semantic_mapping.yaml deve esistere anche se audit fallisce"
+    assert any(
+        rec.message == vp._evt("audit_write_failed")
+        and getattr(rec, "scene", None) == "service"
+        and getattr(rec, "service_only", None) is True
+        and getattr(rec, "operation", None) == "audit_append"
+        for rec in caplog.records
+        if rec.name == vp.EVENT
+    ), "Dev'essere emesso il log semantic.vision.audit_write_failed con i metadati SERVICE_ONLY"
+
+
 def test_ensure_materializes_vision_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "vision-strict"
     ctx = _Ctx(tmp_path)

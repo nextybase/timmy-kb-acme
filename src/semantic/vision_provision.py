@@ -396,10 +396,24 @@ def _load_vision_yaml_text(repo_root_dir: Path, yaml_path: Path, *, slug: str) -
 
 
 def _write_audit_line(repo_root_dir: Path, record: Dict[str, Any]) -> None:
-    """Scrive una riga di audit JSONL in modo atomico e sicuro."""
+    """Scrive una riga di audit JSONL (SERVICE) e ignora i fallimenti scrivendo un evento."""
     (repo_root_dir / "logs").mkdir(parents=True, exist_ok=True)
     payload = json.dumps(record, ensure_ascii=False) + "\n"
-    safe_append_text(repo_root_dir, repo_root_dir / "logs" / LOG_FILE_NAME, payload)
+    log_path = repo_root_dir / "logs" / LOG_FILE_NAME
+    try:
+        safe_append_text(repo_root_dir, log_path, payload)
+    except Exception as exc:  # pragma: no cover - best-effort SERVICE handling
+        LOGGER.warning(
+            _evt("audit_write_failed"),
+            extra={
+                "slug": record.get("slug"),
+                "path": str(log_path),
+                "scene": "service",
+                "service_only": True,
+                "operation": "audit_append",
+                "reason": str(exc),
+            },
+        )
 
 
 @dataclass(frozen=True)

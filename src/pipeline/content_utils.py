@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable, Literal, Mapping, Protocol, TypeAlias, cast
 from urllib.parse import quote
 
-from pipeline.exceptions import PathTraversalError, PipelineError
+from pipeline.exceptions import ConfigError, PathTraversalError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
 from pipeline.frontmatter_utils import read_frontmatter
@@ -740,7 +740,19 @@ def convert_files_to_structured_markdown(
 
     validated_safe_pdfs = None
     if safe_pdfs is not None:
-        validated_safe_pdfs = [_ensure_safe(raw_root, pdf, slug=getattr(ctx, "slug", None)) for pdf in safe_pdfs]
+        filtered = _filter_safe_pdfs(
+            perimeter_root=base,
+            raw_root=raw_root,
+            pdfs=safe_pdfs,
+            slug=getattr(ctx, "slug", None),
+            logger=logger,
+        )
+        if len(filtered) != len(safe_pdfs):
+            raise ConfigError(
+                "safe_pdfs contiene path non validi (symlink/traversal/fuori perimetro).",
+                slug=getattr(ctx, "slug", None),
+            )
+        validated_safe_pdfs = filtered
 
     root_pdfs, cat_items = _plan_pdf_groups(
         perimeter_root=base,
