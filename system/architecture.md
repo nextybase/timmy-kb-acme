@@ -273,7 +273,7 @@ May have optional dependencies, but must fail explicitly if missing.
 The Timmy-KB runtime is deterministic by design.
 Determinism is enforced by a small set of core modules.
 
-These modules are **Single Sources of Truth (SSoT)** and must never be bypassed.
+These modules are **Single Sources of Truth (SSoT)** and must never be bypassed. For recent contract alignments see [docs/contract_alignment.md](docs/contract_alignment.md).
 
 ### Workspace Layout (SSoT of structure)
 Module: `pipeline/workspace_layout.py`
