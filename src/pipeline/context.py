@@ -46,6 +46,27 @@ from .path_utils import validate_slug as _validate_slug
 from .settings import Settings
 
 _MISSING = object()
+LOGGER = get_structured_logger(__name__)
+
+
+def _handle_logger_level_failure(exc: Exception, *, stage: str, target: Any) -> None:
+    strict_mode = is_beta_strict()
+    if strict_mode:
+        raise ConfigError(
+            f"Impossibile applicare il livello log ({stage}).",
+            code="logging.level.apply_failed",
+            component="pipeline.context",
+        ) from exc
+
+    logger_name = getattr(target, "name", target.__class__.__name__)
+    extra = {
+        "scene": "service",
+        "service_only": True,
+        "stage": stage,
+        "target": logger_name,
+        "error_type": type(exc).__name__,
+    }
+    LOGGER.warning("context.logger_level_apply_failed", extra=extra)
 
 
 def validate_slug(slug: str) -> str:
@@ -237,13 +258,18 @@ class ClientContext:
         """Aggiorna il livello del logger e degli handler esistenti."""
         try:
             logger.setLevel(level)
-        except Exception:
+        except Exception as exc:
+            _handle_logger_level_failure(exc, stage="logger", target=logger)
             return
         for handler in list(getattr(logger, "handlers", []) or []):
             try:
                 handler.setLevel(level)
-            except Exception:
-                continue
+            except Exception as exc:
+                _handle_logger_level_failure(
+                    exc,
+                    stage=f"handler:{handler.__class__.__name__}",
+                    target=handler,
+                )
 
     @staticmethod
     def _reject_workspace_sentinels(root: Path, slug: str) -> None:

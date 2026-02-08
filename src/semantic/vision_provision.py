@@ -460,13 +460,21 @@ def _log_audit_lock_cleanup_failure(
 
 
 def _write_audit_line(repo_root_dir: Path, record: Dict[str, Any]) -> None:
-    """Scrive una riga di audit JSONL (SERVICE) e ignora i fallimenti scrivendo un evento."""
+    """Scrive una riga di audit JSONL (SERVICE); in strict fallisce, altrimenti logga un evento."""
+    strict_mode = is_beta_strict()
     (repo_root_dir / "logs").mkdir(parents=True, exist_ok=True)
     payload = json.dumps(record, ensure_ascii=False) + "\n"
     log_path = repo_root_dir / "logs" / LOG_FILE_NAME
     try:
         safe_append_text(repo_root_dir, log_path, payload)
     except Exception as exc:  # pragma: no cover - best-effort SERVICE handling
+        if strict_mode:
+            raise ConfigError(
+                "Vision audit log write failed.",
+                code="vision.audit.write_failed",
+                component="vision_provision",
+                file_path=str(log_path),
+            ) from exc
         _log_audit_append_failure(record.get("slug"), log_path, exc)
         return
 
@@ -750,6 +758,15 @@ def _prepare_payload(
 
     use_kb_flag = _coerce_flag(config.use_kb, True)
     strict_output_flag = _coerce_flag(config.strict_output, True)
+    strict_mode = is_beta_strict()
+
+    if strict_mode and use_kb_flag:
+        raise ConfigError(
+            "Vision strict mode forbids File Search (use_kb).",
+            slug=slug,
+            code="vision.strict.retrieval_forbidden",
+            component="vision_provision",
+        )
 
     display_name = getattr(ctx, "client_name", None) or slug
     prompt_text = (
@@ -867,6 +884,16 @@ def _prepare_payload_from_yaml(
 
     use_kb_flag = _coerce_flag(config.use_kb, True)
     strict_output_flag = _coerce_flag(config.strict_output, True)
+    strict_mode = is_beta_strict()
+
+    if strict_mode and use_kb_flag:
+        raise ConfigError(
+            "Vision strict mode forbids File Search (use_kb).",
+            slug=slug,
+            code="vision.strict.retrieval_forbidden",
+            component="vision_provision",
+        )
+
     run_instructions = _build_run_instructions(use_kb=use_kb_flag)
 
     return _VisionPrepared(

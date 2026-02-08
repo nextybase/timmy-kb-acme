@@ -13,12 +13,21 @@ import os
 from pathlib import Path
 from typing import cast
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.constants import LOGS_DIR_NAME
 from pipeline.context import ClientContext
 from pipeline.exceptions import ConfigError, WorkspaceNotFound
 from pipeline.file_utils import safe_write_text
+from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe, validate_slug
 from pipeline.workspace_layout import WorkspaceLayout
+
+LOGGER = get_structured_logger(__name__)
+BOOK_PLACEHOLDER_MARKER = "<!-- workspace_bootstrap auto -->"
+BOOK_README_TEMPLATE = f"# Client book\n{BOOK_PLACEHOLDER_MARKER}\n"
+BOOK_SUMMARY_TEMPLATE = f"# Summary\n{BOOK_PLACEHOLDER_MARKER}\n"
+DUMMY_BOOK_README = f"# Dummy KB\n{BOOK_PLACEHOLDER_MARKER}\n"
+DUMMY_BOOK_SUMMARY = f"# Summary\n{BOOK_PLACEHOLDER_MARKER}\n"
 
 __all__ = [
     "bootstrap_client_workspace",
@@ -57,8 +66,8 @@ def bootstrap_client_workspace(context: ClientContext) -> WorkspaceLayout:
     config_path = _assert_within(workspace_root, config_dir / "config.yaml")
     if not config_path.exists():
         _write_minimal_file(config_path, _template_config_content())
-    _write_minimal_file(book_dir / "README.md", "# Client book\n")
-    _write_minimal_file(book_dir / "SUMMARY.md", "# Summary\n")
+    _write_book_file_guarded(book_dir / "README.md", BOOK_README_TEMPLATE)
+    _write_book_file_guarded(book_dir / "SUMMARY.md", BOOK_SUMMARY_TEMPLATE)
 
     return WorkspaceLayout.from_context(context)
 
@@ -74,6 +83,39 @@ def _assert_within(base: Path, candidate: Path) -> Path:
 
 def _write_minimal_file(path: Path, content: str) -> None:
     safe_write_text(path, content, encoding="utf-8", atomic=True)
+
+
+def _is_placeholder_book_file(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        safe_path = ensure_within_and_resolve(path.parent, path)
+        text = read_text_safe(path.parent, safe_path, encoding="utf-8")
+    except Exception:
+        return False
+    return BOOK_PLACEHOLDER_MARKER in text
+
+
+def _write_book_file_guarded(path: Path, content: str) -> None:
+    strict_mode = is_beta_strict()
+    if path.exists() and not _is_placeholder_book_file(path):
+        if strict_mode:
+            raise ConfigError(
+                "Impossibile sovrascrivere manualmente il book in strict runtime.",
+                code="bootstrap.book.overwrite_forbidden",
+                component="pipeline.workspace_bootstrap",
+                file_path=str(path),
+            )
+        LOGGER.warning(
+            "workspace_bootstrap.book_skip_existing",
+            extra={
+                "scene": "service",
+                "service_only": True,
+                "path": str(path),
+            },
+        )
+        return
+    _write_minimal_file(path, content)
 
 
 def _template_config_content() -> str:
@@ -130,7 +172,7 @@ def bootstrap_dummy_workspace(slug: str) -> WorkspaceLayout:
     config_dir.mkdir(parents=True, exist_ok=True)
 
     _write_minimal_file(config_dir / "config.yaml", _template_config_content())
-    _write_minimal_file(book_dir / "README.md", "# Dummy KB")
-    _write_minimal_file(book_dir / "SUMMARY.md", "# Summary")
+    _write_book_file_guarded(book_dir / "README.md", DUMMY_BOOK_README)
+    _write_book_file_guarded(book_dir / "SUMMARY.md", DUMMY_BOOK_SUMMARY)
 
     return WorkspaceLayout.from_workspace(workspace_dir, slug=slug)

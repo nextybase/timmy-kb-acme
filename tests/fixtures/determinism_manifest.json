@@ -3,13 +3,13 @@
   "artifacts": [
     {
       "path": "book/README.md",
-      "sha256": "c78da9afd9b3979501854652b088aacb299d9e601a07efb9f476ca98c7262c59",
-      "bytes": 10
+      "sha256": "d1eba5d84fe3eee545660748532cf58f36246ac69d3e9e40897dd94e758c9735",
+      "bytes": 45
     },
     {
       "path": "book/SUMMARY.md",
-      "sha256": "d472979042ac41639fc5e45fc55464aaeefa9ec20e264099ebb7ebed728e9487",
-      "bytes": 9
+      "sha256": "6e1baf881552d66e889df926e263eb19db19ef8e17f400f9df79ecfc27c4a635",
+      "bytes": 44
     },
     {
       "path": "config/config.yaml",

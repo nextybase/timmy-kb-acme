@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# cspell:ignore conten
 # tests/semantic/test_vision_provision.py
 from __future__ import annotations
 
@@ -212,7 +213,7 @@ def test_provision_ok_writes_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     mapping = Path(res["mapping"])
     assert mapping.is_file(), "semantic_mapping.yaml non scritto"
 
-    # contenuto semantic_mapping.yaml
+    # semantic_mapping.yaml content
     m = yaml.safe_load(mapping.read_text(encoding="utf-8"))
     assert m["source"] == "vision"
     assert m["context"]["slug"] == slug
@@ -235,6 +236,7 @@ def test_audit_log_failure_is_service_only(
     monkeypatch.setattr(document_ingest, "extract_text_from_pdf", lambda path: _fake_pdf_pages())
     monkeypatch.setattr(vp, "_call_assistant_json", lambda **_: _ok_payload(slug))
     caplog.set_level(logging.WARNING, logger=vp.EVENT)
+    monkeypatch.setattr(vp, "is_beta_strict", lambda: False, raising=False)
 
     def _fail_append(*_: Any, **__: Any) -> None:
         raise ConfigError("lock unavailable", file_path="logs/semantic.vision.log")
@@ -265,6 +267,21 @@ def test_audit_log_failure_is_service_only(
         for rec in caplog.records
         if rec.name == vp.EVENT
     ), "Dev'essere emesso il log semantic.vision.audit_write_failed con i metadati SERVICE_ONLY"
+
+
+def test_audit_log_failure_strict_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    repo_root = tmp_path
+    record = {"ts": "0", "slug": "strict-audit"}
+    monkeypatch.setattr(vp, "is_beta_strict", lambda: True, raising=False)
+
+    def _fail_append(*_: Any, **__: Any) -> None:
+        raise OSError("disk error")
+
+    monkeypatch.setattr(vp, "safe_append_text", _fail_append)
+
+    with pytest.raises(ConfigError) as excinfo:
+        vp._write_audit_line(repo_root, record)
+    assert excinfo.value.code == "vision.audit.write_failed"
 
 
 def test_ensure_materializes_vision_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -626,6 +643,70 @@ def test_prepare_payload_sets_instructions_by_use_kb(tmp_path: Path, monkeypatch
     assert prepared_false.use_kb is False
     assert "IGNORARE File Search" in prepared_false.run_instructions
     assert "usa esclusivamente il blocco Vision" in prepared_false.run_instructions
+
+
+def test_prepare_payload_strict_blocks_use_kb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "strict-use-kb"
+    pdf = tmp_path / "vision.pdf"
+    _write_dummy_pdf(pdf)
+    ctx = _Ctx(tmp_path)
+    prepared_prompt = "prompt"
+
+    config = AssistantConfig(
+        model="gpt-4o-mini",
+        assistant_id="asst",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
+
+    monkeypatch.setattr(vp, "is_beta_strict", lambda: True, raising=False)
+
+    with pytest.raises(ConfigError) as excinfo:
+        vp._prepare_payload(
+            ctx,
+            slug,
+            pdf,
+            prepared_prompt=prepared_prompt,
+            config=config,
+            logger=logging.getLogger("test"),
+            retention_days=0,
+        )
+    assert excinfo.value.code == "vision.strict.retrieval_forbidden"
+
+
+def test_prepare_payload_from_yaml_strict_blocks_use_kb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "strict-use-kb-yaml"
+    ctx = _Ctx(tmp_path)
+
+    yaml_path = tmp_path / "visionstatement.yaml"
+    yaml_path.write_text(
+        "content:\n  full_text: Vision text\n",  # cspell:ignore-line
+        encoding="utf-8",
+    )
+
+    config = AssistantConfig(
+        model="gpt-4o-mini",
+        assistant_id="asst",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
+
+    monkeypatch.setattr(vp, "is_beta_strict", lambda: True, raising=False)
+    monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
+
+    with pytest.raises(ConfigError) as excinfo:
+        vp._prepare_payload_from_yaml(
+            ctx,
+            slug,
+            yaml_path,
+            prepared_prompt="prompt",
+            config=config,
+            logger=logging.getLogger("test"),
+            retention_days=0,
+        )
+    assert excinfo.value.code == "vision.strict.retrieval_forbidden"
 
 
 def test_invoke_assistant_passes_use_kb(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
