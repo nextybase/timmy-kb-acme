@@ -28,13 +28,14 @@ def test_apply_logger_level_non_strict_logs(monkeypatch: pytest.MonkeyPatch, cap
     caplog.set_level(logging.WARNING, logger=context.LOGGER.name)
     context.ClientContext._apply_logger_level(logger, logging.INFO)
     assert any(
-        rec.message == "context.logger_level_apply_failed"
-        and getattr(rec, "service_only", None) is True
+        rec.message == "context.logger_level_apply_failed" and getattr(rec, "service_only", None) is True
         for rec in caplog.records
     )
 
 
-def test_apply_logger_level_handler_failure_does_not_crash(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+def test_apply_logger_level_handler_failure_does_not_crash(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     monkeypatch.setattr(context, "is_beta_strict", lambda: False, raising=False)
     logger = logging.Logger("handler-test")
 
@@ -49,7 +50,6 @@ def test_apply_logger_level_handler_failure_does_not_crash(monkeypatch: pytest.M
     context.ClientContext._apply_logger_level(logger, logging.INFO)
 
     assert any(
-        rec.message == "context.logger_level_apply_failed"
-        and getattr(rec, "service_only", None) is True
+        rec.message == "context.logger_level_apply_failed" and getattr(rec, "service_only", None) is True
         for rec in caplog.records
     )

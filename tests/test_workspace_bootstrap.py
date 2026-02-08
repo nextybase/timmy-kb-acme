@@ -25,7 +25,9 @@ def test_book_guard_strict_blocks_overwrite(tmp_path: Path, monkeypatch: pytest.
     assert excinfo.value.code == "bootstrap.book.overwrite_forbidden"
 
 
-def test_book_guard_non_strict_skips_and_logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+def test_book_guard_non_strict_skips_and_logs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     path = tmp_path / "book" / "README.md"
     _write_custom_file(path)
     monkeypatch.setattr(wb, "is_beta_strict", lambda: False, raising=False)
@@ -35,8 +37,7 @@ def test_book_guard_non_strict_skips_and_logs(tmp_path: Path, monkeypatch: pytes
 
     assert path.read_text(encoding="utf-8") == "CUSTOM"
     assert any(
-        rec.message == "workspace_bootstrap.book_skip_existing"
-        and getattr(rec, "service_only", None) is True
+        rec.message == "workspace_bootstrap.book_skip_existing" and getattr(rec, "service_only", None) is True
         for rec in caplog.records
     )
 
