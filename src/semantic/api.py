@@ -202,6 +202,41 @@ def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger)
     return int(_copy_local_pdfs_to_raw(src_dir, raw_dir, logger))
 
 
+def _log_frontmatter_cache_failure(
+    logger: logging.Logger,
+    *,
+    slug: str,
+    context: ClientContextType,
+    operation: str,
+    exc: Exception,
+) -> None:
+    """Emit structured warning when the frontmatter cache cannot be cleared."""
+    extra: dict[str, object | None] = {
+        "slug": slug,
+        "service_only": True,
+        "service": "semantic.frontmatter_cache",
+        "operation": operation,
+        "error": str(exc),
+        "error_type": type(exc).__name__,
+    }
+    run_id = getattr(context, "run_id", None)
+    if run_id:
+        extra["run_id"] = run_id
+    try:
+        logger.warning("semantic.frontmatter_cache.clear_failed", extra=extra)
+    except Exception:
+        logger.warning(
+            "semantic.frontmatter_cache.clear_failed",
+            extra={
+                "slug": slug,
+                "service_only": True,
+                "service": "semantic.frontmatter_cache",
+                "operation": operation,
+                "error": "log emission failed",
+            },
+        )
+
+
 def _run_build_workflow(
     context: ClientContextType,
     logger: logging.Logger,
@@ -268,17 +303,45 @@ def _run_build_workflow(
     finally:
         try:
             from pipeline.content_utils import clear_frontmatter_cache, log_frontmatter_cache_stats
+        except Exception as exc:
+            _log_frontmatter_cache_failure(
+                logger,
+                slug=slug,
+                context=context,
+                operation="import",
+                exc=exc,
+            )
+            return
 
+        try:
             log_frontmatter_cache_stats(
                 logger,
                 "semantic.frontmatter_cache.stats_before_clear",
                 slug=slug,
             )
-            clear_frontmatter_cache()
         except Exception as exc:
             logger.warning(
-                "semantic.frontmatter_cache.clear_failed",
-                extra={"slug": slug, "error": str(exc)},
+                "semantic.frontmatter_cache.stats_log_failed",
+                extra={
+                    "slug": slug,
+                    "service_only": True,
+                    "service": "semantic.frontmatter_cache",
+                    "operation": "stats",
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "run_id": getattr(context, "run_id", None),
+                },
+            )
+
+        try:
+            clear_frontmatter_cache()
+        except Exception as exc:
+            _log_frontmatter_cache_failure(
+                logger,
+                slug=slug,
+                context=context,
+                operation="clear",
+                exc=exc,
             )
 
 

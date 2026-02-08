@@ -395,6 +395,70 @@ def _load_vision_yaml_text(repo_root_dir: Path, yaml_path: Path, *, slug: str) -
     return full_text.strip()
 
 
+def _log_audit_append_failure(
+    slug: str | None,
+    log_path: Path,
+    exc: Exception,
+) -> None:
+    extra = {
+        "slug": slug,
+        "path": str(log_path),
+        "scene": "service",
+        "service_only": True,
+        "service": "semantic.vision.audit_log",
+        "operation": "audit_append",
+        "reason": str(exc),
+        "error_type": type(exc).__name__,
+    }
+    try:
+        LOGGER.warning(_evt("audit_write_failed"), extra=extra)
+    except Exception:
+        LOGGER.warning(
+            _evt("audit_write_failed"),
+            extra={
+                "slug": slug,
+                "scene": "service",
+                "service_only": True,
+                "service": "semantic.vision.audit_log",
+                "operation": "audit_append",
+                "reason": "log emission failed",
+            },
+        )
+
+
+def _log_audit_lock_cleanup_failure(
+    slug: str | None,
+    log_path: Path,
+    lock_path: Path,
+    *,
+    reason: str,
+) -> None:
+    extra = {
+        "slug": slug,
+        "path": str(log_path),
+        "lock_path": str(lock_path),
+        "scene": "service",
+        "service_only": True,
+        "service": "semantic.vision.audit_log",
+        "operation": "lock_cleanup",
+        "reason": reason,
+    }
+    try:
+        LOGGER.warning(_evt("audit_lock_cleanup_failed"), extra=extra)
+    except Exception:
+        LOGGER.warning(
+            _evt("audit_lock_cleanup_failed"),
+            extra={
+                "slug": slug,
+                "scene": "service",
+                "service_only": True,
+                "service": "semantic.vision.audit_log",
+                "operation": "lock_cleanup",
+                "reason": "log emission failed",
+            },
+        )
+
+
 def _write_audit_line(repo_root_dir: Path, record: Dict[str, Any]) -> None:
     """Scrive una riga di audit JSONL (SERVICE) e ignora i fallimenti scrivendo un evento."""
     (repo_root_dir / "logs").mkdir(parents=True, exist_ok=True)
@@ -403,16 +467,16 @@ def _write_audit_line(repo_root_dir: Path, record: Dict[str, Any]) -> None:
     try:
         safe_append_text(repo_root_dir, log_path, payload)
     except Exception as exc:  # pragma: no cover - best-effort SERVICE handling
-        LOGGER.warning(
-            _evt("audit_write_failed"),
-            extra={
-                "slug": record.get("slug"),
-                "path": str(log_path),
-                "scene": "service",
-                "service_only": True,
-                "operation": "audit_append",
-                "reason": str(exc),
-            },
+        _log_audit_append_failure(record.get("slug"), log_path, exc)
+        return
+
+    lock_path = log_path.parent / f"{log_path.name}.lock"
+    if lock_path.exists():
+        _log_audit_lock_cleanup_failure(
+            record.get("slug"),
+            log_path,
+            lock_path,
+            reason="lock_stale",
         )
 
 

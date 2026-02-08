@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from pipeline.exceptions import ConfigError
 import semantic.api as sapi
+from pipeline.exceptions import ConfigError
 
 
 def test_get_paths_rejects_blank_slug() -> None:
