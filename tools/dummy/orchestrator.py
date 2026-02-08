@@ -42,6 +42,12 @@ _SEMANTIC_MAPPING_TEMPLATE = "semantic_tagger: {}\nareas: []\n"
 _DUMMY_STAGE_SKELETON = "skeleton"
 _CTX_STAGE_POST_SKELETON = "dummy.bootstrap.skeleton"
 
+# Must match pipeline.workspace_bootstrap.BOOK_PLACEHOLDER_MARKER
+# (kept local to avoid importing runtime bootstrap internals into tooling).
+_BOOK_PLACEHOLDER_MARKER = "<!-- workspace_bootstrap auto -->"
+_DUMMY_BOOK_README = f"# Dummy KB\n{_BOOK_PLACEHOLDER_MARKER}\n"
+_DUMMY_BOOK_SUMMARY = f"# Summary\n{_BOOK_PLACEHOLDER_MARKER}\n"
+
 
 def _resolve_workspace_layout(
     base_dir: Path,
@@ -588,10 +594,10 @@ def build_dummy_payload(
     book_dir = workspace_root / "book"
     readme_path = book_dir / "README.md"
     if not readme_path.exists():
-        safe_write_text(readme_path, "# Dummy\n", encoding="utf-8", atomic=True)
+        safe_write_text(readme_path, _DUMMY_BOOK_README, encoding="utf-8", atomic=True)
     summary_path = book_dir / "SUMMARY.md"
     if not summary_path.exists():
-        safe_write_text(summary_path, "* [Dummy](README.md)\n", encoding="utf-8", atomic=True)
+        safe_write_text(summary_path, _DUMMY_BOOK_SUMMARY, encoding="utf-8", atomic=True)
 
     _merge_config_with_template(workspace_root, logger=logger)
     _apply_allow_local_only_override(workspace_root, allow=allow_local_only_override, logger=logger)

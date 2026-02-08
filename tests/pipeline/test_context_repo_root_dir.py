@@ -29,15 +29,19 @@ def test_compute_repo_root_dir_rejects_repo_root_env_without_sentinel(tmp_path: 
         ClientContext._compute_repo_root_dir("dummy", env_vars, logger)
 
 
-def test_compute_repo_root_dir_repo_root_env_derives_output(tmp_path: Path) -> None:
+def test_compute_repo_root_dir_strict_rejects_repo_root_env_for_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
     repo = _make_repo_root(tmp_path)
     env_vars = {
         REPO_ROOT_ENV: str(repo),
         WORKSPACE_ROOT_ENV: None,
     }
     logger = logging.getLogger("test.repo_root_env")
-    root = ClientContext._compute_repo_root_dir("dummy", env_vars, logger)
-    assert root == local_workspace_dir(repo / "output", "dummy")
+    with pytest.raises(ConfigError) as excinfo:
+        ClientContext._compute_repo_root_dir("dummy", env_vars, logger)
+    assert excinfo.value.code == "workspace.root.strict_requires_workspace_env"
 
 
 def test_compute_repo_root_dir_workspace_root_env_placeholder(tmp_path: Path) -> None:

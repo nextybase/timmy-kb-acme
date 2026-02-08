@@ -330,8 +330,25 @@ class ClientContext:
         """
         workspace_env = env_vars.get(WORKSPACE_ROOT_ENV)
         env_root = env_vars.get(REPO_ROOT_ENV)
+        strict_mode = is_beta_strict()
 
         if repo_root_override:
+            # Strict override guard
+            if strict_mode and os.getenv("TIMMY_ALLOW_WORKSPACE_OVERRIDE", "").strip().lower() not in {
+                "1",
+                "true",
+                "yes",
+                "y",
+                "on",
+            }:
+                raise ConfigError(
+                    "Workspace override not allowed in strict runtime. "
+                    "Use WORKSPACE_ROOT_DIR or explicitly enable TIMMY_ALLOW_WORKSPACE_OVERRIDE=1 "
+                    "for controlled tooling only.",
+                    code="workspace.override.forbidden",
+                    component="pipeline.context",
+                    slug=slug,
+                )
             try:
                 root = Path(str(repo_root_override)).expanduser().resolve()
             except Exception as e:
@@ -342,6 +359,18 @@ class ClientContext:
                 extra={"slug": slug, "repo_root_dir": str(root)},
             )
             return root
+
+        if strict_mode:
+            if workspace_env:
+                return cls._compute_workspace_root_dir(slug, env_vars, logger)
+            if env_root:
+                raise ConfigError(
+                    f"{WORKSPACE_ROOT_ENV} required in strict runtime: "
+                    f"REPO_ROOT_DIR cannot be used to derive tenant workspace.",
+                    code="workspace.root.strict_requires_workspace_env",
+                    component="pipeline.context",
+                    slug=slug,
+                )
 
         if env_root:
             try:

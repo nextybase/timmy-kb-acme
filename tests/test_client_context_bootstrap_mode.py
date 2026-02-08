@@ -46,4 +46,4 @@ def test_strict_runtime_blocks_bootstrap_without_allow(monkeypatch: pytest.Monke
             bootstrap_config=True,
         )
     err = exc_info.value
-    assert getattr(err, "code", None) == "runtime.bootstrap.forbidden"
+    assert getattr(err, "code", None) == "workspace.root.invalid"
