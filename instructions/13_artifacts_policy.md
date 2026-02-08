@@ -61,6 +61,7 @@ Service artifacts are allowed to follow best-effort or fallback behavior only un
 CORE artifacts MUST be deterministic and reproducible at parity of inputs, configuration, and capability flags.
 Any time-variant telemetry, timestamps, or cache state are SERVICE artifacts and MAY vary; they MUST NOT influence gating, ordering, or selection of CORE inputs.
 SERVICE-only supporting artifacts MUST be marked as such (structured log + `service_only` flag) so they cannot masquerade as deterministically required outputs.
+Note: the Vision audit log append is the single strict guard for SERVICE observability—failures emit `semantic.vision.audit_write_failed` only when `service_only=True`, while the retention/`purge_old_artifacts` path remains SERVICE-only best-effort and MUST NOT block CORE generations (it simply logs what it cleans without gating the pipeline).
 
 ### 4) Optional dependencies policy
 Optional dependencies are permitted only when:
@@ -113,6 +114,7 @@ must be listed here with motivation and dedicated tests.
 Any corruption in `kb.sqlite`, including invalid JSON in meta or embedding fields, is treated as CORE artifact corruption.
 In strict execution such failures MUST hard-fail the pipeline.
 In non-strict/UX flows the corrupted rows MAY be skipped only when the skip is observable (structured log marked SERVICE_ONLY) and does not influence the deterministic production of downstream CORE artifacts.
+The non-strict exception exists solely for resilience: skipping corrupted rows is acceptable provided the resulting CORE artifacts downstream remain identical, the skip is logged with `service_only=True`, and operators can audit which row(s) were skipped so the policy degradation stays visible.
 
 ## Notes
 - Workspace artifacts are validated based on the configuration of the active capabilities.
