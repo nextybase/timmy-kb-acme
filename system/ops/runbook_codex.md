@@ -265,7 +265,9 @@ References highlighted area AGENTS as needed.
 - Gate Semantica on `normalized/` presence and keep messages short while logging details.
 - Perform all I/O via SSoT utilities; avoid manual writes.
 
-References: (src/ui/AGENTS.md not present under src/ui), (src/ui/pages/AGENTS.md not present under src/ui/pages), [User Guide → UI](../../docs/user/user_guide.md).
+References:
+- Le schede/override "area" sono risolte dalla matrice in `system/ops/agents_index.md`; i path possono essere root-level (`AGENTS.md`) oppure nested (es. `src/ui/pages/AGENTS.md`) in base all'area.
+- [User Guide -> UI](../../docs/user/user_guide.md).
 
 ---
 

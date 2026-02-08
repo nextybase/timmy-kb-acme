@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from pathlib import Path
 
 import pytest
 
@@ -20,9 +19,10 @@ def test_resolve_workspace_root_expands_placeholder(tmp_path, monkeypatch):
     assert resolved == workspace_dir
 
 
-def test_resolve_workspace_root_rejects_querystring(monkeypatch):
+def test_resolve_workspace_root_rejects_querystring(tmp_path, monkeypatch):
     slug = "dummy"
-    monkeypatch.setenv(WORKSPACE_ROOT_ENV, f"/tmp/output/timmy-kb-{slug}?q=1")
+    bad_path = tmp_path / "output" / f"timmy-kb-{slug}?q=1"
+    monkeypatch.setenv(WORKSPACE_ROOT_ENV, str(bad_path))
 
     with pytest.raises(ConfigError) as excinfo:
         _resolve_workspace_root(slug)

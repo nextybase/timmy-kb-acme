@@ -16,6 +16,7 @@ from semantic.api import build_tags_csv
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
 from storage import decision_ledger
 from ui.utils.context_cache import get_client_context
+from ui.utils.stubs import get_streamlit
 from ui.utils.workspace import get_ui_workspace_layout
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -25,15 +26,12 @@ else:  # pragma: no cover
 
     ClientContext = Any  # type: ignore[misc]
 
-try:
-    import streamlit as st
-except Exception:  # pragma: no cover
-    st = None
 
-
-def _require_streamlit() -> None:
-    if st is None:
-        raise ConfigError("Streamlit non disponibile per l'adapter Estrai Tags.")
+def _require_streamlit():
+    try:
+        return get_streamlit()
+    except Exception as exc:
+        raise ConfigError("Streamlit non disponibile per l'adapter Estrai Tags.") from exc
 
 
 def _resolve_paths(ctx: ClientContext, slug: str) -> tuple[Path, Path, Path]:
@@ -69,7 +67,7 @@ def _rel(repo_root: Path, p: Path) -> str:
 
 def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
     """Genera/aggiorna tags_reviewed in-process mostrando l'avanzamento nella UI."""
-    _require_streamlit()
+    st = _require_streamlit()
     svc_logger = logger or get_structured_logger("ui.services.tags_adapter")
     conn: Any | None = None
 
@@ -160,8 +158,12 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
                     "component": getattr(exc, "component", None),
                 },
             )
-        except Exception:
-            pass
+        except Exception as ledger_exc:
+            svc_logger.exception(
+                "ui.tags_adapter.ledger_record_failed",
+                extra={"slug": slug, "error": str(ledger_exc), "phase": "handled_error"},
+            )
+            st.warning("Audit trail non disponibile (Decision Ledger). Operazione non tracciata nei log eventi.")
         svc_logger.error("ui.tags_adapter.failed", extra={"slug": slug, "error": message})
     except Exception:  # pragma: no cover
         st.error("Errore inatteso durante l'estrazione dei tag. Consulta i log.")
@@ -178,12 +180,19 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
                 occurred_at=_utc_now_iso(),
                 payload={"error_class": "UnexpectedError"},
             )
-        except Exception:
-            pass
+        except Exception as ledger_exc:
+            svc_logger.exception(
+                "ui.tags_adapter.ledger_record_failed",
+                extra={"slug": slug, "error": str(ledger_exc), "phase": "unexpected_error"},
+            )
+            st.warning("Audit trail non disponibile (Decision Ledger). Operazione non tracciata nei log eventi.")
         svc_logger.exception("ui.tags_adapter.failed", extra={"slug": slug})
     finally:
         if conn is not None:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as close_exc:
+                svc_logger.debug(
+                    "ui.tags_adapter.ledger_close_failed",
+                    extra={"slug": slug, "error": str(close_exc)},
+                )
