@@ -370,7 +370,7 @@ def run_json_model(
     `messages` segue il formato chat role/content e viene convertito in input_text.
     """
     client = client or make_openai_client()
-    # Paranoid guard: fail fast if Responses API is not available or callable.
+    # Guard paranoico: fallisce immediatamente se l'API Responses non è disponibile o invocabile.
     resp_api = getattr(client, "responses", None)
     create_fn = getattr(resp_api, "create", None) if resp_api is not None else None
     if not callable(create_fn):
@@ -494,7 +494,7 @@ def run_json_model(
             component="responses",
         ) from exc
     except AttributeError as exc:  # pragma: no cover
-        # Extra-paranoid: if the SDK raises AttributeError mid-flight, classify as unsupported.
+        # Extra-paranoico: se l'SDK solleva AttributeError durante l'esecuzione, classificare come non supportato.
         LOGGER.error("ai.responses.unsupported", extra={"error": str(exc)})
         raise ConfigError(
             "Client OpenAI non supporta l'API Responses.",

@@ -1,68 +1,68 @@
-# 09 - Context/Layout Contract (1.0 Beta, envelope chiuso)
+# 09 - Context/Layout Contract (1.0 Beta, closed envelope)
 
-**Status:** CONGELATO (definitivo per 1.0 Beta)
-**Scope:** contratto normativo per Context/Layout e derivazione path nel workspace cliente
-**Authority:** questo documento è vincolante e non introduce HOW/implementazioni
+**Status:** FROZEN (final for 1.0 Beta)
+**Scope:** normative contract for Context/Layout and workspace path derivation
+**Authority:** this document is binding and adds no HOW/implementation guidance
 
-## Scopo
-Definire il contratto definitivo "Context/Layout" per la 1.0 Beta: un solo perimetro valido, nessun fallback silenzioso, fail-fast obbligatorio.
+## Purpose
+Define the definitive Context/Layout contract for Beta 1.0: only one perimeter is valid, silent fallbacks are prohibited, and fail-fast behavior is mandatory.
 
-## Definizioni (minime)
-- **context**: oggetto di contesto di esecuzione (slug, repo_root_dir, config) usato per costruire il layout.
-- **WorkspaceLayout**: struttura che espone i path canonici del workspace cliente.
-- **repo_root_dir**: root del repository; è un input obbligatorio del contratto.
-- **book_dir**: directory canonica del Knowledge Book (markdown normalizzati) prodotta dall'Epistemic Envelope.
+## Minimal Definitions
+- **context**: runtime context object (slug, repo_root_dir, config) used to build the layout.
+- **WorkspaceLayout**: structure exposing the canonical workspace paths for a client.
+- **repo_root_dir**: repository root; it is a required contract input.
+- **book_dir**: canonical Knowledge Book directory (normalized markdown) produced by the Epistemic Envelope.
 
 ## 1) Single Source of Truth (SSoT)
-- `WorkspaceLayout.from_context(context)` MUST essere l'unica fonte di verità per i path canonici.
-- Qualsiasi path usato dal runtime MUST derivare dal `WorkspaceLayout` risultante.
+- `WorkspaceLayout.from_context(context)` MUST be the sole source of truth for canonical paths.
+- Every runtime path MUST derive from the resulting `WorkspaceLayout`.
 
-## 2) `repo_root_dir` (obbligatorio, nessun alias)
-- `repo_root_dir` MUST essere presente sempre.
-- `repo_root_dir` MUST NOT essere derivato da CWD, env, heuristics, risalita directory, o valori "di comodo".
-- `base_dir` FORBIDDEN come alias/alternativa per derivare o sostituire `repo_root_dir`.
-- `md_dir` FORBIDDEN come alias/alternativa per derivare o sostituire `book_dir`.
+## 2) `repo_root_dir` (mandatory, no alias)
+- `repo_root_dir` MUST always be present.
+- `repo_root_dir` MUST NOT be derived from CWD, environment heuristics, directory climbing, or “convenience” values.
+- `base_dir` is FORBIDDEN as an alias or alternative to derive or substitute `repo_root_dir`.
+- `md_dir` is FORBIDDEN as an alias or alternative to derive or substitute `book_dir`.
 
-### 2.1 `WORKSPACE_ROOT_DIR` e la macro `<slug>`
-Per esigenze multi-workspace è CONSENTITO documentare `WORKSPACE_ROOT_DIR` con il placeholder `<slug>` (es. `.../timmy-kb-<slug>`), ma:
+### 2.1 `WORKSPACE_ROOT_DIR` and the `<slug>` macro
+Multi-workspace deployments MAY document `WORKSPACE_ROOT_DIR` using the placeholder `<slug>` (e.g., `.../timmy-kb-<slug>`), but:
 
-- la macro viene **risolta centralmente** da `ClientContext` prima di ogni validazione;
-- la risoluzione è deterministica e non introduce fallback alternativi o logiche distribuite;
-- gli strumenti downstream **non devono** sostituire nuovamente `<slug>` (ovvero devono usare la root già risolta dal contesto);
-- la documentazione indica chiaramente che `WORKSPACE_ROOT_DIR` può contenere `<slug>`, ma la **parte runtime non usa `<slug>` direttamente**: passa per il contesto.
+- the macro MUST be resolved centrally by `ClientContext` before any validation;
+- the resolution MUST be deterministic and MUST NOT introduce alternative fallbacks or distributed heuristics;
+- downstream tools MUST NOT re-substitute `<slug>`; they MUST consume the root already resolved by the context;
+- documentation SHALL note that `WORKSPACE_ROOT_DIR` may contain `<slug>`, but the runtime layer MUST NOT consume `<slug>` directly: it passes through the context.
 
-La macro viene risolta una sola volta, prima di costruire il `WorkspaceLayout`, e fa parte del contratto (non è un comportamento di recovery silenzioso).
+The macro is resolved exactly once, before building the `WorkspaceLayout`, and is part of the contract (it is not a silent recovery behavior).
 
-## 3) Path derivati (layout-first)
-- `raw_dir`, `book_dir`, `semantic_dir`, `logs_dir`, `config_dir` MUST essere ottenuti dal `WorkspaceLayout`.
-- I consumer (UI/CLI/services/tools runtime) MUST NOT:
-  - leggere `context.*_dir` (se presenti),
-  - ricostruire path concatenando stringhe,
-  - calcolare path "equivalenti" fuori dal layout.
+## 3) Derived paths (layout-first)
+- `raw_dir`, `book_dir`, `semantic_dir`, `logs_dir`, and `config_dir` MUST be obtained from the `WorkspaceLayout`.
+- Consumers (UI/CLI/runtime services/tools) MUST NOT:
+  - read `context.*_dir` entries (if present),
+  - rebuild paths by concatenating strings,
+  - compute “equivalent” paths outside the layout.
 
-Esempio minimo ammesso (solo illustrativo):
+Permitted minimal example (illustrative only):
 ```
 layout = WorkspaceLayout.from_context(context)
 raw_dir = layout.raw_dir
 book_dir = layout.book_dir
 ```
 
-## 4) Divieti espliciti (pattern proibiti)
-I seguenti pattern sono FORBIDDEN quando coinvolgono path/config critici o campi obbligatori del contratto:
+## 4) Explicit prohibitions (forbidden patterns)
+The following patterns are FORBIDDEN when they touch critical contract fields or paths:
 
-### 4.1 `getattr` con default
+### 4.1 `getattr` with a default
 ```
 getattr(context, "repo_root_dir", None)
 getattr(context, "raw_dir", default)
 ```
 
-### 4.2 OR-chain / defaulting implicito
+### 4.2 OR-chain / implicit defaulting
 ```
 repo_root = context.repo_root_dir or Path.cwd()
 raw_dir = context.raw_dir or (repo_root / "output" / slug / "raw")
 ```
 
-### 4.3 try/except assorbenti (error masking)
+### 4.3 absorbing `try/except` (error masking)
 ```
 try:
     layout = WorkspaceLayout.from_context(context)
@@ -70,19 +70,19 @@ except Exception:
     layout = WorkspaceLayout.from_defaults(...)
 ```
 
-### 4.4 default silenziosi su campi/dir obbligatori
-Qualsiasi comportamento che "prosegue" senza `repo_root_dir` o senza layout valido è FORBIDDEN.
+### 4.4 silent defaults on mandatory fields/dirs
+Any behavior that “continues” without `repo_root_dir` or without a valid layout is FORBIDDEN.
 
-## 5) Error policy (fail-fast, rumorosa, esplicita)
-- Ogni violazione di questo contratto MUST essere trattata come **errore contrattuale**.
-- L'errore MUST essere **fail-fast**, **rumoroso** (log/evento esplicito) e **non recuperato** implicitamente.
-- Nessuna recovery implicita è ammessa: MUST NOT esistere "auto-fix" silenziosi o fallback automatici per tornare in un percorso alternativo.
+## 5) Error policy (fail-fast, noisy, explicit)
+- Every violation of this contract MUST be treated as a **contractual error**.
+- The error MUST be **fail-fast**, **noisy** (explicit log/event), and **not implicitly recovered**.
+- No implicit recovery is allowed: there MUST NOT exist “auto-fix” routines or automatic fallbacks that switch to an alternative path.
 
-## 6) Distinzione fondamentale: HiTL checkpoint ≠ fallback
-- Un **checkpoint HiTL** è uno STOP governato: blocca il progresso finché non esiste una decisione/artefatto umano previsto dal contratto.
-- Un **fallback** è un percorso alternativo che permette di proseguire senza decisione esplicita: è FORBIDDEN nel perimetro Beta.
-- I checkpoint HiTL MUST essere espliciti, tracciabili e non ambigui; non costituiscono alternative al contratto, ma condizioni per continuare dentro l'envelope.
+## 6) Critical distinction: HiTL checkpoint ≠ fallback
+- A **HiTL checkpoint** is a governed STOP: it blocks progress until the human decision/artifact prescribed by the contract becomes available.
+- A **fallback** is an alternative path that continues without an explicit decision; it is FORBIDDEN inside the Beta perimeter.
+- HiTL checkpoints MUST be explicit, traceable, and unambiguous; they are not contract alternatives but conditions to continue within the envelope.
 
-## 7) Perimetro Beta (runtime critico)
-- Il runtime critico Beta riconosce **un solo contratto** Context/Layout: quello in questo documento.
-- Strumenti dev-only/esperimenti MAY esistere solo fuori dal runtime critico e MUST NOT introdurre pluralità di contratti (né path derivati alternativi, né fallback).
+## 7) Beta perimeter (critical runtime)
+- The Beta critical runtime recognizes **a single Context/Layout contract**: the one defined in this document.
+- Dev-only tools or experiments MAY exist only outside the critical runtime and MUST NOT introduce multiple contracts (no alternative derived paths, no silent fallbacks).

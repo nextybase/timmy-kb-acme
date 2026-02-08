@@ -1,143 +1,142 @@
 Agency & Orchestration Model - v1.0 - Prompt Chain Lifecycle
 
-## Scopo e perimetro
-- Il presente documento descrive la timeline delle fasi della Prompt Chain, vista narrativa lineare.
-- La state machine formale e le transizioni precise verranno definite in un documento successivo.
-- Timeline e state machine sono complementari: la timeline illustra chi fa cosa e quando; la state machine specifica gli stati formali e le transizioni consentite.
+## Scope and perimeter
+- This document outlines the Prompt Chain timeline from a linear narrative perspective.
+- The canonical pipeline state machine and all valid transitions are specified in `instructions/05_pipeline_state_machine.md` (SSoT).
+- Timeline and state machine are complementary: the timeline shows who does what and when; the state machine records formal states and permitted transitions.
 
-## Fasi canoniche della Prompt Chain (Timeline)
+## Canonical Prompt Chain Phases (Timeline)
 
 ### PLANNING
-- **Obiettivo:** raccogliere intenti utente e identificare Domain Gatekeepers rilevanti.
-- **Output richiesto:** plan operativo con intenti registrati, coverage Gatekeeper, HiTL impliciti annotati.
-- **Azioni consentite:** analisi policy, consultazione AGENTS, definizione REGISTER_INTENT/REGISTER_ACTION preliminari.
-- **Azioni vietate:** esecuzioni dirette, bypass di HiTL, assegnazione/invocazione di micro-agent.
-- **Attori coinvolti:** Timmy/ProtoTimmy (decide); Domain Gatekeepers (consigliano vincoli, condizionano coverage e segnalano limiti)-micro-agent non partecipa.
+- **Goal:** collect user intents and identify relevant Domain Gatekeepers.
+- **Output required:** an operational plan with registered intents, Gatekeeper coverage, and annotated implicit HiTLs.
+- **Allowed actions:** policy analysis, AGENTS consultation, drafting preliminary REGISTER_INTENT/REGISTER_ACTION entries.
+- **Forbidden actions:** direct executions, HiTL bypass, assigning or invoking micro-agents.
+- **Actors involved:** Timmy/ProtoTimmy (decides); Domain Gatekeepers (advise constraints, influence coverage, signal limits); micro-agents do not participate.
 
 ### MICRO_PLANNING
-- **Obiettivo:** dettagliare sotto-prompts e selezionare micro-agent per ogni Action registrata.
-- **Output richiesto:** ordine di micro-task (Work Order Envelope) e template Action con family validata.
-- **Azioni consentite:** assemblaggio prompt, assegnazione micro-agent, controllo coverage Gatekeeper.
-- **Azioni vietate:** esecuzioni, registrazioni nuove Action senza HiTL, modifiche fuori timeline.
-- **Attori coinvolti:**
-  - Timmy/ProtoTimmy (coordina e seleziona/assegna micro-agent; unico attore autorizzato a farlo).
-  - Engineering Gatekeeper/OCP e altri Domain Gatekeepers (forniscono vincoli e segnalano limiti; non decidono la selezione).
-- **Nota operativa:** ogni modifica all'assegnazione di micro-agent dopo questa fase richiede HiTL esplicito (es. `REGISTER_INTENT`, `REGISTER_ACTION`, `stop_code == "HITL_REQUIRED"`).
+- **Goal:** detail sub-prompts and assign micro-agents for each registered Action.
+- **Output required:** an ordered micro-task list (Work Order Envelope) and Action templates with validated families.
+- **Allowed actions:** prompt assembly, micro-agent assignment, Gatekeeper coverage review.
+- **Forbidden actions:** executions, registering new Actions without HiTL, out-of-sequence changes.
+- **Actors involved:**
+  - Timmy/ProtoTimmy (coordinates and assigns micro-agents; sole authorized actor).
+  - Engineering Gatekeeper/OCP and Domain Gatekeepers (provide constraints and signal limits; they do not select agents).
+- **Operational note:** modifications to micro-agent assignments after this phase require explicit HiTL (e.g., REGISTER_INTENT, REGISTER_ACTION, stop_code == "HITL_REQUIRED").
 
 ### VALIDATION
-- **Obiettivo:** assicurare che prompt e Action rispettino policy e guardrail (semantic, compliance, gate).
-- **Output richiesto:** validazione formale (`StructuredResult` OK) o blocco con HiTL.
-- **Azioni consentite:** invocation di VALIDATE_* Actions, controllo HiTL triggers, log degli stop.
-- **Azioni vietate:** GENERATE_*/EXECUTE_* prima della validazione, bypass dei gate.
-- **Attori coinvolti:**
-  - Domain Gatekeepers (esaminano evidenze, validano schema e guardrail e rilasciano il verdetto).
-  - Engineering Gatekeeper/OCP (control plane che applica gate procedurali come Skeptic, Entrypoint e HiTL).
-  - Micro-agent (esegue i controlli tecnici dei VALIDATE_* sotto Work Order Envelope e restituisce `StructuredResult`; non prende decisioni).
-  - Timmy/ProtoTimmy (riceve e registra il verdetto e coordina HiTL).
- - **Nota:** alcune Action GENERATE_* o EXECUTE_* precedenti possono richiedere una VALIDATION aggiuntiva; tale controllo ricade nella fase VALIDATION esistente, non avvia una nuova fase, e si completa prima di passare a QA.
+- **Goal:** ensure prompts and Actions respect policies and guardrails (semantic, compliance, gate).
+- **Output required:** formal validation (StructuredResult OK) or HiTL block.
+- **Allowed actions:** invoke VALIDATE_* Actions, check HiTL triggers, log stops.
+- **Forbidden actions:** run GENERATE_*/EXECUTE_* before validation or bypass gates.
+- **Actors involved:**
+  - Domain Gatekeepers (assess evidence, validate schema/guardrails, issue verdicts).
+  - Engineering Gatekeeper/OCP (control plane applying Skeptic, Entrypoint, HiTL gates).
+  - Micro-agent (executes technical VALIDATE_* checks under the Work Order Envelope and returns StructuredResult; no decision role).
+  - Timmy/ProtoTimmy (records verdicts and coordinates HiTL).
+- **Note:** preceding GENERATE_* or EXECUTE_* Actions may require additional validation; such checks remain inside VALIDATION and finish before QA.
 
 ### EXECUTION
-- **Obiettivo:** esecuzione delle Action consentite (GENERATE_*, EXECUTE_*) con micro-agent.
-- **Output richiesto:** artefatti generati o side effect documentati e `StructuredResult`.
-- **Azioni consentite:** GENERATE_*, EXECUTE_* scoperte e loggate.
-- **Azioni vietate:** registrazione di nuovi intent/action, esecuzioni senza registry.
-- **Attori coinvolti:** micro-agent (esegue), Domain Gatekeepers (osservano), Engineering Gatekeeper/OCP (coordina control plane), Timmy (monitora).
+- **Goal:** execute permitted Actions (GENERATE_*, EXECUTE_*) via micro-agents.
+- **Output required:** generated artifacts or documented side effects plus StructuredResult.
+- **Allowed actions:** registered GENERATE_* and EXECUTE_* entries with logged side effects.
+- **Forbidden actions:** register new intents/actions or execute absent registry approval.
+- **Actors involved:** micro-agents execute; Gatekeepers observe; Engineering Gatekeeper/OCP coordinates control plane; Timmy monitors.
 
 ### QA
-- **Obiettivo:** verificare artefatti, log, HiTL compliance prima della chiusura.
-- **Output richiesto:** report QA, eventuali riaperture o `stop_code`.
-- **Azioni consentite:** VALIDATE_* su artefatti, controllo cspell/test, decisioni di ri-esposizione.
-- **Azioni vietate:** nuove esecuzioni senza nuova fase, ignorare guardrail.
-- **Attori coinvolti:** Domain Gatekeepers (valutano), Engineering Gatekeeper/OCP (gates), Timmy (approva), micro-agent può eseguire VALIDATE_* per QA.
+- **Goal:** verify artifacts, logs, and HiTL compliance before closure.
+- **Output required:** QA report, possible reopenings, or stop_code.
+- **Allowed actions:** VALIDATE_* on artifacts, cspell/test checks, re-exposure decisions.
+- **Forbidden actions:** new executions without a new phase or ignoring guardrails.
+- **Actors involved:** Domain Gatekeepers evaluate; Engineering Gatekeeper/OCP applies gates; Timmy approves; micro-agent may execute VALIDATE_* for QA scope.
 
 ### CLOSURE
-- **Obiettivo:** archiviare la Prompt Chain, aggiornare evidenze e notificare l'utente.
-- **Output richiesto:** summary, log closure, evidenza HiTL soddisfatta.
-- **Azioni consentite:** registrazione record, comunicazione `message_for_ocp`, chiusura fase.
-- **Azioni vietate:** nuove execution, cambi di coverage senza HiTL.
-- **Attori coinvolti:** Timmy (chiude), Domain Gatekeepers (confermano), micro-agent non partecipa.
+- **Goal:** archive the Prompt Chain, update evidence, and notify the user.
+- **Output required:** summary, closure logs, and HiTL evidence.
+- **Allowed actions:** record keeping, message_for_ocp notifications, closing the phase.
+- **Forbidden actions:** fresh executions or coverage changes without HiTL.
+- **Actors involved:** Timmy closes; Domain Gatekeepers confirm; micro-agents do not participate.
 
-## Regole di linearità globale
-- Avanzamento solo quando l'output richiesto della fase precedente è disponibile e validato.
-- Ritorno a fasi precedenti è permesso esclusivamente tramite Action esplicita (es. `REGISTER_INTENT` aggiornato) e HiTL confermato.
+## Global linearity rules
+- Advance only when the previous phase's required output is available and validated.
+- Returning to an earlier phase requires explicit actions (e.g., updated REGISTER_INTENT) and confirmed HiTL.
 
-## Ricorsività locale controllata
-- I loop sono ammessi solo dentro la medesima fase e avvengono a livello di orchestrazione (es. Engineering Gatekeeper che ri-invoca uno o più micro-agent durante EXECUTION), senza aggiornare lo stato globale della timeline.
-- I micro-agent non mantengono stato né dialogo: ogni iterazione è una nuova invocazione sotto Work Order Envelope.
-- La ricorsività serve a rifinare prompt o validazioni senza cambiare fase principale.
+## Controlled local recursion
+- Loops stay within the same phase and occur at orchestration level (e.g., Engineering Gatekeeper re-invoking micro-agents during EXECUTION) without altering the global timeline.
+- Micro-agents maintain no state or dialogue: each iteration is a fresh invocation under the Work Order Envelope.
+- Recursion refines prompts or validations without switching the main phase.
 
-## HiTL prefissati
-- Obbligatori in: registrazioni (`REGISTER_INTENT`, `REGISTER_ACTION`), modifica coverage, `stop_code == "HITL_REQUIRED"`.
-- Ogni fase elenca i trigger e il relativo stoppaggio tramite `message_for_ocp`.
+## Predefined HiTL triggers
+- Mandatory when: REGISTER_INTENT, REGISTER_ACTION registrations; coverage updates; stop_code == "HITL_REQUIRED".
+- Each phase documents triggers and stopping behavior via message_for_ocp.
 
 ## Phase-scoped Allowed Actions
-- PLANNING: `REGISTER_INTENT`, `REGISTER_ACTION`.
-- MICRO_PLANNING: definizione Work Order Envelope, assegnazione micro-agent.
-- VALIDATION: `VALIDATE_*` (schema, guardrail).
-- EXECUTION: `GENERATE_*`, `EXECUTE_*`.
-- QA: `VALIDATE_*` (report, cspell), eventuali `NEED_INPUT`.
-- CLOSURE: summary logging e HiTL confirmation.
-- Nessuna Action fuori fase è valida.
+- PLANNING: REGISTER_INTENT, REGISTER_ACTION.
+- MICRO_PLANNING: define the Work Order Envelope and assign micro-agents.
+- VALIDATION: VALIDATE_* (schema, guardrails).
+- EXECUTION: GENERATE_*, EXECUTE_*.
+- QA: VALIDATE_* (reports, cspell), possible NEED_INPUT.
+- CLOSURE: summary logging and HiTL confirmation.
+- No action outside its phase is valid.
 
-## State Machine (Opzione B) - Tabella Transizioni
-| STATE | EVENT | GUARD | ACTIONS ALLOWED | OUTPUT/ARTEFATTI | NEXT_STATE | NOTES |
+## State Machine (Option B) - Transition Table
+| STATE | EVENT | GUARD | ACTIONS ALLOWED | OUTPUT/ARTIFACTS | NEXT_STATE | NOTES |
 | --- | --- | --- | --- | --- | --- | --- |
-| PHASE_PLANNING | INTENT_REGISTERED | intent e coverage documentati, HiTL annotato, allowed_actions definiti | `REGISTER_INTENT`, `REGISTER_ACTION` preliminari | intent registry aggiornato, coverage file | PHASE_MICRO_PLANNING | `message_for_ocp` legacy registra il passaggio |
-| PHASE_MICRO_PLANNING | ACTION_REGISTERED | Work Order Envelope completo, micro-agent assegnati sotto coverage | assegnazione micro-agent, definizione prompt | task list, Work Order documenti | PHASE_VALIDATION | nuove assegnazioni richiedono HiTL (`REGISTER_*` o `stop_code == "HITL_REQUIRED"`) |
-| PHASE_VALIDATION | VALIDATION_OK | `VALIDATE_*` family, guardrail passati, nessuna EXECUTE/GENERATE attiva | `VALIDATE_*` sotto Work Order Envelope | `StructuredResult` OK, log | PHASE_EXECUTION | Control Plane applica gate Skeptic/Entrypoint |
-| PHASE_VALIDATION | VALIDATION_FAIL | evidenze negative, stop_code/HiTL, coverage mismatch | sospensione e logging | stop_code, err log | PHASE_VALIDATION | Domain Gatekeepers rilasciano il verdetto e coordinano HiTL |
-| PHASE_EXECUTION | EXECUTION_OK | `GENERATE_*`/`EXECUTE_*` registrate, instructions/ verificata | `GENERATE_*`, `EXECUTE_*` con side effect tracciati | artefatti, StructuredResult | PHASE_QA | prima di ogni prompt operativo la cartella instructions/ viene verificata |
-| PHASE_EXECUTION | EXECUTION_FAIL | runtime error o guardrail violati | blocco e HiTL trigger | stop_code, evidenze | PHASE_VALIDATION | richiamo Domain Gatekeepers per nuova validazione |
-| PHASE_QA | QA_OK | QA `VALIDATE_*` completati con `StructuredResult` positivo | `VALIDATE_*` QA scope | report QA, cspell log | PHASE_CLOSURE | |
-| PHASE_QA | QA_FAIL | QA mismatch, HiTL richiesto | richieste `VALIDATE_*` aggiuntive | issue log | PHASE_EXECUTION | micro-agent restituisce `NEED_INPUT` |
-| PHASE_CLOSURE | CLOSURE_CONFIRMED | summary e evidenze HiTL registrate | closure log, `message_for_ocp` | log finale, evidenza HiTL | PHASE_FINAL | timeline completata |
-| PHASE_FINAL | HITL_REQUIRED | `stop_code == "HITL_REQUIRED"` persistente | nessuna Action nuova | report con `message_for_ocp` | PHASE_PLANNING | necessita intervento umano per ripartire |
+| PHASE_PLANNING | INTENT_REGISTERED | intent and coverage documented, HiTL annotated, allowed_actions defined | REGISTER_INTENT, REGISTER_ACTION preliminaries | updated intent registry, coverage file | PHASE_MICRO_PLANNING | legacy message_for_ocp records the transition |
+| PHASE_MICRO_PLANNING | ACTION_REGISTERED | complete Work Order Envelope, micro-agents assigned under coverage | micro-agent assignment, prompt definition | task list, Work Order documents | PHASE_VALIDATION | new assignments require HiTL (REGISTER_* or stop_code == "HITL_REQUIRED") |
+| PHASE_VALIDATION | VALIDATION_OK | VALIDATE_* family, guardrails passed, no active EXECUTE/GENERATE | VALIDATE_* under Work Order Envelope | StructuredResult OK, logs | PHASE_EXECUTION | Control Plane applies Skeptic/Entrypoint gates |
+| PHASE_VALIDATION | VALIDATION_FAIL | negative evidence, stop_code/HiTL, coverage mismatch | suspension and logging | stop_code, error log | PHASE_VALIDATION | Domain Gatekeepers release verdict and coordinate HiTL |
+| PHASE_EXECUTION | EXECUTION_OK | registered GENERATE_*/EXECUTE_*, instructions/ verified | GENERATE_*/EXECUTE_* with tracked side effects | artifacts, StructuredResult | PHASE_QA | instructions/ folder checked before operational prompts |
+| PHASE_EXECUTION | EXECUTION_FAIL | runtime errors or guardrail violations | block and HiTL trigger | stop_code, evidence | PHASE_VALIDATION | recall Domain Gatekeepers for validation |
+| PHASE_QA | QA_OK | QA VALIDATE_* completed with positive StructuredResult | QA VALIDATE_* scope | QA report, cspell log | PHASE_CLOSURE |
+| PHASE_QA | QA_FAIL | QA mismatch, HiTL required | additional VALIDATE_* requests | issue log | PHASE_EXECUTION | micro-agent returns NEED_INPUT |
+| PHASE_CLOSURE | CLOSURE_CONFIRMED | summary and HiTL evidence recorded | closure log, message_for_ocp | PHASE_FINAL | final log with HiTL evidence |
+| PHASE_FINAL | HITL_REQUIRED | persistent stop_code == "HITL_REQUIRED" | no new actions | report with message_for_ocp | PHASE_PLANNING | requires human intervention to resume |
 
+## Example walkthrough
+- Scenario: producing documentation under instructions/.
+- Sequence: MICRO_PLANNING (define GENERATE_* Action), EXECUTION (micro-agent produces files), QA (VALIDATE_* the content), CLOSURE (summaries).
+- Mandatory rule: every operational prompt verifies instructions/ before acting to avoid divergence.
 
-## Walkthrough esemplificativo
-- **Scenario:** produzione di documentazione sotto `instructions/`.
-- **Sequenza:** MICRO_PLANNING (definizione Action GENERATE_*), EXECUTION (micro-agent genera file), QA (VALIDATE_* sul contenuto), CLOSURE (summaries).
-- **Regola obbligatoria:** ogni prompt operativo verifica `instructions/` prima di agire per evitare divergence.
-
-## Appendice - Stop & HiTL (Mini-C)
+## Appendix - Stop & HiTL (Mini-C)
 - stop_conditions:
   - HITL_REQUIRED:
-      trigger: `stop_code == "HITL_REQUIRED"` o `_CODEX_HITL_KEY` impostato dopo invalidazioni.
-      owner: Domain Gatekeepers (Semantic/Compliance) e Engineering Gatekeeper/OCP.
-      required_human_action: supervisione HiTL con `message_for_ocp` e ack.
-      resume_rule: riprende in PHASE_VALIDATION o PHASE_EXECUTION dopo conferma umana.
+      trigger: stop_code == "HITL_REQUIRED" or _CODEX_HITL_KEY set after invalidations.
+      owner: Domain Gatekeepers (Semantic/Compliance) and Engineering Gatekeeper/OCP.
+      required_human_action: HiTL supervision with message_for_ocp and acknowledgement.
+      resume_rule: resumes in PHASE_VALIDATION or PHASE_EXECUTION after human confirmation.
       resume_phase: SAME
   - SKEPTIC_GATE:
-      trigger: Skeptic Gate attivato da guardrail.
+      trigger: Skeptic Gate activated by guardrails.
       owner: Engineering Gatekeeper/OCP.
-      required_human_action: ack documentato (SKEPTIC_ACK.md) e revisione.
-      resume_rule: PHASE_VALIDATION con nuovi evidences.
+      required_human_action: documented acknowledgement (SKEPTIC_ACK.md) and review.
+      resume_rule: PHASE_VALIDATION with new evidence.
       resume_phase: PHASE_VALIDATION
   - ENTRYPOINT_GUARD:
-      trigger: Entrypoint Guard senza ack.
+      trigger: Entrypoint Guard without acknowledgement.
       owner: Engineering Gatekeeper/OCP.
-      required_human_action: conferma di conformità e log.
-      resume_rule: PHASE_PLANNING o PHASE_MICRO_PLANNING a seconda dell'ambito.
+      required_human_action: conformity confirmation and logging.
+      resume_rule: PHASE_PLANNING or PHASE_MICRO_PLANNING depending on scope.
       resume_phase: PHASE_MICRO_PLANNING
   - TAG_APPROVAL_REQUIRED:
-      trigger: revisione tag necessaria (invalid metadata).
+      trigger: tag review needed (invalid metadata).
       owner: Domain Gatekeepers (Compliance/Semantic).
-      required_human_action: approvazione manuale.
-      resume_rule: PHASE_VALIDATION con coverage aggiornata.
+      required_human_action: manual approval.
+      resume_rule: PHASE_VALIDATION with updated coverage.
       resume_phase: PHASE_VALIDATION
   - INVALID_SEMANTIC_MAPPING:
-      trigger: semantic_mapping.yaml mancante o invalido.
+      trigger: missing or invalid semantic_mapping.yaml.
       owner: Semantic Gatekeeper.
-      required_human_action: correggere mapping e loggare.
-      resume_rule: PHASE_VALIDATION dopo `VALIDATE_MAPPING_SCHEMA`.
+      required_human_action: fix the mapping and log it.
+      resume_rule: PHASE_VALIDATION after VALIDATE_MAPPING_SCHEMA.
       resume_phase: PHASE_VALIDATION
   - CONTRACT_ERROR:
-      trigger: micro-agent restituisce `CONTRACT_ERROR`.
-      owner: micro-agent (esecuzione) notificato da Domain Gatekeepers.
-      required_human_action: diagnosi e intervento operativo.
-      resume_rule: PHASE_EXECUTION o PHASE_VALIDATION in base allo scenario.
+      trigger: micro-agent returns CONTRACT_ERROR.
+      owner: executing micro-agent notified by Domain Gatekeepers.
+      required_human_action: diagnosis and operational action.
+      resume_rule: PHASE_EXECUTION or PHASE_VALIDATION depending on the scenario.
       resume_phase: SAME
 
-## Nota finale
-- La timeline è lineare a livello globale; eventuali cicli locali non rompono la catena.
-- La state machine formale e le transizioni verranno definite in un documento successivo, basandosi sulla timeline descritta sopra.
+## Final note
+- The timeline remains globally linear; local loops do not break the chain.
+- The formal state machine and transitions are documented in a later file, based on this timeline.

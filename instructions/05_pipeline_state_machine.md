@@ -47,9 +47,9 @@
 | `VISUALIZATION_REFRESH` | Frontmatter attested | Preview artefacts (`semantic/kg.tags.*`, final README/SUMMARY drafts) | `GENERATE_*` (visual previews, vision mappings) | Gatekeepers/OCP attest KG + preview → `PREVIEW_READY` |
 | `PREVIEW_READY` | Preview artefacts attested | Final `book/` + `semantic/` artefacts | `VALIDATE_*` (final QA checks) | On PASS: pipeline eligible for completion |
 
-**Nota normativa**
+**Normative note**
 - `COMPLETE` is **not a pipeline state**.
-- It is a **closure act**, attested via Decision Record, once all requirements are satisfied.
+- It is a **closure act**, attested via a Decision Record, once all requirements are satisfied.
 
 ---
 

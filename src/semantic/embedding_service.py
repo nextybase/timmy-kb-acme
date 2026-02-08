@@ -339,7 +339,7 @@ def _persist_markdown_embeddings(
         )
 
     for rel_name, payload_meta, body, vector in batch_chunks:
-        # Enrich metadata with ER-aware fields if present
+        # Arricchisce i metadati con campi ER-aware se presenti
         if isinstance(payload_meta, dict):
             entity = payload_meta.get("entity")
             area = payload_meta.get("area")

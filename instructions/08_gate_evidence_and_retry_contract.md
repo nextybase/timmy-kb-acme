@@ -2,187 +2,170 @@
 
 **Status:** ACTIVE
 **Authority:** Single Source of Truth (SSoT)
-**Scope:** definizione normativa dei contratti dei Gate
-(Evidence / Skeptic / QA), del modello di evidenza,
-dei predicate di stato e della policy di retry/resume.
+**Scope:** normative definition of Gate contracts (Evidence, Skeptic, QA), the evidence model, state predicates, and the retry/resume policy.
 
-Il binding lifecycle ↔ workspace ↔ gate ↔ Decision Record
-è definito in `instructions/06_promptchain_workspace_mapping.md`.
+The binding between lifecycle, workspace, gate, and Decision Record is defined in instructions/06_promptchain_workspace_mapping.md.
 
-Questo documento **non definisce flussi**:
-definisce **le condizioni formali che permettono ai gate di attestare uno stato**.
+This document formalizes the conditions that allow gates to attest a state without prescribing execution flows.
 
 ---
 
-## Principi Fondativi (Beta 1.0)
-- **Ogni transizione di stato produce un Decision Record append-only.**
-- Nessun gate produce "PASS impliciti" o dedotti da log.
-- I log sono **evidenze**, non artefatti di verità.
-- In assenza di Decision Record, **la transizione non è avvenuta**.
-- Retry ≠ resume: ogni retry è una **nuova run attestata**.
+## Foundational principles (Beta 1.0)
+- Every state transition produces an append-only Decision Record.
+- No gate derives implicit PASS outcomes from logs.
+- Logs are evidence, not certificates of truth.
+- Without a Decision Record, the transition has not occurred.
+- Retry does not equal resume: every retry is a new run with its own attestation.
 
 ---
 
-## Decision Record (Artefatto Canonico)
+## Decision Record (canonical artifact)
+The Decision Record is the only normative artifact emitted by gates.
 
-Il **Decision Record** è l'unico output normativo dei gate.
+### Minimal schema
+- decision_id (unique, append-only)
+-
+un_id
+- slug
+- rom_state
+- 	o_state (present only when verdict=PASS)
+- erdict (PASS | BLOCK | FAIL | PASS_WITH_CONDITIONS)
+- ctor (gatekeeper:<name> | 	immy)
+- 	imestamp (UTC)
+- evidence_refs[] (references to logs and artifacts)
+- stop_code (mandatory when verdict=BLOCK or FAIL)
 
-### Schema minimo obbligatorio
-- `decision_id` (univoco, append-only)
-- `run_id`
-- `slug`
-- `from_state`
-- `to_state` (presente solo se PASS)
-- `verdict` (`PASS | BLOCK | FAIL | PASS_WITH_CONDITIONS`)
-- `actor` (`gatekeeper:<name>` | `timmy`)
-- `timestamp` (UTC)
-- `evidence_refs[]` (puntatori a log e/o artefatti)
-- `stop_code` (obbligatorio se BLOCK/FAIL)
-
-I log e i file **non sostituiscono** mai questo record.
-
----
-
-## Persistenza nel Decision Ledger (mapping normativo → SQLite)
-
-Implementazione attuale: tabella `decisions` in `config/ledger.db` (SQLite).
-La persistenza **non cambia schema** e mappa i campi normativi nel ledger così:
-
-### Mapping verdict
-- `PASS` → `ALLOW` (ledger), `to_state` obbligatorio
-- `PASS_WITH_CONDITIONS` → `ALLOW` (ledger), `to_state` obbligatorio, `conditions` obbligatorio
-- `BLOCK` / `FAIL` → `DENY` (ledger), `stop_code` obbligatorio, `to_state` richiesto come *target* (vincolo schema)
-
-### Mapping campi
-- `gate_name` → `decisions.gate_name`
-- `from_state` / `to_state` → `decisions.from_state` / `decisions.to_state`
-- `actor`, `stop_code`, `evidence_refs[]`, `conditions` → `decisions.evidence_json` con chiavi deterministiche:
-  - `actor`
-  - `stop_code` (solo quando applicabile)
-  - `evidence_refs` (lista, anche vuota)
-  - `conditions` (lista, anche vuota)
-  - `normative_verdict`
-- `rationale` → `decisions.rationale` (stringa deterministica, puramente costruita internamente; i gate/CLI non possono fornire input)
-
-`decisions.rationale` è costruita internamente e non accetta stringhe "umane". Qualsiasi spiegazione classificatoria usa `evidence_json.reason_code`; i dettagli diagnostici vanno nei `events`.
-
-### Regole di strictness
-- `PASS` / `PASS_WITH_CONDITIONS` richiedono `to_state`.
-- `BLOCK` / `FAIL` richiedono `stop_code`.
-- `PASS_WITH_CONDITIONS` richiede `conditions` non vuoto.
-- `evidence_json` deve essere serializzato in JSON con chiavi ordinate (deterministico).
+Logs and files never replace this record.
 
 ---
 
-## Evidence Model (Log & Artefact as Evidence)
+## Persistence in Decision Ledger (normative mapping → SQLite)
+The current implementation records decisions inside the decisions table of config/ledger.db.
+Normative fields map into ledger columns as follows.
 
-### Regola generale
-- I gate **non validano eventi**.
-- I gate validano **affermazioni verificabili**, supportate da evidenze.
+### Verdict mapping
+- PASS → ledger ALLOW; 	o_state required.
+- PASS_WITH_CONDITIONS → ledger ALLOW; 	o_state and conditions required.
+- BLOCK / FAIL → ledger DENY; stop_code required; 	o_state stored as the target reference.
 
-### Tipologie di evidenza ammesse
-- **Artefatti**: file, directory, database, report QA.
-- **Log strutturati**: eventi osservabili, non ambigui, non contraddittori.
-- **Segnali di contesto**: es. ledger scrivibile, path-safe, config valida.
+### Field mapping
+- gate_name → decisions.gate_name
+- rom_state / 	o_state → decisions.from_state / decisions.to_state
+- ctor, stop_code, evidence_refs[], conditions → decisions.evidence_json with deterministic keys:
+  - ctor
+  - stop_code
+  - evidence_refs
+  - conditions
+  -
+ormative_verdict
+-
+ationale → decisions.rationale (deterministic string constructed internally; gates cannot inject free text)
 
-Se un'evidenza non è formalizzata:
-- il Gatekeeper **deve** indicarlo nel Decision Record (`evidence_gap`).
+Diagnostics belong to the events table.
 
----
-
-## Predicate di Stato (Beta 1.0 - Normativi)
-
-### `raw_ready`
-Stato **attestabile** se e solo se:
-- WorkspaceLayout valido e completo.
-- Directory canoniche presenti: `raw/`, `config/`, `semantic/`, ledger.
-- `config/config.yaml` valido.
-- Ledger scrivibile.
-
-**Nota normativa**
-- La presenza di PDF **non** definisce lo stato.
-- I PDF sono prerequisito per azioni successive, non per lo stato.
-
----
-
-### `tagging_ready`
-Stato **attestabile** se e solo se:
-- `semantic/tags.db` esiste ed è coerente.
-- `tags_reviewed.yaml` presente (checkpoint HiTL).
-- Artefatti semanticamente allineati.
-
-**Predicate unica**
-- Questa condizione è unica e non sostituibile.
-- Implementazioni multiple devono convergere su questa definizione.
+### Strictness rules
+- PASS and PASS_WITH_CONDITIONS require 	o_state.
+- BLOCK and FAIL require stop_code.
+- PASS_WITH_CONDITIONS requires non-empty conditions.
+- evidence_json must be serialized with ordered keys for determinism.
 
 ---
 
-## Evidence Gate - Contratto Normativo
+## Evidence Model (log and artifact as evidence)
 
-L'Evidence Gate:
-- valuta **coerenza strutturale e presenza delle evidenze**;
-- **non decide avanzamenti**;
-- produce sempre un Decision Record.
+### General rule
+Gates validate verifiable assertions supported by evidence, not raw events.
 
-### Evidence minime per transizione
-| Transizione | Evidenze minime richieste |
-|------------|---------------------------|
-| `WORKSPACE_BOOTSTRAP → SEMANTIC_INGEST` | WorkspaceLayout valido, config valida, ledger scrivibile |
-| `SEMANTIC_INGEST → FRONTMATTER_ENRICH` | `semantic/tags.db`, `tags_reviewed.yaml` |
-| `FRONTMATTER_ENRICH → VISUALIZATION_REFRESH` | draft markdown + mapping semantico |
-| `VISUALIZATION_REFRESH → PREVIEW_READY` | KG + preview artefacts |
-| `PREVIEW_READY → COMPLETE` | artefatti finali completi |
+### Evidence types
+- Artifacts: files, directories, databases, QA reports.
+- Structured logs: observable, unambiguous, consistent events.
+- Context signals: ledger is writable, workspace paths are safe, config is valid.
+
+Missing evidence must be recorded under evidence_gap in the Decision Record.
 
 ---
 
-## Retry / Resume Contract (Beta 1.0)
+## State predicates (Beta 1.0 normative)
 
-### Regola fondamentale
-**Ogni retry è una nuova run.**
+###
+aw_ready
+The state is attestable only when:
+- WorkspaceLayout is valid and complete.
+- Canonical directories exist (
+aw/, config/, semantic/, ledger).
+- config/config.yaml is valid.
+- Ledger is writable.
 
-Non esiste:
-- retry silenzioso,
-- resume implicito,
-- "stessa esecuzione".
+Note: PDF presence does not define the state; PDFs are prerequisites for later actions.
 
-### Condizioni per retry ammesso
-- Artefatti precedenti **ancora integri**.
-- Nessuna violazione strutturale (layout, config, scope).
-- Nuovo `run_id` e nuovo Decision Record.
+### 	agging_ready
+Attested only when:
+- semantic/tags.db exists and is coherent.
+- 	ags_reviewed.yaml is present (HiTL checkpoint).
+- Semantic artifacts align.
 
-### Retry BLOCCATO se
-- `WorkspaceLayoutInvalid`
-- `WorkspaceNotFound`
-- `ConfigError` persistente
-
-In questi casi:
-- verdict = `BLOCK`
-- `stop_code = HITL_REQUIRED`
-- decisione demandata a Timmy (HiTL).
+This predicate is unique; all implementations must follow its definition.
 
 ---
 
-## QA Gate ↔ Stato `COMPLETE`
+## Evidence Gate – normative contract
+The Evidence Gate:
+- assesses structural consistency and the presence of evidence;
+- never decides advancement;
+- always emits a Decision Record.
 
-- Il QA Gate è **necessario ma non sufficiente** per completare la pipeline.
-- Requisiti minimi QA:
-  - `pre-commit run --all-files` → PASS
-  - `pre-commit run --hook-stage pre-push --all-files` → PASS
-  - report QA disponibili come evidenza
-- `logs/qa_passed.json` è il **core-gate artifact** del QA Gate.
-- Il campo `timestamp` è telemetria: non entra nel confronto deterministico/manifest dei core artifacts.
-- In caso di FAIL: verdict = `BLOCK`, `stop_code = QA_GATE_FAILED`.
+### Evidence per transition
+| Transition | Required evidence |
+|------------|------------------|
+| WORKSPACE_BOOTSTRAP → SEMANTIC_INGEST | WorkspaceLayout valid, config valid, ledger writable |
+| SEMANTIC_INGEST → FRONTMATTER_ENRICH | semantic/tags.db, 	ags_reviewed.yaml |
+| FRONTMATTER_ENRICH → VISUALIZATION_REFRESH | draft markdown and semantic mapping |
+| VISUALIZATION_REFRESH → PREVIEW_READY | knowledge graph and preview artifacts |
+| PREVIEW_READY → COMPLETE | final artifacts ready |
 
-Solo dopo:
-1. QA Gate produce Decision Record PASS
-2. Evidence + Skeptic Gate confermano coerenza finale
-3. Timmy/Gatekeeper può attestare `COMPLETE`
+---
 
-La transizione a `COMPLETE` è **essa stessa un Decision Record**.
+## Retry / Resume contract (Beta 1.0)
+
+### Core rule
+Every retry is a new run.
+No silent retries, implicit resumes, or continuations of the same execution.
+
+### Allowed retry conditions
+- Existing artifacts remain intact.
+- No structural violation (layout, config, scope).
+- A new
+un_id and Decision Record are created.
+
+### Retry blocked when
+- WorkspaceLayoutInvalid
+- WorkspaceNotFound
+- Persistent ConfigError
+
+In such cases: verdict=BLOCK, stop_code=HITL_REQUIRED; the decision escalates to Timmy (HiTL).
+
+---
+
+## QA Gate → COMPLETE
+- The QA Gate is necessary but not sufficient for pipeline completion.
+- Minimum QA requirements:
+  1. pre-commit run --all-files → PASS
+  2. pre-commit run --hook-stage pre-push --all-files → PASS
+  3. QA reports available as evidence
+- logs/qa_passed.json is the core-gate artifact.
+- 	imestamp is telemetry and must not influence deterministic comparisons of core artifacts.
+- On FAIL: verdict=BLOCK, stop_code=QA_GATE_FAILED
+
+Only after:
+1. QA Gate emits a PASS Decision Record
+2. Evidence and Skeptic Gate confirm final coherence
+3. Timmy/Gatekeeper attest COMPLETE
+
+The transition to COMPLETE is itself a Decision Record.
 
 ---
 
 ## Non-goals
-- Non introduce nuovi stati.
-- Non definisce implementazioni o logging dettagliato.
-- Non automatizza decisioni: i gate **attestano**, non eseguono.
+- Introduce no new states.
+- Define implementation or logging details.
+- Automate decisions: gates attest, they do not execute.

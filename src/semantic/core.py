@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Canonical semantic helpers for vision ingestion and extraction."""
 
-# All vision artefact generation must go through semantic.core.
-# Parsers are internal and not part of the public Envelope API.
+# Tutta la generazione degli artefatti Vision passa attraverso semantic.core.
+# I parser sono interni e non fanno parte dell'API pubblica Envelope.
 
 from __future__ import annotations
 

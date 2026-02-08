@@ -1,195 +1,192 @@
 # 14_agent_package_contract.md
-**Stato:** attivo
-**Ambito:** Agency Engine - struttura e identità degli agenti
-**Autorità:** `instructions/*` (SSoT normativa)
-**Precedenza:** MANIFEST.md → instructions/* → codice → docs/
+**Status:** active
+**Scope:** Agency Engine – structure and identity of the agents
+**Authority:** `instructions/*` (normative SSoT)
+**Precedence:** MANIFEST.md → instructions/* → code → docs/
 
 ---
 
-## 1. Scopo del documento
+## 1. Purpose of the document
 
-Questo documento definisce il **contratto strutturale obbligatorio** per tutti gli agenti
-(micro-agenti e gatekeeper) dell’ecosistema Timmy-KB in **Beta 1.0**.
+This document defines the **mandatory structural contract** for every agent (micro-agents and gatekeepers) in the Timmy-KB ecosystem during **Beta 1.0**.
 
-Il contratto stabilisce:
-- come un agente è **identificato**
-- dove un agente **vive nel repository**
-- quali **artefatti** può produrre
-- quali **comportamenti sono vietati**
+The contract specifies:
+- how an agent is **identified**
+- where an agent **lives in the repository**
+- which **artifacts** it may produce
+- which **behaviors are forbidden**
 
-Se un agente, o una sua implementazione, viola una regola di questo documento,
-il comportamento è da considerarsi **non ammesso** nel sistema.
+Any agent or implementation that violates a rule from this document is considered **non-compliant** in the system.
 
 ---
 
-## 2. Definizione di Agent Package
+## 2. Definition of Agent Package
 
-Un **Agent Package** è l’unità minima valida per rappresentare un agente nel sistema.
+An **Agent Package** is the minimum valid unit representing an agent in the system.
 
-Un Agent Package è composto da:
-- una **identità formale**
-- una **struttura di repository vincolata**
-- un insieme di **artefatti di runtime tracciabili**
+An Agent Package consists of:
+- a **formal identity**
+- a **constrained repository layout**
+- a set of **traceable runtime artifacts**
 
-Un agente **non esiste** nel sistema se non è rappresentato da un Agent Package conforme.
+An agent **does not exist** in the system unless it is represented by a conformant Agent Package.
 
 ---
 
-## 3. Identità dell’agente (SSoT)
+## 3. Agent identity (SSoT)
 
 ### 3.1 `agent_id`
-Ogni agente deve avere un `agent_id` che soddisfi **tutte** le condizioni seguenti:
+Every agent must expose an `agent_id` that satisfies **all** the following conditions:
 
-- è **semantico e leggibile**
-- è **filesystem-safe**
-- è **immutabile nel tempo**
-- è **globalmente unico** nel repository
+- it is **semantic and human-readable**
+- it is **filesystem-safe**
+- it is **immutable over time**
+- it is **globally unique** within the repository
 
-Il `agent_id`:
-- **non può essere rinominato**
-- **non può avere alias**
-- **non può essere riutilizzato**
+The `agent_id`:
+- **must not be renamed**
+- **must not have aliases**
+- **must not be reused**
 
-Se il ruolo o lo scopo di un agente cambia in modo incompatibile,
-deve essere creato **un nuovo agente con nuovo `agent_id`**.
+If an agent's role or purpose changes incompatibly, a **new agent with a new `agent_id`** must be created.
 
 ---
 
-## 4. Posizionamento nel repository (obbligatorio)
+## 4. Repository placement (mandatory)
 
-Ogni agente deve vivere **esclusivamente** nel seguente path:
+Each agent must live **exclusively** within the following path:
 
+```
 src/ai/<agent_id>/
+```
 
-
-È vietato:
-- distribuire file di uno stesso agente in più directory
-- definire agenti solo tramite configurazione o environment
-- utilizzare naming impliciti o convenzioni non dichiarate
+Forbidden:
+- spreading the same agent files across multiple directories
+- defining agents solely via configuration or environment variables
+- relying on undocumented naming conventions
 
 ---
 
-## 5. `agent.yaml` - Carta d’identità dell’agente
+## 5. `agent.yaml` – agent identity card
 
-Ogni Agent Package deve contenere un file:
+Every Agent Package must include the file:
 
+```
 src/ai/<agent_id>/agent.yaml
+```
 
-
-### 5.1 Ruolo del file
-`agent.yaml` è la **Single Source of Truth** per:
-- identità dell’agente
-- tipo di agente
+### 5.1 Role of the file
+`agent.yaml` is the **Single Source of Truth** for:
+- the agent's identity
+- agent type
 - ownership
-- policy sugli artefatti
+- artifact policies
 
 In **Beta 1.0**, `agent.yaml`:
-- è **normativo**
-- può essere **validato**
-- non è necessariamente usato dal runtime per la risoluzione
+- is **normative**
+- may be **validated**
+- is not necessarily consumed by the runtime for resolution
 
-### 5.2 Obblighi
-- Il file deve esistere.
-- Il file deve essere semanticamente coerente con il codice.
-- Se il file è assente o invalido, l’agente è **non conforme**.
+### 5.2 Obligations
+- The file must exist.
+- The file must be semantically aligned with the code.
+- If the file is missing or invalid, the agent is **non-compliant**.
 
 ---
 
-## 6. Struttura minima obbligatoria
+## 6. Minimum required structure
 
-Ogni Agent Package deve rispettare almeno la seguente struttura:
+Each Agent Package must honor at least the following structure:
 
+```
 src/ai/<agent_id>/
 ├── agent.yaml
 ├── artifacts/
-│ ├── latest.json
-│ └── builds/
-│ └── <build_id>/
-│ └── build_manifest.json
+│   ├── latest.json
+│   └── builds/
+│       └── <build_id>/
+│           └── build_manifest.json
+```
 
-
-### 6.1 Regole
-- `artifacts/` è **append-only**
-- `latest.json` è l’unico file mutabile
-- gli artefatti **non devono essere committati**
-- nessun artefatto può essere sovrascritto
-
----
-
-## 7. Artefatti di build (`build_manifest.json`)
-
-Ogni esecuzione valida di un agente deve poter produrre
-un **build_manifest** conforme.
-
-Il `build_manifest.json`:
-- è un **artefatto di provenance**
-- attesta **che cosa l’agente ha fatto**
-- rende il comportamento **auditabile**
-
-Il contenuto minimo richiesto è definito dal contratto di build vigente
-(versionato nello schema del manifest).
+### 6.1 Rules
+- `artifacts/` is **append-only**
+- `latest.json` is the only mutable file
+- artifacts **must not be committed**
+- no artifact may be overwritten
 
 ---
 
-## 8. Separazione tra identità, runtime e dati
+## 7. Build artifacts (`build_manifest.json`)
 
-È obbligatoria la separazione netta tra:
+Every valid execution of an agent must produce a conformant **build_manifest**.
 
-| Dominio | Contenuto |
-|-------|----------|
-| Identità | `agent.yaml` |
-| Runtime | codice Python |
-| Stato | `artifacts/` |
-| Dati operativi | workspace (`raw/`, `semantic/`, ecc.) |
+The `build_manifest.json`:
+- is a **provenance artifact**
+- attests to **what the agent performed**
+- makes behavior **auditable**
 
-È vietato:
-- mescolare dati runtime e codice
-- dedurre stato dall’assenza/presenza di file non normati
-- utilizzare fallback impliciti
+The minimum required content is defined by the active build contract (versioned within the manifest schema).
 
 ---
 
-## 9. Relazione con l’Agency Engine
+## 8. Separation of identity, runtime, and data
 
-Questo contratto **non modifica**:
-- ruoli decisionali
+A strict separation between the following domains is mandatory:
+
+| Domain | Content |
+| --- | --- |
+| Identity | `agent.yaml` |
+| Runtime | Python code |
+| State | `artifacts/` |
+| Operational data | workspace (`raw/`, `semantic/`, etc.) |
+
+Forbidden:
+- mixing runtime data and code
+- inferring state from the presence or absence of undocumented files
+- relying on implicit fallbacks
+
+---
+
+## 9. Relationship with the Agency Engine
+
+This contract **does not change**:
+- decision-making roles
 - Prompt Chain
-- gate, verdict, HiTL
+- gates, verdicts, HiTL
 - Work Order Envelope
 
-Il contratto **definisce solo**:
-- la forma valida degli agenti
-- le condizioni minime per la loro esistenza tecnica
+It **only defines**:
+- the valid form of agents
+- the minimum conditions for their technical existence
 
-Le regole decisionali restano definite in:
+Decision rules remain defined in:
 - `instructions/AGENTS.md`
 - `instructions/02_prompt_chain_lifecycle.md`
 - `instructions/03_gatekeepers_contracts.md`
 
 ---
 
-## 10. Failure modes (non negoziabili)
+## 10. Failure modes (non-negotiable)
 
-I seguenti casi sono da considerarsi **errori di sistema**:
+The following cases constitute **system errors**:
 
-- agente senza `agent.yaml`
-- `agent_id` ambiguo o rinominato
-- artefatti sovrascritti
-- fallback impliciti su path o identità
-- stato dedotto senza manifest
+- agent without `agent.yaml`
+- ambiguous or renamed `agent_id`
+- overwritten artifacts
+- implicit fallbacks on path or identity
+- state inferred without a manifest
 
-In presenza di tali condizioni:
-- l’esecuzione **deve fermarsi**
-- l’errore deve essere **esplicito e tracciato**
+In such conditions:
+- execution **must stop**
+- the error **must be explicit and traceable**
 
 ---
 
-## 11. Nota di chiusura (Beta 1.0)
+## 11. Closing note (Beta 1.0)
 
-Questo contratto è pensato per:
-- ridurre entropia strutturale
-- rendere gli agenti **oggetti governabili**
-- preparare l’introduzione del Builder senza migrazioni distruttive
+This contract aims to:
+- reduce structural entropy
+- make agents **governable objects**
+- prepare for the Builder introduction without destructive migrations
 
-Ogni deroga a questo documento
-è una **violazione dell’envelope operativo** della Beta 1.0.
+Any deviation from this document is a **violation of the Beta 1.0 operational envelope**.

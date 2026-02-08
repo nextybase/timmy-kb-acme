@@ -250,6 +250,10 @@ Single Source of Truth.
 **Binding Ledger**
 State advancement occurs only after a valid Decision Record.
 
+## Vision Provisioning: Retrieval Prohibition in Strict (P2)
+Vision provisioning in strict execution MUST NOT perform retrieval or File Search.
+`use_kb` MUST remain disabled and any retriever-backed helper invoked during strict MUST hard-fail unless the flow is explicitly escalated to a documented non-strict capability.
+
 ---
 
 End of document.

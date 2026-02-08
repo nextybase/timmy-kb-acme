@@ -1,14 +1,14 @@
 # Contract Alignment Notes
 
-Questo documento non introduce nuove regole: riallinea la descrizione di runtime ai contratti già in essere nel MANIFEST e nelle `instructions/` (in caso di conflitto prevalgono i documenti di livello più alto). Riporta solo ciò che il runtime fa oggi, senza proposte creative.
+This document does not introduce new rules: it realigns the runtime description with the contracts already expressed in the MANIFEST and `instructions/` (higher-level documents prevail in case of conflict). It records only what the runtime actually does today - no creative proposals.
 
-Per allineare la documentazione ai comportamenti reali del runtime (no silenziosi downgrade, contratti testabili), registriamo qui i mismatch risolti:
+To keep documentation consistent with observed runtime behavior (no silent downgrades, testable contracts), we record the resolved mismatches here:
 
-1. **db_path è sempre esplicito/assoluto.** `QueryParams` ora documenta che `db_path` non può essere `None` e deve derivare da `WorkspaceLayout`/`ClientContext`; `storage.kb_db._resolve_db_path` e `KbStore` lo richiedono effettivamente (no fallback su `None`, `kb.sqlite` globale o path relativo).  
-2. **KB DB init fallisce su duplicati.** L’indice UNIQUE non fa “warn and continue”, ma genera un `ConfigError` che obbliga a rigenerare il DB, come chiarito nel commento che segue la creazione dell’indice.  
-3. **_load_env espone valori testuali.** Il contesto restituisce stringhe raw (anche per `CI`, `LOG_REDACTION`, ecc.); se un flag deve essere booleano, la conversione viene fatta dal caller che ha il contesto operativo.  
-4. **RawTransformService segnala fallimenti con eccezioni.** La docstring ora specifica che `FAIL` non viene mai restituito; in caso di errore viene sollevato `PipelineError`, mentre `SKIP` indica formati non supportati e `OK` il flusso riuscito.
+1. **`db_path` is always explicit and absolute.** `QueryParams` now documents that `db_path` cannot be `None` and must derive from `WorkspaceLayout`/`ClientContext`; `storage.kb_db._resolve_db_path` and `KbStore` enforce it strictly (no fallback to `None`, a global `kb.sqlite`, or a relative path).
+2. **KB DB init fails on duplicates.** The UNIQUE index does not warn and continue; it raises `ConfigError`, forcing the DB to be rebuilt, as clarified in the inline comment after the index creation.
+3. **`_load_env` exposes raw strings.** The context returns literal strings (including `CI`, `LOG_REDACTION`, etc.); any caller that needs a boolean flag is responsible for parsing.
+4. **`RawTransformService` signals failures via exceptions.** The documentation now states that `FAIL` is never returned; errors raise `PipelineError`, `SKIP` covers unsupported formats, and `OK` means success.
 
-Queste note servono a documentare i vincoli smistati tra codice e contratti (Beta 1.0: determinismo, fail-fast, nessun fallback implicito). Ogni modifica futura che tocchi uno di questi punti deve riportare il relativo aggiornamento qui.
+These notes document the constraints split between code and contracts (Beta 1.0: determinism, fail-fast, no implicit fallback). Any future change affecting these guarantees must also update this note and the related inline documentation/comments.
 
-Change discipline: ogni modifica che altera una di queste garanzie deve aggiornare anche questa nota e i docstring/commenti associati.
+Change discipline: every change that alters one of these guarantees MUST update this note and the associated inline documentation/comments.

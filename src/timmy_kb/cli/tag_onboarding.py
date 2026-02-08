@@ -267,7 +267,7 @@ def scan_normalized_to_db(
         raise ConfigError(
             "repo_root_dir mancante: richiesto in strict mode per scan_normalized_to_db.",
         )
-    # Fallback is CLI/tooling only; avoid heuristics, prefer ClientContext/WorkspaceLayout when available.
+    # Il fallback è riservato esclusivamente alla CLI/tooling; evitare euristiche e preferire ClientContext/WorkspaceLayout quando disponibili.
     repo_root_dir_path = (
         Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(normalized_dir).resolve().parent
     )
@@ -366,7 +366,7 @@ def run_nlp_to_db(
             "repo_root_dir mancante: richiesto in strict mode per run_nlp_to_db.",
             slug=slug,
         )
-    # Fallback is CLI/tooling only; avoid heuristics, prefer ClientContext/WorkspaceLayout when available.
+    # Il fallback è riservato esclusivamente alla CLI/tooling; evitare euristiche e preferire ClientContext/WorkspaceLayout quando disponibili.
     repo_root_dir_path = (
         Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(normalized_dir).resolve().parent
     )

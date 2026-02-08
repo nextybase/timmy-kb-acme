@@ -1,53 +1,53 @@
 Agency & Orchestration Model - v1.0 - Intents & Actions
 
-## Definizioni essenziali
-- **User Intent**: frammento narrativo dell'utente che descrive un bisogno da soddisfare; innesca una richiesta verso ProtoTimmy.
-- **System Intent**: corrispettivo tecnico di un User Intent, documentato nel registry; diventa operativo solo quando ProtoTimmy lo registra esplicitamente tramite l'Action `REGISTER_INTENT`.
-- **Azioni & Modes**: ogni Intent o Action fa riferimento a una tassonomia esterna di "modalità operative" (analysis, report, spike, ops-run, coding, ecc.); quella tassonomia è presupposta e non viene ridefinita qui.
-- **Registry**: l'insieme di Intent e Action documentati in `instructions/`; il registry è dinamico solo nella misura in cui ProtoTimmy può creare nuovi System Intent e Action tramite le azioni apposite, sempre sotto governance HiTL.
+## Essential Definitions
+- **User Intent**: narrative snippet from the user describing a requirement to fulfill; it triggers a request to ProtoTimmy.
+- **System Intent**: the technical counterpart of a User Intent, documented in the registry; it becomes operational only when ProtoTimmy explicitly registers it through the `REGISTER_INTENT` Action.
+- **Actions & Modes**: every Intent or Action references an external taxonomy of operating modes (`analysis`, `report`, `spike`, `ops-run`, `coding`, etc.); that taxonomy is assumed and not redefined here.
+- **Registry**: the set of documented Intent and Action definitions under `instructions/`; the registry is dynamic only insofar as ProtoTimmy may add new System Intents and Actions through the appropriate actions, always under HiTL governance.
 
-## Registry & dinamismo governato
-- **ProtoTimmy** è l'unico soggetto autorizzato a registrare nuovi System Intent o Action durante la fase di planning o micro-planning, come definito nel lifecycle della Prompt Chain; i Domain Gatekeepers ricevono solo ciò che già è documentato.
-- **Registrazione Intent**: solo per mezzo dell'Action `REGISTER_INTENT` (modello sotto).
-- **Registrazione Action**: solo per mezzo dell'Action `REGISTER_ACTION` (modello sotto).
-- **Whitelist Actions**: Gatekeeper e micro-agent eseguono esclusivamente Action presenti nel registry; qualsiasi Action non documentata viene ignorata o genera `CONTRACT_ERROR`.
-- **Micro-agent esegue, non decide**: gli agenti esecutivi (es. Codex) non valutano se un'Action debba esistere; eseguono solo quanto registrato e ritornano OK / NEED_INPUT / CONTRACT_ERROR.
-- **HiTL per registrazioni**: ogni `REGISTER_INTENT` o `REGISTER_ACTION` richiede HiTL esplicito; la modifica della coverage dei Gatekeeper per un Intent richiede HiTL; lo stesso vale per `stop_code == "HITL_REQUIRED"`.
+## Managed Registry Dynamics
+- **ProtoTimmy** is the only entity authorized to register new System Intents or Actions during planning or micro-planning, as defined in the Prompt Chain lifecycle; Domain Gatekeepers only receive what is already documented.
+- **Intent Registration**: possible only through the `REGISTER_INTENT` Action (template below).
+- **Action Registration**: possible only through the `REGISTER_ACTION` Action (template below).
+- **Whitelist Actions**: Gatekeepers and micro-agents execute only Actions listed in the registry; any undocumented Action is ignored or leads to `CONTRACT_ERROR`.
+- **Micro-agent executes, does not decide**: executing agents (e.g., Codex) do not assess whether an Action should exist; they just execute what is registered and return OK / NEED_INPUT / CONTRACT_ERROR.
+- **HiTL for registrations**: every `REGISTER_INTENT` or `REGISTER_ACTION` mandates explicit HiTL; modifying a Gatekeeper's coverage over an Intent also requires HiTL; the same applies to `stop_code == "HITL_REQUIRED"`.
 
-## Registry invariants (vincoli non negoziabili)
-- Solo ProtoTimmy può compiere `REGISTER_INTENT`/`REGISTER_ACTION` durante PLANNING o MICRO_PLANNING; Domain Gatekeepers e micro-agent possono solo consumare ciò che è già registrato.
-- Ogni Action non presente nel registry causa `CONTRACT_ERROR` o viene ignorata da Gatekeeper/micro-agent e blocca la catena.
-- Il campo `allowed_actions` è una whitelist per Intent: senza una presenza esplicita l'Action è illegittima nel contesto.
-- La famiglia (`VALIDATE_*` vs `GENERATE_*`/`EXECUTE_*`) deve essere compatibile con la fase corrente (see `02_prompt_chain_lifecycle.md`); altrimenti la catena richiede correzione tramite micro-planning.
+## Registry invariants (non-negotiable constraints)
+- Only ProtoTimmy may perform `REGISTER_INTENT` / `REGISTER_ACTION` during PLANNING or MICRO_PLANNING; Domain Gatekeepers and micro-agents can only consume what is already registered.
+- Any Action not present in the registry triggers `CONTRACT_ERROR` or is ignored by Gatekeepers/micro-agents and halts the chain.
+- The `allowed_actions` field acts as a whitelist per Intent: without an explicit presence the Action is illegitimate in the context.
+- The family (`VALIDATE_*` vs `GENERATE_*` / `EXECUTE_*`) must align with the current phase (see `02_prompt_chain_lifecycle.md`); otherwise the chain requires correction via micro-planning.
 
 ## Coverage Domain Gatekeepers
-- Ogni System Intent documentato dichiara quali Domain Gatekeepers sono **mandatory** e quali sono **advisory** per la richiesta.
-- ProtoTimmy invoca esclusivamente quei Gatekeeper, senza variazioni "a caso"; i Gatekeeper advisory possono segnalare blocchi o raccomandazioni, un mandatory Gatekeeper può bloccare e ProtoTimmy orchestra globalmente rispettando i trigger HiTL espliciti; quel blocco è un verdetto di dominio che Timmy non può bypassare senza HiTL/governance.
-- La coverage è un attributo del registro Intent e viene aggiornata solo tramite HiTL e `REGISTER_INTENT`.
+- Every documented System Intent declares which Domain Gatekeepers are **mandatory** and which are **advisory** for the request.
+- ProtoTimmy invokes exactly those Gatekeepers, without ad-hoc variations; advisory Gatekeepers may report blocks or recommendations, while a mandatory Gatekeeper can halt the chain and ProtoTimmy orchestrates globally respecting explicit HiTL triggers; that block is a domain verdict that Timmy cannot bypass without HiTL/governance.
+- Coverage is an attribute of the Intent registry and may be updated only through HiTL and `REGISTER_INTENT`.
 
 ## Action taxonomy
-- Le Action appartengono alle famiglie:
-  1. `VALIDATE_*` - controllo senza side effect (schema, stato, gate).
-  2. `GENERATE_*` - generazione documentale/artefatti (README, rapporti).
-  3. `EXECUTE_*` - side effect su workspace/pipeline (push, pipeline CLI).
-- Un'Action può essere invocata solo se è registrata e la famiglia corrisponde al comportamento atteso.
+- Actions belong to the following families:
+  1. `VALIDATE_*` - checks with no side effects (schema, state, gate).
+  2. `GENERATE_*` - document/artifact generation (README, reports).
+  3. `EXECUTE_*` - workspace/pipeline side effects (push, CLI pipelines).
+- An Action may be invoked only if it is registered and the family matches the expected behavior.
 
 ## HiTL triggers
-- Esigenze obbligatorie:
+- Mandatory needs:
   - `REGISTER_INTENT` → HiTL.
   - `REGISTER_ACTION` → HiTL.
-  - Modifica della coverage Gatekeeper di un Intent → HiTL.
-  - Ricezione di `stop_code == "HITL_REQUIRED"` → HiTL, con blocco fino a supervisione.
-- I Domain Gatekeepers segnalano i trigger HiTL tramite `message_for_ocp` (legacy field inteso come *message_for_gatekeeper*, non come canale diretto verso un particolare agente) e resettano `_CODEX_HITL_KEY` solo dopo conferma.
+  - Modifying the Gatekeeper coverage for an Intent → HiTL.
+  - Receiving `stop_code == "HITL_REQUIRED"` → HiTL, with execution blocked until supervision.
+- Domain Gatekeepers report HiTL triggers through `message_for_ocp` (legacy field intended as *message_for_gatekeeper*, not a direct channel to a specific agent) and reset `_CODEX_HITL_KEY` only after confirmation.
 
-## Failure modes minimi (e cosa deve succedere)
-- Action non registrata richiesta → `CONTRACT_ERROR` + stop immediato (nessuna esecuzione) e log, l'actor segnala NEED_INPUT.
-- Action registrata ma fuori da `allowed_actions` → `CONTRACT_ERROR` + stop e segnalazione a ProtoTimmy per riallineamento.
-- Mismatch fase/family (es. GENERATE_* durante VALIDATION) → stop e richiesta di correzione via micro-planning (resume_phase: SAME).
-- Contrasto tra advisory (consiglio) e mandatory Gatekeeper che blocca → stop + HiTL escalation verso ProtoTimmy (scheduled need_input).
-- `stop_code == "HITL_REQUIRED"` o tag approval gate → stop + richiesta conferma umana prima di proseguire.
+## Minimal failure modes (and required handling)
+- Requesting an unregistered Action → `CONTRACT_ERROR` + immediate stop (no execution) and log entry; the actor reports NEED_INPUT.
+- Registered Action but outside `allowed_actions` → `CONTRACT_ERROR` + stop and notification to ProtoTimmy for realignment.
+- Phase/family mismatch (e.g., `GENERATE_*` during `VALIDATION`) → stop and correction request via micro-planning (`resume_phase: SAME`).
+- Conflict between an advisory recommendation and a blocking mandatory Gatekeeper → stop + HiTL escalation toward ProtoTimmy (scheduled `need_input`).
+- `stop_code == "HITL_REQUIRED"` or tag approval gate → stop + human confirmation required before proceeding.
 
-## Template operativi
+## Operational templates
 
 ### INTENT SPEC (System Intent)
 
@@ -82,8 +82,8 @@ evidence_required:
   - log: ""
   - artifact: ""
 ```
-Regola: nel contesto di questo Intent possono essere invocate solo le Action elencate in allowed_actions.
-Vincolo: `allowed_actions` è obbligatorio e non può essere vuoto per Intent validi.
+Rule: within the context of this Intent, only the Actions listed in `allowed_actions` may be invoked.
+Constraint: `allowed_actions` is required and cannot be empty for valid Intents.
 
 ### ACTION SPEC
 
@@ -108,16 +108,16 @@ stop_conditions:
   - ""
 ```
 
-## Esempio completo
-- **User Intent → System Intent:** l'utente richiede "aggiorna il mapping semantico".
+## Complete example
+- **User Intent → System Intent:** the user requests "update the semantic mapping".
 - **Coverage Gatekeepers:**
   - mandatory: Semantic Gatekeeper.
   - advisory: Compliance Gatekeeper.
-- **Sequence di Action**
-  1. `VALIDATE_MAPPING_SCHEMA` (VALIDATE_*).
-  2. `GENERATE_MAPPING_ARTIFACTS` (GENERATE_*).
-  3. `EXECUTE_DEPLOY_MAPPING` (EXECUTE_*).
-- Ogni Action è eseguita solo dopo che è presente nel registry e combacia con la family corretta; ogni passaggio fa riferimento ai template sopra e riporta OK/NEED_INPUT/CONTRACT_ERROR. La sequenza di Action è ammessa solo se compatibile con la fase corrente della Prompt Chain.
+- **Action sequence**
+  1. `VALIDATE_MAPPING_SCHEMA` (`VALIDATE_*`).
+  2. `GENERATE_MAPPING_ARTIFACTS` (`GENERATE_*`).
+  3. `EXECUTE_DEPLOY_MAPPING` (`EXECUTE_*`).
+- Each Action executes only after it is present in the registry and aligns with the correct family; every step refers to the templates above and returns OK/NEED_INPUT/CONTRACT_ERROR. The sequence is allowed only if compatible with the current Prompt Chain phase.
 
 ## Disclaimer
-- `message_for_ocp` è un nome field legacy; concettualmente è un *message_for_gatekeeper* destinato a un Domain Gatekeeper, non a un singolo agente e non implica esecuzione automatica. Non autorizza né implica l'invocazione diretta di un agente specifico: il routing viene deciso da ProtoTimmy in base alla coverage dell'Intent.
+- `message_for_ocp` is a legacy field name; conceptually it is a *message_for_gatekeeper* addressed to a Domain Gatekeeper, not to a single agent, and it does not imply automatic execution. It neither authorizes nor implies direct invocation of a specific agent: routing is decided by ProtoTimmy based on the Intent coverage.

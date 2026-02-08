@@ -1,114 +1,105 @@
-# instructions/ - Specifica normativa del Control Plane (Beta 1.0)
+# instructions/ – Normative Control Plane Specification (Beta 1.0)
 
-## Cos'è `instructions/`
-- **Design-first specification repository** del control plane ProtoTimmy.
-- **Single Source of Truth (SSoT)** per la governance operativa della Beta 1.0.
-- **NON** è documentazione descrittiva o narrativa.
-- **NON** è implementazione.
-- È un deposito di **contratti operativi verificabili**.
+## What is this folder?
+- **design-first specification repo** for the ProtoTimmy control plane.
+- **Single Source of Truth (SSoT)** for Beta 1.0 operational governance.
+- **NOT** descriptive documentation or narrative.
+- **NOT** an implementation bundle.
+- A repository of **verifiable operational contracts**.
 
-Ogni file in questa cartella:
-- definisce **ruoli, responsabilità, stati, gate, transizioni e artefatti**;
-- impone **invarianti e failure modes espliciti**;
-- produce o richiede **artefatti verificabili** (Decision Record, stati, log, stop_code).
+Each file here:
+- defines **roles, responsibilities, states, gates, transitions, and artifacts**;
+- codifies **invariants and explicit failure modes**;
+- produces or requires **verifiable artifacts** (Decision Records, states, logs, stop_codes).
 
-Se un comportamento non è descritto qui, **non è ammesso** nel sistema.
-
----
-
-## Obiettivo finale (Definition of Done - Beta 1.0)
-- L'interazione utente avviene **esclusivamente tramite Timmy (ProtoTimmy)**.
-- Timmy orchestra Domain Gatekeepers e micro-agent con copertura completa e HiTL esplicito.
-- OCP (Engineering Gatekeeper) dirige Codex e i micro-agent tramite il Control Plane.
-- La Prompt Chain è **lineare, governata e osservabile**, con:
-  - transizioni di fase esplicite,
-  - failure mode dichiarati,
-  - stop rumorosi (no degradazione silenziosa).
-- La pipeline dati è governata end-to-end fino alla produzione dei markdown operativi finali.
+Any behavior not described in this folder is **disallowed** in the system.
 
 ---
 
-## Regole non negoziabili (Beta 1.0)
-- **Ogni transizione di stato produce un Decision Record canonico append-only**
-  (PASS / BLOCK / FAIL / PASS_WITH_CONDITIONS).
-- **Lo stato non è dedotto** da combinazioni di file o segnali:
-  è attestato esclusivamente da Decision Record.
-- Separazione netta tra:
-  - **WHAT** (contratti, invarianti, gate, failure modes),
-  - **HOW** (implementazione, codice, tooling).
-- Nessuna ambiguità su:
-  - chi decide (Timmy),
-  - chi valida (Domain Gatekeepers / OCP),
-  - chi esegue (micro-agent).
-- **Nessun fallback implicito**, nessuna retro-compatibilità, nessuno shim:
-  - ogni stop, errore o deviazione è esplicita,
-  - con owner, trigger e regola di ripresa dichiarata.
-- Runtime operativo **strict**: se non si può attestare uno stato, il sistema si ferma.
+## Definition of Done (Beta 1.0)
+- User interaction happens **exclusively through Timmy/ProtoTimmy**.
+- Timmy orchestrates Domain Gatekeepers and micro-agents with explicit HiTL coverage.
+- OCP (Engineering Gatekeeper) commands Codex and micro-agents through the Control Plane.
+- The Prompt Chain is **linear, governed, observable**, with:
+  - explicit phase transitions,
+  - documented failure modes,
+  - noisy stops (no silent degradation).
+- The data pipeline is governed end-to-end until the final operational markdown outputs exist.
 
 ---
 
-## Elenco dei documenti (stato Beta 1.0)
-
-- `00_ssot_agency.md` - **congelato**
-- `01_intents_and_actions.md` - **attivo**
-- `02_prompt_chain_lifecycle.md` - **attivo**
-- `03_gatekeepers_contracts.md` - **attivo**
-- `04_microagents_work_orders.md` - **attivo**
-- `05_pipeline_state_machine.md` - **attivo**
-- `06_promptchain_workspace_mapping.md` - **attivo**
-- `07_gate_checklists.md` - **attivo**
-- `08_gate_evidence_and_retry_contract.md` - **attivo**
-- `09_context_layout_contract_beta.md` - **congelato**
-- `10_runtime_strict_contract_beta.md` - **attivo** - Runtime invariants and strict-only execution rules (Beta 1.0).
-- `11_ui_contract.md` - **attivo**
-- `12_env_override_capabilities.md` - **attivo**
-- `13_artifacts_policy.md` - **attivo**
-- `14_agent_package_contract.md` - **attivo**
-- `AGENTS.md` - **attivo**
-
-Un documento **attivo** può essere raffinato, ma:
-- non può contraddire le invarianti di questo README;
-- non può introdurre fallback o stati impliciti.
+## Non-negotiable rules
+- **Every state transition emits an append-only Decision Record** (PASS / BLOCK / FAIL / PASS_WITH_CONDITIONS).
+- **State is never inferred** from file combinations or signals; it is asserted only by Decision Records.
+- Maintain a sharp separation between:
+  - **WHAT** (contracts, invariants, gates, failure modes),
+  - **HOW** (implementation, code, tooling).
+- No ambiguity about:
+  - who decides (Timmy),
+  - who validates (Domain Gatekeepers / OCP),
+  - who executes (micro-agents).
+- **No implicit fallbacks, legacy shims, or silent drops**:
+  - every stop, error, or deviation must be explicit,
+  - with owner, trigger, and resume rule declared.
+- Runtime operates in **strict mode**: if a state cannot be attested, execution halts.
 
 ---
 
-## Terminologia ufficiale
+## Document inventory (Beta 1.0)
+- `00_ssot_agency.md` – **frozen**
+- `01_intents_and_actions.md` – **active**
+- `02_prompt_chain_lifecycle.md` – **active**
+- `03_gatekeepers_contracts.md` – **active**
+- `04_microagents_work_orders.md` – **active**
+- `05_pipeline_state_machine.md` – **active**
+- `06_promptchain_workspace_mapping.md` – **active**
+- `07_gate_checklists.md` – **active**
+- `08_gate_evidence_and_retry_contract.md` – **active**
+- `09_context_layout_contract_beta.md` – **frozen**
+- `10_runtime_strict_contract_beta.md` – **active** (runtime invariants and strict-only execution rules)
+- `11_ui_contract.md` – **active**
+- `12_env_override_capabilities.md` – **active**
+- `13_artifacts_policy.md` – **active**
+- `14_agent_package_contract.md` – **active**
+- `AGENTS.md` – **active**
 
-Per evitare ambiguità, il sistema utilizza una terminologia controllata.
-Si raccomanda di evitare l'introduzione di nuovi termini concettuali.
+Active documents may be refined but:
+- they must not contradict this README’s invariants;
+- they must not introduce implicit fallbacks or hidden states.
 
-Domini epistemici canonici:
+---
+
+## Official terminology
+Canonical epistemic domains:
 - **Epistemic Envelope**
 - **Agency Engine**
 
-Terminologia implementativa (alias ammessi):
-- **Control Plane** -> implementazione dell'Agency Engine
-- **Foundation Pipeline** -> implementazione dell'Epistemic Envelope
+Implementation aliases allowed:
+- **Control Plane** → Agency Engine implementation
+- **Foundation Pipeline** → Epistemic Envelope implementation
 
-Tutti i documenti in questa cartella assumono questa terminologia
-come riferimento normativo.
+Every document here uses this terminology as its normative reference.
 
 ---
 
-## Come lavorare sui documenti
-- Eseguire **micro-planning verbale** prima di modificare qualsiasi file.
-- Allineare ogni modifica alla terminologia ufficiale:
-  Timmy / ProtoTimmy, Domain Gatekeepers, Control Plane, micro-agent.
-- Evitare terminologia nuova o non allineata.
-- Preferire:
-  - tabelle,
-  - checklist,
-  - invarianti,
+## How to work with these documents
+- Perform **micro-verbal planning** before editing any file.
+- Align every change with the official terminology: Timmy / ProtoTimmy, Domain Gatekeepers, Control Plane, micro-agent.
+- Avoid introducing new, unmanaged concepts.
+- Prefer:
+  - tables,
+  - checklists,
+  - invariants,
   - failure modes,
-  a spiegazioni discorsive.
-- Scrivere in **tono normativo**, con frasi operative e verificabili.
+  instead of discursive explanations.
+- Write in a **normative tone**, using operational and testable statements.
 
 ---
 
-## Avvertenza finale
-Questo README è la **porta di ingresso normativa** della Beta 1.0:
-- ogni refactor di governance parte da qui;
-- ogni implementazione futura deve potersi mappare a questi contratti;
-- ogni discrepanza tra codice e questa specifica è un **bug**, non una scelta.
+## Final warning
+This README is the **normative entry point** for Beta 1.0:
+- every governance refactor starts here;
+- every future implementation must map to these contracts;
+- any divergence between code and these specifications is a **bug**, not a choice.
 
-Se la documentazione e il codice divergono, **vince la documentazione**.
+If documentation and code diverge, **documentation wins**.
