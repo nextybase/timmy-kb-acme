@@ -36,8 +36,20 @@ def _resolve_workspace_root(slug: str) -> Path:
             code="workspace.root.invalid",
             component="tools.clean_client_workspace",
         ) from exc
+    raw_value = str(raw)
+    if "<slug>" in raw_value:
+        raw_value = raw_value.replace("<slug>", slug)
+
+    if "?" in raw_value or "#" in raw_value:
+        raise ConfigError(
+            f"{WORKSPACE_ROOT_ENV} contiene caratteri non validi: {raw_value}",
+            slug=slug,
+            code="workspace.root.invalid",
+            component="tools.clean_client_workspace",
+        )
+
     try:
-        root = Path(str(raw)).expanduser().resolve()
+        root = Path(raw_value).expanduser().resolve()
     except Exception as exc:
         raise ConfigError(
             f"{WORKSPACE_ROOT_ENV} non valido: {raw}",

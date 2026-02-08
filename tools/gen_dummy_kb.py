@@ -329,6 +329,7 @@ def _purge_previous_state(slug: str, client_name: str, logger: logging.Logger) -
 
 
 def _brute_reset_dummy(*, logger: logging.Logger) -> Path:
+    # Legacy reset for tooling/devers: still removes repo-local output only.
     target = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "output" / "timmy-kb-dummy")
     if target.exists():
         shutil.rmtree(target)
@@ -350,7 +351,7 @@ def _clean_local_workspace_before_generation(
     if workspace_override is not None:
         target = ensure_within_and_resolve(workspace_override.parent, workspace_override)
     else:
-        target = ensure_within_and_resolve(REPO_ROOT, REPO_ROOT / "output" / f"timmy-kb-{slug}")
+        target = _client_base(slug)
     if target.exists():
         shutil.rmtree(target)
         logger.info("tools.gen_dummy_kb.local_clean.deleted", extra={"slug": slug, "path": str(target)})
