@@ -37,6 +37,8 @@ def test_strict_runtime_blocks_bootstrap_without_allow(monkeypatch: pytest.Monke
     (repo_root / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
     monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    workspace_root = local_workspace_dir(repo_root / "output", DUMMY_SLUG)
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(workspace_root))
     monkeypatch.delenv("TIMMY_ALLOW_BOOTSTRAP", raising=False)
 
     with pytest.raises(ConfigError) as exc_info:
@@ -46,4 +48,4 @@ def test_strict_runtime_blocks_bootstrap_without_allow(monkeypatch: pytest.Monke
             bootstrap_config=True,
         )
     err = exc_info.value
-    assert getattr(err, "code", None) == "workspace.root.invalid"
+    assert getattr(err, "code", None) == "runtime.bootstrap.forbidden"

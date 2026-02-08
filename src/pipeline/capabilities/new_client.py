@@ -5,8 +5,11 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import update_config_with_drive_ids
 from pipeline.context import ClientContext, validate_slug
+from pipeline.env_constants import WORKSPACE_ROOT_ENV
+from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_bytes
 from pipeline.logging_utils import get_structured_logger
@@ -71,9 +74,24 @@ def _vision_pdf_path(layout: WorkspaceLayout) -> Path:
 
 
 def _workspace_root(repo_root: Path, safe_slug: str) -> Path:
+    expected = f"timmy-kb-{safe_slug}"
+    if is_beta_strict():
+        raw = get_env_var(WORKSPACE_ROOT_ENV)
+        try:
+            root = Path(str(raw)).expanduser().resolve()
+        except Exception as exc:
+            raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {raw}", slug=safe_slug) from exc
+        if root.name != expected:
+            raise ConfigError(
+                f"{WORKSPACE_ROOT_ENV} deve puntare direttamente a '.../{expected}' (trovato: {root})",
+                slug=safe_slug,
+                code="workspace.root.invalid",
+                component="pipeline.capabilities.new_client",
+            )
+        return root
     return ensure_within_and_resolve(
         repo_root,
-        repo_root / "output" / f"timmy-kb-{safe_slug}",
+        repo_root / "output" / expected,
     )
 
 
