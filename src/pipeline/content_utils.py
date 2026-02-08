@@ -183,6 +183,7 @@ def _filter_safe_pdfs(
     log = logger or get_structured_logger("pipeline.content_utils")
     out: list[Path] = []
     run_id = _run_id_from_logger(log)
+    raw_root = _ensure_safe(perimeter_root, raw_root, slug=slug)
     for p in pdfs:
         try:
             if p.is_symlink():

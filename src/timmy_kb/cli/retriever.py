@@ -265,14 +265,20 @@ def search(
         if throttle_check is not None:
             throttle_check(params)
 
+        common_extra = {
+            "slug": params.slug,
+            "scope": params.scope,
+            "candidate_limit": int(params.candidate_limit),
+            "response_id": response_id,
+        }
+
         # Soft-fail per input non utili
         if params.k == 0:
             try:
                 LOGGER.info(
                     "retriever.query.skipped",
                     extra={
-                        "slug": params.slug,
-                        "scope": params.scope,
+                        **common_extra,
                         "reason": "k_is_zero",
                     },
                 )
@@ -280,8 +286,7 @@ def search(
                 LOGGER.warning(
                     "retriever.query.skipped_log_failed",
                     extra={
-                        "slug": params.slug,
-                        "scope": params.scope,
+                        **common_extra,
                         "reason": "k_is_zero",
                         "error": repr(exc),
                     },
@@ -291,8 +296,7 @@ def search(
             LOGGER.warning(
                 "retriever.query.invalid",
                 extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
+                    **common_extra,
                     "reason": "empty_query",
                 },
             )
@@ -324,9 +328,8 @@ def search(
                 LOGGER.warning(
                     "retriever.query.embed_failed",
                     extra={
+                        **common_extra,
                         "code": ERR_EMBEDDING_FAILED,
-                        "slug": params.slug,
-                        "scope": params.scope,
                         "error": repr(getattr(exc, "__cause__", None) or exc),
                     },
                 )
@@ -338,9 +341,8 @@ def search(
                 LOGGER.warning(
                     "retriever.query.embedding_invalid.softfail",
                     extra={
+                        **common_extra,
                         "code": ERR_EMBEDDING_INVALID,
-                        "slug": params.slug,
-                        "scope": params.scope,
                     },
                 )
             except Exception:

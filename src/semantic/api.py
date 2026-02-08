@@ -76,6 +76,8 @@ __all__ = [
 
 
 def get_paths(slug: str) -> Dict[str, Path]:
+    if not slug or not slug.strip():
+        raise ConfigError("Slug semantic vuoto o invalido per la risoluzione dei path.", slug=slug or None)
     layout = WorkspaceLayout.from_slug(slug=slug, require_drive_env=False)
     return {
         "base": layout.repo_root_dir,

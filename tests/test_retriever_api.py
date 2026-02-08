@@ -8,6 +8,7 @@ Verifica:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Sequence
 
@@ -136,6 +137,49 @@ def test_search_empty_query_embedding_returns_empty(monkeypatch):
 
     out = retr.search(params, EmptyEmb())
     assert out == []
+
+
+def test_search_skipped_logs_response_and_limit(caplog):
+    caplog.set_level(logging.INFO, logger=retr.LOGGER.name)
+    params = QueryParams(
+        db_path=None,
+        slug=DUMMY_SLUG,
+        scope="kb",
+        query="hello",
+        k=0,
+        candidate_limit=500,
+    )
+    response_id = "skip-123"
+
+    out = retr.search(params, FakeEmb(), response_id=response_id)
+
+    assert out == []
+    record = next(
+        rec for rec in caplog.records if rec.name == retr.LOGGER.name and rec.message == "retriever.query.skipped"
+    )
+    assert getattr(record, "response_id", None) == response_id
+    assert getattr(record, "candidate_limit", None) == 500
+
+
+def test_search_invalid_query_logs_response_and_limit(caplog):
+    caplog.set_level(logging.WARNING, logger=retr.LOGGER.name)
+    params = QueryParams(
+        db_path=None,
+        slug=DUMMY_SLUG,
+        scope="kb",
+        query=" ",
+        k=1,
+        candidate_limit=500,
+    )
+    response_id = "invalid-321"
+
+    out = retr.search(params, FakeEmb(), response_id=response_id)
+    assert out == []
+    record = next(
+        rec for rec in caplog.records if rec.name == retr.LOGGER.name and rec.message == "retriever.query.invalid"
+    )
+    assert getattr(record, "response_id", None) == response_id
+    assert getattr(record, "candidate_limit", None) == 500
 
 
 def test_search_budget_exceeded_returns_empty(monkeypatch):
