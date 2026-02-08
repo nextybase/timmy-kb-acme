@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import pipeline.beta_flags as beta_flags
 import storage.kb_db as kb
 from pipeline.exceptions import ConfigError
 
@@ -80,3 +81,21 @@ def test_fetch_candidates_strict_mode_raises_on_invalid_meta(tmp_path: Path):
     with pytest.raises(ConfigError) as exc:
         list(kb.fetch_candidates(project, scope, limit=10, db_path=db, strict_mode=True))
     assert exc.value.code == "kb.db.fetch.invalid_meta_json"
+
+
+def test_fetch_candidates_default_non_strict_logs_when_env_false(tmp_path: Path, monkeypatch, caplog):
+    db = tmp_path / "kb.sqlite"
+    kb.init_db(db)
+    now = datetime.utcnow().isoformat()
+    project, scope = "proj", "book"
+    with kb.connect(db) as con:
+        con.execute(
+            "INSERT INTO chunks (slug, scope, path, version, meta_json, content, embedding_json, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (project, scope, "p1", "v", "{bad}", "c1", "[1,2,3]", now),
+        )
+        con.commit()
+    monkeypatch.setattr(beta_flags, "is_beta_strict", lambda *_: False)
+    caplog.set_level(logging.WARNING)
+    list(kb.fetch_candidates(project, scope, limit=10, db_path=db))
+    assert "kb_db.fetch.invalid_meta_json" in [r.msg for r in caplog.records]

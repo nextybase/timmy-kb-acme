@@ -23,6 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 
@@ -238,7 +239,7 @@ def fetch_candidates(
     sql = (
         "SELECT content, meta_json, embedding_json FROM chunks " "WHERE slug = ? AND scope = ? ORDER BY id DESC LIMIT ?"
     )
-    strict = True if strict_mode is None else strict_mode
+    strict = is_beta_strict() if strict_mode is None else strict_mode
     with connect(resolved_db_path) as con:
         for content, meta_json, emb_json in con.execute(sql, (slug, scope, int(limit))):
             corrupted = False
