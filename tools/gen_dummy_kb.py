@@ -89,6 +89,8 @@ from tools.dummy.policy import DummyPolicy
 # Path bootstrap (repo root + src)
 # ------------------------------------------------------------
 from pipeline.logging_utils import get_structured_logger  # noqa: E402
+from pipeline.env_constants import WORKSPACE_ROOT_ENV  # noqa: E402
+from pipeline.env_utils import get_env_var  # noqa: E402
 from pipeline.path_utils import (  # noqa: E402
     ensure_within_and_resolve,
     open_for_read_bytes_selfguard,
@@ -272,11 +274,11 @@ _ensure_dependencies._done = False  # type: ignore[attr-defined]
 # Helpers
 # ------------------------------------------------------------
 def _client_base(slug: str) -> Path:
-    return _client_base_helper(slug, REPO_ROOT, get_env_var)
+    return _require_workspace_root(slug)
 
 
 def _pdf_path(slug: str) -> Path:
-    return _pdf_path_helper(slug, REPO_ROOT, get_env_var)
+    return _require_workspace_root(slug) / "config" / "VisionStatement.pdf"
 
 
 def _register_client(slug: str, client_name: str, *, policy: DummyPolicy) -> None:
@@ -354,20 +356,40 @@ def _clean_local_workspace_before_generation(
         logger.info("tools.gen_dummy_kb.local_clean.deleted", extra={"slug": slug, "path": str(target)})
 
 
-def _ensure_local_workspace_for_tooling(*, slug: str, client_name: str, vision_statement_pdf: bytes) -> None:
-    workspace_override = os.environ.get("WORKSPACE_ROOT_DIR")
-    if workspace_override:
-        raw = str(workspace_override)
-        if "<slug>" in raw:
-            raw = raw.replace("<slug>", slug)
+def _require_workspace_root(slug: str) -> Path:
+    expected = f"timmy-kb-{slug}"
+    try:
+        raw = get_env_var(WORKSPACE_ROOT_ENV, required=True)
+    except ConfigError as exc:
+        raise ConfigError(
+            f"{WORKSPACE_ROOT_ENV} obbligatorio: {exc}",
+            slug=slug,
+            code="workspace.root.invalid",
+            component="tools.gen_dummy_kb",
+        ) from exc
+    if "<slug>" in raw:
+        raw = raw.replace("<slug>", slug)
+    try:
         workspace_root = Path(raw).expanduser().resolve()
-        expected = f"timmy-kb-{slug}"
-        if workspace_root.name == "output":
-            workspace_root = workspace_root / expected
-        elif workspace_root.name.startswith("timmy-kb-") and workspace_root.name != expected:
-            workspace_root = workspace_root.parent / expected
-    else:
-        workspace_root = _client_base(slug)
+    except Exception as exc:
+        raise ConfigError(
+            f"{WORKSPACE_ROOT_ENV} non valido: {raw}",
+            slug=slug,
+            code="workspace.root.invalid",
+            component="tools.gen_dummy_kb",
+        ) from exc
+    if workspace_root.name != expected:
+        raise ConfigError(
+            f"{WORKSPACE_ROOT_ENV} deve puntare al workspace canonico '.../{expected}' (trovato: {workspace_root})",
+            slug=slug,
+            code="workspace.root.invalid",
+            component="tools.gen_dummy_kb",
+        )
+    return workspace_root
+
+
+def _ensure_local_workspace_for_tooling(*, slug: str, client_name: str, vision_statement_pdf: bytes) -> None:
+    workspace_root = _require_workspace_root(slug)
 
     for child in ("raw", "semantic", "book", "logs", "config", "normalized"):
         (workspace_root / child).mkdir(parents=True, exist_ok=True)

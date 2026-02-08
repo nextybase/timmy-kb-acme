@@ -8,8 +8,45 @@ from ai.kgraph import invoke_kgraph_messages
 from kg_models import TagKnowledgeGraph
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
+from pipeline.env_constants import WORKSPACE_ROOT_ENV
+from pipeline.env_utils import get_env_var
 
 LOGGER = get_structured_logger("ai.check.kgraph")
+
+
+def _resolve_kgraph_workspace(workspace_slug: str, base_dir: Optional[str]) -> Path:
+    expected = f"timmy-kb-{workspace_slug}"
+    if base_dir:
+        candidate = Path(base_dir).expanduser().resolve()
+    else:
+        try:
+            raw = get_env_var(WORKSPACE_ROOT_ENV, required=True)
+        except ConfigError as exc:
+            raise ConfigError(
+                f"{WORKSPACE_ROOT_ENV} obbligatorio: {exc}",
+                slug=workspace_slug,
+                code="workspace.root.invalid",
+                component="ai.check.kgraph",
+            ) from exc
+        if "<slug>" in raw:
+            raw = raw.replace("<slug>", workspace_slug)
+        try:
+            candidate = Path(raw).expanduser().resolve()
+        except Exception as exc:
+            raise ConfigError(
+                f"{WORKSPACE_ROOT_ENV} non valido: {raw}",
+                slug=workspace_slug,
+                code="workspace.root.invalid",
+                component="ai.check.kgraph",
+            ) from exc
+    if candidate.name != expected:
+        raise ConfigError(
+            f"La workspace root deve terminare con '{expected}' (trovato {candidate})",
+            slug=workspace_slug,
+            code="workspace.root.invalid",
+            component="ai.check.kgraph",
+        )
+    return candidate
 
 
 def run_kgraph_dummy_check(
@@ -21,8 +58,7 @@ def run_kgraph_dummy_check(
     """
     Esegue il flusso KGraph in modalità diagnostica su uno workspace.
     """
-    repo_root = Path(__file__).resolve().parents[3]
-    workspace = Path(base_dir) if base_dir else repo_root / f"output/timmy-kb-{workspace_slug}"
+    workspace = _resolve_kgraph_workspace(workspace_slug, base_dir)
     if not workspace.exists():
         raise ConfigError(f"Workspace inesistente: {workspace}", slug=workspace_slug, file_path=str(workspace))
 
