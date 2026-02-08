@@ -23,10 +23,18 @@ Note: credentials and secrets (e.g., `OPENAI_API_KEY`, `SERVICE_ACCOUNT_FILE`, `
 ## B) Paths / Workspace
 
 - `REPO_ROOT_DIR` -> override for the repo root. It MUST contain `.git` or `pyproject.toml`.
-- `WORKSPACE_ROOT_DIR` -> override for the workspace root; it MAY include `<slug>`.
-  - In strict mode (`TIMMY_BETA_STRICT=1`), the resolved value MUST point directly to `.../output/timmy-kb-<slug>`: specifying just `.../output` without the slug causes `ConfigError(code=workspace.root.invalid)` and blocks execution.
+  - In strict mode (`TIMMY_BETA_STRICT=1`), `REPO_ROOT_DIR` MUST NOT participate in client workspace resolution.
 
-Precedence: `REPO_ROOT_DIR` takes precedence over `WORKSPACE_ROOT_DIR` when both are valid.
+- `WORKSPACE_ROOT_DIR` -> the only supported override for client workspace root.
+  - In strict mode (`TIMMY_BETA_STRICT=1`), the resolved value MUST point directly to
+    `.../output/timmy-kb-<slug>`.
+  - Specifying just `.../output` without the slug causes
+    `ConfigError(code=workspace.root.invalid)` and blocks execution.
+
+Precedence (strict):
+- `WORKSPACE_ROOT_DIR` is canonical.
+- Any attempt to derive a client workspace from `REPO_ROOT_DIR` is considered unsupported
+  and MUST trigger a deterministic stop condition.
 
 ---
 

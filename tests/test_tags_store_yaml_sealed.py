@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from storage import tags_store
 from pipeline.exceptions import ConfigError
+from storage import tags_store
 
 
 def test_yaml_import_and_parse_sealed(tmp_path: Path) -> None:

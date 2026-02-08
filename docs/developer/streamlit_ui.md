@@ -185,8 +185,11 @@ Checklist minima per una pagina nuova:
 
 ### Workspace root (REPO_ROOT_DIR / WORKSPACE_ROOT_DIR)
 
-- `REPO_ROOT_DIR` ha precedenza quando impostato: se contiene `.git` o `pyproject.toml` viene trattato come root repo e deriva `output/timmy-kb-<slug>`, altrimenti viene usato come workspace diretta (legacy/test).
-- `WORKSPACE_ROOT_DIR` viene usato quando `REPO_ROOT_DIR` manca; accetta anche il placeholder `<slug>` e viene risolto in un path assoluto, utile per puntare a una workspace cliente specifica.
+- `REPO_ROOT_DIR` definisce la **root della repo** (dev/tooling/registry): se contiene `.git` o `pyproject.toml` viene trattato come root repo.
+  - In strict runtime non deve mai essere usato per derivare o selezionare la workspace cliente.
+- `WORKSPACE_ROOT_DIR` definisce la **workspace cliente canonica**. Accetta il placeholder `<slug>` e viene risolto in un path assoluto.
+  - In strict (`TIMMY_BETA_STRICT=1`) deve puntare direttamente a `.../output/timmy-kb-<slug>` (non al parent `output`).
+  - Qualsiasi semantica "REPO_ROOT_DIR come workspace diretta" è considerata legacy/test-only e non è ammessa nel runtime strict.
 - Se entrambe sono assenti, la pipeline richiede un workspace root canonico via API.
 - Su Windows e Linux usare path assoluti coerenti (niente drive letter nei path relativi).
 
