@@ -76,7 +76,15 @@ def _vision_pdf_path(layout: WorkspaceLayout) -> Path:
 def _workspace_root(repo_root: Path, safe_slug: str) -> Path:
     expected = f"timmy-kb-{safe_slug}"
     if is_beta_strict():
-        raw = get_env_var(WORKSPACE_ROOT_ENV)
+        try:
+            raw = get_env_var(WORKSPACE_ROOT_ENV, required=True)
+        except ConfigError as exc:
+            raise ConfigError(
+                f"{WORKSPACE_ROOT_ENV} obbligatorio in strict runtime: {exc}",
+                slug=safe_slug,
+                code="workspace.root.invalid",
+                component="pipeline.capabilities.new_client",
+            ) from exc
         try:
             root = Path(str(raw)).expanduser().resolve()
         except Exception as exc:

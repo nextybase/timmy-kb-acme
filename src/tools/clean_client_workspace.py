@@ -6,7 +6,6 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import get_drive_id
 from pipeline.context import ClientContext, validate_slug
 from pipeline.env_constants import WORKSPACE_ROOT_ENV
@@ -15,7 +14,6 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
-from pipeline.paths import get_repo_root
 from pipeline.yaml_utils import yaml_read
 from ui import clients_store
 
@@ -27,29 +25,34 @@ except Exception:  # pragma: no cover - dipendenze Drive opzionali
 
 
 def _resolve_workspace_root(slug: str) -> Path:
-    """Deterministic workspace resolution: WORKSPACE_ROOT_DIR in strict, repo output fallback otherwise."""
+    """Risoluzione workspace: WORKSPACE_ROOT_DIR obbligatorio e deve puntare a .../timmy-kb-<slug>."""
     expected = f"timmy-kb-{slug}"
-    strict_mode = is_beta_strict()
-    if strict_mode:
-        raw = get_env_var(WORKSPACE_ROOT_ENV)
-        try:
-            root = Path(str(raw)).expanduser().resolve()
-        except Exception as exc:
-            raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {raw}", slug=slug) from exc
-        if root.name != expected:
-            raise ConfigError(
-                f"{WORKSPACE_ROOT_ENV} deve puntare direttamente a '.../{expected}' (trovato: {root})",
-                slug=slug,
-                code="workspace.root.invalid",
-                component="tools.clean_client_workspace",
-            )
-        return root
     try:
-        repo_root = get_repo_root(allow_env=True)
+        raw = get_env_var(WORKSPACE_ROOT_ENV, required=True)
+    except ConfigError as exc:
+        raise ConfigError(
+            f"{WORKSPACE_ROOT_ENV} obbligatorio: {exc}",
+            slug=slug,
+            code="workspace.root.invalid",
+            component="tools.clean_client_workspace",
+        ) from exc
+    try:
+        root = Path(str(raw)).expanduser().resolve()
     except Exception as exc:
-        raise ConfigError(f"REPO_ROOT_DIR non valido: {exc}", slug=slug) from exc
-    workspace_root = Path(repo_root) / "output" / expected
-    return ensure_within_and_resolve(repo_root, workspace_root)
+        raise ConfigError(
+            f"{WORKSPACE_ROOT_ENV} non valido: {raw}",
+            slug=slug,
+            code="workspace.root.invalid",
+            component="tools.clean_client_workspace",
+        ) from exc
+    if root.name != expected:
+        raise ConfigError(
+            f"{WORKSPACE_ROOT_ENV} deve puntare direttamente a '.../{expected}' (trovato: {root})",
+            slug=slug,
+            code="workspace.root.invalid",
+            component="tools.clean_client_workspace",
+        )
+    return root
 
 
 def _load_config_payload(config_path: Path, *, workspace_root: Path, slug: str) -> Dict[str, Any]:
