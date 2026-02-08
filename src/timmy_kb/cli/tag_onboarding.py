@@ -263,9 +263,17 @@ def scan_normalized_to_db(
 ) -> dict[str, int]:
     """Indicizza cartelle e markdown di `normalized/` dentro il DB (schema v2)."""
 
-    if is_beta_strict() and repo_root_dir is None:
+    strict_mode = is_beta_strict()
+    log = get_structured_logger("tag_onboarding", **_obs_kwargs())
+    fallback_used = repo_root_dir is None
+    if strict_mode and fallback_used:
         raise ConfigError(
             "repo_root_dir mancante: richiesto in strict mode per scan_normalized_to_db.",
+        )
+    if fallback_used:
+        log.warning(
+            "cli.tag_onboarding.repo_root_fallback",
+            extra={"service_only": True, "mode": "scan_normalized"},
         )
     # Il fallback è riservato esclusivamente alla CLI/tooling; evitare euristiche e preferire ClientContext/WorkspaceLayout quando disponibili.
     repo_root_dir_path = (
@@ -282,8 +290,6 @@ def scan_normalized_to_db(
     folders_count = 0
 
     docs_count = 0
-
-    log = get_structured_logger("tag_onboarding", **_obs_kwargs())
 
     with get_conn(str(db_path_path)) as conn:
 
@@ -361,10 +367,17 @@ def run_nlp_to_db(
     """Esegue estrazione keyword, clustering e aggregazione per cartella."""
 
     strict_mode = is_beta_strict()
-    if strict_mode and repo_root_dir is None:
+    log = get_structured_logger("tag_onboarding", **_obs_kwargs())
+    fallback_used = repo_root_dir is None
+    if strict_mode and fallback_used:
         raise ConfigError(
             "repo_root_dir mancante: richiesto in strict mode per run_nlp_to_db.",
             slug=slug,
+        )
+    if fallback_used:
+        log.warning(
+            "cli.tag_onboarding.repo_root_fallback",
+            extra={"service_only": True, "mode": "run_nlp_to_db"},
         )
     # Il fallback è riservato esclusivamente alla CLI/tooling; evitare euristiche e preferire ClientContext/WorkspaceLayout quando disponibili.
     repo_root_dir_path = (
@@ -377,8 +390,6 @@ def run_nlp_to_db(
     db_path_path = ensure_within_and_resolve(perimeter_root, db_path)
 
     ensure_schema_v2(str(db_path_path))
-
-    log = get_structured_logger("tag_onboarding", **_obs_kwargs())
 
     worker_batch_size = max(1, int(worker_batch_size))
 

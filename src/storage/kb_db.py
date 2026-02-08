@@ -73,14 +73,6 @@ def _resolve_db_path(db_path: Optional[Path]) -> Path:
     return resolved
 
 
-def get_db_path() -> Path:
-    """Restituisce il path del DB SQLite del workspace corrente.
-
-    Nota: l'uso implicito di CWD e' vietato; passa sempre un db_path esplicito.
-    """
-    return _resolve_db_path(None)
-
-
 def connect_from_store(store: "KbStore") -> Iterator[sqlite3.Connection]:
     """Convenience wrapper: apre una connessione usando il path risolto da KbStore.
 
@@ -233,32 +225,62 @@ def fetch_candidates(
     scope: str,
     limit: int = 64,
     db_path: Optional[Path] = None,
+    *,
+    strict_mode: bool | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Restituisce (iterator) i candidati per (slug, scope).
 
     Ogni dict prodotto contiene: content (str), meta (dict), embedding (list[float]).
     Ordinati dal più recente. Il LIMIT è applicato a livello SQL.
     """
-    init_db(db_path)
+    resolved_db_path = _resolve_db_path(db_path)
+    init_db(resolved_db_path)
     sql = (
         "SELECT content, meta_json, embedding_json FROM chunks " "WHERE slug = ? AND scope = ? ORDER BY id DESC LIMIT ?"
     )
-    with connect(db_path) as con:
+    strict = True if strict_mode is None else strict_mode
+    with connect(resolved_db_path) as con:
         for content, meta_json, emb_json in con.execute(sql, (slug, scope, int(limit))):
+            corrupted = False
             try:
                 meta = json.loads(meta_json) if meta_json else {}
             except json.JSONDecodeError:
-                meta = {}
-                LOGGER.warning(
-                    "kb_db.fetch.invalid_meta_json",
-                    extra={"slug": slug, "scope": scope},
+                corrupted = True
+                _handle_corrupted_fetch(
+                    slug=slug,
+                    scope=scope,
+                    field="meta_json",
+                    event="kb_db.fetch.invalid_meta_json",
+                    strict=strict,
                 )
             try:
                 emb = json.loads(emb_json) if emb_json else []
             except json.JSONDecodeError:
-                emb = []
-                LOGGER.warning(
-                    "kb_db.fetch.invalid_embedding_json",
-                    extra={"slug": slug, "scope": scope},
+                corrupted = True
+                _handle_corrupted_fetch(
+                    slug=slug,
+                    scope=scope,
+                    field="embedding_json",
+                    event="kb_db.fetch.invalid_embedding_json",
+                    strict=strict,
                 )
+            if corrupted:
+                continue
             yield {"content": content, "meta": meta, "embedding": emb}
+
+
+def _handle_corrupted_fetch(slug: str, scope: str, field: str, event: str, *, strict: bool) -> None:
+    """Logga o fallisce in base alla modalità strict."""
+    extra = {
+        "slug": slug,
+        "scope": scope,
+        "service_only": True,
+        "field": field,
+    }
+    if strict:
+        raise ConfigError(
+            f"Invalid {field} JSON for slug={slug} scope={scope}.",
+            code=f"kb.db.fetch.invalid_{field}",
+            component="kb_db",
+        )
+    LOGGER.warning(event, extra=extra)

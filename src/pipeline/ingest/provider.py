@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Protocol
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.context import ClientContext
 from pipeline.exceptions import CapabilityUnavailableError, ConfigError
@@ -28,7 +29,7 @@ class IngestProvider(Protocol):
         logger: logging.Logger,
         non_interactive: bool,
         local_path: Optional[Path] = None,
-    ) -> int: ...
+    ) -> int | None: ...
 
 
 class DriveIngestProvider:
@@ -40,7 +41,7 @@ class DriveIngestProvider:
         logger: logging.Logger,
         non_interactive: bool,
         local_path: Optional[Path] = None,
-    ) -> int:
+    ) -> int | None:
         cfg = get_client_config(context) or {}
         raw_folder_id = get_drive_id(cfg, "raw_folder_id")
         if not raw_folder_id:
@@ -53,6 +54,8 @@ class DriveIngestProvider:
 
         service = get_drive_service(context)
 
+        strict_mode = is_beta_strict()
+        pdf_count: int | None = None
         with phase_scope(logger, stage="drive_download", customer=getattr(context, "slug", None)) as phase:
             download_drive_pdfs_to_local(
                 service=service,
@@ -64,19 +67,37 @@ class DriveIngestProvider:
             )
             try:
                 pdfs = list(iter_safe_pdfs(raw_dir))
-                phase.set_artifacts(len(pdfs))
-            except Exception:
+                pdf_count = len(pdfs)
+                phase.set_artifacts(pdf_count)
+            except Exception as exc:
                 phase.set_artifacts(None)
+                _handle_drive_count_failure(logger, context, strict_mode, exc)
 
         logger.info(
             "ingest_provider.drive_completed",
             extra={"folder_id": raw_folder_id, "slug": getattr(context, "slug", None)},
         )
 
-        try:
-            return len(list(iter_safe_pdfs(raw_dir)))
-        except Exception:
-            return 0
+        return pdf_count
+
+
+def _handle_drive_count_failure(
+    logger: logging.Logger,
+    context: ClientContext,
+    strict_mode: bool,
+    exc: Exception,
+) -> None:
+    extra = {
+        "slug": getattr(context, "slug", None),
+        "service_only": True,
+        "stage": "drive_count",
+    }
+    logger.warning("ingest_provider.drive_count_failed", extra=extra)
+    if strict_mode:
+        raise ConfigError(
+            "Drive PDF count failed; strict mode requires deterministic artifacts.",
+            slug=getattr(context, "slug", None),
+        ) from exc
 
 
 class LocalIngestProvider:
@@ -88,7 +109,7 @@ class LocalIngestProvider:
         logger: logging.Logger,
         non_interactive: bool,
         local_path: Optional[Path] = None,
-    ) -> int:
+    ) -> int | None:
         raw_dir = raw_dir.resolve()
         ensure_within(raw_dir.parent, raw_dir)
         if local_path is None:

@@ -5,7 +5,10 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 import storage.kb_db as kb
+from pipeline.exceptions import ConfigError
 
 
 def test_insert_chunks_logs_db_inserted_and_idempotent(tmp_path: Path, caplog):
@@ -50,7 +53,7 @@ def test_fetch_candidates_logs_invalid_json(tmp_path: Path, caplog):
         con.commit()
 
     caplog.set_level(logging.WARNING)
-    list(kb.fetch_candidates(project, scope, limit=10, db_path=db))
+    list(kb.fetch_candidates(project, scope, limit=10, db_path=db, strict_mode=False))
     msgs = [r.msg for r in caplog.records]
     assert "kb_db.fetch.invalid_meta_json" in msgs
     assert "kb_db.fetch.invalid_embedding_json" in msgs
@@ -58,3 +61,22 @@ def test_fetch_candidates_logs_invalid_json(tmp_path: Path, caplog):
     erec = next(r for r in caplog.records if r.msg == "kb_db.fetch.invalid_embedding_json")
     assert getattr(mrec, "slug", None) == project
     assert getattr(erec, "scope", None) == scope
+    assert getattr(mrec, "service_only", None) is True
+    assert getattr(erec, "service_only", None) is True
+
+
+def test_fetch_candidates_strict_mode_raises_on_invalid_meta(tmp_path: Path):
+    db = tmp_path / "kb.sqlite"
+    kb.init_db(db)
+    now = datetime.utcnow().isoformat()
+    project, scope = "proj", "book"
+    with kb.connect(db) as con:
+        con.execute(
+            "INSERT INTO chunks (slug, scope, path, version, meta_json, content, embedding_json, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (project, scope, "p1", "v", "{bad}", "c1", "[1,2,3]", now),
+        )
+        con.commit()
+    with pytest.raises(ConfigError) as exc:
+        list(kb.fetch_candidates(project, scope, limit=10, db_path=db, strict_mode=True))
+    assert exc.value.code == "kb.db.fetch.invalid_meta_json"
