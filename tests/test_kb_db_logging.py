@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-import pipeline.beta_flags as beta_flags
 import storage.kb_db as kb
 from pipeline.exceptions import ConfigError
 
@@ -95,7 +94,10 @@ def test_fetch_candidates_default_non_strict_logs_when_env_false(tmp_path: Path,
             (project, scope, "p1", "v", "{bad}", "c1", "[1,2,3]", now),
         )
         con.commit()
-    monkeypatch.setattr(beta_flags, "is_beta_strict", lambda *_: False)
+    monkeypatch.setattr(kb, "is_beta_strict", lambda *_: False)
     caplog.set_level(logging.WARNING)
     list(kb.fetch_candidates(project, scope, limit=10, db_path=db))
-    assert "kb_db.fetch.invalid_meta_json" in [r.msg for r in caplog.records]
+    msgs = [r.msg for r in caplog.records]
+    assert "kb_db.fetch.invalid_meta_json" in msgs
+    mrec = next(r for r in caplog.records if r.msg == "kb_db.fetch.invalid_meta_json")
+    assert getattr(mrec, "service_only", None) is True
