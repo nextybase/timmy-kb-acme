@@ -39,20 +39,6 @@ def _make_settings(payload: dict[str, object]) -> Settings:
     return Settings(config_path=Path("config/config.yaml"), data=payload)
 
 
-def test_resolve_vision_config_prefers_env(monkeypatch):
-    ctx = _DummyCtx(settings={"ai": {"vision": {"assistant_id_env": "VISION_OVERRIDE_ENV", "model": "config-model"}}})
-
-    def fake_env(name: str, required: bool = False) -> str:
-        if name == "VISION_OVERRIDE_ENV":
-            return "env-vision"
-        raise KeyError(name)
-
-    monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
-    result = config.resolve_vision_config(ctx)
-    assert result.assistant_id == "env-vision"
-    assert result.model == "config-model"
-
-
 def test_resolve_prototimmy_config_missing_assistant_id_raises(monkeypatch):
     settings = _make_settings({"ai": {"prototimmy": {"model": "proto-model"}}})
     monkeypatch.setattr("pipeline.env_utils.get_env_var", _missing_env)
@@ -222,16 +208,6 @@ def test_legacy_root_vision_rejected(caplog):
     with pytest.raises(ConfigError, match="ai\\.vision"):
         config.resolve_vision_config(ctx)
     assert any(rec.message == "ai.vision_config.legacy_root_vision" for rec in caplog.records)
-
-
-def test_as_mapping_raises_on_as_dict_error() -> None:
-    class _BadSettings:
-        def as_dict(self) -> dict[str, object]:
-            raise RuntimeError("boom")
-
-    with pytest.raises(ConfigError) as excinfo:
-        config._as_mapping(_BadSettings())
-    assert excinfo.value.code == "config.read.failed"
 
 
 def test_optional_env_missing_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:

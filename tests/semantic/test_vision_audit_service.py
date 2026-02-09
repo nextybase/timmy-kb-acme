@@ -14,6 +14,8 @@ def test_vision_audit_line_failure_logs_service_event(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Questo test verifica logging service-only: in strict state fallisce prima con ConfigError.
+    monkeypatch.setattr(vp, "is_beta_strict", lambda: False, raising=False)
     repo_root = tmp_path / "workspace"
     repo_root.mkdir()
     record = {"slug": "test-slug", "ts": "ts-value"}

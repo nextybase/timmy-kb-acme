@@ -67,3 +67,6 @@ def test_optional_env_read_error_raises(monkeypatch: pytest.MonkeyPatch) -> None
     with pytest.raises(ConfigError) as excinfo:
         _optional_env("BROKEN_ENV")
     assert excinfo.value.code == "assistant.env.read_failed"
+
+
+# Nota: la copertura degli helper su Settings reali è già garantita dai boundary test dedicati.

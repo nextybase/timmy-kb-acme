@@ -389,8 +389,11 @@ def _stable_env(monkeypatch, sandbox_workspace):
     monkeypatch.delenv("OBNEXT_ASSISTANT_ID", raising=False)
     # Evita che REPO_ROOT_DIR da .env alteri i test che richiedono la repo root.
     monkeypatch.delenv("REPO_ROOT_DIR", raising=False)
-    # Beta strict is enforced only when explicitly requested by the test.
-    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
+    # Default: STRICT (Beta contract).
+    # Tests that intentionally explore non-strict behavior must downgrade explicitly.
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    # Allow workspace overrides under the controlled test harness to keep ClientContext.load usable.
+    monkeypatch.setenv("TIMMY_ALLOW_WORKSPACE_OVERRIDE", "1")
 
     # Evita side-effect su output/ del repo: se qualche codice usa default,
     # meglio che punti alla base temporanea del dummy.

@@ -20,6 +20,9 @@ def test_kg_build_cli_fails_without_config_and_does_not_bootstrap(
     repo_root.mkdir(parents=True, exist_ok=True)
     (repo_root / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
+    ws = local_workspace_dir(repo_root / "output", DUMMY_SLUG)
+    ws.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(ws))
 
     args = argparse.Namespace(
         slug=DUMMY_SLUG,
@@ -27,8 +30,8 @@ def test_kg_build_cli_fails_without_config_and_does_not_bootstrap(
         workspace=None,
         namespace=None,
         run_id=None,
-        require_drive_env=False,
     )
+    args.require_env = False
 
     with pytest.raises(ConfigError):
         kg_build.main(args)

@@ -7,16 +7,17 @@ import pytest
 
 import semantic.vision_provision as S
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
+from pipeline.settings import Settings
 from tests._helpers.workspace_paths import local_workspace_dir
 
 fitz = pytest.importorskip("fitz", reason="PyMuPDF non disponibile: installa PyMuPDF")
 
 
 class DummyCtx:
-    def __init__(self, repo_root_dir: Path, client_name: str | None = None):
+    def __init__(self, repo_root_dir: Path, settings: Settings, client_name: str | None = None):
         self.repo_root_dir = str(repo_root_dir)
         self.client_name = client_name
-        self.settings = {"ai": {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID", "snapshot_retention_days": 30}}}
+        self.settings = settings
 
 
 class _NoopLogger:
@@ -48,9 +49,24 @@ def tmp_ws(tmp_path: Path) -> Path:
     return base
 
 
+def _write_min_config(ws: Path) -> Settings:
+    cfg = ws / "config" / "config.yaml"
+    cfg.write_text(
+        "ai:\n"
+        "  vision:\n"
+        "    assistant_id_env: OBNEXT_ASSISTANT_ID\n"
+        "    snapshot_retention_days: 30\n"
+        "    use_kb: false\n"
+        "    model: test-model\n",
+        encoding="utf-8",
+    )
+    return Settings.load(ws)
+
+
 def test_prompt_contains_client_name(monkeypatch, tmp_ws: Path):
     slug = "dummy"
-    ctx = DummyCtx(repo_root_dir=tmp_ws, client_name="Dummy S.p.A.")
+    settings = _write_min_config(tmp_ws)
+    ctx = DummyCtx(repo_root_dir=tmp_ws, settings=settings, client_name="Dummy S.p.A.")
     seen = {"user_messages": None}
 
     # Finto assistant: payload conforme al contratto (≥3 aree + system_folders + metadata_policy)

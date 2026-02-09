@@ -16,6 +16,9 @@ def test_load_without_bootstrap_requires_config(monkeypatch: pytest.MonkeyPatch,
     repo_root.mkdir(parents=True, exist_ok=True)
     (repo_root / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
+    ws = local_workspace_dir(repo_root / "output", DUMMY_SLUG)
+    ws.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(ws))
 
     workspace_root = local_workspace_dir(repo_root / "output", DUMMY_SLUG)
     expected_path = workspace_root / "config" / "config.yaml"

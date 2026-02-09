@@ -15,6 +15,7 @@ import semantic.vision_provision as S
 from ai.types import AssistantConfig
 from ai.vision_config import resolve_vision_config, resolve_vision_retention_days
 from pipeline.exceptions import ConfigError
+from pipeline.settings import Settings
 
 
 @pytest.fixture(autouse=True)
@@ -39,9 +40,9 @@ def _write_pdf(path: Path, text: str | None) -> None:
 
 
 class DummyCtx:
-    def __init__(self, repo_root_dir: Path):
+    def __init__(self, repo_root_dir: Path, settings: Settings):
         self.repo_root_dir = str(repo_root_dir)
-        self.settings = {"ai": {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID", "snapshot_retention_days": 30}}}
+        self.settings = settings
 
 
 class _NoopLogger:
@@ -57,6 +58,20 @@ def _vision_config_for(ctx: DummyCtx) -> AssistantConfig:
 
 def _vision_retention_for(ctx: DummyCtx) -> int:
     return resolve_vision_retention_days(ctx)
+
+
+def _write_min_config(ws: Path) -> Settings:
+    cfg = ws / "config" / "config.yaml"
+    cfg.write_text(
+        "ai:\n"
+        "  vision:\n"
+        "    assistant_id_env: OBNEXT_ASSISTANT_ID\n"
+        "    snapshot_retention_days: 30\n"
+        "    use_kb: false\n"
+        "    model: test-model\n",
+        encoding="utf-8",
+    )
+    return Settings.load(ws)
 
 
 # ---- Fixtures --------------------------------------------------------------
@@ -219,7 +234,8 @@ def test_happy_path_inline(monkeypatch, tmp_workspace: Path):
     monkeypatch.setattr(S.ontology, "get_all_entities", lambda: sample_entities)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
 
-    ctx = DummyCtx(repo_root_dir=tmp_workspace)
+    settings = _write_min_config(tmp_workspace)
+    ctx = DummyCtx(repo_root_dir=tmp_workspace, settings=settings)
     pdf_path = tmp_workspace / "config" / "VisionStatement.pdf"
     config = _vision_config_for(ctx)
     retention_days = _vision_retention_for(ctx)
@@ -254,7 +270,8 @@ def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: bad_output)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
 
-    ctx = DummyCtx(repo_root_dir=tmp_workspace)
+    settings = _write_min_config(tmp_workspace)
+    ctx = DummyCtx(repo_root_dir=tmp_workspace, settings=settings)
     config = _vision_config_for(ctx)
     retention_days = _vision_retention_for(ctx)
     with pytest.raises(ConfigError):
@@ -309,7 +326,8 @@ def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
     }
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: mismatched)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
-    ctx = DummyCtx(repo_root_dir=tmp_workspace)
+    settings = _write_min_config(tmp_workspace)
+    ctx = DummyCtx(repo_root_dir=tmp_workspace, settings=settings)
     config = _vision_config_for(ctx)
     retention_days = _vision_retention_for(ctx)
     with pytest.raises(ConfigError):
@@ -361,7 +379,8 @@ def test_missing_system_folders_raises(monkeypatch, tmp_workspace: Path):
     }
     monkeypatch.setattr(S, "_call_assistant_json", lambda **_: out)
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "asst_dummy")
-    ctx = DummyCtx(repo_root_dir=tmp_workspace)
+    settings = _write_min_config(tmp_workspace)
+    ctx = DummyCtx(repo_root_dir=tmp_workspace, settings=settings)
     config = _vision_config_for(ctx)
     retention_days = _vision_retention_for(ctx)
     with pytest.raises((ConfigError, ValueError)):

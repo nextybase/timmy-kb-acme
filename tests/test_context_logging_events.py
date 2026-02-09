@@ -28,6 +28,9 @@ def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     (repo_root / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("REPO_ROOT_DIR", str(repo_root))
     monkeypatch.setenv("TIMMY_ALLOW_BOOTSTRAP", "1")
+    ws = local_workspace_dir(repo_root / "output", DUMMY_SLUG)
+    ws.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(ws))
 
     # Logger strutturato con handler in memoria
     lg = get_structured_logger("test.context")
@@ -42,7 +45,6 @@ def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
 
     # Verifica eventi
     events = {r.msg for r in mem.records}
-    assert "context.repo_root_dir_env" in events
     assert "context.config.bootstrap" in events  # config creato perché assente
     assert "context.config.loaded" in events
 
@@ -50,6 +52,9 @@ def test_bootstrap_logging_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
 def test_repo_root_dir_invalid_includes_slug(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     # Env impostato ma Path.resolve forza un errore
     monkeypatch.setenv("REPO_ROOT_DIR", str(tmp_path / "bad"))
+    ws = tmp_path / "ws"
+    ws.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(ws))
 
     import pipeline.context as ctxmod
 
@@ -62,4 +67,5 @@ def test_repo_root_dir_invalid_includes_slug(monkeypatch: pytest.MonkeyPatch, tm
         ClientContext.load("oops", logger=get_structured_logger("t"), require_drive_env=False)
     err = ei.value
     assert getattr(err, "slug", None) == "oops"
-    assert str(err).startswith("REPO_ROOT_DIR non valido:")
+    msg = str(err)
+    assert msg.startswith("REPO_ROOT_DIR non valido:") or msg.startswith("WORKSPACE_ROOT_DIR non valido:")

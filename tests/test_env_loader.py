@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 import pipeline.env_utils as envu
+from pipeline.context import ClientContext
 
 pytestmark = pytest.mark.unit
 
@@ -40,8 +41,8 @@ def test_client_context_load_reads_dotenv(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.delenv("ZZZ_DRIVE_ID", raising=False)
     assert "ZZZ_DRIVE_ID" not in os.environ
     monkeypatch.chdir(tmp_path)
-
-    from pipeline.context import ClientContext
+    monkeypatch.setenv("TIMMY_ALLOW_WORKSPACE_OVERRIDE", "1")
+    monkeypatch.setenv("TIMMY_ALLOW_BOOTSTRAP", "1")
 
     # Act: reload env_utils to reset lazy loader, explicitly load .env, then create context (no required env)
     _il.reload(envu)
@@ -63,7 +64,6 @@ def test_client_context_require_drive_env_missing_raises_configerror(monkeypatch
     monkeypatch.delenv("SERVICE_ACCOUNT_FILE", raising=False)
     monkeypatch.delenv("DRIVE_ID", raising=False)
 
-    from pipeline.context import ClientContext
     from pipeline.exceptions import ConfigError
 
     # Act & Assert: con require_drive_env=True deve alzare ConfigError chiaro (no KeyError)
