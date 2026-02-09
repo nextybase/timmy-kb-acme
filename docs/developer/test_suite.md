@@ -1,6 +1,6 @@
-# Testing Strategy — FAST / ARCH / FULL
+# Testing Strategy -- FAST / ARCH / FULL
 
-Questa pagina è **normativa**. Definisce lo scopo e l’uso dei tre binari di test per garantire **determinismo**, **bassa entropia** e **cicli di feedback coerenti** con la Beta.
+Questa pagina è **normativa**. Definisce lo scopo e l'uso dei tre binari di test per garantire **determinismo**, **bassa entropia** e **cicli di feedback coerenti** con la Beta.
 
 ## Principi guida
 
@@ -29,13 +29,13 @@ make test-arch
 make test-full
 ```
 
-**Regola**: non duplicare altrove la logica di selezione (niente script paralleli, niente comandi “simili ma diversi”).
+**Regola**: non duplicare altrove la logica di selezione (niente script paralleli, niente comandi "simili ma diversi").
 
 ---
 
 ## Prerequisiti opzionali e skip deterministici
 
-Questa sezione descrive gli skip **attesi** (non “incidenti”):
+Questa sezione descrive gli skip **attesi** (non "incidenti"):
 
 - **e2e**: richiede Playwright + Chromium (`playwright install chromium`) oltre alle dipendenze dev.
 - **drive**: richiede variabili (`SERVICE_ACCOUNT_FILE`, `DRIVE_ID`) e dipendenze Google (extra/dev).
@@ -58,15 +58,15 @@ Comando:
 python tools/test_runner.py fast
 ```
 
-**Regola**: se un test deve girare nell’inner loop, deve essere marcato `unit`. Se manca il marker, **non è garantito** in FAST.
+**Regola**: se un test deve girare nell'inner loop, deve essere marcato `unit`. Se manca il marker, **non è garantito** in FAST.
 
-**Nota pratica**: il fatto che un test sia “veloce” non basta; deve anche essere **stabile** e non dipendere da integrazioni opzionali.
+**Nota pratica**: il fatto che un test sia "veloce" non basta; deve anche essere **stabile** e non dipendere da integrazioni opzionali.
 
 ---
 
 ## ARCH (invarianti) + CONTRACT (gating/contratti)
 
-**Scopo**: verificare invarianti strutturali e contratti di comportamento che riducono l’entropia del sistema.
+**Scopo**: verificare invarianti strutturali e contratti di comportamento che riducono l'entropia del sistema.
 
 Comando:
 
@@ -82,7 +82,7 @@ python tools/test_runner.py arch
 ### Disciplina di scrittura
 
 - Un test `contract` deve testare **comportamento reale** (non ricostruire la logica a mano).
-- Se un test è “tautologico” (verifica solo che i file creati esistano), va eliminato o riscritto.
+- Se un test è "tautologico" (verifica solo che i file creati esistano), va eliminato o riscritto.
 
 **Esempio reale di pulizia fatta**: abbiamo rimosso un test UI che non invocava mai la funzione di produzione e duplicava la logica nel test.
 
@@ -98,7 +98,7 @@ Comando:
 python tools/test_runner.py full
 ```
 
-**Regola**: FULL deve essere affidabile, ripetibile e “non sorprendente”. Se un test è flaky, va reso deterministico oppure spostato/isolato (o rimosso se non porta valore reale).
+**Regola**: FULL deve essere affidabile, ripetibile e "non sorprendente". Se un test è flaky, va reso deterministico oppure spostato/isolato (o rimosso se non porta valore reale).
 
 ---
 
@@ -131,7 +131,7 @@ Marker principali:
 - **Per path** (preferito): cartelle dedicate (`tests/ui`, `tests/pipeline`, `tests/contract`, ecc.).
 - **Per prefisso file** (supporto): `test_ui_…`, `test_pipeline_…`, `test_retriever_…`.
 
-**Regola**: evitare regole special-case su file specifici, perché aumentano l’entropia. Teniamo solo eccezioni rare e motivate.
+**Regola**: evitare regole special-case su file specifici, perché aumentano l'entropia. Teniamo solo eccezioni rare e motivate.
 
 **Esempio reale di pulizia fatta**: abbiamo rimosso in `conftest.py` riferimenti a file non più esistenti, lasciando marking quasi interamente path/prefix-based.
 
@@ -150,7 +150,7 @@ Comando consigliato:
 pytest -q --durations=20 --durations-min=1.0
 ```
 
-**Regola**: meglio 10 test deterministici e rapidi che 1 test “onnicomprensivo” e lento.
+**Regola**: meglio 10 test deterministici e rapidi che 1 test "onnicomprensivo" e lento.
 
 ---
 
@@ -160,7 +160,7 @@ pytest -q --durations=20 --durations-min=1.0
 - A fine task o change importante: `python tools/test_runner.py arch`
 - Prima del push: `python tools/test_runner.py full`
 
-**Suggerimento**: se stai lavorando su un’area specifica (es. retriever), usa anche selezione diretta:
+**Suggerimento**: se stai lavorando su un'area specifica (es. retriever), usa anche selezione diretta:
 
 ```bash
 pytest -q -m retriever
@@ -170,7 +170,7 @@ pytest -q -m retriever
 
 ## Pre-commit / pre-push hooks
 
-Gli hook Git coordinano formattazione, linting e test preliminari senza costringere a lanciare manualmente l’intera suite.
+Gli hook Git coordinano formattazione, linting e test preliminari senza costringere a lanciare manualmente l'intera suite.
 
 ### Installazione
 
@@ -201,7 +201,7 @@ pre-commit run --hook-stage pre-push --all-files
 ### Suggerimenti operativi
 
 - In caso di failure: eseguire `pre-commit run --all-files` per isolare il tool in errore.
-- Prima di un changelog “macro”: ripetere `pre-commit run --hook-stage pre-push --all-files`.
+- Prima di un changelog "macro": ripetere `pre-commit run --hook-stage pre-push --all-files`.
 
 ---
 
@@ -222,4 +222,4 @@ Queste regole sono normative e riflettono quanto abbiamo già applicato:
 - `build_tags_csv` è stato riclassificato come **contract + pipeline** (marker espliciti).
 - `preview_effective_candidate_limit` è stato allineato al runtime con clamping e test di regressione.
 - `vocab_loader` deduplica alias in modo case-insensitive per ridurre drift.
-- log di retriever include `embedding_model` già da l’evento “started” per audit più robusto.
+- log di retriever include `embedding_model` già da l'evento "started" per audit più robusto.
