@@ -151,11 +151,7 @@ def export_tags_yaml_from_db(
     """Facade sicuro per esportare tags_reviewed.yaml dal DB NLP (UI-only).
     Richiede `context` o `workspace_base` canonico per risolvere il layout."""
     if context is not None:
-        if getattr(context, "repo_root_dir", None) is None:
-            raise ConfigError(
-                "Contesto privo di repo_root_dir: impossibile risolvere il workspace.",
-                file_path=str(semantic_dir),
-            )
+        _require_repo_root_dir(context, slug=slug or "")
         layout = WorkspaceLayout.from_context(cast(Any, context))
     elif workspace_base is not None:
         if slug is None:
@@ -259,12 +255,11 @@ def _run_build_workflow(
     per evitare cross-contaminazione tra run consecutivi nella stessa process e rilasciare memoria.
     """
 
-    if getattr(context, "repo_root_dir", None) is None:
-        raise ConfigError(
-            "Contesto privo di repo_root_dir: impossibile risolvere il workspace in modo deterministico.",
-            slug=slug,
-        )
+    repo_root_dir = _require_repo_root_dir(context, slug=slug)
     layout = WorkspaceLayout.from_context(cast(Any, context))
+    # sanity: mantiene invarianti e dà visibilità immediata a drift
+    if layout.repo_root_dir != repo_root_dir:
+        raise ConfigError("repo_root_dir non coerente con WorkspaceLayout.", slug=slug)
     repo_root_dir = layout.repo_root_dir
 
     def _wrap(stage_name: str, func: Callable[[], Any]) -> Any:
@@ -470,11 +465,7 @@ def index_markdown_to_db(
     chunk_records: Sequence[ChunkRecord] | None = None,
 ) -> int:
     """Indice i Markdown presenti in book/ nel DB, delegando al servizio dedicato."""
-    if getattr(context, "repo_root_dir", None) is None:
-        raise ConfigError(
-            "Contesto privo di repo_root_dir: impossibile risolvere il workspace in modo deterministico.",
-            slug=slug,
-        )
+    _require_repo_root_dir(context, slug=slug)
     layout = WorkspaceLayout.from_context(cast(Any, context))
     repo_root_dir = layout.repo_root_dir
     book_dir = layout.book_dir
@@ -493,3 +484,12 @@ def index_markdown_to_db(
             chunk_records=chunk_records,
         ),
     )
+def _require_repo_root_dir(context: ClientContextType, *, slug: str) -> Path:
+    """Fail-fast: repo_root_dir è obbligatorio per contratto."""
+    try:
+        repo_root_dir = context.repo_root_dir
+    except AttributeError as exc:
+        raise ConfigError("repo_root_dir mancante nel contesto.", slug=slug) from exc
+    if repo_root_dir is None:
+        raise ConfigError("repo_root_dir nullo nel contesto.", slug=slug)
+    return Path(repo_root_dir)

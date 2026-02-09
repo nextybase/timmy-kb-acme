@@ -318,7 +318,7 @@ def load_reviewed_vocab(
     perimeter_root = repo_root_dir
     sem_dir = ppath.ensure_within_and_resolve(perimeter_root, _semantic_dir(repo_root_dir))
     db_path = ppath.ensure_within_and_resolve(sem_dir, sem_dir / "tags.db")
-    if not db_path.exists():
+    if not db_path.exists() or not db_path.is_file():
         _log_vocab_event(
             logger,
             "semantic.vocab.db_missing",

@@ -219,7 +219,12 @@ def search(
     if throttle_mod._deadline_exceeded(deadline):
         _safe_warning(
             "retriever.throttle.deadline",
-            extra={"slug": params.slug, "scope": params.scope, "stage": "preflight"},
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "stage": "preflight",
+                "response_id": response_id,
+            },
         )
         return []
 
@@ -274,7 +279,12 @@ def search(
         if throttle_mod._deadline_exceeded(deadline):
             _safe_warning(
                 "retriever.latency_budget.hit",
-                extra={"slug": params.slug, "scope": params.scope, "stage": "embedding"},
+                extra={
+                    "slug": params.slug,
+                    "scope": params.scope,
+                    "stage": "embedding",
+                    "response_id": response_id,
+                },
             )
             return []
 
@@ -328,7 +338,12 @@ def search(
         if throttle_mod._deadline_exceeded(deadline):
             _safe_warning(
                 "retriever.latency_budget.hit",
-                extra={"slug": params.slug, "scope": params.scope, "stage": "fetch_candidates"},
+                extra={
+                    "slug": params.slug,
+                    "scope": params.scope,
+                    "stage": "fetch_candidates",
+                    "response_id": response_id,
+                },
             )
             return []
 
@@ -377,7 +392,12 @@ def search(
         if budget_hit:
             _safe_warning(
                 "retriever.latency_budget.hit",
-                extra={"slug": params.slug, "scope": params.scope, "stage": "ranking"},
+                extra={
+                    "slug": params.slug,
+                    "scope": params.scope,
+                    "stage": "ranking",
+                    "response_id": response_id,
+                },
             )
             return []
 

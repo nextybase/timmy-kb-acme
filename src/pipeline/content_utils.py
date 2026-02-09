@@ -816,6 +816,13 @@ def build_chunk_records_from_markdown_files(
     records: list[ChunkRecord] = []
     base_path = Path(perimeter_root) if perimeter_root is not None else None
     resolved_base = base_path.resolve() if base_path is not None else None
+    if resolved_base is None:
+        _safe_log(
+            get_structured_logger("pipeline.content_utils"),
+            "warning",
+            "pipeline.content.chunk_records.no_perimeter",
+            extra={"slug": slug, "service_only": True, "paths": len(md_paths)},
+        )
 
     for raw_path in md_paths:
         path = raw_path if isinstance(raw_path, Path) else Path(raw_path)
