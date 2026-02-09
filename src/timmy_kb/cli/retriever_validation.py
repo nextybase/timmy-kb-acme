@@ -56,6 +56,8 @@ def _validate_params(params: QueryParams) -> None:
 
     Range candidato: 500-20000 inclusi.
     """
+    if params.db_path is None:
+        raise RetrieverError("db_path mancante")
     if not params.slug.strip():
         raise RetrieverError("slug vuoto")
     if not params.scope.strip():

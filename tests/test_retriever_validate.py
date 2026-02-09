@@ -2,12 +2,13 @@
 # tests/test_retriever_validate.py
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Sequence
 
 import pytest
 
 import timmy_kb.cli.retriever as r
-from tests.conftest import DUMMY_SLUG
+from tests.conftest import DUMMY_SLUG, kb_sqlite_path
 from timmy_kb.cli.retriever import QueryParams, RetrieverError, search  # <- usa la stessa classe del modulo sotto test
 
 
@@ -41,6 +42,7 @@ class HappyEmbeddings:
 
 
 def _params(
+    db_path: Path,
     *,
     slug: str = DUMMY_SLUG,
     scope: str = "kb",
@@ -50,7 +52,7 @@ def _params(
 ):
     """Costruttore tipizzato per evitare dict Any→str|int|None che confondono Pylance."""
     return QueryParams(
-        db_path=None,
+        db_path=db_path,
         slug=slug,
         scope=scope,
         query=query,
@@ -59,61 +61,61 @@ def _params(
     )
 
 
-def test_validate_params_empty_slug() -> None:
+def test_validate_params_empty_slug(kb_sqlite_path: Path) -> None:
     with pytest.raises(RetrieverError, match="slug"):
-        search(_params(slug="   "), DummyEmbeddings())
+        search(_params(kb_sqlite_path, slug="   "), DummyEmbeddings())
 
 
 def test_validate_params_empty_scope() -> None:
     with pytest.raises(RetrieverError, match="scope"):
-        search(_params(scope=""), DummyEmbeddings())
+        search(_params(kb_sqlite_path, scope=""), DummyEmbeddings())
 
 
-def test_validate_params_negative_candidate_limit() -> None:
+def test_validate_params_negative_candidate_limit(kb_sqlite_path: Path) -> None:
     with pytest.raises(RetrieverError, match="candidate_limit"):
-        search(_params(candidate_limit=-1), DummyEmbeddings())
+        search(_params(kb_sqlite_path, candidate_limit=-1), DummyEmbeddings())
 
 
-def test_validate_params_candidate_limit_too_low() -> None:
+def test_validate_params_candidate_limit_too_low(kb_sqlite_path: Path) -> None:
     with pytest.raises(RetrieverError, match="candidate_limit"):
-        search(_params(candidate_limit=r.MIN_CANDIDATE_LIMIT - 1), DummyEmbeddings())
+        search(_params(kb_sqlite_path, candidate_limit=r.MIN_CANDIDATE_LIMIT - 1), DummyEmbeddings())
 
 
-def test_validate_params_candidate_limit_too_high() -> None:
+def test_validate_params_candidate_limit_too_high(kb_sqlite_path: Path) -> None:
     with pytest.raises(RetrieverError, match="candidate_limit"):
-        search(_params(candidate_limit=r.MAX_CANDIDATE_LIMIT + 1), DummyEmbeddings())
+        search(_params(kb_sqlite_path, candidate_limit=r.MAX_CANDIDATE_LIMIT + 1), DummyEmbeddings())
 
 
 @pytest.mark.parametrize("candidate_limit", (r.MIN_CANDIDATE_LIMIT, r.MAX_CANDIDATE_LIMIT))
-def test_validate_params_candidate_limit_extremes(monkeypatch, candidate_limit) -> None:
+def test_validate_params_candidate_limit_extremes(monkeypatch, candidate_limit, kb_sqlite_path: Path) -> None:
     monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: [])
-    out = search(_params(candidate_limit=candidate_limit), HappyEmbeddings())
+    out = search(_params(kb_sqlite_path, candidate_limit=candidate_limit), HappyEmbeddings())
     assert out == []
 
 
-def test_validate_params_negative_k() -> None:
+def test_validate_params_negative_k(kb_sqlite_path: Path) -> None:
     with pytest.raises(RetrieverError, match="k"):
-        search(_params(k=-5), DummyEmbeddings())
+        search(_params(kb_sqlite_path, k=-5), DummyEmbeddings())
 
 
-def test_search_early_return_on_empty_query(monkeypatch) -> None:
+def test_search_early_return_on_empty_query(monkeypatch, kb_sqlite_path: Path) -> None:
     def _boom(*a, **k):
         raise AssertionError("fetch_candidates should not be called for empty query")
 
     monkeypatch.setattr(r, "fetch_candidates", _boom)
-    out = search(_params(query="   "), DummyEmbeddings())
+    out = search(_params(kb_sqlite_path, query="   "), DummyEmbeddings())
     assert out == []
 
 
-def test_search_early_return_on_zero_k(monkeypatch) -> None:
+def test_search_early_return_on_zero_k(monkeypatch, kb_sqlite_path: Path) -> None:
     def _boom(*a, **k):
         raise AssertionError("fetch_candidates should not be called when k==0")
 
     monkeypatch.setattr(r, "fetch_candidates", _boom)
-    out = search(_params(k=0), DummyEmbeddings())
+    out = search(_params(kb_sqlite_path, k=0), DummyEmbeddings())
     assert out == []
 
 
-def test_search_early_return_on_zero_candidate_limit(monkeypatch) -> None:
+def test_search_early_return_on_zero_candidate_limit(monkeypatch, kb_sqlite_path: Path) -> None:
     with pytest.raises(RetrieverError, match="candidate_limit"):
-        search(_params(candidate_limit=0), DummyEmbeddings())
+        search(_params(kb_sqlite_path, candidate_limit=0), DummyEmbeddings())

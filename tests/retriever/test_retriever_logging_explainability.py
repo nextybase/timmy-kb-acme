@@ -39,10 +39,17 @@ def _fake_candidates_with_lineage(*_: Any, **__: Any) -> list[dict[str, Any]]:
 
 
 def test_retriever_logs_explainability_events(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", _fake_candidates_with_lineage, raising=True)
-    params = QueryParams(db_path=None, slug=DUMMY_SLUG, scope="kb", query="hello world", k=2, candidate_limit=800)
+    params = QueryParams(
+        db_path=tmp_path / "kb.sqlite",
+        slug=DUMMY_SLUG,
+        scope="kb",
+        query="hello world",
+        k=2,
+        candidate_limit=800,
+    )
     client = _DummyEmbeddingsClient([0.1, 0.1, 0.1])
 
     assert len(list(_fake_candidates_with_lineage())) == 2
@@ -81,7 +88,14 @@ def test_response_manifest_event_emitted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", _fake_candidates_with_lineage, raising=True)
-    params = QueryParams(db_path=None, slug=DUMMY_SLUG, scope="kb", query="hello world", k=1, candidate_limit=600)
+    params = QueryParams(
+        db_path=tmp_path / "kb.sqlite",
+        slug=DUMMY_SLUG,
+        scope="kb",
+        query="hello world",
+        k=1,
+        candidate_limit=600,
+    )
     client = _DummyEmbeddingsClient([0.1, 0.1, 0.1])
 
     with caplog.at_level(logging.INFO):
@@ -100,7 +114,14 @@ def test_response_manifest_write_failure_raises(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", _fake_candidates_with_lineage, raising=True)
-    params = QueryParams(db_path=None, slug=DUMMY_SLUG, scope="kb", query="hello world", k=1, candidate_limit=600)
+    params = QueryParams(
+        db_path=tmp_path / "kb.sqlite",
+        slug=DUMMY_SLUG,
+        scope="kb",
+        query="hello world",
+        k=1,
+        candidate_limit=600,
+    )
     client = _DummyEmbeddingsClient([0.1, 0.1, 0.1])
 
     def _boom(*_a: object, **_k: object) -> Path:
@@ -113,13 +134,20 @@ def test_response_manifest_write_failure_raises(
 
 
 def test_retriever_logging_handles_missing_lineage(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     def _fake_candidates_no_lineage(*_: Any, **__: Any) -> list[dict[str, Any]]:
         return [{"content": "foo", "meta": {}, "embedding": [0.1, 0.2]}]
 
     monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", _fake_candidates_no_lineage, raising=True)
-    params = QueryParams(db_path=None, slug=DUMMY_SLUG, scope="kb", query="hi", k=1, candidate_limit=600)
+    params = QueryParams(
+        db_path=tmp_path / "kb.sqlite",
+        slug=DUMMY_SLUG,
+        scope="kb",
+        query="hi",
+        k=1,
+        candidate_limit=600,
+    )
     client = _DummyEmbeddingsClient([0.1, 0.2])
 
     with caplog.at_level(logging.INFO):

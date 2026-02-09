@@ -8,7 +8,8 @@
 import math
 import time
 from collections import deque
-from typing import Iterable
+from pathlib import Path
+from typing import Any, Callable, Iterable
 
 import pytest
 
@@ -79,20 +80,24 @@ def test_cosine_scales_huge_magnitudes():
     assert opposite == pytest.approx(-1.0, rel=1e-12)
 
 
-def _default_params():
-    # Usa i default del dataclass (candidate_limit=4000 by design)
-    return QueryParams(
-        db_path=None,
-        slug=DUMMY_SLUG,
-        scope="kb",
-        query="test",
-        # k default = 8 nel dataclass
-        # candidate_limit default = 4000 nel dataclass
-    )
+@pytest.fixture
+def default_params(kb_sqlite_path: Path) -> Callable[..., QueryParams]:
+    def _build(**over: Any) -> QueryParams:
+        return QueryParams(
+            db_path=kb_sqlite_path,
+            slug=DUMMY_SLUG,
+            scope="kb",
+            query="test",
+            k=8,
+            candidate_limit=4000,
+            **over,
+        )
+
+    return _build
 
 
-def test_with_config_candidate_limit_explicit_not_overridden():
-    params = _default_params()
+def test_with_config_candidate_limit_explicit_not_overridden(default_params):
+    params = default_params()
     # Esplicito diverso dal default => non va sovrascritto
     params = params.__class__(**{**params.__dict__, "candidate_limit": 777})
     cfg = {"retriever": {"throttle": {"candidate_limit": 1234}}}
@@ -100,15 +105,15 @@ def test_with_config_candidate_limit_explicit_not_overridden():
     assert out.candidate_limit == 777
 
 
-def test_with_config_candidate_limit_uses_config_when_default():
-    params = _default_params()  # candidate_limit rimane al default del dataclass
+def test_with_config_candidate_limit_uses_config_when_default(default_params):
+    params = default_params()  # candidate_limit rimane al default del dataclass
     cfg = {"retriever": {"throttle": {"candidate_limit": 1234}}}
     out = with_config_candidate_limit(params, cfg)
     assert out.candidate_limit == 1234
 
 
-def test_with_config_or_budget_explicit_wins_even_with_auto_budget():
-    params = _default_params()
+def test_with_config_or_budget_explicit_wins_even_with_auto_budget(default_params):
+    params = default_params()
     params = params.__class__(**{**params.__dict__, "candidate_limit": 9000})
     cfg = {
         "retriever": {
@@ -129,41 +134,41 @@ def test_with_config_or_budget_explicit_wins_even_with_auto_budget():
         (450, 8000),  # > 420ms
     ],
 )
-def test_with_config_or_budget_auto_budget_thresholds(budget_ms, expected):
-    params = _default_params()  # default -> eleggibile a override
+def test_with_config_or_budget_auto_budget_thresholds(budget_ms, expected, default_params):
+    params = default_params()  # default -> eleggibile a override
     cfg = {"retriever": {"auto_by_budget": True, "throttle": {"latency_budget_ms": budget_ms}}}
     out = with_config_or_budget(params, cfg)
     assert out.candidate_limit == expected
 
 
-def test_with_config_or_budget_uses_config_when_no_auto_budget():
-    params = _default_params()  # default -> eleggibile a override
+def test_with_config_or_budget_uses_config_when_no_auto_budget(default_params):
+    params = default_params()  # default -> eleggibile a override
     cfg = {"retriever": {"throttle": {"candidate_limit": 2222}}}
     out = with_config_or_budget(params, cfg)
     assert out.candidate_limit == 2222
 
 
-def test_preview_effective_candidate_limit_reports_sources_correctly():
+def test_preview_effective_candidate_limit_reports_sources_correctly(default_params):
     # 1) explicit
-    p_explicit = _default_params()
+    p_explicit = default_params()
     p_explicit = p_explicit.__class__(**{**p_explicit.__dict__, "candidate_limit": 777})
     lim, source, budget = preview_effective_candidate_limit(p_explicit, {})
     assert (lim, source, budget) == (777, "explicit", 0)
 
     # 2) auto_by_budget
-    p_auto = _default_params()
+    p_auto = default_params()
     cfg_auto = {"retriever": {"auto_by_budget": True, "throttle": {"latency_budget_ms": 260}}}
     lim, source, budget = preview_effective_candidate_limit(p_auto, cfg_auto)
     assert (lim, source, budget) == (2000, "auto_by_budget", 260)
 
     # 3) config
-    p_cfg = _default_params()
+    p_cfg = default_params()
     cfg = {"retriever": {"throttle": {"candidate_limit": 3333}}}
     lim, source, budget = preview_effective_candidate_limit(p_cfg, cfg)
     assert (lim, source, budget) == (3333, "config", 0)
 
     # 4) default
-    p_def = _default_params()
+    p_def = default_params()
     lim, source, budget = preview_effective_candidate_limit(p_def, {})
     assert (lim, source, budget) == (4000, "default", 0)
 
@@ -173,8 +178,8 @@ class _DummyEmbeddingsClient:
         return [[0.1, 0.2, 0.3]]
 
 
-def test_search_with_config_passes_throttle(monkeypatch: pytest.MonkeyPatch):
-    params = _default_params()
+def test_search_with_config_passes_throttle(monkeypatch: pytest.MonkeyPatch, default_params):
+    params = default_params()
     captured: dict[str, object] = {}
 
     def _fake_search(*args, **kwargs):

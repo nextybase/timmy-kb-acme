@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # tests/test_retriever_ranking_invariance_short_circuit.py
 import logging
+from pathlib import Path
 
 import timmy_kb.cli.retriever as retr
 
@@ -10,9 +11,9 @@ class _EmbClient:
         return [[0.5, 0.5]]  # embedding query
 
 
-def _params():
+def _params(db_path: Path):
     return retr.QueryParams(
-        db_path=None,
+        db_path=db_path,
         slug="proj",
         scope="kb",
         query="hello world",
@@ -21,7 +22,7 @@ def _params():
     )
 
 
-def test_ranking_invariance_between_short_circuit_and_normalize(monkeypatch, caplog):
+def test_ranking_invariance_between_short_circuit_and_normalize(monkeypatch, caplog, kb_sqlite_path: Path):
     # Scenario A: embedding piatti -> short-circuit
     cands_short = [
         {"content": "A", "meta": {"id": "A"}, "embedding": [1.0, 0.0]},
@@ -37,7 +38,7 @@ def test_ranking_invariance_between_short_circuit_and_normalize(monkeypatch, cap
         {"content": "D", "meta": {"id": "D"}, "embedding": [[0.1, 0.9]]},
     ]
 
-    params = _params()
+    params = _params(kb_sqlite_path)
     emb = _EmbClient()
 
     # Run A (short-circuit)

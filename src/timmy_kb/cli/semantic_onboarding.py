@@ -364,21 +364,9 @@ def main() -> int:
                         parent_folder_id=drive_raw_id,
                         log=logger,
                     )
-                # 3) Costruisci il Knowledge Graph dei tag (Tag KG Builder)
-                semantic_dir = layout.semantic_dir
-                # Path-safety: blocca traversal/symlink fuori semantic_dir.
-                tags_raw_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.json")
-                if tags_raw_path.exists():
-                    with phase_scope(logger, stage="cli.tag_kg_builder", customer=slug):
-                        build_kg_for_workspace(ctx, namespace=slug)
-                    tag_kg_effective = "built"
-                else:
-                    logger.info(
-                        "cli.tag_kg_builder.skipped",
-                        extra={"slug": slug, "reason": "semantic/tags_raw.json assente"},
-                    )
-                    tag_kg_effective = "skipped"
+                tag_kg_effective = _run_tag_kg_builder(ctx, layout, logger)
                 if tag_kg_effective == "built":
+                    semantic_dir = layout.semantic_dir
                     kg_json = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.json")
                     kg_md = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.md")
                     if kg_json.exists() and kg_md.exists():
@@ -607,3 +595,15 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except KeyboardInterrupt:
         raise SystemExit(130)
+
+
+def _run_tag_kg_builder(ctx: SemanticContextProtocol, layout: WorkspaceLayout, logger) -> str:
+    """Esegue il KG builder se tags_raw.json esiste, ritorna 'built'/'skipped'."""
+    semantic_dir = layout.semantic_dir
+    tags_raw_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.json")
+    if tags_raw_path.exists():
+        with phase_scope(logger, stage="cli.tag_kg_builder", customer=layout.slug):
+            build_kg_for_workspace(ctx, namespace=layout.slug)
+        return "built"
+    logger.info("cli.tag_kg_builder.skipped", extra={"slug": layout.slug, "reason": "semantic/tags_raw.json assente"})
+    return "skipped"

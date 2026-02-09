@@ -16,7 +16,7 @@ from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
 from pipeline.frontmatter_utils import read_frontmatter
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_paths, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths, read_text_safe
 from pipeline.tracing import start_decision_span
 from pipeline.types import ChunkRecord
 from pipeline.workspace_layout import WorkspaceLayout
@@ -558,7 +558,7 @@ def _cleanup_orphan_markdown(
         if low in {"readme.md", "summary.md"}:
             continue
         if candidate not in written:
-            ensure_within(target, candidate)
+            ensure_within_and_resolve(target, candidate)
             try:
                 candidate.unlink(missing_ok=True)
                 removed += 1

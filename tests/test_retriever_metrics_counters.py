@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # tests/test_retriever_metrics_counters.py
 import logging
+from pathlib import Path
 
 import timmy_kb.cli.retriever as retr
 
@@ -10,9 +11,9 @@ class _EmbClient:
         return [[0.2, 0.8]]  # embedding query
 
 
-def _params():
+def _params(db_path: Path) -> retr.QueryParams:
     return retr.QueryParams(
-        db_path=None,
+        db_path=db_path,
         slug="proj",
         scope="kb",
         query="hello",
@@ -21,7 +22,7 @@ def _params():
     )
 
 
-def test_retriever_metrics_coerce_and_skip(monkeypatch, caplog):
+def test_retriever_metrics_coerce_and_skip(monkeypatch, caplog, kb_sqlite_path: Path):
     cands = [
         {"content": "short", "meta": {}, "embedding": [0.3, 0.7]},  # short-circuit
         {"content": "norm", "meta": {}, "embedding": [[0.2, 0.8]]},  # normalize
@@ -31,7 +32,7 @@ def test_retriever_metrics_coerce_and_skip(monkeypatch, caplog):
     monkeypatch.setattr(retr, "fetch_candidates", lambda *a, **k: list(cands))
 
     caplog.set_level(logging.INFO)
-    out = retr.search(_params(), _EmbClient())
+    out = retr.search(_params(kb_sqlite_path), _EmbClient())
 
     ids = [x["content"] for x in out]
     assert "skip_invalid" not in ids

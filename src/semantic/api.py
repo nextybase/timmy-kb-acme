@@ -311,6 +311,7 @@ def _run_build_workflow(
                 operation="import",
                 exc=exc,
             )
+            # Non interrompere il return della pipeline; log-only.
             return
 
         try:

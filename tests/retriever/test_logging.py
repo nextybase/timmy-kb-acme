@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -23,9 +24,9 @@ def _no_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", lambda *args, **kwargs: [], raising=True)
 
 
-def _base_params(query: str) -> QueryParams:
+def _base_params(query: str, db_path: Path) -> QueryParams:
     return QueryParams(
-        db_path=None,
+        db_path=db_path,
         slug=DUMMY_SLUG,
         scope="kb",
         query=query,
@@ -41,9 +42,13 @@ def _base_params(query: str) -> QueryParams:
     ),
 )
 def test_search_logs_invalid_input(
-    caplog: pytest.LogCaptureFixture, query: str, payload: list[list[float]], reason: str
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+    query: str,
+    payload: list[list[float]],
+    reason: str,
 ) -> None:
-    params = _base_params(query)
+    params = _base_params(query, tmp_path / "kb.sqlite")
     client = _DummyEmbeddingsClient(payload)
 
     with caplog.at_level(logging.WARNING):
@@ -62,8 +67,8 @@ def test_search_logs_invalid_input(
     assert getattr(record, "scope") == "kb"
 
 
-def test_search_logs_embedding_failure(caplog: pytest.LogCaptureFixture) -> None:
-    params = _base_params("ciao")
+def test_search_logs_embedding_failure(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
+    params = _base_params("ciao", tmp_path / "kb.sqlite")
 
     class _BoomClient:
         def embed_texts(self, texts: list[str]) -> list[list[float]]:

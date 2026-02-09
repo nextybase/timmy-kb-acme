@@ -10,11 +10,24 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import timmy_kb.cli.retriever as retr
 from tests.conftest import DUMMY_SLUG
 from timmy_kb.cli.retriever import QueryParams
+
+
+def _build_query_params(tmp_path: Path, **overrides: Any) -> QueryParams:
+    base = {
+        "db_path": tmp_path / "kb.sqlite",
+        "slug": DUMMY_SLUG,
+        "scope": "kb",
+        "query": "hello",
+        "k": 1,
+        "candidate_limit": retr.MIN_CANDIDATE_LIMIT,
+    }
+    base.update(overrides)
+    return QueryParams(**base)
 
 
 class FakeEmb:
@@ -82,7 +95,7 @@ def test_search_uses_query_params_and_limit(monkeypatch, tmp_path: Path):
     assert all("content" in r and "score" in r for r in out)
 
 
-def test_search_accepts_numpy_embeddings(monkeypatch):
+def test_search_accepts_numpy_embeddings(monkeypatch, tmp_path):
     """Compatibilità: client embeddings che ritorna numpy.ndarray (2D)."""
     import numpy as np
 
@@ -98,7 +111,7 @@ def test_search_accepts_numpy_embeddings(monkeypatch):
             return np.array([[1.0, 0.0]])
 
     params = QueryParams(
-        db_path=None,
+        db_path=tmp_path / "kb.sqlite",
         slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
@@ -112,7 +125,7 @@ def test_search_accepts_numpy_embeddings(monkeypatch):
     assert isinstance(out[0]["score"], float)
 
 
-def test_search_empty_query_embedding_returns_empty(monkeypatch):
+def test_search_empty_query_embedding_returns_empty(monkeypatch, tmp_path):
     """Se l'embedding della query risulta vuoto, ritorna lista vuota (soft-fail)."""
 
     import timmy_kb.cli.retriever as retr
@@ -127,7 +140,7 @@ def test_search_empty_query_embedding_returns_empty(monkeypatch):
             return [[]]  # embedding vuoto
 
     params = QueryParams(
-        db_path=None,
+        db_path=tmp_path / "kb.sqlite",
         slug=DUMMY_SLUG,
         scope="kb",
         query="hello",
@@ -139,16 +152,9 @@ def test_search_empty_query_embedding_returns_empty(monkeypatch):
     assert out == []
 
 
-def test_search_skipped_logs_response_and_limit(caplog):
+def test_search_skipped_logs_response_and_limit(caplog, tmp_path: Path):
     caplog.set_level(logging.INFO, logger=retr.LOGGER.name)
-    params = QueryParams(
-        db_path=None,
-        slug=DUMMY_SLUG,
-        scope="kb",
-        query="hello",
-        k=0,
-        candidate_limit=500,
-    )
+    params = _build_query_params(tmp_path, query="hello", k=0, candidate_limit=500)
     response_id = "skip-123"
 
     out = retr.search(params, FakeEmb(), response_id=response_id)
@@ -161,16 +167,9 @@ def test_search_skipped_logs_response_and_limit(caplog):
     assert getattr(record, "candidate_limit", None) == 500
 
 
-def test_search_invalid_query_logs_response_and_limit(caplog):
+def test_search_invalid_query_logs_response_and_limit(caplog, tmp_path: Path):
     caplog.set_level(logging.WARNING, logger=retr.LOGGER.name)
-    params = QueryParams(
-        db_path=None,
-        slug=DUMMY_SLUG,
-        scope="kb",
-        query=" ",
-        k=1,
-        candidate_limit=500,
-    )
+    params = _build_query_params(tmp_path, query=" ", candidate_limit=500)
     response_id = "invalid-321"
 
     out = retr.search(params, FakeEmb(), response_id=response_id)
@@ -182,7 +181,7 @@ def test_search_invalid_query_logs_response_and_limit(caplog):
     assert getattr(record, "candidate_limit", None) == 500
 
 
-def test_search_budget_exceeded_returns_empty(monkeypatch):
+def test_search_budget_exceeded_returns_empty(monkeypatch, tmp_path: Path):
     """Se il budget/clock del throttle indica deadline exceeded, search() deve soft-fail con []."""
 
     def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
@@ -195,14 +194,7 @@ def test_search_budget_exceeded_returns_empty(monkeypatch):
         def embed_texts(self, texts: Sequence[str], *, model: str | None = None):
             return [[1.0, 0.0]]
 
-    params = QueryParams(
-        db_path=None,
-        slug=DUMMY_SLUG,
-        scope="kb",
-        query="hello",
-        k=1,
-        candidate_limit=retr.MIN_CANDIDATE_LIMIT,
-    )
+    params = _build_query_params(tmp_path)
     throttle_settings = retr.throttle_mod.ThrottleSettings(
         latency_budget_ms=1,
         parallelism=1,
@@ -216,12 +208,11 @@ def test_search_budget_exceeded_returns_empty(monkeypatch):
     assert out == []
 
 
-def test_search_accepts_deque_embedding(monkeypatch):
+def test_search_accepts_deque_embedding(monkeypatch, tmp_path: Path):
     """Client che ritorna deque o generatore come singolo vettore."""
     from collections import deque
 
     import timmy_kb.cli.retriever as retr
-    from timmy_kb.cli.retriever import QueryParams
 
     # Stub di fetch_candidates: un solo candidato compatibile
     def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
@@ -234,14 +225,7 @@ def test_search_accepts_deque_embedding(monkeypatch):
             # Restituisce un vettore come deque (singolo embedding)
             return deque([1.0, 0.0])
 
-    params = QueryParams(
-        db_path=None,
-        slug=DUMMY_SLUG,
-        scope="kb",
-        query="hello",
-        k=1,
-        candidate_limit=retr.MIN_CANDIDATE_LIMIT,
-    )
+    params = _build_query_params(tmp_path)
 
     out = retr.search(params, DequeEmb())
 
@@ -249,12 +233,11 @@ def test_search_accepts_deque_embedding(monkeypatch):
     assert isinstance(out[0]["score"], float)
 
 
-def test_search_accepts_list_of_numpy_arrays(monkeypatch):
+def test_search_accepts_list_of_numpy_arrays(monkeypatch, tmp_path: Path):
     """Client che ritorna list[np.ndarray] come batch (uno vettore)."""
     import numpy as np
 
     import timmy_kb.cli.retriever as retr
-    from timmy_kb.cli.retriever import QueryParams
 
     def stub_fetch_candidates(slug, scope, limit, db_path):  # type: ignore[no-untyped-def]
         yield {"content": "only", "meta": {}, "embedding": [1.0, 0.0]}
@@ -266,14 +249,7 @@ def test_search_accepts_list_of_numpy_arrays(monkeypatch):
             assert len(texts) == 1
             return [np.array([1.0, 0.0])]
 
-    params = QueryParams(
-        db_path=None,
-        slug=DUMMY_SLUG,
-        scope="kb",
-        query="hello",
-        k=1,
-        candidate_limit=retr.MIN_CANDIDATE_LIMIT,
-    )
+    params = _build_query_params(tmp_path)
 
     out = retr.search(params, ListNpEmb())
 

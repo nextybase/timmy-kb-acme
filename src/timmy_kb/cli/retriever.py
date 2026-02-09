@@ -21,6 +21,7 @@ Design:
 
 from __future__ import annotations
 
+import logging
 import time
 from contextlib import nullcontext
 from dataclasses import MISSING, replace
@@ -38,6 +39,7 @@ from timmy_kb.cli import retriever_throttle as throttle_mod
 from timmy_kb.cli import retriever_validation as validation_mod
 
 LOGGER = get_structured_logger("timmy_kb.retriever")
+_FALLBACK_LOG = logging.getLogger("timmy_kb.retriever")
 
 QueryParams = validation_mod.QueryParams
 SearchResult = validation_mod.SearchResult
@@ -69,21 +71,21 @@ def _safe_info(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
     try:
         LOGGER.info(event, extra=dict(extra or {}))
     except Exception:
-        return
+        _FALLBACK_LOG.info(event, extra={"payload": dict(extra or {})})
 
 
 def _safe_warning(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
     try:
         LOGGER.warning(event, extra=dict(extra or {}))
     except Exception:
-        return
+        _FALLBACK_LOG.warning(event, extra={"payload": dict(extra or {})})
 
 
 def _safe_debug(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
     try:
         LOGGER.debug(event, extra=dict(extra or {}))
     except Exception:
-        return
+        _FALLBACK_LOG.debug(event, extra={"payload": dict(extra or {})})
 
 
 def _log_logging_failure(event: str, exc: Exception, *, extra: Mapping[str, Any] | None = None) -> None:

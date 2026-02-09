@@ -2,6 +2,7 @@
 # tests/retriever/test_security_hooks.py
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -25,9 +26,9 @@ def _stub_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("timmy_kb.cli.retriever.fetch_candidates", lambda *args, **kwargs: [], raising=True)
 
 
-def _base_params(query: str = "hello") -> QueryParams:
+def _base_params(tmp_path: Path, query: str = "hello") -> QueryParams:
     return QueryParams(
-        db_path=None,
+        db_path=tmp_path / "kb.sqlite",
         slug=DUMMY_SLUG,
         scope="kb",
         query=query,
@@ -35,8 +36,8 @@ def _base_params(query: str = "hello") -> QueryParams:
     )
 
 
-def test_search_denied_by_authorizer(monkeypatch: pytest.MonkeyPatch) -> None:
-    params = _base_params()
+def test_search_denied_by_authorizer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    params = _base_params(tmp_path)
     client = _DummyEmbeddingsClient([[0.1, 0.2, 0.3]])
 
     def _deny_authorizer(p: QueryParams) -> None:
@@ -46,11 +47,11 @@ def test_search_denied_by_authorizer(monkeypatch: pytest.MonkeyPatch) -> None:
         search(params, client, authorizer=_deny_authorizer)
 
 
-def test_search_throttle_blocks_after_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_search_throttle_blocks_after_limit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     reset_token_buckets()
     monkeypatch.setenv("TIMMY_USER_EMAIL", "user@example.com")
 
-    params = _base_params()
+    params = _base_params(tmp_path)
     client = _DummyEmbeddingsClient([[0.1, 0.2, 0.3]])
 
     def _limited_throttle(p: QueryParams) -> None:

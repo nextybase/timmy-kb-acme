@@ -13,14 +13,14 @@ from timmy_kb.cli.retriever import (
 )
 
 
-def test_with_config_candidate_limit_precedence() -> None:
+def test_with_config_candidate_limit_precedence(kb_sqlite_path: Path) -> None:
     # default params -> prende dal config
-    p = QueryParams(db_path=None, slug="p", scope="s", query="q")
+    p = QueryParams(db_path=kb_sqlite_path, slug="p", scope="s", query="q")
     cfg = {"retriever": {"throttle": {"candidate_limit": 2000}}}
     out = with_config_candidate_limit(p, cfg)
     assert out.candidate_limit == 2000
     # valore esplicito diverso dal default -> non sovrascrivere
-    p2 = QueryParams(db_path=None, slug="p", scope="s", query="q", candidate_limit=1234)
+    p2 = QueryParams(db_path=kb_sqlite_path, slug="p", scope="s", query="q", candidate_limit=1234)
     out2 = with_config_candidate_limit(p2, cfg)
     assert out2.candidate_limit == 1234
 
@@ -33,8 +33,8 @@ def test_choose_limit_for_budget_mapping() -> None:
     assert choose_limit_for_budget(800) == 8000
 
 
-def test_with_config_or_budget_auto() -> None:
-    p = QueryParams(db_path=None, slug="p", scope="s", query="q")
+def test_with_config_or_budget_auto(kb_sqlite_path: Path) -> None:
+    p = QueryParams(db_path=kb_sqlite_path, slug="p", scope="s", query="q")
     cfg = {
         "retriever": {
             "auto_by_budget": True,
@@ -62,7 +62,7 @@ def test_choose_limit_for_budget_is_monotonic_for_positive_budgets() -> None:
     ), "choose_limit_for_budget deve essere non decrescente per budget > 0"
 
 
-def _typed_params(**over: Any) -> QueryParams:
+def _typed_params(db_path: Path | None = None, **over: Any) -> QueryParams:
     """
     Costruisce QueryParams forzando i tipi corretti per evitare warning Pylance:
     - db_path: Path|None
@@ -71,7 +71,7 @@ def _typed_params(**over: Any) -> QueryParams:
     Ignora eventuali chiavi extra.
     """
     base: Dict[str, Any] = dict(
-        db_path=None,
+        db_path=db_path,
         slug="p",
         scope="s",
         query="q",
@@ -102,9 +102,9 @@ def _typed_params(**over: Any) -> QueryParams:
     )
 
 
-def test_with_config_or_budget_explicit_param_wins() -> None:
+def test_with_config_or_budget_explicit_param_wins(kb_sqlite_path: Path) -> None:
     # esplicito diverso dal default → deve prevalere su auto/config
-    p = _typed_params(candidate_limit=1234)
+    p = _typed_params(db_path=kb_sqlite_path, candidate_limit=1234)
     cfg = {
         "retriever": {
             "auto_by_budget": True,
@@ -115,9 +115,9 @@ def test_with_config_or_budget_explicit_param_wins() -> None:
     assert out.candidate_limit == 1234
 
 
-def test_with_config_or_budget_config_value() -> None:
+def test_with_config_or_budget_config_value(kb_sqlite_path: Path) -> None:
     # default → prende il valore da config (anche se stringa)
-    p = _typed_params()
+    p = _typed_params(db_path=kb_sqlite_path)
     cfg = {"retriever": {"throttle": {"candidate_limit": "6000"}}}
     out = with_config_or_budget(p, cfg)
     assert out.candidate_limit == 6000

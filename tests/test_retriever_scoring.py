@@ -2,6 +2,7 @@
 # tests/test_retriever_scoring.py
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Sequence
 
 import numpy as np
@@ -32,7 +33,7 @@ def _cand(content: str, emb: list[float], meta: dict | None = None) -> dict:
     return {"content": content, "embedding": emb, "meta": meta or {}}
 
 
-def test_search_scoring_and_tie_break_deterministic(monkeypatch) -> None:
+def test_search_scoring_and_tie_break_deterministic(monkeypatch, kb_sqlite_path: Path) -> None:
     # query embedding punta (1,0)
     embeddings = EmbedOne([1.0, 0.0])
 
@@ -47,7 +48,7 @@ def test_search_scoring_and_tie_break_deterministic(monkeypatch) -> None:
 
     # k >= n → ordina tutto; atteso: A, B, C
     params_all = QueryParams(
-        db_path=None,
+        db_path=kb_sqlite_path,
         slug=DUMMY_SLUG,
         scope="kb",
         query="q",
@@ -59,7 +60,7 @@ def test_search_scoring_and_tie_break_deterministic(monkeypatch) -> None:
 
     # k < n (branch nlargest) → atteso: A, B
     params_top2 = QueryParams(
-        db_path=None,
+        db_path=kb_sqlite_path,
         slug=DUMMY_SLUG,
         scope="kb",
         query="q",
@@ -70,7 +71,7 @@ def test_search_scoring_and_tie_break_deterministic(monkeypatch) -> None:
     assert [x["content"] for x in out_top2] == ["A", "B"]
 
 
-def test_search_accepts_nested_numpy_embedding(monkeypatch) -> None:
+def test_search_accepts_nested_numpy_embedding(monkeypatch, kb_sqlite_path: Path) -> None:
     embeddings = EmbedOne([1.0, 0.0, 0.0])
     # embedding annidato: [np.array([...])]
     nested = [np.array([1.0, 0.0, 0.0], dtype=float)]
@@ -82,7 +83,7 @@ def test_search_accepts_nested_numpy_embedding(monkeypatch) -> None:
     monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: cands)
 
     params = QueryParams(
-        db_path=None,
+        db_path=kb_sqlite_path,
         slug=DUMMY_SLUG,
         scope="kb",
         query="q",
@@ -93,7 +94,7 @@ def test_search_accepts_nested_numpy_embedding(monkeypatch) -> None:
     assert [x["content"] for x in out] == ["nested-ok"]
 
 
-def test_search_handles_missing_embeddings_field(monkeypatch) -> None:
+def test_search_handles_missing_embeddings_field(monkeypatch, kb_sqlite_path: Path) -> None:
     embeddings = EmbedOne([1.0, 0.0])
     cands = [
         {"content": "no-emb", "meta": {}},  # embedding mancante → trattato come []
@@ -103,7 +104,7 @@ def test_search_handles_missing_embeddings_field(monkeypatch) -> None:
     monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: cands)
 
     params = QueryParams(
-        db_path=None,
+        db_path=kb_sqlite_path,
         slug=DUMMY_SLUG,
         scope="kb",
         query="q",
@@ -115,7 +116,7 @@ def test_search_handles_missing_embeddings_field(monkeypatch) -> None:
     assert [x["content"] for x in out] == ["ok", "no-emb"]
 
 
-def test_search_large_vectors_preserve_order(monkeypatch) -> None:
+def test_search_large_vectors_preserve_order(monkeypatch, kb_sqlite_path: Path) -> None:
     size = 20000
     base_vec = [float((i % 17) - 8) for i in range(size)]
     embeddings = EmbedOne(base_vec)
@@ -132,7 +133,7 @@ def test_search_large_vectors_preserve_order(monkeypatch) -> None:
     monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: cands)
 
     params = QueryParams(
-        db_path=None,
+        db_path=kb_sqlite_path,
         slug=DUMMY_SLUG,
         scope="kb",
         query="q",

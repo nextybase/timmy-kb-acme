@@ -464,3 +464,12 @@ def build_vocab_db(base: Path, tags: Iterable[dict[str, Any]]) -> Path:
                 )
         conn.commit()
     return db_path
+
+
+@pytest.fixture
+def kb_sqlite_path(tmp_path: Path) -> Path:
+    """Percorso SQLite canonico per i test retriever con db_path obbligatorio."""
+    path = tmp_path / "kb.sqlite"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch()
+    return path
