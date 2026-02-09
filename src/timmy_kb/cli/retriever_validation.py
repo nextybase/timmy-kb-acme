@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 from pipeline.exceptions import RetrieverError
 from pipeline.logging_utils import get_structured_logger
@@ -16,9 +16,8 @@ class QueryParams:
     """Parametri strutturati per la ricerca.
 
     Note:
-    - `db_path`: percorso ABSOLUTO del DB SQLite; deve essere fornito esplicitamente e
-      derivato da `WorkspaceLayout`/`ClientContext` (tipicamente `<workspace>/semantic/kb.sqlite`
-      via `KbStore`). Col valore `None` non si collegherà a nessun DB e la chiamata fallirà.
+    - `db_path`: percorso ABSOLUTO del DB SQLite (`<workspace>/semantic/kb.sqlite`)
+      e obbligatorio. Gli override sono permessi solo in TEST_MODE tramite `KbStore`.
     - `slug`: progetto/spazio logico da cui recuperare i candidati.
     - `scope`: sotto-spazio o ambito (es. sezione o agente).
     - `query`: testo naturale da embeddare e confrontare con i candidati.
@@ -26,7 +25,7 @@ class QueryParams:
     - `candidate_limit`: massimo numero di candidati da caricare dal DB.
     """
 
-    db_path: Optional[Path]
+    db_path: Path
     slug: str
     scope: str
     query: str
@@ -56,8 +55,8 @@ def _validate_params(params: QueryParams) -> None:
 
     Range candidato: 500-20000 inclusi.
     """
-    if params.db_path is None:
-        raise RetrieverError("db_path mancante")
+    if not params.db_path.is_absolute():
+        raise RetrieverError("db_path deve essere assoluto")
     if not params.slug.strip():
         raise RetrieverError("slug vuoto")
     if not params.scope.strip():

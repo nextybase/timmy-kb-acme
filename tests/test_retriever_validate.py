@@ -8,7 +8,7 @@ from typing import Sequence
 import pytest
 
 import timmy_kb.cli.retriever as r
-from tests.conftest import DUMMY_SLUG, kb_sqlite_path
+from tests.conftest import DUMMY_SLUG
 from timmy_kb.cli.retriever import QueryParams, RetrieverError, search  # <- usa la stessa classe del modulo sotto test
 
 
@@ -66,7 +66,7 @@ def test_validate_params_empty_slug(kb_sqlite_path: Path) -> None:
         search(_params(kb_sqlite_path, slug="   "), DummyEmbeddings())
 
 
-def test_validate_params_empty_scope() -> None:
+def test_validate_params_empty_scope(kb_sqlite_path: Path) -> None:
     with pytest.raises(RetrieverError, match="scope"):
         search(_params(kb_sqlite_path, scope=""), DummyEmbeddings())
 

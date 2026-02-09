@@ -62,10 +62,10 @@ def test_choose_limit_for_budget_is_monotonic_for_positive_budgets() -> None:
     ), "choose_limit_for_budget deve essere non decrescente per budget > 0"
 
 
-def _typed_params(db_path: Path | None = None, **over: Any) -> QueryParams:
+def _typed_params(db_path: Path, **over: Any) -> QueryParams:
     """
     Costruisce QueryParams forzando i tipi corretti per evitare warning Pylance:
-    - db_path: Path|None
+    - db_path: Path
     - slug/scope/query: str
     - k/candidate_limit: int
     Ignora eventuali chiavi extra.

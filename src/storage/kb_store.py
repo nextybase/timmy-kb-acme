@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from pipeline.beta_flags import is_test_mode
 from pipeline.exceptions import ConfigError
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve
 
@@ -63,10 +64,19 @@ class KbStore:
           validato con `ensure_within_and_resolve`.
         - Se non c'è né override né repo_root_dir: alleva un errore (risoluzione globale implicita rimossa).
         """
+        test_mode = is_test_mode()
         if self.db_path_override is not None:
-            p = Path(self.db_path_override)
-            if p.is_absolute():
-                resolved = p.resolve()
+            override_path = Path(self.db_path_override)
+            if not test_mode:
+                payload_path = str(override_path.resolve()) if override_path.is_absolute() else str(override_path)
+                raise ConfigError(
+                    "KbStore: db_path_override consentito solo in TEST_MODE per il debugging.",
+                    code="kb.db_path.override_forbidden",
+                    slug=self.slug,
+                    file_path=payload_path,
+                )
+            if override_path.is_absolute():
+                resolved = override_path.resolve()
                 if self.repo_root_dir is None:
                     raise ConfigError(
                         "KbStore: db_path assoluto richiede workspace root per validare il perimetro.",
@@ -88,7 +98,7 @@ class KbStore:
             if self.repo_root_dir is not None:
                 repo_root_dir = Path(self.repo_root_dir).resolve()
                 perimeter_root = repo_root_dir
-                candidate = repo_root_dir / p
+                candidate = repo_root_dir / override_path
                 return ensure_within_and_resolve(perimeter_root, candidate)
             raise ConfigError("KbStore: db_path relativo senza repo_root_dir non è supportato.")
 
@@ -96,6 +106,19 @@ class KbStore:
             repo_root_dir = Path(self.repo_root_dir).resolve()
             perimeter_root = repo_root_dir
             candidate = repo_root_dir / "semantic" / "kb.sqlite"
-            return ensure_within_and_resolve(perimeter_root, candidate)
+            resolved = ensure_within_and_resolve(perimeter_root, candidate)
+            if not test_mode:
+                self._assert_canonical_path(resolved, repo_root_dir)
+            return resolved
 
         raise ConfigError("KbStore richiede slug/repo_root_dir espliciti; risoluzione globale implicita rimossa.")
+
+    def _assert_canonical_path(self, resolved: Path, repo_root_dir: Path) -> None:
+        canonical_semantic = (repo_root_dir / "semantic").resolve()
+        if resolved.name != "kb.sqlite" or resolved.parent != canonical_semantic:
+            raise ConfigError(
+                "KbStore: runtime supporta solo <workspace>/semantic/kb.sqlite.",
+                code="kb.db_path.non_canonical",
+                slug=self.slug,
+                file_path=str(resolved),
+            )

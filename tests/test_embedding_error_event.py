@@ -46,6 +46,10 @@ def test_embedding_error_is_logged_and_fall_back(tmp_path: Path, caplog: pytest.
     (book / "a.md").write_text("# A\nBody", encoding="utf-8")
     _prepare_workspace(base, slug="dummy")
 
+    import os
+
+    os.environ["TEST_MODE"] = "1"
+
     ctx = type("C", (), dict(book_dir=book, repo_root_dir=base, slug="dummy"))()
     logger = get_structured_logger("tests.index.emb_error", context=ctx)
 

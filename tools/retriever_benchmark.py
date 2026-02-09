@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, List
 
+from pipeline.beta_flags import is_test_mode
 from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.context import ClientContext
 from pipeline.path_utils import ensure_within_and_resolve
@@ -92,6 +93,9 @@ def main() -> None:
     ap.add_argument("--db", type=Path, default=None, help="Percorso DB (opzionale)")
     ap.add_argument("--out", type=Path, default=Path("bench.json"), help="File risultati JSON")
     args = ap.parse_args()
+
+    if args.db is not None and not is_test_mode():
+        ap.error("Override --db consentito solo con TEST_MODE attivo (override bloccato in runtime)")
 
     queries = _parse_queries(args.queries)
     candidates_list = [int(x.strip()) for x in str(args.candidates).split(",") if x.strip()]
