@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+from pathlib import Path
 from typing import Callable
 
 import pytest
@@ -12,6 +13,7 @@ from ai.assistant_registry import (
     resolve_prototimmy_config,
 )
 from pipeline.exceptions import ConfigError
+from pipeline.settings import Settings
 
 
 class _DummyCtx:
@@ -33,6 +35,10 @@ def _fake_env_factory(mapping: dict[str, str]) -> Callable[[str, bool], str]:
     return _fake_env
 
 
+def _make_settings(payload: dict[str, object]) -> Settings:
+    return Settings(config_path=Path("config/config.yaml"), data=payload)
+
+
 def test_resolve_vision_config_prefers_env(monkeypatch):
     ctx = _DummyCtx(settings={"ai": {"vision": {"assistant_id_env": "VISION_OVERRIDE_ENV", "model": "config-model"}}})
 
@@ -48,7 +54,7 @@ def test_resolve_vision_config_prefers_env(monkeypatch):
 
 
 def test_resolve_prototimmy_config_missing_assistant_id_raises(monkeypatch):
-    settings = {"ai": {"prototimmy": {"model": "proto-model"}}}
+    settings = _make_settings({"ai": {"prototimmy": {"model": "proto-model"}}})
     monkeypatch.setattr("pipeline.env_utils.get_env_var", _missing_env)
     with pytest.raises(ConfigError) as exc:
         resolve_prototimmy_config(settings)
@@ -56,7 +62,7 @@ def test_resolve_prototimmy_config_missing_assistant_id_raises(monkeypatch):
 
 
 def test_resolve_kgraph_config_requires_model(monkeypatch):
-    settings = {"ai": {"kgraph": {"model": "kgraph-model"}}}
+    settings = _make_settings({"ai": {"kgraph": {"model": "kgraph-model"}}})
 
     def fake_env(name: str, required: bool = False) -> str:
         if name == "KGRAPH_ASSISTANT_ID":
@@ -71,10 +77,12 @@ def test_resolve_kgraph_config_requires_model(monkeypatch):
 
 
 def test_resolve_kgraph_config_prefers_nested_model(monkeypatch):
-    settings = {
-        "ai": {"kgraph": {"model": "nested-model", "assistant_id_env": "KGRAPH_ASSISTANT_ID"}},
-        "ai.kgraph.model": "flat-model",
-    }
+    settings = _make_settings(
+        {
+            "ai": {"kgraph": {"model": "nested-model", "assistant_id_env": "KGRAPH_ASSISTANT_ID"}},
+            "ai.kgraph.model": "flat-model",
+        }
+    )
 
     def fake_env(name: str, required: bool = False) -> str:
         if name == "KGRAPH_ASSISTANT_ID":
@@ -103,7 +111,7 @@ def test_vision_assistant_env_payload_over_default():
 
 
 def test_ai_section_assistant_env_payload_precedence():
-    settings = {"ai": {"prototimmy": {"assistant_id_env": "PROTO_PAYLOAD_ENV"}}}
+    settings = _make_settings({"ai": {"prototimmy": {"assistant_id_env": "PROTO_PAYLOAD_ENV"}}})
     env_name = config._resolve_assistant_env_generic(
         settings,
         "ai.prototimmy.assistant_id_env",
@@ -149,17 +157,19 @@ def test_resolvers_missing_env_raise(monkeypatch, resolver, env_name, resolver_c
         "OCP_EXECUTOR_ASSISTANT_ID",
         "AUDIT_ASSISTANT_ID",
         "OBNEXT_ASSISTANT_ID",
+        "KGRAPH_ASSISTANT_ID",
     }:
         if env_name == "OBNEXT_ASSISTANT_ID":
-            ctx.settings = {"ai": {"vision": {"assistant_id_env": env_name, "model": "dummy-model"}}}
+            ctx.settings = _make_settings({"ai": {"vision": {"assistant_id_env": env_name, "model": "dummy-model"}}})
         else:
             section = {
                 "PROTOTIMMY_ID": "prototimmy",
                 "PLANNER_ASSISTANT_ID": "planner_assistant",
                 "OCP_EXECUTOR_ASSISTANT_ID": "ocp_executor",
                 "AUDIT_ASSISTANT_ID": "audit_assistant",
+                "KGRAPH_ASSISTANT_ID": "kgraph",
             }[env_name]
-            ctx.settings = {"ai": {section: {"model": "dummy-model", "assistant_id_env": env_name}}}
+            ctx.settings = _make_settings({"ai": {section: {"model": "dummy-model", "assistant_id_env": env_name}}})
     with pytest.raises(ConfigError) as exc:
         resolver_call(ctx)
     assert env_name in str(exc.value)
@@ -174,7 +184,7 @@ def test_resolvers_missing_env_raise(monkeypatch, resolver, env_name, resolver_c
     ),
 )
 def test_non_assistant_resolvers_require_model(monkeypatch, resolver, model_path, env_name):
-    settings = {"ai": {model_path.split(".")[1]: {"model": "", "assistant_id_env": env_name}}}
+    settings = _make_settings({"ai": {model_path.split(".")[1]: {"model": "", "assistant_id_env": env_name}}})
     fake_env = _fake_env_factory({env_name: f"{env_name.lower()}-assistant"})
     monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
     with pytest.raises(ConfigError) as exc:
@@ -185,7 +195,7 @@ def test_non_assistant_resolvers_require_model(monkeypatch, resolver, model_path
 def test_resolve_audit_assistant_success(monkeypatch):
     fake_env = _fake_env_factory({"AUDIT_ASSISTANT_ID": "audit-assistant"})
     monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
-    result = resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": "audit-model"}}})
+    result = resolve_audit_assistant_config(_make_settings({"ai": {"audit_assistant": {"model": "audit-model"}}}))
     assert result.assistant_id == "audit-assistant"
     assert result.model == "audit-model"
     assert result.use_kb is False
@@ -194,7 +204,7 @@ def test_resolve_audit_assistant_success(monkeypatch):
 def test_resolve_audit_assistant_missing_env(monkeypatch):
     monkeypatch.setattr("pipeline.env_utils.get_env_var", _missing_env)
     with pytest.raises(ConfigError) as exc:
-        resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": "audit-model"}}})
+        resolve_audit_assistant_config(_make_settings({"ai": {"audit_assistant": {"model": "audit-model"}}}))
     assert "AUDIT_ASSISTANT_ID" in str(exc.value)
 
 
@@ -202,7 +212,7 @@ def test_resolve_audit_assistant_missing_model(monkeypatch):
     fake_env = _fake_env_factory({"AUDIT_ASSISTANT_ID": "audit-assistant"})
     monkeypatch.setattr("pipeline.env_utils.get_env_var", fake_env)
     with pytest.raises(ConfigError) as exc:
-        resolve_audit_assistant_config({"ai": {"audit_assistant": {"model": ""}}})
+        resolve_audit_assistant_config(_make_settings({"ai": {"audit_assistant": {"model": ""}}}))
     assert "ai.audit_assistant.model" in str(exc.value)
 
 

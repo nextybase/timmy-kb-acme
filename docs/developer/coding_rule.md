@@ -51,7 +51,7 @@ model = get_vision_model()  # passa sempre da Settings.load (SSoT)
 
 ---
 
-## 1ter) Dummy Mode (Smoke E2E) — Regole Vincolanti
+## 1ter) Dummy Mode (Smoke E2E) -- Regole Vincolanti
 
 La **Dummy Mode** esiste esclusivamente come:
 
@@ -85,7 +85,7 @@ Ogni divergenza è ammessa **solo** se:
 
 ### Anti-pattern (considerati errori in Beta)
 
-- Usare il Dummy per “far funzionare comunque” la pipeline.
+- Usare il Dummy per "far funzionare comunque" la pipeline.
 - Accettare input o firme legacy se non più usate nel core.
 - Introdurre fallback difensivi non documentati.
 
