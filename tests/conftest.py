@@ -49,19 +49,9 @@ _ORIG_WRITE_SUMMARY_AND_README = _frontmatter_service.write_summary_and_readme
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-
-    arch_files = {
-        "test_architecture_paths.py",
-        "test_imports.py",
-        "test_preflight_import_safety.py",
-    }
-    contract_files = {
-        "test_chunk_record_contract.py",
-    }
-    tools_files = {
-        "test_gen_dummy_kb_import_safety.py",
-        "test_tools_check.py",
-    }
+    # Special-case list kept intentionally small: prefer path-based and prefix-based marking
+    # to reduce entropy and avoid stale rules.
+    arch_files = {"test_imports.py"}
     for item in items:
         nodeid = getattr(item, "nodeid", "") or ""
         nodeid_norm = nodeid.replace("\\", "/")
@@ -73,11 +63,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         elif filename in arch_files or filename.startswith("test_architecture_"):
             item.add_marker(pytest.mark.arch)
 
-        if (
-            nodeid_norm.startswith("tests/contract/")
-            or filename.startswith("test_contract_")
-            or filename in contract_files
-        ):
+        if nodeid_norm.startswith("tests/contract/") or filename.startswith("test_contract_"):
             item.add_marker(pytest.mark.contract)
 
         if nodeid_norm.startswith("tests/ui/") or filename.startswith("test_ui_"):
@@ -98,7 +84,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         if nodeid_norm.startswith("tests/scripts/"):
             item.add_marker(pytest.mark.scripts)
 
-        if nodeid_norm.startswith("tests/tools/") or filename.startswith("test_tools_") or filename in tools_files:
+        if nodeid_norm.startswith("tests/tools/") or filename.startswith("test_tools_"):
             item.add_marker(pytest.mark.tools)
 
         if nodeid_norm.startswith("tests/e2e/"):

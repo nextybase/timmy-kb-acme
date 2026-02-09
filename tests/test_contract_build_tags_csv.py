@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# tests/test_unit_build_tags_csv.py
+# tests/test_contract_build_tags_csv.py
 import csv
 import logging
 import sqlite3
 from pathlib import Path
 
 import pytest
+
+pytestmark = [pytest.mark.contract, pytest.mark.pipeline]
 
 from pipeline.exceptions import PathTraversalError
 from semantic.api import build_tags_csv

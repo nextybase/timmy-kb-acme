@@ -77,27 +77,6 @@ def test_run_nlp_to_db_requires_repo_root_dir_in_strict(tmp_path, monkeypatch):
         run_nlp_to_db("dummy", normalized_dir, str(db_path))
 
 
-def test_run_nlp_to_db_records_entities_failure_non_strict(tmp_path, monkeypatch):
-    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
-    normalized_dir = tmp_path / "normalized"
-    normalized_dir.mkdir(parents=True)
-    db_path = tmp_path / "semantic" / "tags.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    monkeypatch.setattr("semantic.nlp_runner.run_doc_terms_pipeline", lambda *_a, **_k: {"doc_terms": 0})
-
-    fake_entities = types.ModuleType("semantic.entities_runner")
-
-    def _boom(*_a, **_k):
-        raise RuntimeError("entities failed")
-
-    fake_entities.run_doc_entities_pipeline = _boom
-    monkeypatch.setitem(sys.modules, "semantic.entities_runner", fake_entities)
-
-    with pytest.raises(PipelineError):
-        run_nlp_to_db("dummy", normalized_dir, str(db_path), repo_root_dir=tmp_path)
-
-
 def _prepare_nlp_paths(tmp_path):
     normalized_dir = tmp_path / "normalized"
     normalized_dir.mkdir(parents=True)

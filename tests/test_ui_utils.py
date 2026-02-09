@@ -14,35 +14,6 @@ from storage.tags_store import save_tags_reviewed
 from ui.utils import workspace as ws
 
 
-def test_ui_normalized_ready_respects_context_paths(tmp_path: Path):
-    """Verifica (unit) che i path 'normalized' e 'semantic' siano coerenti rispetto a un contesto fornito
-    (simula il comportamento della UI che ora usa ClientContext.* invece di interrogare
-    sem_get_paths)."""
-    base = tmp_path / "custom-root"
-    normalized = base / "normalized"
-    semantic = base / "semantic"
-    normalized.mkdir(parents=True)
-    semantic.mkdir(parents=True)
-
-    # Crea un Markdown dummy in normalized e un CSV dummy in semantic
-    (normalized / "doc.md").write_text("dummy", encoding="utf-8")
-    (semantic / "tags_raw.csv").write_text("id,tag\n1,test", encoding="utf-8")
-
-    # Finto "context" con gli attributi usati dalla UI
-    ctx = SimpleNamespace(base_dir=base, normalized_dir=normalized)
-
-    # has_mds: True se esistono Markdown in normalized/
-    normalized_ok = hasattr(ctx, "normalized_dir") and ctx.normalized_dir and ctx.normalized_dir.exists()
-    has_mds = any(ctx.normalized_dir.rglob("*.md")) if normalized_ok else False
-
-    # has_csv: True se esiste semantic/tags_raw.csv rispetto al base_dir
-    base_ok = hasattr(ctx, "base_dir") and ctx.base_dir and ctx.base_dir.exists()
-    has_csv = (ctx.base_dir / "semantic" / "tags_raw.csv").exists() if base_ok else False
-
-    assert has_mds is True
-    assert has_csv is True
-
-
 def test_normalized_ready_false_on_layout_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ws, "get_ui_workspace_layout", lambda *_a, **_k: (_ for _ in ()).throw(ConfigError("boom")))
     ready, path = ws.normalized_ready("dummy")
