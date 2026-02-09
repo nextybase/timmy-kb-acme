@@ -12,7 +12,7 @@ Important disambiguation:
 the system-level Epistemic Envelope.
 
 ## Turn-Based Protocol & Single-Turn Execution
-- Planner → OCP → Codex → OCP → Planner is the only valid sequence; each prompt must contain exactly one action and never bundles multiple turns.
+- Planner -> OCP -> Codex -> OCP -> Planner is the only valid sequence; each prompt must contain exactly one action and never bundles multiple turns.
 - OCP issues prompt numbers in order; after Codex replies, the cycle pauses until the next OCP instruction (no autopilot beyond the current prompt).
 - Prompts 0/0a..0x remain analytical/read-only, prompts 1..N are operational micro-PRs, and prompt N+1 finalizes the chain with full QA.
 - The Onboarding Task Codex sets this protocol before any edits can happen, so its acknowledgement is mandatory in Prompt 0.
@@ -21,7 +21,7 @@ the system-level Epistemic Envelope.
 
 ## Language Policy for Codex
 - All codified documents and templates stay in English to preserve the SSoT grammar.
-- Default: Codex responses are in Italian. Exception: when the OCP is in control mode, OCP ↔ Codex exchanges are English-only; Timmy/ProtoTimmy ↔ User remains Italian-only. Treat this as the only authorized override.
+- Default: Codex responses are in Italian. Exception: when the OCP is in control mode, OCP <-> Codex exchanges are English-only; Timmy/ProtoTimmy <-> User remains Italian-only. Treat this as the only authorized override.
 - This policy covers narrative reports, QA summaries, and communication with Planner/OCP unless the control-mode exception is invoked.
 
 ## Prompt Template Requirements
@@ -97,8 +97,8 @@ STOP RULE: <fermo dopo la risposta>
 - Evidence Gate aggiuntivo: verificare che il diff riportato sia davvero un unified diff (marker presenti) e che `git status --porcelain=v1` compaia in ogni micro-PR operativo.
 
 #### No-ambiguity addendum (MUST)
-- Do NOT write “output omitted”, “same as above”, “identical log”, or any similar placeholder.
-- Include the diff blocks for every touched file. If the diff is large, split by file, but each file must still include full unified diff headers (`diff --git` …).
+- Do NOT write "output omitted", "same as above", "identical log", or any similar placeholder.
+- Include the diff blocks for every touched file. If the diff is large, split by file, but each file must still include full unified diff headers (`diff --git` ...).
 - If the prompt requests logs (e.g., pre-commit / pytest), include enough of the terminal output to show PASS plus the final summary + exit status (do not paraphrase only).
 
 #### Self-check (MUST)
@@ -107,7 +107,7 @@ Before returning, verify all items are present and ordered:
 2) unified diff markers
 3) report section
 4) QA section + exit status
-If any item is missing → return a corrected full response (do not ask OCP for clarification on formatting).
+If any item is missing -> return a corrected full response (do not ask OCP for clarification on formatting).
 
 ### Template: Prompt N+1
 - Purpose: conclude the chain via final QA and a closing narrative.
@@ -144,8 +144,8 @@ Tests: <new/updated; e.g., python tools/test_runner.py fast -- -k ...>
 QA: isort  black  ruff --fix  mypy  pre-commit run --all-files; pre-commit run --hook-stage pre-push --all-files
 Docs notes: <if you touch X, update Y/Z>
 
-## Work Order Envelope (Agent → Micro-agent)
-WORK ORDER ENVELOPE (Agent → Micro-agent)
+## Work Order Envelope (Agent -> Micro-agent)
+WORK ORDER ENVELOPE (Agent -> Micro-agent)
 Version: 1.0
 Rule: Micro-agent must NOT decide "what". It only executes "how" under a strict contract.
 Use ASCII quotes (" ") in contracts and templates unless non-ASCII characters are semantically required.
@@ -225,7 +225,7 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 ## Active Rules for Operational Prompts
 - Active Rules: path safety ON, micro-PR discipline, zero side effects, documentation updates when functionality changes, intermediate QA (`python tools/test_runner.py fast`; ARCH only if invariants/contract/manifest change), final QA (`pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files`, fallback: `python tools/test_runner.py full`), and the Language Policy for Italian conversations.
 - After Prompt 0/1, OCP issues one prompt at a time, Codex responds with diff/report/QA, OCP evaluates, and only then emits the next prompt; never stack multiple OCP prompts without a Codex reply.
-- Include this memo at the start of every operational response to reinforce the OCP⇄Codex turn cycle and remind that each step is a narrow micro-PR with mandatory intermediate QA.
+- Include this memo at the start of every operational response to reinforce the OCP<->Codex turn cycle and remind that each step is a narrow micro-PR with mandatory intermediate QA.
 - Micro-PR + QA: apply focused changes, run `python tools/test_runner.py fast` before moving on, document tests and retries, and perform the full final QA run plus `pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`) at the concluding prompt.
 - Escalation: after two failed correction attempts during intermediate or final QA, ask the OCP/user for instructions before proceeding.
 
@@ -254,7 +254,7 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 - Present the diff, request human/OCP confirmation, and do not perform commit before full validation.
 - The closing Prompt Chain commit must state that the chain is sealed, summarize QA/tests, and notify the OCP of next steps or outstanding issues.
 
-## Turn-Based Prompt Chain (OCP→Codex Cycle)
+## Turn-Based Prompt Chain (OCP->Codex Cycle)
 - **SSoT:** refer to `system/specs/promptchain_spec.md` for governance and the operational contract.
 - The OrchestratoreChainPrompt (OCP) issues numbered prompts (Prompt 0, 1, 2, ...); each stays within a fixed scope and corresponds to a micro-PR under the same Codex rules (HiTL, AGENT-first, QA, path safety, atomic I/O).
 - The OCP never edits the repository; it converts Timmy/ProtoTimmy's goals into formal prompts and drives Codex one step at a time. Codex must not anticipate future steps, generate additional prompts, or expand the defined scope.
@@ -270,7 +270,7 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 - **Goal:** verify that the Prompt Chain respects turn-taking, memo recognition, QA rules, escalation limits, the Italian Language Policy, and the Pre-Check validation without editing the repository.
 - **Structure:** S0: OCP issues a minimal prompt; Codex confirms that the Active Rules memo is recognized. S1: Codex describes how it would run the Pre-Check validation on a mock diff (no files created). S2: OCP simulates an operational prompt; Codex replies with a conceptual micro-PR description. S3: Codex articulates the intermediate QA (`python tools/test_runner.py fast`) it would run and explains how it would interpret outcomes (without executing anything). S4: Codex summarizes the escalation/retry plan, final QA (`pre-commit run --all-files` + `pre-commit run --hook-stage pre-push --all-files`, fallback: `python tools/test_runner.py full`), and reconfirms Italian-language compliance.
 - **Rules:** no actual patches, no disk writes, no QA commands executed; perform the entire chain conceptually as a fast diagnostic after modifying Prompt Chain metadata.
-- **Use cases:** diagnose governance issues, validate Prompt Chain updates, and provide HiTL evidence that the OCP→Codex cycle, QA policies, Pre-Check validation, and Italian-language policy remain synchronized.
+- **Use cases:** diagnose governance issues, validate Prompt Chain updates, and provide HiTL evidence that the OCP->Codex cycle, QA policies, Pre-Check validation, and Italian-language policy remain synchronized.
 
 # Semantics & tags.db
 

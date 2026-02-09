@@ -1,4 +1,4 @@
-# Prompt Chain — CI Worker Contract (Codex)
+# Prompt Chain -- CI Worker Contract (Codex)
 
 This document is the Single Source of Truth for how Codex must respond during a Prompt Chain.
 

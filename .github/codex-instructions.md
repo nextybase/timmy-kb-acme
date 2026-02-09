@@ -19,16 +19,16 @@
 - SSoT principles mean that configuration/config overrides belong in the versioned files (`config/config.yaml`, `.env.example`) and secrets stay out of the repository.
 
 ## SECTION 4 - Prompt Chain Governance
-- The agent interaction follows the OCP⇄Codex turn-based model described in `system/specs/promptchain_spec.md`: Onboarding → meta analysis → operational prompts → final QA → Prompt N+1 report.
+- The agent interaction follows the OCP<->Codex turn-based model described in `system/specs/promptchain_spec.md`: Onboarding -> meta analysis -> operational prompts -> final QA -> Prompt N+1 report.
 - Always respond to one prompt at a time, never invent future prompts, and leave the channel after each answer awaiting the next instruction.
 - After completing Prompt 0, prepend the memo "Active rules: path-safety ON, micro-PR, zero side-effects, update docs if needed." to the start of every subsequent prompt response, keeping the active rule reminder visible.
 - Each operational prompt is treated as a micro-PR: produce one focused diff, document tests run, state QA status, and summarize the impact plus next steps in the final reply.
 
 ### SECTION 4.1 - Output Contract (MUST, zero ambiguity)
-For Prompt 1..N and Prompt N+1, the response must follow the **canonical Evidence Pack** order defined in `.codex/PROMPTS.md` (“EVIDENCE FORMAT (MUST)”) and reinforced by `system/specs/promptchain_spec.md` (Evidence Gate).
+For Prompt 1..N and Prompt N+1, the response must follow the **canonical Evidence Pack** order defined in `.codex/PROMPTS.md` ("EVIDENCE FORMAT (MUST)") and reinforced by `system/specs/promptchain_spec.md` (Evidence Gate).
 
 Hard rules:
-- No “omitted for brevity”, no partial diffs, no “identical to previous log”.
+- No "omitted for brevity", no partial diffs, no "identical to previous log".
 - The diff MUST be a real unified diff with `diff --git`, `index`, `---/+++`, `@@`.
 - If you touched multiple files, include all their diff blocks.
 - If any required artifact is missing, assume the Evidence Gate will BLOCK: fix the response format proactively (do not ask the OCP how to format it).

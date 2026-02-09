@@ -12,7 +12,7 @@
 > - Repo root `AGENTS.md` enforces the same contract for Codex tooling.
 
 ## 1. Introduction
-- **Purpose:** keep the planning phase (Planner → OCP) and the operational work (Codex) strictly separated while ensuring every step remains controlled, traceable, and compliant with the micro-PR discipline.
+- **Purpose:** keep the planning phase (Planner -> OCP) and the operational work (Codex) strictly separated while ensuring every step remains controlled, traceable, and compliant with the micro-PR discipline.
 - **Why a SSoT:** this document is the authoritative reference for actors, expected outputs, governance rules, and template requirements across the Prompt Chain.
 - **Principles:** turn-based rigor, micro-PR safety (path safety, atomic I/O), human oversight (HiTL), explicit QA, and strict adherence to the Phase model.
 - **Support docs:** `.codex/PROMPTS.md` (template API), `.codex/CHECKLISTS.md` (checklist), `.codex/CLOSURE_AND_SKEPTIC.md` (closure packet), `system/ops/runbook_codex.md` (operational guide).
@@ -23,19 +23,19 @@
 - Codex executes exactly one action per prompt: apply a micro-PR, provide a diff/report, and declare QA outcomes before pausing.
 - After Codex responds, OCP evaluates and issues the next prompt (or the closing prompt): no batching, no unsolicited follow-ups, no prompt skipping.
 - Every prompt turn must reference this protocol so that all participants remain aligned and the chain remains reproducible.
-- **Skeptic Gate (MUST):** after each operational output by Codex (Prompt 1..N and Prompt N+1) the OCP conducts the Skeptic Gate as a decision act; the chain advances only with Decision=PASS, PASS WITH CONDITIONS imposes constraints, BLOCK stops the next phase. The "N+1′" label indicates only the Skeptic Gate after Prompt N+1, not a distinct phase.
+- **Skeptic Gate (MUST):** after each operational output by Codex (Prompt 1..N and Prompt N+1) the OCP conducts the Skeptic Gate as a decision act; the chain advances only with Decision=PASS, PASS WITH CONDITIONS imposes constraints, BLOCK stops the next phase. The "N+1'" label indicates only the Skeptic Gate after Prompt N+1, not a distinct phase.
 - **Evidence Gate:** Prompt 1..N does not advance until the Codex response includes the Active Rules memo, the unified diff, the structured report, and the required QA; the OCP halts the chain without these artifacts.
-  - **Output Contract (MUST, fail-closed):** if any required artifact is missing or out of order, Codex must re-emit a full corrected response in the same turn style (no questions to OCP about formatting). The canonical contract is in `.codex/PROMPTS.md` → “EVIDENCE FORMAT (MUST)”. No “omitted for brevity”, no partial diffs.
+  - **Output Contract (MUST, fail-closed):** if any required artifact is missing or out of order, Codex must re-emit a full corrected response in the same turn style (no questions to OCP about formatting). The canonical contract is in `.codex/PROMPTS.md` -> "EVIDENCE FORMAT (MUST)". No "omitted for brevity", no partial diffs.
 - **Hard rule OPS/RUN authorization:** no OPS/RUN operational prompt (Phase 1..N or Prompt N+1) may be sent to Codex without an explicit human confirmation recorded by the OCP. The OCP remains the sole owner of the decision to send the prompt, must document it in the report, and activate it before Codex receives instructions. Codex must not request or interpret approvals; it must only respect scope/path-safety and produce the Active Rules memo + diff/report/QA. If the OCP confirmation is missing, the Skeptic Gate blocks progression and the prompt is invalid.
 
 ## 3. Verification & Progression Rules
 - **Evidence required per step:** each prompt response constitutes progression only when Codex delivers a unified diff, a structured report describing the change and QA results, and, when asked, the intermediate QA output (`pytest -q -k "not slow"` or other tests detailed in the prompt). Those artifacts alone prove that Codex performed the requested work.
 - **Delivery policy:** alignment with `main` is not a default step; it happens only when the chain reaches Prompt N+1 (finalization), the OCP explicitly authorizes it, or a runtime change cannot remain confined to diff/report/QA. Synchronization is an explicit event, never implicit.
 - **OCP decision gate:** only the OCP decides whether the evidence is sufficient to advance the chain or request further iterations; Codex waits for the next OCP prompt before moving forward, reporting the artifacts produced and any blockers.
-- **Prompt formatting requirement:** OCP → Codex prompts must be delivered as a single copyable structured block (see `.codex/PROMPTS.md`) to prevent ambiguity and ensure reproducibility.
+- **Prompt formatting requirement:** OCP -> Codex prompts must be delivered as a single copyable structured block (see `.codex/PROMPTS.md`) to prevent ambiguity and ensure reproducibility.
 
-### 3.1 Evidence Gate – Canonical Output Skeleton (MUST)
-Codex operational responses MUST follow this exact ordering (no extra sections before it, no “output omitted”):
+### 3.1 Evidence Gate - Canonical Output Skeleton (MUST)
+Codex operational responses MUST follow this exact ordering (no extra sections before it, no "output omitted"):
 
 1) `git status --porcelain=v1`
 2) Unified diff (must include `diff --git`, `index`, `---/+++`, `@@`)
@@ -57,7 +57,7 @@ Report
 - ...
 
 QA
-- <command> → PASS (exit 0)
+- <command> -> PASS (exit 0)
 ```
 - **Encoding guard (docs/README):** documentation under `docs/` and `README.md` are protected by a mojibake guard using `tools/fix_mojibake.py` and `tests/encoding/test_docs_encoding.py`; the guard is a governance check on documentation quality and does not introduce runtime behavior.
 
@@ -66,7 +66,7 @@ The Prompt Chain unfolds in three clearly delimited phases that map to numbered 
 
 ### 4.1 Phase 0 - Analytical, read-only prompts (Prompt 0, 0x)
 
-**Normative clarification (v1.1):** Prompt 0x (0a, 0b, … 0n) are not legacy, fallback, or deprecated. They are a formal extension of Phase 0 and an integral part of controlled uncertainty reduction.
+**Normative clarification (v1.1):** Prompt 0x (0a, 0b, ... 0n) are not legacy, fallback, or deprecated. They are a formal extension of Phase 0 and an integral part of controlled uncertainty reduction.
 
 #### Phase 0 - Purpose
 Phase 0 exists to:
@@ -126,7 +126,7 @@ Once the operational phase starts (Prompt 1), the emergence of new structural un
 
 ## 5. Mandatory Language Policy
 - All canonical documentation, templates, and artifacts referenced by the Prompt Chain are maintained in English, preserving the SSoT character.
-- Default conversational rule: Codex replies in Italian for the chain, except when the OCP explicitly enters control mode (OCP ↔ Codex exchanges) which are English-only; Timmy/ProtoTimmy ↔ User stays Italian-only. Treat this as the sole approved override to the Italian default.
+- Default conversational rule: Codex replies in Italian for the chain, except when the OCP explicitly enters control mode (OCP <-> Codex exchanges) which are English-only; Timmy/ProtoTimmy <-> User stays Italian-only. Treat this as the sole approved override to the Italian default.
 - When not under the OCP control exception, conversations between Planner, OCP, and Codex must remain Italian to keep the human-in-the-loop flow consistent with this policy.
 
 ## 6. Prompt Template Expectations
@@ -152,7 +152,7 @@ STOP RULE: ...
     The `ROLE: Codex` line must precede any operational detail: without it the OCP considers the prompt incomplete and the Skeptic Gate will not authorize progression. The template blocks advancement when `ROLE` is missing or replaced, preventing prompts copied from OCP or other sources from improperly assuming Codex's role. Evidence Gate and Skeptic Gate verify that the block is present before assessing content, limits, and risks.
 
   ## 7. Protocol Violations (do not do)
-- Breaking the Planner→OCP→Codex→OCP→Planner turn order or issuing multiple actions per prompt.
+- Breaking the Planner->OCP->Codex->OCP->Planner turn order or issuing multiple actions per prompt.
 - Executing edits/QA during Phase 0 or skipping Phase N+1 altogether.
 - Responding in any language other than Italian when not explicitly allowed.
 - Touching files that lie outside the scope declared by the active prompt or the SSoT.
@@ -172,14 +172,14 @@ STOP RULE: ...
 - Activates the Phase model: Prompt 0 (analysis) always precedes any operational prompt; skipping or collapsing phases is forbidden.
 
 ### 8.3 Prompt Chain definition
-- The chain is a numbered, turn-based sequence (Prompt 0…N+1) with a clear scope for each prompt as per section 6.
+- The chain is a numbered, turn-based sequence (Prompt 0...N+1) with a clear scope for each prompt as per section 6.
 - Each prompt addresses a single concern; no prompt may inject future requests, combine unrelated scopes, or expand its declared file set.
 - Prompt templates require the Active Rules memo, list of allowed/prohibited files, expected outputs (diff/report/QA), and explicit statements about the phase and language policy.
 
 ### 8.4 Prompt Chain lifecycle
 - **Kick-off:** Human/Planner decides on the chain; Onboarding Task codifies the plan and loads the SSoT; only after this may the OCP issue Prompt 0.
 - **Execution:** OCP issues prompts sequentially; Codex responds with one micro-PR (diff + report + intermediate QA), then waits for the next prompt. Each operational response includes the memo from section 6 and confirms compliance with the turn-based protocol.
-- **Closure:** OCP issues Prompt N+1 with final QA requirements; Codex runs `pytest -q` and `pre-commit run --all-files` (repeating up to ten times if needed), documents every rerun, summarizes the entire chain, records the Retrospective PASS (optional notes/TODO), and ends with a one-line Italian commit message. The post-N+1 Skeptic Gate (sometimes labeled "N+1′") remains a governance gate, not a phase.
+- **Closure:** OCP issues Prompt N+1 with final QA requirements; Codex runs `pytest -q` and `pre-commit run --all-files` (repeating up to ten times if needed), documents every rerun, summarizes the entire chain, records the Retrospective PASS (optional notes/TODO), and ends with a one-line Italian commit message. The post-N+1 Skeptic Gate (sometimes labeled "N+1'") remains a governance gate, not a phase.
 - If QA fails more than twice per prompt, Codex rewrites the patch and retries; after the third failure, Codex explicitly requests guidance from the OCP.
 
 ## 9. Part B - Operational Contract for Codex
@@ -192,7 +192,7 @@ STOP RULE: ...
 - Respect path safety, atomic writes, the AGENTS matrices, this spec, and the QA pipeline (intermediate `pytest -q -k "not slow"`, final `pytest -q` + `pre-commit run --all-files`).
 - Run the static pre-check described in `.codex/PROMPTS.md` before generating a patch; failing pre-checks halt QA and require corrective action.
 - Handle retries cleanly, document them in each report, and stop to ask the OCP if the same issue persists after two autocorrections.
-- Conversational exchanges stay Italian unless the OCP invokes the control-mode exception (OCP ↔ Codex English-only); Timmy/ProtoTimmy ↔ User remains Italian-only.
+- Conversational exchanges stay Italian unless the OCP invokes the control-mode exception (OCP <-> Codex English-only); Timmy/ProtoTimmy <-> User remains Italian-only.
 - **Trial window:** the Skeptic Gate is MUST for the next two complete Prompt Chains; after the second cycle the OCP leads a mandatory retrospective to decide whether to keep it or retune it.
 
 ### 9.3 Prompt format
@@ -216,4 +216,4 @@ STOP RULE: ...
   - S3: Codex states the intermediate QA (`pytest -q -k "not slow"`) it would run, explaining how it would interpret the outcome without executing the command.
   - S4: Codex describes the escalation path (max two autocorrections), the final QA (`pytest -q` + `pre-commit run --all-files`), and reconfirms Italian-language compliance.
 - Rules: no disk writes, no QA execution, always respect path safety, micro-PR discipline, and the Italian-only policy.
-- Use cases: governance health check, Prompt Chain metadata validation, and documentation of OCP→Codex alignment.
+- Use cases: governance health check, Prompt Chain metadata validation, and documentation of OCP->Codex alignment.
