@@ -209,6 +209,7 @@ It certifies a controlled minimum workspace state:
 3. the `ClientContext` load immediately after the skeleton (post-skeleton) is performed and reused whenever available.
 It does **not** certify that Vision, Drive, or full Semantic flows completed; those remain distinct events or logs.
 Any `non_strict_step` event is emitted separately to audit a scoped relaxed execution (e.g., `vision_enrichment`) and records only the specific step name, status, and justification.
+For Dummy/Smoke contract and allowed exceptions, see `docs/developer/coding_rule.md` (section: "1ter) Dummy Mode (Smoke E2E)").
 
 ### Context load entropy policy (Dummy)
 Under the Beta contract the dummy bootstrap may call `ClientContext.load` only once in the post-skeleton phase (`_CTX_STAGE_POST_SKELETON`).

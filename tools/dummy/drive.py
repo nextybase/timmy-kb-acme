@@ -53,10 +53,14 @@ def call_drive_min(
     ctx = _LayoutCtx(slug=slug, repo_root_dir=base_dir)
     try:
         # firma principale (ctx, slug, client_folder_id=None, logger=None)
-        return ensure_drive_minimal_and_upload_config(ctx, slug=slug, client_folder_id=None, logger=logger)  # type: ignore[arg-type]
-    except TypeError:
-        # fallback legacy: (slug, client_name)
-        return ensure_drive_minimal_and_upload_config(slug=slug, client_name=client_name)  # type: ignore[misc]
+        return ensure_drive_minimal_and_upload_config(  # type: ignore[arg-type]
+            ctx, slug=slug, client_folder_id=None, logger=logger
+        )
+    except TypeError as exc:
+        # Dummy = smoke e2e: una firma sbagliata è regressione, non compat fallback.
+        raise RuntimeError(
+            "Firma non compatibile per ensure_drive_minimal_and_upload_config (attesa: (ctx, *, slug, client_folder_id, logger))."
+        ) from exc
 
 
 def call_drive_emit_readmes(

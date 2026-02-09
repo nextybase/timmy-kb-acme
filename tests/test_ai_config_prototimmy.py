@@ -1,82 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
 
 import pytest
 
 from ai.assistant_registry import _get_from_settings, _optional_env, resolve_prototimmy_config
 from pipeline.exceptions import ConfigError
-
-
-def _sample_data() -> dict[str, Any]:
-    return {
-        "ai": {
-            "prototimmy": {
-                "model": "gpt-4.1",
-                "assistant_id_env": "PROTOTIMMY_ID",
-                "use_kb": True,
-            }
-        }
-    }
-
-
-def test_get_from_settings_reads_nested_model_from_mapping() -> None:
-    data = _sample_data()
-    value = _get_from_settings(data, "ai.prototimmy.model", default=None)
-    assert value == "gpt-4.1"
-
-
-def test_get_from_settings_reads_nested_model_from_settings_like_object(monkeypatch: pytest.MonkeyPatch) -> None:
-    data = _sample_data()
-
-    class FakeSettings:
-        def __init__(self, payload: dict[str, Any]) -> None:
-            self._data = payload
-
-        def get(self, path: str, default: object | None = None) -> object | None:
-            # Simula il caso problematico: sempre None
-            return None
-
-        def as_dict(self) -> dict[str, Any]:
-            return self._data
-
-    fake = FakeSettings(data)
-    value = _get_from_settings(fake, "ai.prototimmy.model", default=None)
-    assert value == "gpt-4.1"
-
-
-def test_get_from_settings_raises_on_settings_get_error() -> None:
-    class FakeSettings:
-        def get(self, path: str, default: object | None = None) -> object | None:
-            raise RuntimeError("boom")
-
-    with pytest.raises(ConfigError) as excinfo:
-        _get_from_settings(FakeSettings(), "ai.prototimmy.model", default=None)
-    assert excinfo.value.code == "config.read.failed"
-
-
-def test_get_from_settings_raises_on_as_dict_error() -> None:
-    class FakeSettings:
-        def get(self, path: str, default: object | None = None) -> object | None:
-            return None
-
-        def as_dict(self) -> dict[str, Any]:
-            raise RuntimeError("boom")
-
-    with pytest.raises(ConfigError) as excinfo:
-        _get_from_settings(FakeSettings(), "ai.prototimmy.model", default=None)
-    assert excinfo.value.code == "config.read.failed"
-
-
-def test_get_from_settings_raises_on_non_mapping() -> None:
-    class FakeSettings:
-        def get(self, path: str, default: object | None = None) -> object | None:
-            return None
-
-    with pytest.raises(ConfigError) as excinfo:
-        _get_from_settings(FakeSettings(), "ai.prototimmy.model", default=None)
-    assert excinfo.value.code == "config.read.failed"
+from pipeline.settings import Settings
 
 
 def test_get_from_settings_strict_rejects_non_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -84,33 +15,27 @@ def test_get_from_settings_strict_rejects_non_mapping(monkeypatch: pytest.Monkey
         def get(self, path: str, default: object | None = None) -> object | None:
             return None
 
-        def as_dict(self) -> dict[str, Any]:
-            return _sample_data()
-
-    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    # Il core ora accetta solo Settings tipizzato: sempre shape.invalid.
     with pytest.raises(ConfigError) as excinfo:
         _get_from_settings(FakeSettings(), "ai.prototimmy.model", default=None)
     assert excinfo.value.code == "config.shape.invalid"
 
 
-def test_resolve_prototimmy_config_raises_when_model_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    data = {"ai": {"prototimmy": {"assistant_id_env": "PROTOTIMMY_ID"}}}
-
-    class FakeSettings:
-        def __init__(self, payload: dict[str, Any]) -> None:
-            self._data = payload
-
-        def get(self, path: str, default: object | None = None) -> object | None:
-            return None
-
-        def as_dict(self) -> dict[str, Any]:
-            return self._data
-
-    fake = FakeSettings(data)
+def test_resolve_prototimmy_config_raises_when_model_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Config reale (SSoT) ma senza ai.prototimmy.model -> deve esplodere.
+    repo_root = tmp_path / "repo-root"
+    (repo_root / "config").mkdir(parents=True, exist_ok=True)
+    (repo_root / ".git").mkdir(parents=True, exist_ok=True)
+    # cspell:ignore prototimm
+    (repo_root / "config" / "config.yaml").write_text(
+        "ai:\n  prototimmy:\n    assistant_id_env: PROTOTIMMY_ID\n    use_kb: true\n",
+        encoding="utf-8",
+    )
+    settings = Settings.load(repo_root)
     monkeypatch.setenv("PROTOTIMMY_ID", "asst_dummy")
 
     with pytest.raises(ConfigError):
-        resolve_prototimmy_config(fake)
+        resolve_prototimmy_config(settings)
 
     monkeypatch.delenv("PROTOTIMMY_ID", raising=False)
 

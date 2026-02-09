@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import os
-from typing import Mapping, Optional
+from typing import Optional
 
 import pipeline.env_utils as env_utils
-from pipeline.beta_flags import is_beta_strict
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.settings import Settings
@@ -45,47 +44,13 @@ def _get_from_settings(settings: object, path: str, default: object = None) -> o
             return settings.get_value(path, default=default)
         except KeyError:
             return default
-    if is_beta_strict():
-        raise ConfigError(
-            "Settings non conforme: atteso pipeline.settings.Settings in strict runtime.",
-            code="config.shape.invalid",
-            component="assistant_registry",
-            path=path,
-        )
-    mapping: object | None = None
-    if hasattr(settings, "as_dict"):
-        try:
-            mapping = settings.as_dict()  # type: ignore[no-any-return]
-        except Exception as exc:
-            raise ConfigError(
-                f"Errore lettura config per '{path}'.",
-                code="config.read.failed",
-                component="assistant_registry",
-                path=path,
-            ) from exc
-    if mapping is None and isinstance(settings, Mapping):
-        mapping = settings
-    if mapping is None:
-        raise ConfigError(
-            f"Configurazione non valida per '{path}': atteso mapping.",
-            code="config.read.failed",
-            component="assistant_registry",
-            path=path,
-        )
-    if not isinstance(mapping, Mapping):
-        raise ConfigError(
-            f"Configurazione non valida per '{path}': atteso mapping.",
-            code="config.read.failed",
-            component="assistant_registry",
-            path=path,
-        )
-    current: object = mapping
-    for part in path.split("."):
-        if isinstance(current, Mapping) and part in current:
-            current = current.get(part)
-        else:
-            return default
-    return current
+    # Contratto deterministico: il core accetta solo Settings tipizzato.
+    raise ConfigError(
+        "Settings non conforme: atteso pipeline.settings.Settings.",
+        code="config.shape.invalid",
+        component="assistant_registry",
+        path=path,
+    )
 
 
 def _resolve_assistant_env_name(settings: Settings, path: str, default_env: str) -> str:

@@ -51,6 +51,49 @@ model = get_vision_model()  # passa sempre da Settings.load (SSoT)
 
 ---
 
+## 1ter) Dummy Mode (Smoke E2E) — Regole Vincolanti
+
+La **Dummy Mode** esiste esclusivamente come:
+
+- **smoke test end-to-end** della pipeline,
+- **ambiente di automazione controllata** per input esterni (es. Drive, Vision),
+- **perimetro di test esplicito**, *mai* come runtime alternativo.
+
+### Principio fondamentale
+
+> **Il Dummy deve usare le stesse funzioni, gli stessi flussi e gli stessi contratti
+> della pipeline normale.**
+
+Ogni divergenza è ammessa **solo** se:
+- strettamente necessaria,
+- esplicitamente documentata,
+- confinata nel perimetro `tools/`,
+- tracciata tramite logging/audit.
+
+### Regole operative
+
+- Il Dummy **NON** introduce contratti alternativi:
+  - `Settings` deve essere sempre un `pipeline.settings.Settings`;
+  - la configurazione invalida o mancante **deve fallire rumorosamente**.
+- Il Dummy **NON** degrada silenziosamente il comportamento:
+  - niente fallback a `dict`/mapping per config;
+  - niente shim di retrocompatibilità non indispensabili.
+- Le eccezioni di non-strict:
+  - sono ammesse **solo a livello di singoli step** (non di tipo/contratto),
+  - devono essere elencate esplicitamente (whitelist),
+  - devono produrre un evento di audit.
+
+### Anti-pattern (considerati errori in Beta)
+
+- Usare il Dummy per “far funzionare comunque” la pipeline.
+- Accettare input o firme legacy se non più usate nel core.
+- Introdurre fallback difensivi non documentati.
+
+> In sintesi: **se il Dummy passa, la pipeline reale deve passare.
+> Se il Dummy fallisce, è un segnale utile, non un problema da mascherare.**
+
+---
+
 ## 2) Stile & Convenzioni
 - **Python  3.11**, tipizzazione obbligatoria per API pubbliche e funzioni non-trivial.
 - **Evita `Any`** salvo casi motivati e documentati (commento o docstring dedicata).

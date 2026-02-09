@@ -57,8 +57,11 @@ class _Ctx:
                 raise RuntimeError("config/config.yaml mancante nel workspace dummy.")
         try:
             self.settings = Settings.load(base_dir)
-        except Exception:
-            self.settings = {}
+        except Exception as exc:  # noqa: BLE001
+            # Dummy = smoke e2e: config invalida deve fallire rumorosamente.
+            raise RuntimeError(
+                f"Caricamento Settings fallito nel dummy workspace (config/config.yaml non valida?): {config_path}"
+            ) from exc
 
 
 def _vision_worker(queue: mp.Queue, slug: str, base_dir: str, pdf_path: str, run_vision: Callable[..., Any]) -> None:
