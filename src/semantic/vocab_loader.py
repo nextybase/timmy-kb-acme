@@ -67,9 +67,10 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
         alias = str(alias_value).strip()
         if not canon or not alias:
             return
-        if alias in seen_aliases[canon]:
+        alias_key = alias.casefold()
+        if alias_key in seen_aliases[canon]:
             return
-        seen_aliases[canon].add(alias)
+        seen_aliases[canon].add(alias_key)
         out[canon].append(alias)
 
     def _build_from_tag_rows(rows: Sequence[Any]) -> Dict[str, Dict[str, list[str]]]:

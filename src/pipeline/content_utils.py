@@ -665,7 +665,13 @@ def generate_readme_markdown(ctx: _ReadmeCtx, book_dir: Path | None = None) -> P
             logger,
             "warning",
             "pipeline.content.mapping_failed",
-            extra={"slug": getattr(ctx, "slug", None), "error": str(exc)},
+            extra={
+                "slug": getattr(ctx, "slug", None),
+                "error": str(exc),
+                "service_only": True,
+                "service": "pipeline.content_utils",
+                "operation": "load_semantic_config",
+            },
         )
 
     content = "\n\n".join(sections).strip() or "Contenuti generati/curati automaticamente."

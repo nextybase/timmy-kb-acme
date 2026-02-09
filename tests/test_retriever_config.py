@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any, Dict
 
 from timmy_kb.cli.retriever import (
+    MAX_CANDIDATE_LIMIT,
     QueryParams,
     choose_limit_for_budget,
+    preview_effective_candidate_limit,
     with_config_candidate_limit,
     with_config_or_budget,
 )
@@ -121,3 +123,11 @@ def test_with_config_or_budget_config_value(kb_sqlite_path: Path) -> None:
     cfg = {"retriever": {"throttle": {"candidate_limit": "6000"}}}
     out = with_config_or_budget(p, cfg)
     assert out.candidate_limit == 6000
+
+
+def test_preview_effective_candidate_limit_clamps(kb_sqlite_path: Path) -> None:
+    params = QueryParams(db_path=kb_sqlite_path, slug="p", scope="s", query="q")
+    cfg = {"retriever": {"throttle": {"candidate_limit": 999999}}}
+    limit, source, _budget = preview_effective_candidate_limit(params, cfg)
+    assert source == "config"
+    assert limit <= MAX_CANDIDATE_LIMIT

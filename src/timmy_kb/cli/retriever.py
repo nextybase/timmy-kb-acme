@@ -240,6 +240,9 @@ def search(
             "latency_budget_ms": int(throttle_cfg.latency_budget_ms) if throttle_cfg else None,
             "throttle_key": throttle_key or params.slug or "retriever",
             "query_len": len(params.query or ""),
+            "embedding_model": embedding_model
+            or getattr(embeddings_client, "model", None)
+            or getattr(embeddings_client, "embedding_model", None),
         },
     )
 
@@ -594,7 +597,9 @@ def preview_effective_candidate_limit(
         budget_ms = 0
 
     if auto and budget_ms > 0:
-        return choose_limit_for_budget(budget_ms), "auto_by_budget", int(budget_ms)
+        chosen = choose_limit_for_budget(budget_ms)
+        safe_chosen = max(MIN_CANDIDATE_LIMIT, min(int(chosen), MAX_CANDIDATE_LIMIT))
+        return int(safe_chosen), "auto_by_budget", int(budget_ms)
 
     # 3) Config
     throttle = throttle_mod._coerce_throttle_section(retr)
@@ -604,7 +609,8 @@ def preview_effective_candidate_limit(
     except Exception:
         lim = None
     if lim and lim > 0:
-        return int(lim), "config", 0
+        safe_lim = max(MIN_CANDIDATE_LIMIT, min(int(lim), MAX_CANDIDATE_LIMIT))
+        return int(safe_lim), "config", 0
 
     # 4) Default
     return int(default_lim), "default", 0
