@@ -407,6 +407,34 @@ def ensure_drive_minimal_and_upload_config(slug: str, client_name: Optional[str]
     return cfg_path
 
 
+# =====================================================================
+# Dummy / smoke e2e bridge (firma richiesta dal tool tools/gen_dummy_kb)
+# =====================================================================
+def ensure_drive_minimal_and_upload_config_ui(
+    ctx: "ClientContext",
+    *,
+    slug: str,
+    client_folder_id: str | None,
+    logger: logging.Logger,
+) -> dict[str, object]:
+    """
+    Bridge per il dummy KB (smoke/e2e).
+    - Firma canonica richiesta dal tool dummy: (ctx, *, slug, client_folder_id, logger).
+    - Non introduce fallback: delega all'entrypoint UI esistente.
+    - Ritorna un dict serializzabile per payload/health.
+    Nota: client_folder_id è accettato per contratto dummy ma non è usato in questo path.
+    """
+    cfg_path = ensure_drive_minimal_and_upload_config(slug, client_name=None)
+    try:
+        logger.info(
+            "ui.drive.dummy_minimal.complete",
+            extra={"slug": slug, "config_path": str(cfg_path), "client_folder_id": client_folder_id},
+        )
+    except Exception:
+        pass
+    return {"ok": True, "config_path": str(cfg_path)}
+
+
 # ===== Helpers Drive ===========================================================
 
 

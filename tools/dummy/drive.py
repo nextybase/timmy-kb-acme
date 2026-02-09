@@ -59,7 +59,7 @@ def call_drive_min(
     except TypeError as exc:
         # Dummy = smoke e2e: una firma sbagliata è regressione, non compat fallback.
         raise RuntimeError(
-            "Firma non compatibile per ensure_drive_minimal_and_upload_config (attesa: (ctx, *, slug, client_folder_id, logger))."
+            "Firma non compatibile per ensure_drive_minimal_and_upload_config_ui (attesa: (ctx, *, slug, client_folder_id, logger))."
         ) from exc
 
 

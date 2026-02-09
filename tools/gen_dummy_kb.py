@@ -184,7 +184,7 @@ _drive_mod, _drive_attrs, _drive_import_error = _strict_optional_import(
     "ui.services.drive_runner",
     feature_name="drive_runner",
     attrs={
-        "ensure_drive_minimal_and_upload_config": "ensure_drive_minimal_and_upload_config",
+        "ensure_drive_minimal_and_upload_config": "ensure_drive_minimal_and_upload_config_ui",
         "emit_readmes_for_raw": "emit_readmes_for_raw",
     },
 )
