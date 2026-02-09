@@ -21,7 +21,6 @@ Design:
 
 from __future__ import annotations
 
-import logging
 import time
 from contextlib import nullcontext
 from dataclasses import MISSING, replace
@@ -39,7 +38,7 @@ from timmy_kb.cli import retriever_throttle as throttle_mod
 from timmy_kb.cli import retriever_validation as validation_mod
 
 LOGGER = get_structured_logger("timmy_kb.retriever")
-_FALLBACK_LOG = logging.getLogger("timmy_kb.retriever")
+_FALLBACK_LOG = get_structured_logger("timmy_kb.retriever.fallback")
 
 QueryParams = validation_mod.QueryParams
 SearchResult = validation_mod.SearchResult
@@ -514,7 +513,7 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
         chosen = choose_limit_for_budget(budget)
         safe_chosen = max(MIN_CANDIDATE_LIMIT, min(int(chosen), MAX_CANDIDATE_LIMIT))
         if int(safe_chosen) != int(chosen):
-            _safe_warning("limit.clamped", extra={"provided": int(chosen), "effective": int(safe_chosen)})
+            _safe_warning("retriever.limit.clamped", extra={"provided": int(chosen), "effective": int(safe_chosen)})
 
         _safe_info(
             "retriever.limit.source",
@@ -544,7 +543,7 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
             )
 
         if safe_lim != int(lim):
-            _safe_warning("limit.clamped", extra={"provided": int(lim), "effective": int(safe_lim)})
+            _safe_warning("retriever.limit.clamped", extra={"provided": int(lim), "effective": int(safe_lim)})
 
         return replace(params, candidate_limit=safe_lim)
 

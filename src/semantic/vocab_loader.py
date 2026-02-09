@@ -14,7 +14,7 @@ from pipeline.logging_utils import get_structured_logger
 __all__ = ["load_reviewed_vocab", "load_tags_reviewed_db"]
 
 LOGGER = get_structured_logger("semantic.vocab_loader")
-_FALLBACK_LOG = logging.getLogger(__name__)
+_FALLBACK_LOG = get_structured_logger("semantic.vocab_loader.fallback")
 
 
 def _safe_structured_warning(event: str, *, extra: Mapping[str, Any]) -> None:

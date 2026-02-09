@@ -210,7 +210,7 @@ def _log_frontmatter_cache_failure(
     operation: str,
     exc: Exception,
 ) -> None:
-    """Emit structured warning when the frontmatter cache cannot be cleared."""
+    """Registra un warning strutturato quando la cache del frontmatter non può essere svuotata."""
     extra: dict[str, object | None] = {
         "slug": slug,
         "service_only": True,
@@ -312,7 +312,7 @@ def _run_build_workflow(
                 exc=exc,
             )
             # Non interrompere il return della pipeline; log-only.
-            return
+            pass
 
         try:
             log_frontmatter_cache_stats(
