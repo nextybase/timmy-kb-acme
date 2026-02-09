@@ -96,6 +96,19 @@ STOP RULE: <fermo dopo la risposta>
 - Dirty working tree: declare `working tree dirty outside scope: YES/NO` at the start of the report and use only `git diff -- <paths in scope>`; repo-wide diffs are forbidden when there are out-of-scope changes.
 - Evidence Gate aggiuntivo: verificare che il diff riportato sia davvero un unified diff (marker presenti) e che `git status --porcelain=v1` compaia in ogni micro-PR operativo.
 
+#### No-ambiguity addendum (MUST)
+- Do NOT write “output omitted”, “same as above”, “identical log”, or any similar placeholder.
+- Include the diff blocks for every touched file. If the diff is large, split by file, but each file must still include full unified diff headers (`diff --git` …).
+- If the prompt requests logs (e.g., pre-commit / pytest), include enough of the terminal output to show PASS plus the final summary + exit status (do not paraphrase only).
+
+#### Self-check (MUST)
+Before returning, verify all items are present and ordered:
+1) `git status --porcelain=v1`
+2) unified diff markers
+3) report section
+4) QA section + exit status
+If any item is missing → return a corrected full response (do not ask OCP for clarification on formatting).
+
 ### Template: Prompt N+1
 - Purpose: conclude the chain via final QA and a closing narrative.
 - Mandatory content: QA results for `pre-commit run --all-files` and `pre-commit run --hook-stage pre-push --all-files` (fallback: `python tools/test_runner.py full`), documentation of retries/micro-fixes (up to ten attempts), full summary of the chain's work, the one-line closing commit message in Italian (unless otherwise specified), and the Retrospective outcome (always PASS, with optional note/TODO) logged after the N+1 Gate.

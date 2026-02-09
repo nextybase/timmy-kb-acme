@@ -1,5 +1,16 @@
 # Prompt Chain Spec (SSoT)
 
+> ## Codex = CI worker (HARD)
+> In Prompt Chain mode, Codex MUST prioritize auditability over readability.
+> Evidence MUST be provided verbatim (no truncation, no "omitted for brevity", no "as above").
+> If the evidence is too long, Codex MUST chunk into multiple parts rather than omit.
+>
+> Single Source of Truth:
+> - `system/specs/promptchain_ci_worker_contract.md`
+>
+> Implementation hook:
+> - Repo root `AGENTS.md` enforces the same contract for Codex tooling.
+
 ## 1. Introduction
 - **Purpose:** keep the planning phase (Planner → OCP) and the operational work (Codex) strictly separated while ensuring every step remains controlled, traceable, and compliant with the micro-PR discipline.
 - **Why a SSoT:** this document is the authoritative reference for actors, expected outputs, governance rules, and template requirements across the Prompt Chain.
@@ -14,6 +25,7 @@
 - Every prompt turn must reference this protocol so that all participants remain aligned and the chain remains reproducible.
 - **Skeptic Gate (MUST):** after each operational output by Codex (Prompt 1..N and Prompt N+1) the OCP conducts the Skeptic Gate as a decision act; the chain advances only with Decision=PASS, PASS WITH CONDITIONS imposes constraints, BLOCK stops the next phase. The "N+1′" label indicates only the Skeptic Gate after Prompt N+1, not a distinct phase.
 - **Evidence Gate:** Prompt 1..N does not advance until the Codex response includes the Active Rules memo, the unified diff, the structured report, and the required QA; the OCP halts the chain without these artifacts.
+  - **Output Contract (MUST, fail-closed):** if any required artifact is missing or out of order, Codex must re-emit a full corrected response in the same turn style (no questions to OCP about formatting). The canonical contract is in `.codex/PROMPTS.md` → “EVIDENCE FORMAT (MUST)”. No “omitted for brevity”, no partial diffs.
 - **Hard rule OPS/RUN authorization:** no OPS/RUN operational prompt (Phase 1..N or Prompt N+1) may be sent to Codex without an explicit human confirmation recorded by the OCP. The OCP remains the sole owner of the decision to send the prompt, must document it in the report, and activate it before Codex receives instructions. Codex must not request or interpret approvals; it must only respect scope/path-safety and produce the Active Rules memo + diff/report/QA. If the OCP confirmation is missing, the Skeptic Gate blocks progression and the prompt is invalid.
 
 ## 3. Verification & Progression Rules
@@ -21,6 +33,32 @@
 - **Delivery policy:** alignment with `main` is not a default step; it happens only when the chain reaches Prompt N+1 (finalization), the OCP explicitly authorizes it, or a runtime change cannot remain confined to diff/report/QA. Synchronization is an explicit event, never implicit.
 - **OCP decision gate:** only the OCP decides whether the evidence is sufficient to advance the chain or request further iterations; Codex waits for the next OCP prompt before moving forward, reporting the artifacts produced and any blockers.
 - **Prompt formatting requirement:** OCP → Codex prompts must be delivered as a single copyable structured block (see `.codex/PROMPTS.md`) to prevent ambiguity and ensure reproducibility.
+
+### 3.1 Evidence Gate – Canonical Output Skeleton (MUST)
+Codex operational responses MUST follow this exact ordering (no extra sections before it, no “output omitted”):
+
+1) `git status --porcelain=v1`
+2) Unified diff (must include `diff --git`, `index`, `---/+++`, `@@`)
+3) Structured report (what/why/risk/impact/next)
+4) QA output + exit status
+
+Minimal example (shape only):
+```
+git status --porcelain=v1
+ M src/example.py
+
+diff --git a/src/example.py b/src/example.py
+index 1111111..2222222 100644
+--- a/src/example.py
++++ b/src/example.py
+@@ ...
+
+Report
+- ...
+
+QA
+- <command> → PASS (exit 0)
+```
 - **Encoding guard (docs/README):** documentation under `docs/` and `README.md` are protected by a mojibake guard using `tools/fix_mojibake.py` and `tests/encoding/test_docs_encoding.py`; the guard is a governance check on documentation quality and does not introduce runtime behavior.
 
 ## 4. Prompt Chain Phase Model

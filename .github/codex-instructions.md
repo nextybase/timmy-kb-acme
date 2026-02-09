@@ -24,6 +24,21 @@
 - After completing Prompt 0, prepend the memo "Active rules: path-safety ON, micro-PR, zero side-effects, update docs if needed." to the start of every subsequent prompt response, keeping the active rule reminder visible.
 - Each operational prompt is treated as a micro-PR: produce one focused diff, document tests run, state QA status, and summarize the impact plus next steps in the final reply.
 
+### SECTION 4.1 - Output Contract (MUST, zero ambiguity)
+For Prompt 1..N and Prompt N+1, the response must follow the **canonical Evidence Pack** order defined in `.codex/PROMPTS.md` (“EVIDENCE FORMAT (MUST)”) and reinforced by `system/specs/promptchain_spec.md` (Evidence Gate).
+
+Hard rules:
+- No “omitted for brevity”, no partial diffs, no “identical to previous log”.
+- The diff MUST be a real unified diff with `diff --git`, `index`, `---/+++`, `@@`.
+- If you touched multiple files, include all their diff blocks.
+- If any required artifact is missing, assume the Evidence Gate will BLOCK: fix the response format proactively (do not ask the OCP how to format it).
+
+Self-check before sending (must be true):
+- `git status --porcelain=v1` present
+- unified diff markers present
+- report present
+- QA output present + exit status stated
+
 ## SECTION 5 - Agents & Priority Rules
 - The local `.codex/AGENTS.md` is the authoritative AGENT configuration for this repository and overrides any user-level or external AGENTS files.
 - External or global agent configs (e.g., `~/.codex/AGENTS.md`) must not override the repository-local rules; resolve conflicts in favor of the repository-level instructions.
