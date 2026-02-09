@@ -157,7 +157,7 @@ def _default_candidate_limit() -> int:
 
 def _load_candidates(params: QueryParams) -> tuple[list[dict[str, Any]], float]:
     """Carica tutti i candidati e restituisce (lista, ms)."""
-    t0 = time.time()
+    t0 = time.perf_counter()
     candidates = list(
         fetch_candidates(
             params.slug,
@@ -166,7 +166,7 @@ def _load_candidates(params: QueryParams) -> tuple[list[dict[str, Any]], float]:
             db_path=params.db_path,
         )
     )
-    return candidates, (time.time() - t0) * 1000.0
+    return candidates, (time.perf_counter() - t0) * 1000.0
 
 
 # ---------------- Wrapper pubblico per calibrazione candidate_limit -------------
@@ -177,16 +177,7 @@ def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
     validation_mod._validate_params_logged(params)
     if params.candidate_limit == 0:
         return []
-    t0 = time.time()
-    candidates = list(
-        fetch_candidates(
-            params.slug,
-            params.scope,
-            limit=params.candidate_limit,
-            db_path=params.db_path,
-        )
-    )
-    dt_ms = (time.time() - t0) * 1000.0
+    candidates, dt_ms = _load_candidates(params)
 
     # best-effort: se info fallisce, fallback su debug (entrambi safe)
     extra = {
@@ -274,7 +265,7 @@ def search(
             _safe_warning("retriever.query.invalid", extra={**common_extra, "reason": "empty_query"})
             return []
 
-        t_total_start = time.time()
+        t_total_start = time.perf_counter()
 
         # 1) Embedding della query
         if throttle_mod._deadline_exceeded(deadline):
@@ -387,7 +378,7 @@ def search(
             )
             return []
 
-        total_ms = (time.time() - t_total_start) * 1000.0
+        total_ms = (time.perf_counter() - t_total_start) * 1000.0
         ranking_mod._log_retriever_metrics(
             params=params,
             total_ms=total_ms,

@@ -194,6 +194,10 @@ def export_tags_yaml_from_db(
         keep_only_listed=keep_only_listed,
         version=version,
     )
+    logger.info(
+        "semantic.tags_reviewed.exported",
+        extra={"slug": slug, "file_path": str(result), "db_path": str(expected_db_path)},
+    )
     return cast(Path, result)
 
 
@@ -343,6 +347,22 @@ def _run_build_workflow(
                 context=context,
                 operation="clear",
                 exc=exc,
+            )
+        try:
+            log_frontmatter_cache_stats(
+                logger,
+                "semantic.frontmatter_cache.stats_after_clear",
+                slug=slug,
+            )
+        except Exception as exc:
+            logger.warning(
+                "semantic.frontmatter_cache.stats_log_failed",
+                extra={
+                    "slug": slug,
+                    "service_only": True,
+                    "service": "semantic.frontmatter_cache",
+                    "error": str(exc),
+                },
             )
 
 

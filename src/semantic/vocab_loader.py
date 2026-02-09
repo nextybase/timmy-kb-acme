@@ -271,7 +271,10 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
             extra={"file_path": str(db_path), "error": str(exc)},
         )
         raise ConfigError("tags.db missing or unreadable", file_path=str(db_path)) from exc
-    return _to_vocab(raw)
+    try:
+        return _to_vocab(raw)
+    except ConfigError as exc:
+        raise ConfigError(str(exc), file_path=str(db_path)) from exc
 
 
 def _semantic_dir(repo_root_dir: Path) -> Path:
