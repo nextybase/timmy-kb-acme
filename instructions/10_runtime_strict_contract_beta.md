@@ -39,19 +39,19 @@ Determinism takes precedence over usability, resilience, or graceful degradation
 
 ## 2. System Invariants
 
-**I-1 — Strict-first execution**
+**I-1 -- Strict-first execution**
 Strict execution is the default runtime behavior.
 No operational path may accept outputs that are not compliant with declared schemas unless a documented capability gate explicitly authorizes a non-strict exception.
 
-**I-2 — Deterministic fail-fast**
+**I-2 -- Deterministic fail-fast**
 Any error on prerequisites or output validity MUST interrupt execution with:
 - an explicit error;
 - a stable, reproducible message.
 
-**I-3 — No silent fallback**
+**I-3 -- No silent fallback**
 The system MUST NOT continue execution in best-effort or log-only mode after a critical error.
 
-**I-3bis — Capability-gated exceptions**
+**I-3bis -- Capability-gated exceptions**
 The runtime core preserves strict behavior by default.
 Non-strict paths are permitted **only** when:
 - the capability is explicitly declared and documented;
@@ -60,28 +60,28 @@ Non-strict paths are permitted **only** when:
 
 Any heuristic, fallback, partial execution, or tolerance-based recovery is forbidden in the runtime core unless explicitly authorized by a capability gate.
 
-**I-4 — Binding Ledger**
+**I-4 -- Binding Ledger**
 Decision Records (ledger) are binding.
 Any failure to write or validate a Decision Record MUST block state advancement.
 
-**I-5 — Deterministic NLP semantics**
+**I-5 -- Deterministic NLP semantics**
 If the required NLP backend is `spacy`:
 - SpaCy errors MUST cause hard-fail;
 - missing or empty `tags.db` MUST cause hard-fail.
 
-**I-6 — Input-derived structure only**
+**I-6 -- Input-derived structure only**
 Proposed structures MUST derive strictly from input evidence.
 Placeholders, auto-branches, or inferred nodes MUST NOT be introduced.
 
-**I-7 — Pure Vision output**
+**I-7 -- Pure Vision output**
 Vision output MUST be **pure JSON**.
 Code fences, prefixes, suffixes, or tolerant parsing MUST NOT be accepted.
 
-**I-8 — Goal format invariant**
+**I-8 -- Goal format invariant**
 The `Goal N` format MUST be present and parsable.
 Its absence MUST cause hard-fail.
 
-**I-9 — Normative Ledger is non-diagnostic**
+**I-9 -- Normative Ledger is non-diagnostic**
 Decision Records are **normative** and MUST remain **low-entropy**.
 
 The ledger boundary enforces this: evidence_refs are normative identifiers, not environment references, and absolute paths are forbidden by definition, so diagnostic content is rejected before recording.
@@ -161,41 +161,41 @@ It is a safety gate that prevents accidental or implicit mutation of runtime wor
 
 ## 3. Input Validity Rules
 
-**3.1 — Vision Statement**
+**3.1 -- Vision Statement**
 Required sections MUST be present and non-empty.
 
-**3.2 — Vision payload**
+**3.2 -- Vision payload**
 The payload MUST comply with the `VisionOutput` schema.
 `areas` MUST be a non-empty list within the allowed range.
 
-**3.3 — Canonical vocabulary**
+**3.3 -- Canonical vocabulary**
 When vocabulary is required:
 - `tags.db` MUST exist;
 - `tags.db` MUST be readable.
 
-**3.4 — NLP backend availability**
+**3.4 -- NLP backend availability**
 If `TAGS_NLP_BACKEND == "spacy"`, the SpaCy model MUST be available and loadable.
 
-**3.5 — Area documents**
+**3.5 -- Area documents**
 Each Vision area MUST provide a non-empty `documents` list.
 
-**3.6 — System folders**
+**3.6 -- System folders**
 `identity` and `glossario` folders are valid ONLY if explicitly present in the payload.
 
 ---
 
 ## 4. Output Validity Rules
 
-**4.1 — Vision output format**
+**4.1 -- Vision output format**
 Vision output MUST be valid pure JSON.
 
-**4.2 — Schema compliance**
+**4.2 -- Schema compliance**
 Vision output MUST comply with the `VisionOutput` schema in strict execution.
 
-**4.3 — Layout proposals**
+**4.3 -- Layout proposals**
 Layout proposals MUST NOT contain placeholders.
 
-**4.4 — Structural merge**
+**4.4 -- Structural merge**
 Structural merge conflicts MUST cause hard-fail.
 
 ---

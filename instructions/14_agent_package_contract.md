@@ -1,6 +1,6 @@
 # 14_agent_package_contract.md
 **Status:** active
-**Scope:** Agency Engine – structure and identity of the agents
+**Scope:** Agency Engine - structure and identity of the agents
 **Authority:** `instructions/*` (normative SSoT)
 **Precedence:** MANIFEST.md → instructions/* → code → docs/
 
@@ -67,7 +67,7 @@ Forbidden:
 
 ---
 
-## 5. `agent.yaml` – agent identity card
+## 5. `agent.yaml` - agent identity card
 
 Every Agent Package must include the file:
 

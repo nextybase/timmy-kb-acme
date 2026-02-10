@@ -8,10 +8,10 @@ This document **does not introduce new semantics**:
 - it binds and harmonizes definitions already available in the source documents.
 
 Normative references:
-- instructions/02_prompt_chain_lifecycle.md – lifecycle and action families
-- instructions/05_pipeline_state_machine.md – workspace states
-- instructions/07_gate_checklists.md – gate operational checklists
-- instructions/08_gate_evidence_and_retry_contract.md – Evidence/QA/Skeptic Gate
+- instructions/02_prompt_chain_lifecycle.md - lifecycle and action families
+- instructions/05_pipeline_state_machine.md - workspace states
+- instructions/07_gate_checklists.md - gate operational checklists
+- instructions/08_gate_evidence_and_retry_contract.md - Evidence/QA/Skeptic Gate
 
 In case of conflict, **this document prevails** as the SSoT binding.
 

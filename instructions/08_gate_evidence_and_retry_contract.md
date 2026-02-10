@@ -108,7 +108,7 @@ This predicate is unique; all implementations must follow its definition.
 
 ---
 
-## Evidence Gate – normative contract
+## Evidence Gate - normative contract
 The Evidence Gate:
 - assesses structural consistency and the presence of evidence;
 - never decides advancement;

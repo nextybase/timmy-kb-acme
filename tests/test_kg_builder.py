@@ -118,7 +118,11 @@ def test_invoke_assistant_raises_on_error(monkeypatch: pytest.MonkeyPatch, messa
         kg_builder._invoke_assistant([{"role": "user", "content": "hi"}], redact_logs=False)
 
 
-def test_build_kg_for_workspace_creates_artifacts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_kg_for_workspace_creates_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    allow_workspace_override: None,
+) -> None:
     workspace = _create_minimal_workspace(tmp_path)
     semantic = workspace / "semantic"
     _write_tags_raw(semantic, namespace="dummy")
@@ -142,7 +146,7 @@ def test_build_kg_for_workspace_creates_artifacts(tmp_path: Path, monkeypatch: p
     assert kg.namespace == "dummy"
 
 
-def test_build_kg_requires_tags_raw(tmp_path: Path) -> None:
+def test_build_kg_requires_tags_raw(tmp_path: Path, allow_workspace_override: None) -> None:
     workspace = _create_minimal_workspace(tmp_path)
     ctx = _create_client_context(workspace)
 

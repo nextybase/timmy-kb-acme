@@ -1,4 +1,4 @@
-# instructions/ – Normative Control Plane Specification (Beta 1.0)
+# instructions/ - Normative Control Plane Specification (Beta 1.0)
 
 ## What is this folder?
 - **design-first specification repo** for the ProtoTimmy control plane.
@@ -46,25 +46,25 @@ Any behavior not described in this folder is **disallowed** in the system.
 ---
 
 ## Document inventory (Beta 1.0)
-- `00_ssot_agency.md` – **frozen**
-- `01_intents_and_actions.md` – **active**
-- `02_prompt_chain_lifecycle.md` – **active**
-- `03_gatekeepers_contracts.md` – **active**
-- `04_microagents_work_orders.md` – **active**
-- `05_pipeline_state_machine.md` – **active**
-- `06_promptchain_workspace_mapping.md` – **active**
-- `07_gate_checklists.md` – **active**
-- `08_gate_evidence_and_retry_contract.md` – **active**
-- `09_context_layout_contract_beta.md` – **frozen**
-- `10_runtime_strict_contract_beta.md` – **active** (runtime invariants and strict-only execution rules)
-- `11_ui_contract.md` – **active**
-- `12_env_override_capabilities.md` – **active**
-- `13_artifacts_policy.md` – **active**
-- `14_agent_package_contract.md` – **active**
-- `AGENTS.md` – **active**
+- `00_ssot_agency.md` - **frozen**
+- `01_intents_and_actions.md` - **active**
+- `02_prompt_chain_lifecycle.md` - **active**
+- `03_gatekeepers_contracts.md` - **active**
+- `04_microagents_work_orders.md` - **active**
+- `05_pipeline_state_machine.md` - **active**
+- `06_promptchain_workspace_mapping.md` - **active**
+- `07_gate_checklists.md` - **active**
+- `08_gate_evidence_and_retry_contract.md` - **active**
+- `09_context_layout_contract_beta.md` - **frozen**
+- `10_runtime_strict_contract_beta.md` - **active** (runtime invariants and strict-only execution rules)
+- `11_ui_contract.md` - **active**
+- `12_env_override_capabilities.md` - **active**
+- `13_artifacts_policy.md` - **active**
+- `14_agent_package_contract.md` - **active**
+- `AGENTS.md` - **active**
 
 Active documents may be refined but:
-- they must not contradict this README’s invariants;
+- they must not contradict this README's invariants;
 - they must not introduce implicit fallbacks or hidden states.
 
 ---

@@ -8,7 +8,7 @@ General rules:
 - no implicit fallbacks: invalid values MUST trigger deterministic stop conditions;
 - overrides MUST NOT replace the base configuration (config/config.yaml).
 
-Note: credentials and secrets (e.g., `OPENAI_API_KEY`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`) are **not “overrides”**; they are execution prerequisites and are outside the scope of this list.
+Note: credentials and secrets (e.g., `OPENAI_API_KEY`, `SERVICE_ACCOUNT_FILE`, `DRIVE_ID`) are **not "overrides"**; they are execution prerequisites and are outside the scope of this list.
 
 ---
 

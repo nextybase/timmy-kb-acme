@@ -378,8 +378,9 @@ def _stable_env(monkeypatch, sandbox_workspace):
     # Default: STRICT (Beta contract).
     # Tests that intentionally explore non-strict behavior must downgrade explicitly.
     monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
-    # Allow workspace overrides under the controlled test harness to keep ClientContext.load usable.
-    monkeypatch.setenv("TIMMY_ALLOW_WORKSPACE_OVERRIDE", "1")
+    # IMPORTANT (Beta 1.0): non abilitiamo TIMMY_ALLOW_WORKSPACE_OVERRIDE a livello globale.
+    # Chi chiama ClientContext.load(..., repo_root_dir=...) in strict deve dichiarare il fixture
+    # `allow_workspace_override`.
 
     # Evita side-effect su output/ del repo: se qualche codice usa default,
     # meglio che punti alla base temporanea del dummy.
@@ -400,6 +401,17 @@ def _stable_env(monkeypatch, sandbox_workspace):
     except Exception:
         pass
     yield
+
+
+@pytest.fixture
+def allow_workspace_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Opt-in esplicito per i test che forzano il repo_root explicitamente in strict.
+
+    TIMMY_ALLOW_WORKSPACE_OVERRIDE è normalmente bloccato in Beta 1.0; questa fixture fornisce
+    un punto unico in cui abilitarlo.
+    """
+    monkeypatch.setenv("TIMMY_ALLOW_WORKSPACE_OVERRIDE", "1")
 
 
 def build_vocab_db(base: Path, tags: Iterable[dict[str, Any]]) -> Path:

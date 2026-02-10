@@ -23,7 +23,7 @@ categories:
       - id: milestone
         label: "Milestone"
         document_code: "MLS-"
-        description: "Punto di controllo temporale che scandisce l’avanzamento del progetto."
+        description: "Punto di controllo temporale che scandisce l'avanzamento del progetto."
         examples: ["Completamento onboarding", "Rilascio prototipo Timmy v0.1"]
       - id: epic
         label: "Epic"
@@ -88,7 +88,7 @@ categories:
       - id: management
         label: "Management"
         document_code: "MNG-"
-        description: "Strato direzionale dell’organizzazione, responsabile di strategia e supervisione."
+        description: "Strato direzionale dell'organizzazione, responsabile di strategia e supervisione."
         examples: ["Direzione generale", "C-Suite"]
       - id: fornitore
         label: "Fornitore"
@@ -148,7 +148,7 @@ categories:
       - id: bene
         label: "Bene"
         document_code: "BEN-"
-        description: "Oggetto materiale utilizzato o gestito nell’ambito dei progetti."
+        description: "Oggetto materiale utilizzato o gestito nell'ambito dei progetti."
         examples: ["Server", "Device in aula"]
       - id: servizio
         label: "Servizio"

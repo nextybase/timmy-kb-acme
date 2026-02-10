@@ -19,7 +19,7 @@ Define the definitive Context/Layout contract for Beta 1.0: only one perimeter i
 
 ## 2) `repo_root_dir` (mandatory, no alias)
 - `repo_root_dir` MUST always be present.
-- `repo_root_dir` MUST NOT be derived from CWD, environment heuristics, directory climbing, or “convenience” values.
+- `repo_root_dir` MUST NOT be derived from CWD, environment heuristics, directory climbing, or "convenience" values.
 - `base_dir` is FORBIDDEN as an alias or alternative to derive or substitute `repo_root_dir`.
 - `md_dir` is FORBIDDEN as an alias or alternative to derive or substitute `book_dir`.
 
@@ -38,7 +38,7 @@ The macro is resolved exactly once, before building the `WorkspaceLayout`, and i
 - Consumers (UI/CLI/runtime services/tools) MUST NOT:
   - read `context.*_dir` entries (if present),
   - rebuild paths by concatenating strings,
-  - compute “equivalent” paths outside the layout.
+  - compute "equivalent" paths outside the layout.
 
 Permitted minimal example (illustrative only):
 ```
@@ -71,12 +71,12 @@ except Exception:
 ```
 
 ### 4.4 silent defaults on mandatory fields/dirs
-Any behavior that “continues” without `repo_root_dir` or without a valid layout is FORBIDDEN.
+Any behavior that "continues" without `repo_root_dir` or without a valid layout is FORBIDDEN.
 
 ## 5) Error policy (fail-fast, noisy, explicit)
 - Every violation of this contract MUST be treated as a **contractual error**.
 - The error MUST be **fail-fast**, **noisy** (explicit log/event), and **not implicitly recovered**.
-- No implicit recovery is allowed: there MUST NOT exist “auto-fix” routines or automatic fallbacks that switch to an alternative path.
+- No implicit recovery is allowed: there MUST NOT exist "auto-fix" routines or automatic fallbacks that switch to an alternative path.
 
 ## 6) Critical distinction: HiTL checkpoint ≠ fallback
 - A **HiTL checkpoint** is a governed STOP: it blocks progress until the human decision/artifact prescribed by the contract becomes available.

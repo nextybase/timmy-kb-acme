@@ -57,10 +57,13 @@ def main() -> int:
     ap.add_argument("--root", default=".", help="Repo root (default: .)")
     ap.add_argument("--check", action="store_true", help="Fail if replacements would occur; do not modify files.")
     ap.add_argument("--files", nargs="*", help="Optional explicit file list (overrides scan).")
+    ap.add_argument("positional_files", nargs="*", help="File list supplied by pre-commit.")
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
-    paths = [Path(f) for f in (args.files or [])] if args.files else iter_text_files(root)
+    explicit_files: list[Path] = [Path(f) for f in (args.files or [])]
+    explicit_files.extend(Path(f) for f in (args.positional_files or []))
+    paths = explicit_files if explicit_files else iter_text_files(root)
 
     touched: list[Path] = []
     for path in paths:

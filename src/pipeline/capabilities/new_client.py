@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -38,6 +39,26 @@ def _summarize_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "warnings": list(payload.get("warnings", [])) if payload.get("warnings") is not None else [],
         "artifacts": list(payload.get("artifacts", [])) if payload.get("artifacts") is not None else [],
     }
+
+
+@contextmanager
+def _scoped_workspace_env(*, workspace_root: Path) -> Any:
+    """Forza WORKSPACE_ROOT_DIR e rimuove REPO_ROOT_DIR per evitare drift non intenzionali."""
+    prev_workspace = os.environ.get("WORKSPACE_ROOT_DIR")
+    prev_repo = os.environ.get("REPO_ROOT_DIR")
+    os.environ["WORKSPACE_ROOT_DIR"] = str(workspace_root)
+    os.environ.pop("REPO_ROOT_DIR", None)
+    try:
+        yield
+    finally:
+        if prev_workspace is None:
+            os.environ.pop("WORKSPACE_ROOT_DIR", None)
+        else:
+            os.environ["WORKSPACE_ROOT_DIR"] = prev_workspace
+        if prev_repo is None:
+            os.environ.pop("REPO_ROOT_DIR", None)
+        else:
+            os.environ["REPO_ROOT_DIR"] = prev_repo
 
 
 def _run_tool_with_repo_env(
@@ -131,15 +152,15 @@ def create_new_client_workspace(
     _notify_progress(progress, 15, "Self-check ambiente completato")
 
     workspace_root = _workspace_root(repo_root_path, safe_slug)
-    os.environ.setdefault("TIMMY_ALLOW_BOOTSTRAP", "1")
 
-    ctx = ClientContext.load(
-        slug=safe_slug,
-        require_drive_env=False,
-        bootstrap_config=True,
-        repo_root_dir=workspace_root,
-        logger=LOGGER,
-    )
+    # TIMMY_ALLOW_BOOTSTRAP deve essere esplicito nei flussi di onboarding/tooling.
+    with _scoped_workspace_env(workspace_root=workspace_root):
+        ctx = ClientContext.load(
+            slug=safe_slug,
+            require_drive_env=False,
+            bootstrap_config=True,
+            logger=LOGGER,
+        )
     layout = bootstrap_client_workspace(ctx)
     _notify_progress(progress, 30, "Workspace creato")
 
@@ -157,13 +178,13 @@ def create_new_client_workspace(
         "meta": {"client_name": resolved_name},
     }
     update_config_with_drive_ids(ctx, updates, logger=LOGGER)
-    ctx = ClientContext.load(
-        slug=safe_slug,
-        require_drive_env=False,
-        bootstrap_config=False,
-        repo_root_dir=layout.repo_root_dir,
-        logger=LOGGER,
-    )
+    with _scoped_workspace_env(workspace_root=layout.repo_root_dir):
+        ctx = ClientContext.load(
+            slug=safe_slug,
+            require_drive_env=False,
+            bootstrap_config=False,
+            logger=LOGGER,
+        )
     layout = WorkspaceLayout.from_context(ctx)
     vision_pdf = _vision_pdf_path(layout)
     _notify_progress(progress, 40, "VisionStatement.pdf salvato e config aggiornato")
@@ -211,13 +232,13 @@ def create_new_client_workspace(
                 "Errore durante il provisioning Drive",
                 slug=safe_slug,
             ) from exc
-        ctx = ClientContext.load(
-            slug=safe_slug,
-            require_drive_env=False,
-            bootstrap_config=False,
-            repo_root_dir=layout.repo_root_dir,
-            logger=LOGGER,
-        )
+        with _scoped_workspace_env(workspace_root=layout.repo_root_dir):
+            ctx = ClientContext.load(
+                slug=safe_slug,
+                require_drive_env=False,
+                bootstrap_config=False,
+                logger=LOGGER,
+            )
         layout = WorkspaceLayout.from_context(ctx)
 
     vision_yaml_path = vision_yaml_workspace_path(layout.repo_root_dir, pdf_path=vision_pdf)
@@ -248,13 +269,13 @@ def run_vision_provision_for_client(
     safe_slug = validate_slug(slug)
     repo_root_path = repo_root.resolve()
     workspace_root = _workspace_root(repo_root_path, safe_slug)
-    ctx = ClientContext.load(
-        slug=safe_slug,
-        require_drive_env=False,
-        bootstrap_config=False,
-        repo_root_dir=workspace_root,
-        logger=LOGGER,
-    )
+    with _scoped_workspace_env(workspace_root=workspace_root):
+        ctx = ClientContext.load(
+            slug=safe_slug,
+            require_drive_env=False,
+            bootstrap_config=False,
+            logger=LOGGER,
+        )
     layout = WorkspaceLayout.from_context(ctx)
     _notify_progress(progress, 70, "Vision (Fase B) in corso")
     vision_payload = _run_tool_with_repo_env(

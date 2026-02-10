@@ -1,7 +1,7 @@
 # Artifacts Policy (Core vs Service) - v1.0 Beta
 
 ## Scope & intent
-This policy defines what an “artifact” represents in the Timmy-KB system and establishes the normative rules that govern determinism, fallback behavior, optional dependencies, and traceability.
+This policy defines what an "artifact" represents in the Timmy-KB system and establishes the normative rules that govern determinism, fallback behavior, optional dependencies, and traceability.
 
 It is a **normative Single Source of Truth (SSoT)**. In case of conflict with `docs/` or `system/`, this document prevails.
 
@@ -24,14 +24,14 @@ A service artifact:
 - is not a prerequisite for the deterministic pipeline;
 - must not alter or replace the semantics of core artifacts.
 
-Examples: zipped logs, workspace summaries, in-memory cache, previews, “service” reports.
+Examples: zipped logs, workspace summaries, in-memory cache, previews, "service" reports.
 
 ### Conditional CORE artifact
 Some artifacts are CORE **only when** a capability or pipeline stage is active. In those situations:
 - if the condition is active and the artifact is missing → FAIL-FAST (no fallback);
 - if the condition is inactive → the artifact is **not required** and **must not** be produced implicitly.
 
-“Conditional CORE” does **not** justify best-effort behaviors while the condition is active; the capability must explicitly govern the artifact’s presence.
+"Conditional CORE" does **not** justify best-effort behaviors while the condition is active; the capability must explicitly govern the artifact's presence.
 
 ### Core-Gate Artifact (Gate prerequisite)
 A core-gate artifact:
@@ -49,24 +49,24 @@ When a core artifact relies on an optional dependency or capability that is unav
 - STOP with a typed error (fail-fast), and
 - explicit tracking (structured log and ledger entry where applicable).
 
-Automatically substituting a core artifact with a “good enough” variant (e.g., emitting `.txt` instead of `.pdf`, or changing the format without explicit authorization) is prohibited.
+Automatically substituting a core artifact with a "good enough" variant (e.g., emitting `.txt` instead of `.pdf`, or changing the format without explicit authorization) is prohibited.
 
 ### 3) Service artifacts MAY be best-effort (but must not masquerade)
 Service artifacts are allowed to follow best-effort or fallback behavior only under the following conditions:
 - they do not alter or replace core artifacts;
-- they are explicit (structured log) and marked as “SERVICE_ONLY”;
+- they are explicit (structured log) and marked as "SERVICE_ONLY";
 - they do not introduce implicit dependencies for subsequent steps.
 
 ### Determinism & Observability (P1)
 CORE artifacts MUST be deterministic and reproducible at parity of inputs, configuration, and capability flags.
 Any time-variant telemetry, timestamps, or cache state are SERVICE artifacts and MAY vary; they MUST NOT influence gating, ordering, or selection of CORE inputs.
 SERVICE-only supporting artifacts MUST be marked as such (structured log + `service_only` flag) so they cannot masquerade as deterministically required outputs.
-Note: the Vision audit log append is the single strict guard for SERVICE observability—failures emit `semantic.vision.audit_write_failed` only when `service_only=True`, while the retention/`purge_old_artifacts` path remains SERVICE-only best-effort and MUST NOT block CORE generations (it simply logs what it cleans without gating the pipeline).
+Note: the Vision audit log append is the single strict guard for SERVICE observability--failures emit `semantic.vision.audit_write_failed` only when `service_only=True`, while the retention/`purge_old_artifacts` path remains SERVICE-only best-effort and MUST NOT block CORE generations (it simply logs what it cleans without gating the pipeline).
 
 ### 4) Optional dependencies policy
 Optional dependencies are permitted only when:
 - they are enabled through explicit capability gating (configuration or documented extra), and
-- their failure does not create apparent “success” for the affected core artifacts.
+- their failure does not create apparent "success" for the affected core artifacts.
 
 ### 5) Time-based state and caching policy
 Any time-based cache (TTL, wall-clock timestamps) counts as *operational entropy*. These caches are acceptable only as service behavior when:
@@ -91,7 +91,7 @@ When unsure: default to CORE.
 
 ## Compliance hooks (normative expectations)
 - Gatekeepers and micro-agents (Work Order Envelope) must treat any unauthorized alternative production of core artifacts as a violation.
-- An “OK” verdict is invalid if the expected core artifacts were not produced in the required form.
+- An "OK" verdict is invalid if the expected core artifacts were not produced in the required form.
 
 ## Allowed exceptions (strictness/caching)
 No active exceptions (2026-01-25).
@@ -107,7 +107,7 @@ must be listed here with motivation and dedicated tests.
 - The absence or corruption of a core artifact blocks the pipeline (fail-fast) and must be tracked.
 - Silent fallback or downgrade behavior is not allowed.
 - For conditional CORE artifacts:
-  - “Skip with warning” is not valid while the condition is active.
+  - "Skip with warning" is not valid while the condition is active.
   - The condition must be explicit and verifiable (no heuristic fallback).
 
 ### Corruption Handling (P3)
@@ -121,7 +121,7 @@ The non-strict exception exists solely for resilience: skipping corrupted rows i
 - Artifacts required by inactive capabilities must not be forced.
 - Clarification: the presence of a conditional CORE artifact does not activate a capability; capabilities activate artifacts.
 
-## Appendix A – Runtime inventory (`src/`)
+## Appendix A - Runtime inventory (`src/`)
 Method: static scan of producers in `src/` (runtime UI/CLI/pipeline). Excludes `tools/` and `tests/`.
 Includes file/DB/log/zip writes identified via `safe_write_*`, sqlite3, log handlers, and zip utilities.
 Limit: dynamic writes through plugins/ENV may not be captured by the scan.
@@ -150,7 +150,7 @@ Note: `visionstatement.yaml` exists only in the workspace (`output/timmy-kb-<slu
 | `src/semantic/vision_provision.py:_persist_outputs` | `output/timmy-kb-<slug>/semantic/semantic_mapping.yaml` | YAML mapping | Tagging/Semantics | CORE | Vision responses, valid schema | No |
 | `src/ui/components/mapping_editor.py:save_semantic_mapping`<br>`src/ui/components/yaml_editors.py:_write_yaml_text` | `output/timmy-kb-<slug>/semantic/semantic_mapping.yaml` | YAML mapping | Tagging/Semantics | CORE | UI + valid YAML | No |
 | `src/ui/components/mapping_editor.py:write_raw_structure_yaml` | `output/timmy-kb-<slug>/semantic/_raw_from_mapping.yaml` | YAML (raw layout) | Drive runner (optional) | SERVICE | Mapping exists | No |
-| `src/semantic/vision_provision.py:_write_audit_line` | `output/timmy-kb-<slug>/logs/semantic.vision.log` | JSONL audit log | Diagnostics | SERVICE | FS write | `best-effort (SERVICE_ONLY)` – failures log `semantic.vision.audit_write_failed` (append failure) or `semantic.vision.audit_lock_cleanup_failed` (lock cleanup failure) with `scene=service`, `service_only=True`, `service=semantic.vision.audit_log`; documented coverage: `tests/semantic/test_vision_audit_service.py` + `tests/contract/test_service_audit_log.py`. |
+| `src/semantic/vision_provision.py:_write_audit_line` | `output/timmy-kb-<slug>/logs/semantic.vision.log` | JSONL audit log | Diagnostics | SERVICE | FS write | `best-effort (SERVICE_ONLY)` - failures log `semantic.vision.audit_write_failed` (append failure) or `semantic.vision.audit_lock_cleanup_failed` (lock cleanup failure) with `scene=service`, `service_only=True`, `service=semantic.vision.audit_log`; documented coverage: `tests/semantic/test_vision_audit_service.py` + `tests/contract/test_service_audit_log.py`. |
 | `src/ai/responses.py:_diagnose_json_schema_format` | `output/debug/vision_schema_sent.json` | Debug JSON | Diagnostics | SERVICE | Local debug | Yes (best-effort, warning on failure) |
 
 ### A.3 Raw ingest
@@ -218,7 +218,7 @@ Note: `visionstatement.yaml` exists only in the workspace (`output/timmy-kb-<slu
 | `src/pipeline/drive/upload.py:create_drive_structure_from_names` | `Drive/<client_folder>/raw/<area>/` | Drive folders | Raw ingest (Drive) | CORE (conditional) | Drive APIs + mapping | No (fail-fast if mapping invalid) |
 | `src/ui/services/drive_runner.py:emit_readmes_for_raw` | `Drive/<client_folder>/raw/<area>/README.pdf`<br>`Drive/<client_folder>/raw/<area>/README.txt` | PDF/TXT | UX/operator | SERVICE | ReportLab (optional) | Yes (SERVICE_ONLY + structured log + Drive appProperties) |
 
-## Appendix B – CORE artifacts expected per phase
+## Appendix B - CORE artifacts expected per phase
 | Phase (runbook) | Expected CORE artifacts | Notes/conditions |
 | --- | --- | --- |
 | pre_onboarding | `output/timmy-kb-<slug>/config/config.yaml`<br>`output/timmy-kb-<slug>/book/README.md`<br>`output/timmy-kb-<slug>/book/SUMMARY.md` | Idempotent bootstrap. If Vision is active: `output/timmy-kb-<slug>/config/VisionStatement.pdf`, `output/timmy-kb-<slug>/config/visionstatement.yaml`, `output/timmy-kb-<slug>/semantic/semantic_mapping.yaml`. |

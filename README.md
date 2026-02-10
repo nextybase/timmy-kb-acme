@@ -16,6 +16,10 @@ Timmy-KB è un ambiente per la creazione e il governo di Timmy, strutturato su d
 [![Security Status](https://img.shields.io/badge/security-hardened-brightgreen)](docs/policies/security.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.md)
 
+## CI enforcement
+
+Il workflow CI ha un job `Smoke / Strict Gates` che esegue `python tools/smoke/check_strict_workspace_gates.py` prima di lanciare la suite completa: fa fallire subito bootstrap e override quando `TIMMY_BETA_STRICT=1` e i flag `TIMMY_ALLOW_*` sono assenti, così eventuali regressioni "auto-consenso" vengono scoperte in pochi secondi.
+
 Timmy-KB è l'implementazione operativa che incarna i principi del framework NeXT: mantiene l'envelope epistemico, resta Human-in-the-Loop e imposta governance by design; NeXT è la cornice teorica che descrive l'AI come strumento di supporto, non come autorità autonoma.
 
 Cornice filosofica e di responsabilità: [MANIFEST.md](MANIFEST.md).
