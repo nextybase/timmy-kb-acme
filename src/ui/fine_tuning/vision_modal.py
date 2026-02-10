@@ -62,8 +62,13 @@ def _ensure_workspace_pdf(ctx: ClientContext) -> Path:
 def open_vision_modal(slug: str = "dummy") -> None:
     dialog_factory = getattr(st, "dialog", None)
     if not callable(dialog_factory):
-        st.error("La versione corrente di Streamlit non supporta i dialog.")
-        return
+        # Strict UI: se manca la capability (dialog), STOP.
+        LOG.error("ui.vision_modal.dialog_unavailable", extra={"slug": slug or "", "decision": "STOP"})
+        st.error("Streamlit non supporta i dialog: operazione non eseguibile in modalita strict.")
+        stop_fn = getattr(st, "stop", None)
+        if callable(stop_fn):
+            stop_fn()
+        raise ConfigError("Streamlit dialog non disponibile per Vision modal.", slug=slug or "")
 
     DialogFactory = Callable[[str], Callable[[Callable[[], None]], Callable[[], None]]]
     dialog = cast(DialogFactory, dialog_factory)
@@ -75,11 +80,15 @@ def open_vision_modal(slug: str = "dummy") -> None:
     try:
         data = load_workspace_yaml(slug)
     except Exception as exc:
+        LOG.error("ui.vision_modal.yaml_load_failed", extra={"slug": slug or "", "error": str(exc), "decision": "STOP"})
         st.error(str(exc))
         if st.button("Chiudi", key="ft_modal_vision_close_error"):
             _clear_state()
             _st_rerun()
-        return
+        stop_fn = getattr(st, "stop", None)
+        if callable(stop_fn):
+            stop_fn()
+        raise ConfigError("Impossibile caricare visionstatement.yaml.", slug=slug or "") from exc
 
     client_name_hint: str | None = None
     try:
@@ -145,6 +154,8 @@ def open_vision_modal(slug: str = "dummy") -> None:
             except Exception as exc:
                 LOG.error("ui.vision_modal.prepare_failed", extra={"slug": slug, "error": str(exc)})
                 st.error(str(exc))
+                # Strict: preparazione fallita => STOP, niente "resto del modal" che sembra operabile.
+                st.stop()
             else:
                 args: list[str] = [
                     "--repo-root",
@@ -165,6 +176,8 @@ def open_vision_modal(slug: str = "dummy") -> None:
                 except Exception as exc:
                     LOG.error("ui.vision_modal.run_failed", extra={"slug": slug, "error": str(exc)})
                     st.error(str(exc))
+                    # Strict: fallimento esecuzione => STOP.
+                    st.stop()
                 else:
                     display_control_plane_result(st, payload, success_message="Vision completata correttamente.")
                     if payload.get("status") == "ok":

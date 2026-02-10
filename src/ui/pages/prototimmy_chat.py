@@ -2,6 +2,8 @@
 # src/ui/pages/prototimmy_chat.py
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Sequence, cast
 
 from ai.assistant_registry import resolve_ocp_executor_config, resolve_prototimmy_config
@@ -11,9 +13,11 @@ from ai.responses import run_json_model, run_text_model
 from ai.types import AssistantConfig
 from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
+from storage import decision_ledger
 from ui.chrome import render_chrome_then_require
 from ui.utils.repo_root import get_repo_root
 from ui.utils.stubs import get_streamlit
+from ui.utils.workspace import get_ui_workspace_layout
 
 st = get_streamlit()
 
@@ -66,7 +70,7 @@ _CODEX_VALIDATION_SYSTEM = {
     "content": (
         "Sei OCP_executor. Valida l'output manuale di Codex CLI in formato JSON. "
         "Rispondi SOLO con le chiavi ok, issues, next_prompt_for_codex e stop_code. "
-        "stop_code = 'HITL_REQUIRED' se è necessaria la supervisione umana."
+        "stop_code = 'HITL_REQUIRED' se risulta necessaria la supervisione umana."
     ),
 }
 
@@ -96,6 +100,35 @@ _CODEX_HITL_KEY = "codex_hitl_required"
 _CODEX_HITL_CODE = "HITL_REQUIRED"
 _CODEX_CLI_CMD: list[str] = ["codex", "run"]
 _CODEX_CLI_TIMEOUT_S = 60
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _event_id(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex}"
+
+
+def _record_ui_event(slug: str, event_name: str, *, payload: dict[str, Any] | None = None) -> None:
+    """
+    Audit non-normativo (ledger.events). Non deve mai bloccare la UI: se fallisce, fallisce hard.
+    """
+    layout = get_ui_workspace_layout(slug, require_env=False)
+    conn = decision_ledger.open_ledger(layout)
+    try:
+        decision_ledger.record_event(
+            conn,
+            event_id=_event_id("ui"),
+            slug=slug,
+            event_name=event_name,
+            actor="ui:prototimmy_chat",
+            occurred_at=_utc_now(),
+            payload=payload,
+            run_id=None,  # UI/tooling: not part of a run
+        )
+    finally:
+        conn.close()
 
 
 def _build_chat_invocation(
@@ -252,7 +285,7 @@ def _validate_codex_output(output: str) -> None:
             st.warning("HITL richiesto: fermare la catena e attendere supervisione.")
             st.session_state[_CODEX_HITL_KEY] = True
     except Exception as exc:  # pragma: no cover - logging happens in downstream libs
-        st.error(f"Non è stato possibile validare l'output: {exc}")
+        raise ConfigError(f"Non è stato possibile validare l'output Codex: {exc}") from exc
 
 
 def _execute_codex_cli(prompt: str) -> None:
@@ -272,11 +305,15 @@ def _execute_codex_cli(prompt: str) -> None:
         if result.stderr:
             st.info(f"Codex stderr: {result.stderr}")
     except Exception as exc:
-        st.error(f"Codex CLI fallita inaspettatamente: {exc}")
+        raise ConfigError(f"Codex CLI fallita inaspettatamente: {exc}") from exc
 
 
-def _render_codex_section() -> None:
+def _render_codex_section(*, slug: str) -> None:
     st.subheader("Turno Codex (manuale)")
+    st.caption(
+        "Nota: questa sezione è TOOLING (manuale). Non avanza alcun gate/runtime end-to-end: "
+        "serve solo come supporto operativo con audit in ledger.events."
+    )
     prompt = _get_codex_prompt()
     st.text_area("Prompt per Codex", value=prompt, disabled=True)
     st.session_state.setdefault(_CODEX_OUTPUT_KEY, "")
@@ -285,15 +322,34 @@ def _render_codex_section() -> None:
         key=_CODEX_OUTPUT_KEY,
     )
     if st.session_state.get(_CODEX_HITL_KEY):
-        st.warning("HITL richiesto: non è possibile validare altri output.")
-        if st.button("Sblocca HITL (supervisore)"):
+        st.error("HITL richiesto: catena fermata. La UI non può auto-riprendere senza ack esplicito.")
+        st.caption("Per riprendere: inserisci un ack supervisionato. Questo evento viene tracciato su ledger.")
+        ack = st.text_input("Ack supervisore (scrivi: I ACK HITL)", key="prototimmy_codex_hitl_ack")
+        if st.button("Registra ACK e sblocca (supervisore)", type="primary"):
+            if (ack or "").strip() != "I ACK HITL":
+                st.error("Ack non valido. Scrivi esattamente: I ACK HITL")
+                st.stop()
+            _record_ui_event(slug, "ui.hitl.ack", payload={"scope": "codex", "ack": "I ACK HITL"})
             st.session_state[_CODEX_HITL_KEY] = False
-            st.success("HITL sbloccato; prosegui con il prossimo output.")
-        return
+            st.success("ACK registrato. HITL sbloccato; puoi riprendere.")
+        st.stop()
     if st.button("Valida output Codex"):
+        _record_ui_event(
+            slug, "ui.codex.validation.requested", payload={"chars": len(st.session_state[_CODEX_OUTPUT_KEY] or "")}
+        )
         _validate_codex_output(st.session_state[_CODEX_OUTPUT_KEY])
+        if st.session_state.get(_CODEX_HITL_KEY):
+            _record_ui_event(slug, "ui.hitl.required", payload={"scope": "codex_validation"})
+        else:
+            _record_ui_event(slug, "ui.codex.validation.completed")
     if st.button("Esegui Codex CLI (locale)"):
+        _record_ui_event(slug, "ui.codex.cli.run.requested", payload={"timeout_s": _CODEX_CLI_TIMEOUT_S})
         _execute_codex_cli(prompt)
+        _record_ui_event(
+            slug,
+            "ui.codex.cli.run.completed",
+            payload={"stdout_chars": len(st.session_state.get(_CODEX_OUTPUT_KEY, "") or "")},
+        )
 
 
 def _invoke_prototimmy_json(
@@ -365,28 +421,42 @@ def _render_smoke_test() -> None:
 
 
 def main() -> None:
-    render_chrome_then_require(
-        allow_without_slug=True,
+    slug = render_chrome_then_require(
+        allow_without_slug=False,
         title="ProtoTimmy Chat",
         subtitle="Chat operativa con ProtoTimmy e smoke test dedicato.",
+        control_plane_note="Strict runtime attivo. Tooling auditato su ledger.events (non normativo).",
     )
+    if not slug:
+        st.error("Slug mancante: impossibile operare in modo deterministico.")
+        st.stop()
     history = _ensure_history()
     user_input = _collect_user_input()
-    if user_input:
-        history.append({"role": "user", "content": user_input})
-        reply, ocp_request = _invoke_prototimmy_json(history, user_input)
-        if reply:
-            history.append({"role": "assistant", "content": reply})
-        if ocp_request:
-            ocp_response = _call_ocp(ocp_request)
-            _render_ocp_response(ocp_response)
-            summary_prompt = f"Questa è la risposta reale di OCP:\n{ocp_response}\nRiassumila per l'utente."
-            summary = _invoke_prototimmy_text(summary_prompt)
-            if summary:
-                history.append({"role": "assistant", "content": summary})
+    try:
+        if user_input:
+            _record_ui_event(slug, "ui.chat.user_input", payload={"chars": len(user_input)})
+            history.append({"role": "user", "content": user_input})
+            reply, ocp_request = _invoke_prototimmy_json(history, user_input)
+            if reply:
+                history.append({"role": "assistant", "content": reply})
+                _record_ui_event(slug, "ui.chat.prototimmy_reply")
+            if ocp_request:
+                _record_ui_event(slug, "ui.ocp.requested", payload={"chars": len(ocp_request)})
+                ocp_response = _call_ocp(ocp_request)
+                _render_ocp_response(ocp_response)
+                _record_ui_event(slug, "ui.ocp.completed", payload={"chars": len(ocp_response or "")})
+                summary_prompt = f"Questa è la risposta reale di OCP:\n{ocp_response}\nRiassumila per l'utente."
+                summary = _invoke_prototimmy_text(summary_prompt)
+                if summary:
+                    history.append({"role": "assistant", "content": summary})
+                    _record_ui_event(slug, "ui.chat.summary_added")
+    except ConfigError as exc:
+        st.error(str(exc))
+        _record_ui_event(slug, "ui.hard_fail", payload={"error": str(exc).splitlines()[:1]})
+        st.stop()
     _render_history(history)
     _render_smoke_test()
-    _render_codex_section()
+    _render_codex_section(slug=slug)
 
 
 if __name__ == "__main__":

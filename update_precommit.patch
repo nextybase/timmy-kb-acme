@@ -1,0 +1,7 @@
+*** Begin Patch
+*** Update File: .pre-commit-config.yaml
+@@
+-minimum_pre_commit_version: \" "3.6.0\
++minimum_pre_commit_version: \" "3.6.0\
+@@
++default_stages: [pre-commit]

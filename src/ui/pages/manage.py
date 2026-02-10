@@ -60,7 +60,7 @@ def _clients_db_path() -> Path:
 
 
 def _load_clients() -> list[dict[str, Any]]:
-    """Wrapper resiliente che espone get_clients con logging uniforme."""
+    """Carica il registro clienti. In strict UI non deve degradare a 'vuoto' in caso di errore."""
     try:
         entries = get_clients()
         result: list[dict[str, Any]] = []
@@ -74,11 +74,17 @@ def _load_clients() -> list[dict[str, Any]]:
                 result.append(vars(entry))
         return result
     except Exception as exc:
-        LOGGER.warning(
+        # Strict-only: non "fingiamo" che non esistano clienti (entropia: falso negativo).
+        LOGGER.error(
             "ui.manage.clients.load_error",
-            extra={"error": str(exc), "path": str(_clients_db_path())},
+            extra={"error": str(exc), "path": str(_clients_db_path()), "decision": "STOP"},
         )
-        return []
+        st.error("Impossibile caricare il registro clienti (clients_db). Operazione bloccata in modalità strict.")
+        st.caption(f"Dettaglio: {exc}")
+        stop_fn = getattr(st, "stop", None)
+        if callable(stop_fn):
+            stop_fn()
+        raise RuntimeError("clients_db non leggibile: abort UI manage in strict mode.") from exc
 
 
 def _resolve_layout(slug: str) -> WorkspaceLayout | None:
@@ -87,6 +93,8 @@ def _resolve_layout(slug: str) -> WorkspaceLayout | None:
         return get_ui_workspace_layout(slug, require_drive_env=False)
     except Exception as exc:
         LOGGER.warning("ui.manage.layout_resolution_failed", extra={"slug": slug, "error": str(exc)})
+        # Nota: qui ritorniamo None perché il caller fa hard-cut (_render_missing_layout).
+        # Tenere la decisione "STOP" nel punto in cui l'UI interrompe realmente.
         return None
 
 
@@ -270,7 +278,9 @@ if isinstance(_cleanup_last, dict) and _cleanup_last.get("text"):
 
 if not slug:
     st.subheader("Seleziona cliente")
-    clients = manage_helpers.load_clients(LOGGER, _MANAGE_FILE)
+    # In strict UI usiamo il loader locale "non-degradabile":
+    # evita il caso "errore di I/O -> clients=[] -> 'nessun cliente registrato'".
+    clients = _load_clients()
 
     if not clients:
         st.info("Nessun cliente registrato. Crea il primo dalla pagina **Nuovo cliente**.")

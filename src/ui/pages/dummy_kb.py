@@ -285,19 +285,27 @@ def main() -> None:
             value=False,
             help="Salta provisioning/upload su Google Drive",
         )
-    no_vision = st.checkbox(
-        "Disabilita Vision (usa fallback semantic basico)",
-        value=False,
-        help="Salta Vision; genera artefatti minimi senza chiamare il modello.",
-    )
+    if is_beta_strict():
+        st.info("Modalità strict: opzioni di bypass (Vision/Semantic/Enrichment) disabilitate in questa UI tool.")
+        no_vision = True
+        no_semantic_default = False
+        no_enrichment_default = False
+    else:
+        no_vision = st.checkbox(
+            "Disabilita Vision (test-only)",
+            value=False,
+            help="Salta Vision per test locali; non è un canale operativo Beta 1.0 strict-only.",
+        )
+        no_semantic_default = False
+        no_enrichment_default = False
     no_semantic = st.checkbox(
         "Disabilita Semantic",
-        value=False,
+        value=no_semantic_default,
         help="Salta la fase Semantic (non scrive artefatti semantic/*).",
     )
     no_enrichment = st.checkbox(
         "Disabilita Enrichment",
-        value=False,
+        value=no_enrichment_default,
         help="Salta l'arricchimento (no modifica artefatti di enrichment).",
     )
     no_preview = st.checkbox(

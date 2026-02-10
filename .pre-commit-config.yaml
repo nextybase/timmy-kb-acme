@@ -3,6 +3,10 @@ minimum_pre_commit_version: "3.6.0"
 default_language_version:
   python: python3.11
 
+# Default: se un hook non dichiara "stages", resta su pre-commit.
+# (Non cambia nulla per quelli che hanno già stages espliciti.)
+default_stages: [pre-commit]
+
 # Evita di analizzare cartelle generate/venv
 exclude: |
   (?x)^(
@@ -130,7 +134,8 @@ repos:
         name: qa-safe (isort/black/ruff/mypy se presenti)
         entry: python tools/dev/qa_safe.py
         language: python
-        additional_dependencies: [
+        additional_dependencies:
+          [
             "PyMuPDF==1.24.14",
             "PyPDF2==3.0.1",
             "pypdf==6.4.0",
@@ -174,7 +179,7 @@ repos:
             "pre-commit==4.3.0",
             "pre-commit-hooks==4.6.0",
             "pip-audit==2.7.2",
-        ]
+          ]
         pass_filenames: false
         stages: [pre-push]
 
@@ -221,12 +226,34 @@ repos:
         files: "^(src/.*|tests/.*|docs/.*|.*\\.(md|txt|json|ya?ml))$"
         stages: [pre-commit]
 
+      # GUARDIANO: blocca smart quotes/dashes (curly quotes, en/em dash).
+      # Richiede che tools/replace_quotes.py supporti --check.
+      - id: forbid-smart-quotes
+        name: Forbid smart quotes/dashes (unicode punctuation)
+        entry: python tools/replace_quotes.py --check
+        language: system
+        pass_filenames: true
+        types: [text]
+        files: "^(src/.*|tests/.*|docs/.*|.*\\.(md|txt|json|ya?ml|py))$"
+        stages: [pre-commit]
+
+      # FIXER: eseguilo quando serve (manuale), non in automatico.
+      - id: fix-smart-quotes
+        name: Fix smart quotes/dashes (manual)
+        entry: python tools/replace_quotes.py
+        language: system
+        pass_filenames: true
+        types: [text]
+        files: "^(src/.*|tests/.*|docs/.*|.*\\.(md|txt|json|ya?ml|py))$"
+        stages: [manual]
+
       - id: forbid-streamlit-deprecated
         name: Forbid deprecated Streamlit APIs
         entry: python tools/smoke/check_streamlit_deprecations.py
         language: system
         pass_filenames: false
         stages: [pre-commit, pre-push]
+
       - id: streamlit-ui-guard
         name: Streamlit UI guard (router + path-safety + logging)
         entry: python tools/smoke/check_streamlit_ui.py --ci

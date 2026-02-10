@@ -484,6 +484,8 @@ def index_markdown_to_db(
             chunk_records=chunk_records,
         ),
     )
+
+
 def _require_repo_root_dir(context: ClientContextType, *, slug: str) -> Path:
     """Fail-fast: repo_root_dir è obbligatorio per contratto."""
     try:

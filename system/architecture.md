@@ -467,3 +467,74 @@ Any violation of these rules introduces entropy and breaks determinism.
 | Paths       | Manual path joins                                            | Layout-provided paths + `ensure_within`   |
 | Roots       | Heuristic workspace root inference                           | Resolve via context + layout              |
 | Fallbacks   | Silent or non-deterministic fallback in runtime code          | Explicit, logged, deterministic fallback  |
+## Execution Model (Beta 1.0): End-to-End Determinism
+
+Beta 1.0 enforces determinism at the level of **process and artifacts**, not at the level of model text.
+All critical execution steps MUST be reconstructible from the local ledger (`runs/decisions/events`).
+
+Two end-to-end flows are considered primary for Beta readiness:
+
+1. **Epistemic Envelope Flow (Foundation Pipeline)**
+2. **Agency Flow (Control Plane + Assistants)**
+
+These flows are governed by the same strict principles:
+
+- No implicit fallbacks
+- No silent degradation
+- Stop/resume is ledger-governed, not UI-governed
+
+---
+
+## Flow A -- Epistemic Envelope (Ingest → Normalize → Semantic Book)
+
+This is the deterministic foundation pipeline:
+
+Raw Sources
+  → Raw Ingest (append-only)
+  → Normalize (canonical forms)
+  → Semantic Book / Tags / Index
+  → Reviewed Vocabulary (tags.db)
+
+Key invariants:
+
+- State progression is attested by **normative decisions**, not inferred from file existence.
+- Artifact presence does not imply validity without a decision record.
+- Core artifacts MUST fail-fast if missing or unreadable.
+
+Ledger enforcement:
+
+- Each gating transition MUST emit a `decisions` record with ALLOW/DENY.
+- Failures MUST emit stop_code + evidence_json.
+
+---
+
+## Flow B -- Agency (ProtoTimmy → Planner → OCP Executor)
+
+Agency is probabilistic in content but deterministic in orchestration:
+
+User Request
+  → ProtoTimmy (intent + envelope)
+  → Planner Assistant (action family selection)
+  → OCP Executor (controlled execution)
+  → Response + Attestation
+
+Key invariants:
+
+- Assistants operate only within registered intents/actions.
+- Micro-agents (Codex included) are executors, not epistemic authorities.
+- Stop conditions (HITL_REQUIRED, CONTRACT_ERROR) MUST be ledger-governed.
+
+UI constraint:
+
+- UI surfaces MUST NOT resume execution via local toggles.
+- Resume requires an owned resume_rule and a recorded decision.
+
+---
+
+## Beta 1.0 Forbidden Patterns (Strict)
+
+The following are considered Beta errors:
+
+- UI-only stop/resume handling without ledger attestation
+- Soft-fail paths that continue execution after critical errors
+- Retrocompatibility shims in core artifact resolution

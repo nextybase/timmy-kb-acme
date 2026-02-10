@@ -10,6 +10,26 @@ Per Beta 1.0 valgono invarianti di governance:
 
 ---
 
+## Regole UI Beta 1.0: error handling (STOP vs HIDE)
+
+In Beta 1.0 "strict-only" la UI deve evitare stati ambigui in cui un errore viene mostrato
+ma l'esecuzione prosegue in modo che l'utente possa scambiare l'azione per "successo".
+
+- **STOP (obbligatorio)** quando manca una capability/servizio richiesto dal flusso operativo
+  (es. tooling non importabile, layout non risolvibile, registry non leggibile).
+  - log: evento strutturato con `decision=STOP` e `reason` esplicito.
+  - UI: mostra errore sintetico + caption, poi `st.stop()`.
+
+- **HIDE (ammesso)** solo per pagine diagnostiche/di sola lettura dove un pannello è opzionale
+  (es. "non riesco a tailare i log", "riepilogo non disponibile"), purché:
+  - l'azione non abbia side effect,
+  - il log registri `decision=HIDE` e la pagina non dichiari "OK" per quella capability.
+
+Le pagine tool/test (es. dummy generator) NON devono introdurre scorciatoie "fallback" in strict mode:
+se presenti, vanno disabilitate o rese esplicitamente test-only.
+
+---
+
 ## Stack base (Loki + Promtail + Grafana)
 
 1. Avvia lo stack locale (usando il `.env` in root):

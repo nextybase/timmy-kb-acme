@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Tuple, cast
 
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.system_prompt_api import build_openai_client, load_remote_system_prompt, resolve_assistant_id
 from ui.utils.control_plane import display_control_plane_result, run_control_plane_tool
@@ -68,8 +69,13 @@ def _join_sections(sections: Dict[str, str]) -> str:
 def open_system_prompt_modal(*, slug: str = "dummy") -> None:
     dialog_factory = getattr(st, "dialog", None)
     if not callable(dialog_factory):
-        st.error("La versione corrente di Streamlit non supporta i dialog.")
-        return
+        # Strict UI: capability mancante => STOP (non degradare a "mezzo successo").
+        LOG.error("ui.system_prompt.dialog_unavailable", extra={"slug": slug or "", "decision": "STOP"})
+        st.error("Streamlit non supporta i dialog: operazione non eseguibile in modalità strict.")
+        stop_fn = getattr(st, "stop", None)
+        if callable(stop_fn):
+            stop_fn()
+        raise ConfigError("Streamlit dialog non disponibile per System Prompt modal.", slug=slug or "")
 
     DialogFactory = Callable[[str], Callable[[Callable[[], None]], Callable[[], None]]]
     dialog = cast(DialogFactory, dialog_factory)
@@ -84,13 +90,15 @@ def open_system_prompt_modal(*, slug: str = "dummy") -> None:
             model = assistant_payload.get("model", "")
             sys_text = assistant_payload.get("instructions", "") or ""
         except Exception as exc:
-            LOG.warning("ui.system_prompt.error", extra={"err": str(exc)})
+            LOG.error("ui.system_prompt.load_failed", extra={"slug": slug or "", "err": str(exc), "decision": "STOP"})
             st.error("Impossibile caricare il system prompt dell'assistente. Verifica la configurazione.")
             if st.button("Chiudi", key="ft_sys_prompt_close_error"):
                 st.session_state.pop(_SS_TEXT, None)
                 st.session_state.pop(_SS_SECTIONS, None)
                 _st_rerun()
-            return
+            stop_fn = getattr(st, "stop", None)
+            if callable(stop_fn):
+                stop_fn()
 
         try:
             st.caption(f"assistant_id: {asst_id}" + (f" - model: {model}" if model else ""))
@@ -140,7 +148,11 @@ def open_system_prompt_modal(*, slug: str = "dummy") -> None:
                 st.session_state.pop(_SS_SECTIONS, None)
                 _st_rerun()
         except Exception as exc:
-            LOG.warning("ui.system_prompt.error", extra={"err": str(exc)})
+            LOG.error("ui.system_prompt.render_failed", extra={"slug": slug or "", "err": str(exc), "decision": "STOP"})
             st.error("Errore inatteso durante il rendering del system prompt.")
+            stop_fn = getattr(st, "stop", None)
+            if callable(stop_fn):
+                stop_fn()
+            raise ConfigError("Render system prompt fallito.", slug=slug or "") from exc
 
     _inner()

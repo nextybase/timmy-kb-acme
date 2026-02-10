@@ -234,7 +234,7 @@ def _regenerate_agents_matrix() -> None:
             extra={"error": str(exc)},
         )
         st.error("Impossibile importare tools/gen_agents_matrix.py. Controlla i log.")
-        return
+        st.stop()
 
     try:
         gen_agents_matrix.main(check=False)
@@ -262,6 +262,7 @@ def _regenerate_agents_matrix() -> None:
             extra={"rel_path": "system/ops/agents_index.md", "error": str(exc)},
         )
         st.error("Errore durante la rigenerazione della matrice AGENTS. Controlla i log.")
+        st.stop()
 
 
 # ---------------------------------------------------------------------------

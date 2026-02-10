@@ -110,6 +110,9 @@ def _ensure_tags_db_ready(
             extra={"slug": slug, "path": str(db_path)},
         )
         st.error("`semantic/tags.db` non trovato: esegui l'onboarding semantico per generarlo.")
+        stop_fn = getattr(st, "stop", None)
+        if callable(stop_fn):
+            stop_fn()
         return None
     try:
         ensure_schema_v2(str(db_path))
@@ -120,6 +123,9 @@ def _ensure_tags_db_ready(
             extra={"slug": slug, "path": str(db_path), "error": str(exc)},
         )
         st.error("`semantic/tags.db` non valido: esegui l'onboarding semantico per rigenerarlo.")
+        stop_fn = getattr(st, "stop", None)
+        if callable(stop_fn):
+            stop_fn()
         return None
 
 
@@ -257,6 +263,9 @@ def enable_tags_stub(
                     extra={"slug": slug, "path": str(yaml_path), "error": str(exc)},
                 )
                 st.error(f"Sincronizzazione tags.db non riuscita: {exc}")
+                stop_fn = getattr(st, "stop", None)
+                if callable(stop_fn):
+                    stop_fn()
                 return False
         else:
             logger.warning(
@@ -310,6 +319,9 @@ def enable_tags_stub(
     except Exception as exc:
         st.error(f"Abilitazione (stub) non riuscita: {exc}")
         logger.warning("ui.manage.tags_yaml.stub_error", extra={"slug": slug, "error": str(exc)})
+        stop_fn = getattr(st, "stop", None)
+        if callable(stop_fn):
+            stop_fn()
         return False
 
 
@@ -428,6 +440,10 @@ def handle_tags_raw_enable(
             extra={"slug": slug, "mode": tags_mode or "default"},
         )
         st.error("Servizio di estrazione tag non disponibile.")
+        stop_fn = getattr(st, "stop", None)
+        if callable(stop_fn):
+            stop_fn()
+        # Strict: capability mancante => STOP
         return False
     return enable_tags_service(
         slug,

@@ -41,6 +41,17 @@ def _show_error(message: str, exc: Exception) -> None:
         st.exception(exc)
 
 
+def _stop_ui(message: str, *, slug: str) -> None:
+    """
+    Strict UI: quando manca un file richiesto (artefatto contrattuale), fermiamo la pagina.
+    Evita stati ambigui tipo "editor aperto ma non operabile".
+    """
+    if st is not None:
+        st.error(message)
+        st.stop()
+    raise ConfigError(message, slug=slug)
+
+
 SEMANTIC_DIR = "semantic"
 MAPPING_FILE = "semantic_mapping.yaml"
 TAGS_FILE = "tags_reviewed.yaml"
@@ -105,7 +116,7 @@ def edit_semantic_mapping(slug: str) -> None:
         except ConfigError as exc:
             st.error("File non disponibile")
             st.caption(f"Dettaglio: {exc}")
-            return
+            _stop_ui("semantic_mapping.yaml mancante: impossibile continuare in modalita strict.", slug=slug)
 
         state_key = f"yaml_mapping::{slug}"
         if state_key not in st.session_state:
@@ -163,7 +174,7 @@ def edit_tags_reviewed(slug: str) -> None:
         except ConfigError as exc:
             st.error("File non disponibile")
             st.caption(f"Dettaglio: {exc}")
-            return
+            _stop_ui("tags_reviewed.yaml mancante: impossibile continuare in modalita strict.", slug=slug)
 
         state_key = f"yaml_tags::{slug}"
         if state_key not in st.session_state:
