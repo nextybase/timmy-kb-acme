@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import logging
 import os
 import uuid
 from pathlib import Path
@@ -261,6 +262,50 @@ def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
     return base
 
 
+def _apply_cli_flags_to_context(ctx: SemanticContextProtocol, args: argparse.Namespace) -> None:
+    """Trasferisce flag CLI puliti nel contesto senza side-effect nascosti."""
+    ctx.skip_preview = bool(args.no_preview)
+    ctx.no_interactive = bool(args.non_interactive)
+
+
+def _log_semantic_summary(
+    logger: logging.Logger,
+    layout: WorkspaceLayout,
+    touched: list[Path],
+    slug: str,
+) -> dict[str, object]:
+    """Raccoglie e logga i metadati riassuntivi (non influisce su exit code)."""
+    summary_extra: dict[str, object] = {}
+    try:
+        book_dir: Path = layout.book_dir
+        summary_path = book_dir / "SUMMARY.md"
+        readme_path = book_dir / "README.md"
+
+        content_mds = list_content_markdown(book_dir)
+        summary_extra = {
+            "book_dir": str(book_dir),
+            "repo_root_dir": str(layout.repo_root_dir),
+            "markdown": len(content_mds),
+            "frontmatter": len(touched),
+            "summary_exists": summary_path.exists(),
+            "readme_exists": readme_path.exists(),
+        }
+        log_workflow_summary(
+            logger,
+            event="cli.semantic_onboarding.summary",
+            slug=slug,
+            artifacts=len(content_mds),
+            extra=summary_extra,
+        )
+    except Exception as exc:
+        logger.warning(
+            "cli.semantic_onboarding.summary_failed",
+            extra={"slug": slug, "error": str(exc)},
+        )
+        summary_extra = {}
+    return summary_extra
+
+
 def main() -> int:
     # Parse args FIRST: evita side-effects (log/init) quando l'utente chiede solo --help.
     args = _parse_args()
@@ -305,8 +350,7 @@ def main() -> int:
 
     try:
         # Imposta flag UX nel contesto (contratto esplicito del semantic context)
-        ctx.skip_preview = bool(args.no_preview)
-        ctx.no_interactive = bool(args.non_interactive)
+        _apply_cli_flags_to_context(ctx, args)
 
         env = os.getenv("TIMMY_ENV", "dev")
         overall_slug = slug
@@ -552,34 +596,7 @@ def main() -> int:
                 return code
 
         # Riepilogo artefatti (best-effort (non influenza artefatti/gate/ledger/exit code), non influenza l'exit code)
-        summary_extra: dict[str, object] = {}
-        try:
-            book_dir: Path = layout.book_dir
-            summary_path = book_dir / "SUMMARY.md"
-            readme_path = book_dir / "README.md"
-
-            content_mds = list_content_markdown(book_dir)
-            summary_extra = {
-                "book_dir": str(book_dir),
-                "repo_root_dir": str(layout.repo_root_dir),
-                "markdown": len(content_mds),
-                "frontmatter": len(touched),
-                "summary_exists": summary_path.exists(),
-                "readme_exists": readme_path.exists(),
-            }
-            log_workflow_summary(
-                logger,
-                event="cli.semantic_onboarding.summary",
-                slug=slug,
-                artifacts=len(content_mds),
-                extra=summary_extra,
-            )
-        except Exception as exc:
-            logger.warning(
-                "cli.semantic_onboarding.summary_failed",
-                extra={"slug": slug, "error": str(exc)},
-            )
-
+        summary_extra = _log_semantic_summary(logger, layout, touched, slug)
         logger.info(
             "cli.semantic_onboarding.completed",
             extra={"slug": slug, "artifacts": int(len(touched)), **summary_extra},

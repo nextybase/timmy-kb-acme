@@ -43,6 +43,210 @@ def _load_tags_reviewed_or_raise() -> Any:
     return _load_tags_reviewed
 
 
+def _normalize_vocab_result(canon_map: Mapping[str, Iterable[str]]) -> Dict[str, Dict[str, list[str]]]:
+    """Ordina e de-duplica alias preservando l'ordine d'inserimento."""
+    result: Dict[str, Dict[str, list[str]]] = {}
+    for canon, aliases in canon_map.items():
+        canon_key = str(canon)
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for alias in aliases or []:
+            alias_str = str(alias)
+            if not alias_str or alias_str in seen:
+                continue
+            seen.add(alias_str)
+            ordered.append(alias_str)
+        if ordered:
+            result[canon_key] = {"aliases": ordered}
+    return result
+
+
+def _append_alias(
+    storage: Dict[str, list[str]],
+    seen_aliases: Dict[str, Set[str]],
+    canon_value: Any,
+    alias_value: Any,
+) -> None:
+    canon = str(canon_value).strip().casefold()
+    alias = str(alias_value).strip()
+    if not canon or not alias:
+        return
+    alias_key = alias.casefold()
+    if alias_key in seen_aliases[canon]:
+        return
+    seen_aliases[canon].add(alias_key)
+    storage[canon].append(alias)
+
+
+def _parse_normalized_vocab_mapping(data: Mapping[str, Any]) -> Dict[str, Dict[str, list[str]]] | None:
+    sample_val = next(iter(data.values()), None)
+    if not (isinstance(sample_val, Mapping) and "aliases" in sample_val):
+        return None
+    result: Dict[str, Dict[str, list[str]]] = {}
+    for canon, payload in cast(Mapping[str, Mapping[str, Iterable[str]]], data).items():
+        aliases = payload.get("aliases", [])
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for alias in aliases or []:
+            alias_str = str(alias)
+            if not alias_str or alias_str in seen:
+                continue
+            seen.add(alias_str)
+            ordered.append(alias_str)
+        result[str(canon)] = {"aliases": ordered}
+    if not result:
+        return None
+    return result
+
+
+def _parse_simple_vocab_mapping(data: Mapping[str, Iterable[Any]]) -> Dict[str, Dict[str, list[str]]] | None:
+    out: Dict[str, list[str]] = defaultdict(list)
+    seen_aliases: Dict[str, Set[str]] = defaultdict(set)
+    for canon, aliases in data.items():
+        if isinstance(aliases, (str, bytes)):
+            _append_alias(out, seen_aliases, canon, aliases)
+        else:
+            for alias in aliases:
+                _append_alias(out, seen_aliases, canon, alias)
+    return _normalize_vocab_result(out) if out else None
+
+
+def _parse_sequence_rows(rows: Sequence[Any]) -> Dict[str, Dict[str, list[str]]] | None:
+    out: Dict[str, list[str]] = defaultdict(list)
+    seen_aliases: Dict[str, Set[str]] = defaultdict(set)
+    for row in rows:
+        if isinstance(row, Mapping):
+            canon = row.get("canonical") or row.get("canon") or row.get("c") or ""
+            alias = row.get("alias") or row.get("a") or ""
+            _append_alias(out, seen_aliases, canon, alias)
+        elif isinstance(row, (tuple, list)) and len(row) >= 2:
+            _append_alias(out, seen_aliases, row[0], row[1])
+    return _normalize_vocab_result(out) if out else None
+
+
+def _parse_storage_tags_rows(rows: Sequence[Any]) -> Dict[str, Dict[str, list[str]]] | None:
+    synonym_map: dict[str, list[str]] = defaultdict(list)
+    synonym_seen: dict[str, set[str]] = defaultdict(set)
+    merge_map: dict[str, str] = {}
+    display_names: dict[str, str] = {}
+    case_conflicts: set[str] = set()
+
+    def _normalize_synonyms(raw: Any) -> list[str]:
+        if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
+            return [str(item).strip() for item in raw if str(item).strip()]
+        if isinstance(raw, (str, bytes)):
+            value = str(raw).strip()
+            return [value] if value else []
+        return []
+
+    def _record_synonym(target: str, alias_value: str) -> None:
+        alias_str = alias_value.strip()
+        if not alias_str:
+            return
+        key = alias_str.casefold()
+        if key in synonym_seen[target]:
+            return
+        synonym_seen[target].add(key)
+        synonym_map[target].append(alias_str)
+
+    def _resolve_target(name: str) -> str:
+        visited: set[str] = set()
+        current = name
+        while True:
+            next_target = merge_map.get(current)
+            if not next_target or next_target in visited:
+                break
+            visited.add(current)
+            current = next_target
+        return current
+
+    final_aliases: dict[str, list[str]] = defaultdict(list)
+    final_seen: dict[str, set[str]] = defaultdict(set)
+
+    def _ensure_target(target: str) -> None:
+        final_aliases.setdefault(target, [])
+        final_seen.setdefault(target, set())
+
+    def _add_final_alias(target: str, alias_value: str) -> None:
+        alias_str = alias_value.strip()
+        if not alias_str:
+            return
+        lower = alias_str.casefold()
+        if lower in final_seen[target]:
+            return
+        final_seen[target].add(lower)
+        final_aliases[target].append(alias_str)
+
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        raw_name = str(row.get("name") or row.get("canonical") or "").strip()
+        if not raw_name:
+            continue
+        name = raw_name.casefold()
+        existing_display = display_names.get(name)
+        if existing_display and existing_display != raw_name and name not in case_conflicts:
+            case_conflicts.add(name)
+            _safe_structured_warning(
+                "semantic.vocab.canonical_case_conflict",
+                extra={
+                    "canonical_norm": name,
+                    "canonical": existing_display,
+                    "canonical_new": raw_name,
+                },
+            )
+        display_names.setdefault(name, raw_name)
+
+        raw_action = str(row.get("action", "")).strip()
+        action = raw_action.lower()
+        synonym_map.setdefault(name, [])
+        synonym_seen.setdefault(name, set())
+        raw_syns = row.get("synonyms") or row.get("aliases") or []
+        for alias in _normalize_synonyms(raw_syns):
+            _record_synonym(name, alias)
+
+        if action.startswith("merge_into:"):
+            parts = raw_action.split(":", 1)
+            target_raw = parts[1].strip() if len(parts) > 1 else ""
+            if target_raw:
+                target_norm = target_raw.casefold()
+                merge_map[name] = target_norm
+                existing_target = display_names.get(target_norm)
+                if existing_target and existing_target != target_raw and target_norm not in case_conflicts:
+                    case_conflicts.add(target_norm)
+                    _safe_structured_warning(
+                        "semantic.vocab.canonical_case_conflict",
+                        extra={
+                            "canonical_norm": target_norm,
+                            "canonical": existing_target,
+                            "canonical_new": target_raw,
+                        },
+                    )
+                display_names.setdefault(target_norm, target_raw)
+
+    for canon in sorted(synonym_map):
+        aliases = synonym_map[canon]
+        for alias in aliases:
+            alias_norm = alias.casefold()
+            if alias_norm in synonym_map and alias_norm != canon and alias_norm not in merge_map:
+                merge_map[alias_norm] = canon
+
+    all_names = sorted(set(synonym_map.keys()) | set(merge_map.keys()) | set(merge_map.values()))
+    for name in all_names:
+        target = _resolve_target(name)
+        if not target:
+            continue
+        _ensure_target(target)
+        if name != target:
+            _add_final_alias(target, display_names.get(name, name))
+        for alias in synonym_map.get(name, []):
+            _add_final_alias(target, alias)
+
+    if not final_aliases:
+        return None
+    return {display_names.get(canon, canon): {"aliases": aliases} for canon, aliases in final_aliases.items()}
+
+
 def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
     """
     Normalizza data in: { canonical: { "aliases": [str,...] } } mantenendo l'ordine di inserimento.
@@ -56,203 +260,34 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
     - lista di liste:  [[canonical, alias], ...]
     - altro/non riconosciuto -> ConfigError
     """
-    out: Dict[str, list[str]] = defaultdict(list)
-    seen_aliases: Dict[str, Set[str]] = defaultdict(set)
 
     def _raise_invalid() -> None:
         raise ConfigError("Canonical vocab shape invalid")
 
-    def _append_alias(canon_value: Any, alias_value: Any) -> None:
-        canon = str(canon_value).strip().casefold()
-        alias = str(alias_value).strip()
-        if not canon or not alias:
-            return
-        alias_key = alias.casefold()
-        if alias_key in seen_aliases[canon]:
-            return
-        seen_aliases[canon].add(alias_key)
-        out[canon].append(alias)
-
-    def _build_from_tag_rows(rows: Sequence[Any]) -> Dict[str, Dict[str, list[str]]]:
-        synonym_map: dict[str, list[str]] = defaultdict(list)
-        synonym_seen: dict[str, set[str]] = defaultdict(set)
-        merge_map: dict[str, str] = {}
-        display_names: dict[str, str] = {}
-        case_conflicts: set[str] = set()
-
-        def _normalize_synonyms(raw: Any) -> list[str]:
-            if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
-                return [str(item).strip() for item in raw if str(item).strip()]
-            if isinstance(raw, (str, bytes)):
-                value = str(raw).strip()
-                return [value] if value else []
-            return []
-
-        def _record_synonym(target: str, alias_value: str) -> None:
-            alias_str = alias_value.strip()
-            if not alias_str:
-                return
-            key = alias_str.casefold()
-            if key in synonym_seen[target]:
-                return
-            synonym_seen[target].add(key)
-            synonym_map[target].append(alias_str)
-
-        def _resolve_target(name: str) -> str:
-            visited: set[str] = set()
-            current = name
-            while True:
-                next_target = merge_map.get(current)
-                if not next_target or next_target in visited:
-                    break
-                visited.add(current)
-                current = next_target
-            return current
-
-        final_aliases: dict[str, list[str]] = defaultdict(list)
-        final_seen: dict[str, set[str]] = defaultdict(set)
-
-        def _ensure_target(target: str) -> None:
-            final_aliases.setdefault(target, [])
-            final_seen.setdefault(target, set())
-
-        def _add_final_alias(target: str, alias_value: str) -> None:
-            alias_str = alias_value.strip()
-            if not alias_str:
-                return
-            lower = alias_str.casefold()
-            if lower in final_seen[target]:
-                return
-            final_seen[target].add(lower)
-            final_aliases[target].append(alias_str)
-
-        for row in rows:
-            if not isinstance(row, Mapping):
-                continue
-            raw_name = str(row.get("name") or row.get("canonical") or "").strip()
-            if not raw_name:
-                continue
-            name = raw_name.casefold()
-            existing_display = display_names.get(name)
-            if existing_display and existing_display != raw_name and name not in case_conflicts:
-                case_conflicts.add(name)
-                _safe_structured_warning(
-                    "semantic.vocab.canonical_case_conflict",
-                    extra={
-                        "canonical_norm": name,
-                        "canonical": existing_display,
-                        "canonical_new": raw_name,
-                    },
-                )
-            display_names.setdefault(name, raw_name)
-
-            raw_action = str(row.get("action", "")).strip()
-            action = raw_action.lower()
-            synonym_map.setdefault(name, [])
-            synonym_seen.setdefault(name, set())
-            raw_syns = row.get("synonyms") or row.get("aliases") or []
-            for alias in _normalize_synonyms(raw_syns):
-                _record_synonym(name, alias)
-
-            if action.startswith("merge_into:"):
-                parts = raw_action.split(":", 1)
-                target_raw = parts[1].strip() if len(parts) > 1 else ""
-                if target_raw:
-                    target_norm = target_raw.casefold()
-                    merge_map[name] = target_norm
-                    existing_target = display_names.get(target_norm)
-                    if existing_target and existing_target != target_raw and target_norm not in case_conflicts:
-                        case_conflicts.add(target_norm)
-                        _safe_structured_warning(
-                            "semantic.vocab.canonical_case_conflict",
-                            extra={
-                                "canonical_norm": target_norm,
-                                "canonical": existing_target,
-                                "canonical_new": target_raw,
-                            },
-                        )
-                    display_names.setdefault(target_norm, target_raw)
-
-        # Deduce merge relationships for canonical entries that appear as aliases elsewhere.
-        for canon, aliases in list(synonym_map.items()):
-            for alias in aliases:
-                alias_norm = alias.casefold()
-                if alias_norm in synonym_map and alias_norm != canon and alias_norm not in merge_map:
-                    merge_map[alias_norm] = canon
-
-        all_names = set(synonym_map.keys()) | set(merge_map.keys()) | set(merge_map.values())
-        for name in all_names:
-            target = _resolve_target(name)
-            if not target:
-                continue
-            _ensure_target(target)
-            if name != target:
-                _add_final_alias(target, display_names.get(name, name))
-            for alias in synonym_map.get(name, []):
-                _add_final_alias(target, alias)
-
-        return {display_names.get(canon, canon): {"aliases": aliases} for canon, aliases in final_aliases.items()}
-
-    # 1) già normalizzato o dizionario con chiave speciale 'tags'
     if isinstance(data, Mapping):
-        sample_val = next(iter(data.values()), None)
-        # già normalizzato
-        if isinstance(sample_val, Mapping) and "aliases" in sample_val:
-            result: Dict[str, Dict[str, list[str]]] = {}
-            for canon, payload in cast(Mapping[str, Mapping[str, Iterable[str]]], data).items():
-                aliases = payload.get("aliases", [])
-                ordered: list[str] = []
-                seen: set[str] = set()
-                for alias in aliases or []:
-                    alias_str = str(alias)
-                    if not alias_str or alias_str in seen:
-                        continue
-                    seen.add(alias_str)
-                    ordered.append(alias_str)
-                result[str(canon)] = {"aliases": ordered}
-            if not result:
-                _raise_invalid()
-            return result
+        normalized = _parse_normalized_vocab_mapping(cast(Mapping[str, Any], data))
+        if normalized:
+            return normalized
 
-        # formato storage: {"tags": [ {name, action, synonyms?}, ... ]}
         items = cast(Any, data).get("tags") if hasattr(data, "get") else None
-        if isinstance(items, Sequence) and not isinstance(items, (str, bytes)):
-            processed = _build_from_tag_rows(items)
-            if processed:
-                return processed
-            _raise_invalid()
+        parsed_storage = (
+            _parse_storage_tags_rows(items)
+            if isinstance(items, Sequence) and not isinstance(items, (str, bytes))
+            else None
+        )
+        if parsed_storage:
+            return parsed_storage
 
-        # mapping semplice: canon -> Iterable[alias]
-        try:
-            for canon, aliases in cast(Mapping[str, Iterable[Any]], data).items():
-                if isinstance(aliases, (str, bytes)):
-                    _append_alias(canon, aliases)
-                else:
-                    for a in aliases:
-                        _append_alias(canon, a)
-            if out:
-                return {k: {"aliases": v} for k, v in out.items()}
-            _raise_invalid()
-        except Exception:
-            _raise_invalid()
-
-    # 2) lista di dict/tuple/list
-    if isinstance(data, Sequence) and not isinstance(data, (str, bytes)):
-        for row in data:
-            if isinstance(row, Mapping):
-                canon = str(row.get("canonical") or row.get("canon") or row.get("c") or "")
-                alias = str(row.get("alias") or row.get("a") or "")
-                if isinstance(canon, (str, bytes)) and isinstance(alias, (str, bytes)):
-                    _append_alias(canon, alias)
-            elif isinstance(row, (tuple, list)) and len(row) >= 2:
-                canon, alias = row[0], row[1]
-                if isinstance(canon, (str, bytes)) and isinstance(alias, (str, bytes)):
-                    _append_alias(canon, alias)
-        if out:
-            return {k: {"aliases": v} for k, v in out.items()}
+        simple = _parse_simple_vocab_mapping(cast(Mapping[str, Iterable[Any]], data))
+        if simple:
+            return simple
         _raise_invalid()
 
-    # 3) ramo di default: shape non riconosciuta
+    if isinstance(data, Sequence) and not isinstance(data, (str, bytes)):
+        parsed_sequence = _parse_sequence_rows(data)
+        if parsed_sequence:
+            return parsed_sequence
+
     _raise_invalid()
     return {}
 
