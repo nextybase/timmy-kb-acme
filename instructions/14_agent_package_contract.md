@@ -79,8 +79,11 @@ src/ai/<agent_id>/agent.yaml
 `agent.yaml` is the **Single Source of Truth** for:
 - the agent's identity
 - agent type
-- ownership
+- maintainer ownership (technical)
+- accountable responsibility (governance)
 - artifact policies
+- execution constraints (deployment tier)
+- governance/approval linkage
 
 In **Beta 1.0**, `agent.yaml`:
 - is **normative**
@@ -91,6 +94,67 @@ In **Beta 1.0**, `agent.yaml`:
 - The file must exist.
 - The file must be semantically aligned with the code.
 - If the file is missing or invalid, the agent is **non-compliant**.
+
+### 5.3 Required fields (Beta 1.0)
+The following fields are **mandatory** in `agent.yaml`:
+- `agent_id` (must match the directory name)
+- `agent_type`
+- `maintainer`
+- `accountable`
+- `artifact_policies` (may be empty, but must exist)
+- `execution.tier`
+- `execution.sensitivity`
+- `governance.checklist_id`
+- `governance.approval_ref`
+- `governance.required_status`
+
+If any required field is missing, malformed, or contradictory, the agent is **non-compliant**.
+
+### 5.4 Maintainer vs Accountable (normative semantics)
+`maintainer` is the technical owner of the agent:
+- responsible for code, prompts, and operational maintenance
+- may change over time via explicit repository change
+
+`accountable` is the responsible validator of the agent:
+- must be explicitly aware of the agent package
+- is validated only through an approval checklist outcome
+- cannot be considered "valid" by simple syntactic checks
+
+### 5.5 Execution policy (deployment tier)
+`execution` defines where the agent is allowed to run and under which sensitivity constraints.
+
+Required fields:
+- `execution.tier` MUST be one of: `on_prem`, `cloud`
+- `execution.sensitivity` MUST be one of: `public`, `internal`, `restricted`
+
+Optional hints (not hard limits):
+- `execution.concurrency_hint` (integer, ≥ 1)
+- `execution.context_hint_tokens` (integer, ≥ 1)
+
+### 5.6 Governance linkage and approval receipt (non-negotiable)
+`governance` links the agent package to a verifiable approval receipt.
+
+Required fields:
+- `governance.checklist_id` (checklist spec/version identifier)
+- `governance.approval_ref` (path to approval receipt file)
+- `governance.required_status` MUST be `approved`
+
+Rules:
+- `governance.approval_ref` MUST point to a file within the agent package directory (recommended location: `src/ai/<agent_id>/governance/approvals/<checklist_id>.yaml`)
+- The approval receipt MUST include the following fields:
+  - `agent_id` (must match)
+  - `checklist_id` (must match)
+  - `accountable` (must match `agent.yaml.accountable`)
+  - `status`
+  - `evidence` sections detailing documents received and consents
+- An agent is considered deployable **only if**:
+  - the approval receipt exists
+  - `status == governance.required_status`
+  - the receipt `accountable` matches `agent.yaml.accountable`
+
+If the approval receipt is missing or not in the required status:
+- execution must stop
+- the error must be explicit and traceable
 
 ---
 
@@ -106,6 +170,9 @@ src/ai/<agent_id>/
 │   └── builds/
 │       └── <build_id>/
 │           └── build_manifest.json
+└── governance/ (optional but recommended when accountable is enforced)
+    └── approvals/
+        └── <checklist_id>.yaml
 ```
 
 ### 6.1 Rules
@@ -113,6 +180,8 @@ src/ai/<agent_id>/
 - `latest.json` is the only mutable file
 - artifacts **must not be committed**
 - no artifact may be overwritten
+- `governance/` MAY exist
+- governance receipts MUST be treated as **immutable evidence** once `status: approved` is reached
 
 ---
 

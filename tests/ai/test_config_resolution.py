@@ -86,8 +86,6 @@ def test_strict_output_logs_settings_load_failure(monkeypatch, caplog, tmp_path)
     assert len(errors) == 1
 
 
-
-
 def test_missing_ai_vision_section_raises(monkeypatch):
     monkeypatch.setenv("OBNEXT_ASSISTANT_ID", "env-assistant")
     ctx = _GovernorCtx(settings=SimpleNamespace(as_dict=lambda: {}))

@@ -1,0 +1,32 @@
+agent_id: timmy_ops_procedure_agent
+checklist_id: AGENT_ONBOARDING_V1
+
+# Must match agent.yaml.accountable exactly
+accountable: role:unisim_procurement_owner
+
+evidence:
+  docs_received:
+    - name: agent_package_summary
+      version: "1.0"
+      hash: "sha256:REPLACE_ME"
+    - name: data_access_notes
+      version: "1.0"
+      hash: "sha256:REPLACE_ME"
+    - name: risk_notes
+      version: "0.1"
+      hash: "sha256:REPLACE_ME"
+    - name: artifact_policy_mapping
+      version: "1.0"
+      hash: "sha256:REPLACE_ME"
+
+  consents:
+    - by: role:unisim_procurement_owner
+      action: acknowledge
+      at: "2026-02-11T00:00:00Z"
+      note: "Ricevuti documenti e compreso perimetro on-prem."
+    - by: role:unisim_procurement_owner
+      action: approve
+      at: "2026-02-11T00:00:00Z"
+      note: "Approvato per esecuzione on-prem (restricted) con gate obbligatori."
+
+status: approved

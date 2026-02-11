@@ -4,7 +4,11 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import pytest
+
+import pipeline.content_utils as cu
 from pipeline.content_utils import _filter_safe_pdfs, convert_files_to_structured_markdown
+from pipeline.exceptions import PathTraversalError
 
 
 def test_filter_safe_pdfs_logs_symlink_event(tmp_path: Path, caplog, monkeypatch):
@@ -43,7 +47,61 @@ def test_filter_safe_pdfs_logs_unsafe_event_with_slug(tmp_path: Path, caplog):
     rec = recs[0]
     assert getattr(rec, "slug", None) == "dummy"
     assert str(outside) in getattr(rec, "file_path", "")
+    assert getattr(rec, "reason", None) == "path_traversal"
+    assert getattr(rec, "error_type", None) == "PathTraversalError"
     assert hasattr(rec, "error")
+
+
+@pytest.mark.parametrize("error_cls", [PermissionError, FileNotFoundError])
+def test_filter_safe_pdfs_logs_io_error(tmp_path: Path, caplog, monkeypatch, error_cls):
+    raw = tmp_path / "kb" / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    pdf = raw / "blocked.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+
+    original = cu.ensure_within_and_resolve
+
+    def _fake(base_dir: Path, candidate: Path) -> Path:
+        if candidate == pdf:
+            raise error_cls("access denied")
+        return original(base_dir, candidate)
+
+    monkeypatch.setattr(cu, "ensure_within_and_resolve", _fake)
+
+    caplog.set_level(logging.WARNING)
+    out = _filter_safe_pdfs(tmp_path, raw, [pdf], slug="dummy")
+    assert out == []
+    recs = [r for r in caplog.records if r.msg == "pipeline.content.skip_unsafe"]
+    assert recs, "evento skip_unsafe mancante"
+    rec = recs[0]
+    assert getattr(rec, "reason", None) == "io_error"
+    assert getattr(rec, "error_type", None) == error_cls.__name__
+
+
+def test_filter_safe_pdfs_propagates_unexpected_error(tmp_path: Path, caplog, monkeypatch):
+    raw = tmp_path / "kb" / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    pdf = raw / "fail.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+
+    original = cu._ensure_safe
+
+    def _fake(perimeter: Path, candidate: Path, *, slug: str | None = None) -> Path:
+        if candidate == pdf:
+            raise RuntimeError("boom")
+        return original(perimeter, candidate, slug=slug)
+
+    monkeypatch.setattr(cu, "_ensure_safe", _fake)
+
+    caplog.set_level(logging.WARNING)
+    with pytest.raises(RuntimeError):
+        _filter_safe_pdfs(tmp_path, raw, [pdf], slug="dummy")
+
+    recs = [r for r in caplog.records if r.msg == "pipeline.content.skip_unsafe"]
+    assert recs, "evento skip_unsafe mancante"
+    rec = recs[0]
+    assert getattr(rec, "reason", None) == "unexpected_error"
+    assert getattr(rec, "error_type", None) == "RuntimeError"
 
 
 def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Path, caplog, monkeypatch):
@@ -81,7 +139,7 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
     # Simula path non sicuro per cat_pdf
     def _fake_ensure_within_and_resolve(base_dir: Path, candidate: Path) -> Path:  # noqa: ARG001
         if str(candidate) == str(cat_pdf):
-            raise RuntimeError("unsafe")
+            raise PathTraversalError("path traversal")
         return candidate.resolve()
 
     monkeypatch.setattr(

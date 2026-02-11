@@ -21,6 +21,7 @@ Design:
 
 from __future__ import annotations
 
+import sys
 import time
 from contextlib import nullcontext
 from dataclasses import MISSING, replace
@@ -61,38 +62,51 @@ ERR_EMBEDDING_INVALID = "retriever_embedding_invalid"
 ERR_BUDGET_HIT_PARTIAL = "retriever_budget_hit_partial"
 
 
-# ---------------------------
-# Safe logging (no S110: niente try/except/pass)
-# ---------------------------
+def _safe_log(level: str, event: str, *, extra: Mapping[str, Any] | None = None) -> None:
+    """Logging strutturato con fallback deterministico in caso di failure del logger."""
+    payload = dict(extra or {})
+
+    # 1) Logger primario
+    try:
+        log_fn = getattr(LOGGER, level, None)
+        if callable(log_fn):
+            log_fn(event, extra=payload)
+            return
+    except Exception as exc:  # pragma: no cover - best-effort
+        _FALLBACK_LOG.warning(
+            "retriever.log_failed",
+            extra={"event": event, "level": level, "stage": "primary", "error": repr(exc)},
+        )
+
+    # 2) Logger fallback (stesso schema)
+    try:
+        fallback_fn = getattr(_FALLBACK_LOG, level, None)
+        if callable(fallback_fn):
+            fallback_fn(event, extra=payload)
+            return
+    except Exception as exc:  # pragma: no cover - ultima risorsa
+        _FALLBACK_LOG.warning(
+            "retriever.log_failed",
+            extra={"event": event, "level": level, "stage": "fallback", "error": repr(exc)},
+        )
+
+    # 3) Ultima linea di difesa: stderr
+    try:
+        sys.stderr.write(f"[timmy_kb.retriever.log_failed] level={level} event={event} extra={payload!r}\n")
+    except Exception:  # pragma: no cover - fallback finale
+        return
 
 
 def _safe_info(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
-    try:
-        LOGGER.info(event, extra=dict(extra or {}))
-    except Exception:
-        _FALLBACK_LOG.info(event, extra={"payload": dict(extra or {})})
+    _safe_log("info", event, extra=extra)
 
 
 def _safe_warning(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
-    try:
-        LOGGER.warning(event, extra=dict(extra or {}))
-    except Exception:
-        _FALLBACK_LOG.warning(event, extra={"payload": dict(extra or {})})
+    _safe_log("warning", event, extra=extra)
 
 
 def _safe_debug(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
-    try:
-        LOGGER.debug(event, extra=dict(extra or {}))
-    except Exception:
-        _FALLBACK_LOG.debug(event, extra={"payload": dict(extra or {})})
-
-
-def _log_logging_failure(event: str, exc: Exception, *, extra: Mapping[str, Any] | None = None) -> None:
-    payload: dict[str, Any] = {"event": event, "error": repr(exc)}
-    if extra:
-        payload.update(dict(extra))
-    # best-effort e non bloccante
-    _safe_warning("retriever.log_failed", extra=payload)
+    _safe_log("debug", event, extra=extra)
 
 
 def _apply_error_context(exc: RetrieverError, *, code: str, **extra: Any) -> RetrieverError:
@@ -543,18 +557,10 @@ def with_config_or_budget(params: QueryParams, config: Optional[Mapping[str, Any
 
     if lim and lim > 0:
         safe_lim = max(MIN_CANDIDATE_LIMIT, min(int(lim), MAX_CANDIDATE_LIMIT))
-        try:
-            _safe_info(
-                "retriever.limit.source",
-                extra={"source": "config", "limit": int(safe_lim), "limit_requested": int(lim)},
-            )
-        except Exception as exc:
-            # in realtà _safe_info non dovrebbe mai alzare, ma teniamolo difensivo
-            _log_logging_failure(
-                "retriever.limit.source",
-                exc,
-                extra={"source": "config", "limit": int(safe_lim), "limit_requested": int(lim)},
-            )
+        _safe_info(
+            "retriever.limit.source",
+            extra={"source": "config", "limit": int(safe_lim), "limit_requested": int(lim)},
+        )
 
         if safe_lim != int(lim):
             _safe_warning("retriever.limit.clamped", extra={"provided": int(lim), "effective": int(safe_lim)})

@@ -195,6 +195,40 @@ def _filter_safe_pdfs(
     out: list[Path] = []
     run_id = _run_id_from_logger(log)
     raw_root = _ensure_safe(perimeter_root, raw_root, slug=slug)
+
+    def _log_blocked_path(path: Path, *, reason: str, exc: BaseException) -> None:
+        message = str(exc)
+        error_type = type(exc).__name__
+        with start_decision_span(
+            "filter",
+            slug=slug,
+            run_id=run_id,
+            trace_kind="onboarding",
+            phase="semantic.discover_raw",
+            file_path_relative=_relative_to(raw_root, path),
+            decision_channel="auto",
+            risk_level="high",
+            attributes={
+                "reason": reason,
+                "status": "blocked",
+                "error": message,
+                "error_type": error_type,
+                "policy_id": "INGEST.SAFE_PATH",
+            },
+        ):
+            _safe_log(
+                log,
+                "warning",
+                "pipeline.content.skip_unsafe",
+                extra={
+                    "slug": slug,
+                    "file_path": str(path),
+                    "reason": reason,
+                    "error_type": error_type,
+                    "error": message,
+                },
+            )
+
     for p in pdfs:
         try:
             if p.is_symlink():
@@ -221,30 +255,15 @@ def _filter_safe_pdfs(
                     )
                 continue
             safe_p = _ensure_safe(raw_root, p, slug=slug)
-        except Exception as e:  # pragma: no cover (error path)
-            with start_decision_span(
-                "filter",
-                slug=slug,
-                run_id=run_id,
-                trace_kind="onboarding",
-                phase="semantic.discover_raw",
-                file_path_relative=_relative_to(raw_root, p),
-                decision_channel="auto",
-                risk_level="high",
-                attributes={
-                    "reason": "unsafe_path",
-                    "status": "blocked",
-                    "error": str(e),
-                    "policy_id": "INGEST.SAFE_PATH",
-                },
-            ):
-                _safe_log(
-                    log,
-                    "warning",
-                    "pipeline.content.skip_unsafe",
-                    extra={"slug": slug, "file_path": str(p), "error": str(e)},
-                )
+        except PathTraversalError as exc:  # pragma: no cover (error path)
+            _log_blocked_path(p, reason="path_traversal", exc=exc)
             continue
+        except OSError as exc:  # pragma: no cover (error path)
+            _log_blocked_path(p, reason="io_error", exc=exc)
+            continue
+        except Exception as exc:  # pragma: no cover (error path)
+            _log_blocked_path(p, reason="unexpected_error", exc=exc)
+            raise
         out.append(safe_p)
     return out
 

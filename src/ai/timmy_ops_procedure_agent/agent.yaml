@@ -1,0 +1,28 @@
+agent_id: timmy_ops_procedure_agent
+agent_type: micro_agent
+
+# Technical ownership (who maintains code/prompts)
+maintainer: team_c
+
+# Responsible validator (must sign via checklist receipt)
+accountable: role:unisim_procurement_owner
+
+artifact_policies:
+  # Placeholder: keep declared even if initially empty.
+  # Concrete rules remain defined by instructions/13_artifacts_policy.md and AGENTS.md.
+  allowed_outputs:
+    - markdown
+    - docx
+  forbidden_outputs:
+    - direct_system_changes_without_gate
+
+execution:
+  tier: on_prem
+  sensitivity: restricted
+  concurrency_hint: 2
+  context_hint_tokens: 32000
+
+governance:
+  checklist_id: AGENT_ONBOARDING_V1
+  approval_ref: governance/approvals/AGENT_ONBOARDING_V1.yaml
+  required_status: approved
