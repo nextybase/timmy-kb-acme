@@ -17,7 +17,7 @@ import yaml
 from pipeline.exceptions import EnrichmentError, InputDirectoryMissing, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths, read_text_safe
+from pipeline.path_utils import iter_safe_paths, read_text_safe
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic.document_ingest import DocumentContent, read_document
 from semantic.vocab_loader import load_reviewed_vocab
@@ -53,20 +53,20 @@ class _CtxProto:
     slug: Optional[str]
 
 
-def _list_markdown_files(context: _CtxProto, logger: logging.Logger) -> List[Path]:
-    if not getattr(context, "book_dir", None) or not getattr(context, "repo_root_dir", None):
-        raise PipelineError(
-            "Contesto incompleto: book_dir/repo_root_dir mancanti",
-            slug=getattr(context, "slug", None),
-        )
-    layout = WorkspaceLayout.from_context(context)
-    repo_root_dir = layout.repo_root_dir
-    try:
-        safe_book_dir = ensure_within_and_resolve(repo_root_dir, context.book_dir)
-    except Exception as exc:
-        raise PipelineError("Path non sicuro", slug=context.slug, file_path=context.book_dir) from exc
+def _list_markdown_files(
+    context: _CtxProto,
+    logger: logging.Logger,
+    *,
+    layout: WorkspaceLayout | None = None,
+) -> List[Path]:
+    layout = layout or WorkspaceLayout.from_context(context)
+    safe_book_dir = layout.book_dir
     if not safe_book_dir.exists() or not safe_book_dir.is_dir():
-        raise InputDirectoryMissing(f"Directory markdown non valida: {safe_book_dir}", slug=context.slug)
+        raise InputDirectoryMissing(
+            f"Directory markdown non valida: {safe_book_dir}",
+            slug=layout.slug,
+            file_path=safe_book_dir,
+        )
     files = sorted(
         iter_safe_paths(
             safe_book_dir,
@@ -79,7 +79,7 @@ def _list_markdown_files(context: _CtxProto, logger: logging.Logger) -> List[Pat
     logger.info(
         "semantic.files.found",
         extra={
-            "slug": context.slug,
+            "slug": layout.slug,
             "file_path": str(safe_book_dir),
             "count": len(files),
         },
@@ -149,7 +149,8 @@ def extract_semantic_concepts(
     if not mapping:
         logger.warning("semantic.extract.mapping_empty", extra={"slug": context.slug})
         return {}
-    files = _list_markdown_files(context, logger)
+    layout = WorkspaceLayout.from_context(context)
+    files = _list_markdown_files(context, logger, layout=layout)
 
     # Pre-carica i contenuti una volta sola: se non riesci a leggere un input, non puoi garantire determinismo.
     normalized_by_file: dict[Path, str] = {}
@@ -166,12 +167,12 @@ def extract_semantic_concepts(
             )
             continue
         try:
-            content = read_text_safe(context.book_dir, file, encoding="utf-8")
+            content = read_text_safe(layout.book_dir, file, encoding="utf-8")
         except Exception as exc:
             # hard-fail: input incompleto => output non attestabile
             raise PipelineError(
                 "Lettura markdown fallita: impossibile garantire estrazione deterministica.",
-                slug=getattr(context, "slug", None),
+                slug=layout.slug,
                 file_path=str(file),
             ) from exc
         normalized_by_file[file] = re.sub(
@@ -206,7 +207,7 @@ def extract_semantic_concepts(
             if hit_idx is not None:
                 matches.append({"file": file.name, "keyword": norm_kws[hit_idx]})
         extracted[concept] = matches
-    logger.info("semantic.extract.completed", extra={"slug": context.slug})
+    logger.info("semantic.extract.completed", extra={"slug": layout.slug})
     return extracted
 
 
@@ -219,12 +220,13 @@ def enrich_markdown_folder(context: _CtxProto, logger: Optional[logging.Logger] 
     if not getattr(context, "enrich_enabled", True):
         logger.info("enrich.disabled", extra={"slug": context.slug})
         return
-    files = _list_markdown_files(context, logger)
+    layout = WorkspaceLayout.from_context(context)
+    files = _list_markdown_files(context, logger, layout=layout)
     logger.info(
         "semantic.enrich.start",
         extra={
-            "slug": context.slug,
-            "file_path": str(context.book_dir),
+            "slug": layout.slug,
+            "file_path": str(layout.book_dir),
             "count": len(files),
         },
     )
@@ -241,10 +243,10 @@ def enrich_markdown_folder(context: _CtxProto, logger: Optional[logging.Logger] 
     if failures:
         raise EnrichmentError(
             f"Arricchimento fallito su {len(failures)} file markdown (run non attestabile).",
-            slug=getattr(context, "slug", None),
-            file_path=str(getattr(context, "book_dir", "")),
+            slug=layout.slug,
+            file_path=str(layout.book_dir),
         )
-    logger.info("semantic.enrich.completed", extra={"slug": context.slug})
+    logger.info("semantic.enrich.completed", extra={"slug": layout.slug})
 
 
 __all__ = [

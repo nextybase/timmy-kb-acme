@@ -197,12 +197,17 @@ def _resolve_vision_use_kb(
 
 @lru_cache(maxsize=16)
 def _load_settings_cached(repo_root_dir: Optional[str]) -> Optional[Settings]:
+    """
+    Carica i Settings dal workspace.
+
+    In Beta strict-first: un fallimento di load è un errore deterministico (ConfigError).
+    """
     if not repo_root_dir:
         return None
     try:
         return Settings.load(Path(repo_root_dir))
     except Exception as exc:
-        LOGGER.warning(
+        LOGGER.error(
             "ai.vision_config.settings_load_failed",
             extra={
                 "repo_root_dir": repo_root_dir,
@@ -210,7 +215,11 @@ def _load_settings_cached(repo_root_dir: Optional[str]) -> Optional[Settings]:
                 "exc_type": type(exc).__name__,
             },
         )
-        return None
+        raise ConfigError(
+            "Impossibile caricare i settings Vision per workspace.",
+            component="vision_config",
+            file_path=repo_root_dir,
+        ) from exc
 
 
 def _resolve_vision_strict_output(

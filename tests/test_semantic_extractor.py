@@ -2,6 +2,7 @@
 # tests/test_semantic_extractor.py
 from __future__ import annotations
 
+import shutil
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,7 @@ import pytest
 import semantic.core as se
 from pipeline.exceptions import InputDirectoryMissing, PipelineError
 from pipeline.logging_utils import get_structured_logger
+from pipeline.workspace_layout import WorkspaceLayout
 from semantic.core import _list_markdown_files, extract_semantic_concepts
 from tests.conftest import build_vocab_db
 from tests.utils.workspace import ensure_minimal_workspace_layout
@@ -66,33 +68,40 @@ def test__list_markdown_files_missing_fields_raises() -> None:
 
 def test__list_markdown_files_unsafe_path_raises(tmp_path: Path) -> None:
     base = tmp_path / "safe"
-    _prepare_layout(base, base / "book", strict=False)
-    # book_dir outside base -> unsafe
+    md = base / "book"
+    _prepare_layout(base, md, strict=False)
+    # Create at least one markdown file in canonical book dir
+    (md / "x.md").write_text("X", encoding="utf-8")
+
+    # book_dir outside base (non-canonical) -> must be ignored in Beta contract
     md_outside = tmp_path / "outside"
     md_outside.mkdir()
-    with pytest.raises(PipelineError):
-        _ = _list_markdown_files(
-            cast(Any, DummyCtx(base_dir=base, book_dir=md_outside, repo_root_dir=base)),
-            get_structured_logger(
-                "tests.semantic_extractor.list_md",
-                context=DummyCtx(base_dir=base, book_dir=md_outside, repo_root_dir=base),
-            ),
-        )
+    files = _list_markdown_files(
+        cast(Any, DummyCtx(base_dir=base, book_dir=md_outside, repo_root_dir=base)),
+        get_structured_logger(
+            "tests.semantic_extractor.list_md",
+            context=DummyCtx(base_dir=base, book_dir=md_outside, repo_root_dir=base),
+        ),
+    )
+    # Must list from canonical layout.book_dir, not context override
+    assert any(p.name == "x.md" for p in files)
 
 
 def test__list_markdown_files_missing_dir_raises(tmp_path: Path) -> None:
     base = tmp_path / "kb"
-    book = base / "book"
-    md = base / "missing"
-    _prepare_layout(base, book, strict=False)
-    # md does not exist
+    md = base / "book"
+    ensure_minimal_workspace_layout(base, client_name="test")
+    layout = WorkspaceLayout.from_context(DummyCtx(base_dir=base, book_dir=md, repo_root_dir=base))
+    shutil.rmtree(md)
+    # canonical layout.book_dir missing => InputDirectoryMissing
     with pytest.raises(InputDirectoryMissing):
         _ = _list_markdown_files(
-            cast(Any, DummyCtx(base_dir=base, book_dir=md, repo_root_dir=base)),
+            cast(Any, DummyCtx(base_dir=base, book_dir=None, repo_root_dir=base)),
             get_structured_logger(
                 "tests.semantic_extractor.list_md",
-                context=DummyCtx(base_dir=base, book_dir=md, repo_root_dir=base),
+                context=DummyCtx(base_dir=base, book_dir=None, repo_root_dir=base),
             ),
+            layout=layout,
         )
 
 

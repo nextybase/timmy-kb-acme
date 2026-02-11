@@ -78,31 +78,14 @@ def test_model_from_settings_avoids_make(monkeypatch):
 
 
 def test_strict_output_logs_settings_load_failure(monkeypatch, caplog, tmp_path):
-    caplog.set_level("WARNING", logger="ai.vision_config")
+    caplog.set_level("ERROR", logger="ai.vision_config")
 
-    result = _resolve_vision_strict_output(None, {"ai": {"vision": {}}}, tmp_path)
-    assert result is True
-    warnings = [rec for rec in caplog.records if "settings_load_failed" in rec.getMessage()]
-    assert len(warnings) == 1
+    with pytest.raises(ConfigError):
+        _resolve_vision_strict_output(None, {"ai": {"vision": {}}}, tmp_path)
+    errors = [rec for rec in caplog.records if "settings_load_failed" in rec.getMessage()]
+    assert len(errors) == 1
 
 
-def test_strict_output_load_cached(monkeypatch, caplog, tmp_path):
-    caplog.set_level("WARNING", logger="ai.vision_config")
-    called = 0
-
-    def fake_load(base_dir):
-        nonlocal called
-        called += 1
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr("ai.vision_config.Settings.load", fake_load)
-
-    _resolve_vision_strict_output(None, {"ai": {"vision": {}}}, tmp_path)
-    _resolve_vision_strict_output(None, {"ai": {"vision": {}}}, tmp_path)
-
-    assert called == 1
-    warnings = [rec for rec in caplog.records if "settings_load_failed" in rec.getMessage()]
-    assert len(warnings) == 1
 
 
 def test_missing_ai_vision_section_raises(monkeypatch):

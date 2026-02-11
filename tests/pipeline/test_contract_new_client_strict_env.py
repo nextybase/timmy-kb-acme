@@ -29,9 +29,13 @@ def test_new_client_strict_does_not_require_workspace_override(monkeypatch: pyte
     repo_root = tmp_path / "repo"
     repo_root.mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setattr("pipeline.capabilities.new_client.run_system_self_check", lambda _p: SimpleNamespace(ok=True, items=[]))
+    monkeypatch.setattr(
+        "pipeline.capabilities.new_client.run_system_self_check", lambda _p: SimpleNamespace(ok=True, items=[])
+    )
 
-    def _fake_run_control_plane_tool(*, tool_module: str, slug: str, action: str, args: list[str] | None = None) -> dict[str, Any]:
+    def _fake_run_control_plane_tool(
+        *, tool_module: str, slug: str, action: str, args: list[str] | None = None
+    ) -> dict[str, Any]:
         return {
             "payload": {
                 "action": action,

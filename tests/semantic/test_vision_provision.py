@@ -37,6 +37,18 @@ class _Ctx:
         self.client_name = client_name
         # SSoT: il nome dell'env da cui ricavare l'assistant_id
         self.settings = {"ai": {"vision": {"assistant_id_env": "OBNEXT_ASSISTANT_ID", "snapshot_retention_days": 30}}}
+        cfg_dir = base_dir / "config"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        cfg = cfg_dir / "config.yaml"
+        if not cfg.exists():
+            cfg.write_text(
+                "ai:\n"
+                "  vision:\n"
+                "    assistant_id_env: OBNEXT_ASSISTANT_ID\n"
+                "    model: direct-model\n"
+                "    snapshot_retention_days: 30\n",
+                encoding="utf-8",
+            )
 
 
 def _fake_pdf_text() -> str:
