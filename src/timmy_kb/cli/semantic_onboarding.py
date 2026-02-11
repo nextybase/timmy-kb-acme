@@ -13,12 +13,7 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import TypeVar
-
-from pipeline.paths import get_repo_root
-
-_T = TypeVar("_T")
-
+from typing import Any
 
 from pipeline.artifact_policy import enforce_core_artifacts
 from pipeline.config_utils import get_client_config, get_drive_id
@@ -28,6 +23,7 @@ from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineEr
 from pipeline.logging_utils import get_structured_logger, log_workflow_summary, phase_scope
 from pipeline.observability_config import get_observability_settings
 from pipeline.path_utils import ensure_within_and_resolve
+from pipeline.paths import get_repo_root
 from pipeline.qa_evidence import qa_evidence_path
 from pipeline.qa_gate import require_qa_gate_pass
 from pipeline.runtime_guard import ensure_strict_runtime
@@ -37,7 +33,7 @@ from pipeline.workspace_layout import WorkspaceLayout
 from semantic.api import require_reviewed_vocab  # noqa: F401  # esposto per monkeypatch nei test CLI
 from semantic.api import run_semantic_pipeline
 from semantic.convert_service import convert_markdown  # noqa: F401  # esposto per monkeypatch nei test CLI
-from semantic.embedding_service import list_content_markdown  # <-- PR2: import dell'helper
+from semantic.embedding_service import list_content_markdown
 from semantic.frontmatter_service import (  # noqa: F401  # esposto per monkeypatch nei test CLI
     enrich_frontmatter,
     write_summary_and_readme,
@@ -52,16 +48,12 @@ def get_paths(slug: str) -> dict[str, Path]:
     return {"base": layout.repo_root_dir, "book": layout.book_dir}
 
 
-def _default_parse_args() -> argparse.Namespace:
+def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Semantic Onboarding CLI")
     p.add_argument("--slug", required=True, help="Slug cliente (es. acme)")
     p.add_argument("--no-preview", action="store_true", help="Non avviare/considerare la preview (flag nel contesto)")
     p.add_argument("--non-interactive", action="store_true", help="Esecuzione senza prompt")
     return p.parse_args()
-
-
-def _parse_args() -> argparse.Namespace:
-    return _default_parse_args()
 
 
 def _resolve_requested_effective(args: argparse.Namespace) -> tuple[dict[str, object], dict[str, object]]:
@@ -78,6 +70,15 @@ def _resolve_requested_effective(args: argparse.Namespace) -> tuple[dict[str, ob
     }
     effective = dict(requested)  # in questo CLI non ci sono override/auto-correction
     return requested, effective
+
+
+def _path_ref(path: Path, layout: WorkspaceLayout) -> str:
+    repo_root = layout.repo_root_dir
+    try:
+        rel_path = path.relative_to(repo_root).as_posix()
+    except ValueError:
+        rel_path = path.as_posix()
+    return f"path:{rel_path}"
 
 
 def _build_evidence_refs(
@@ -97,6 +98,7 @@ def _build_evidence_refs(
     slug_value = layout.slug
     if not slug_value:
         raise ConfigError("Slug mancante nel layout durante la costruzione dell'evidence.", slug=slug_value)
+
     refs = [
         f"slug:{slug_value}",
         _path_ref(layout.config_path, layout),
@@ -105,13 +107,17 @@ def _build_evidence_refs(
         f"effective:{json.dumps(effective_final, sort_keys=True, separators=(',', ':'))}",
         f"outcome:{outcome}",
     ]
+
     normalized_dir = getattr(layout, "normalized_dir", None)
     if normalized_dir is not None:
         refs.append(_path_ref(normalized_dir, layout))
+
     if exit_code is not None:
         refs.append(f"exit_code:{int(exit_code)}")
+
     if tag_kg_effective is not None:
         refs.append(f"tag_kg:{tag_kg_effective}")
+
     return refs
 
 
@@ -147,12 +153,7 @@ def _summarize_error(exc: BaseException) -> str:
     return f"{name}: {first_line}"
 
 
-def _require_normalize_raw_gate(
-    conn,
-    *,
-    slug: str,
-    layout: WorkspaceLayout,
-) -> None:
+def _require_normalize_raw_gate(conn: Any, *, slug: str, layout: WorkspaceLayout) -> None:
     row = conn.execute(
         """
         SELECT d.decision_id, d.decided_at
@@ -175,27 +176,14 @@ def _require_normalize_raw_gate(
     )
 
 
-def _path_ref(path: Path, layout: WorkspaceLayout) -> str:
-    try:
-        repo_root = layout.repo_root_dir
-        rel_path = path.relative_to(repo_root).as_posix() if repo_root else path.as_posix()
-    except Exception:
-        rel_path = path.as_posix()
-    return f"path:{rel_path}"
-
-
-def _run_qa_gate_and_record(
-    conn,
-    *,
-    layout: WorkspaceLayout,
-    slug: str,
-    run_id: str,
-) -> None:
+def _run_qa_gate_and_record(conn: Any, *, layout: WorkspaceLayout, slug: str, run_id: str) -> None:
     logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
     if logs_dir is None:
         raise ConfigError("Directory log mancante per QA evidence.", code="qa_evidence_invalid", slug=slug)
+
     qa_path = qa_evidence_path(logs_dir)
     decided_at = _dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     try:
         result = require_qa_gate_pass(logs_dir, slug=slug)
     except QaGateViolation as exc:
@@ -227,9 +215,10 @@ def _run_qa_gate_and_record(
                 "Ledger write failed for gate=qa_gate",
                 slug=slug,
                 run_id=run_id,
-                hint=str(ledger_exc),
+                hint=_summarize_error(ledger_exc),
             ) from ledger_exc
         raise
+
     checks_json = json.dumps(result.checks_executed, sort_keys=True, separators=(",", ":"))
     evidence_refs = [
         _path_ref(qa_path, layout),
@@ -255,10 +244,8 @@ def _run_qa_gate_and_record(
 
 
 def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
-    if isinstance(exc, ArtifactPolicyViolation):
-        return [*base, *exc.evidence_refs]
-    if isinstance(exc, QaGateViolation):
-        return [*base, *exc.evidence_refs]
+    if isinstance(exc, (ArtifactPolicyViolation, QaGateViolation)):
+        return [*base, *(exc.evidence_refs or [])]
     return base
 
 
@@ -274,22 +261,31 @@ def _log_semantic_summary(
     touched: list[Path],
     slug: str,
 ) -> dict[str, object]:
-    """Raccoglie e logga i metadati riassuntivi (non influisce su exit code)."""
-    summary_extra: dict[str, object] = {}
-    try:
-        book_dir: Path = layout.book_dir
-        summary_path = book_dir / "SUMMARY.md"
-        readme_path = book_dir / "README.md"
+    """
+    Raccoglie e logga metadati riassuntivi.
+    Policy: best-effort (NON influenza exit code / ledger / gate), ma NON è silenzioso.
+    """
+    book_dir: Path = layout.book_dir
+    repo_root_dir = layout.repo_root_dir
+    summary_path = book_dir / "SUMMARY.md"
+    readme_path = book_dir / "README.md"
 
+    summary_extra: dict[str, object] = {
+        "book_dir": str(book_dir),
+        "repo_root_dir": str(repo_root_dir),
+        "frontmatter": len(touched),
+        "summary_failed": False,
+    }
+
+    try:
         content_mds = list_content_markdown(book_dir)
-        summary_extra = {
-            "book_dir": str(book_dir),
-            "repo_root_dir": str(layout.repo_root_dir),
-            "markdown": len(content_mds),
-            "frontmatter": len(touched),
-            "summary_exists": summary_path.exists(),
-            "readme_exists": readme_path.exists(),
-        }
+        summary_extra.update(
+            {
+                "markdown": len(content_mds),
+                "summary_exists": summary_path.exists(),
+                "readme_exists": readme_path.exists(),
+            }
+        )
         log_workflow_summary(
             logger,
             event="cli.semantic_onboarding.summary",
@@ -297,13 +293,39 @@ def _log_semantic_summary(
             artifacts=len(content_mds),
             extra=summary_extra,
         )
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
+        # Evita payload ad alta entropia: tipo sì, messaggio no (resta nel traceback se serve).
         logger.warning(
             "cli.semantic_onboarding.summary_failed",
-            extra={"slug": slug, "error": str(exc)},
+            extra={
+                "slug": slug,
+                "stage": "semantic_summary",
+                "error_type": type(exc).__name__,
+            },
         )
-        summary_extra = {}
+        summary_extra.update(
+            {
+                "summary_failed": True,
+                "summary_error_type": type(exc).__name__,
+            }
+        )
+
     return summary_extra
+
+
+def _run_tag_kg_builder(ctx: SemanticContextProtocol, layout: WorkspaceLayout, logger: logging.Logger) -> str:
+    """Esegue il KG builder se tags_raw.json esiste, ritorna 'built'/'skipped'."""
+    semantic_dir = layout.semantic_dir
+    tags_raw_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.json")
+    if tags_raw_path.exists():
+        with phase_scope(logger, stage="cli.tag_kg_builder", customer=layout.slug):
+            build_kg_for_workspace(ctx, namespace=layout.slug)
+        return "built"
+    logger.info(
+        "cli.tag_kg_builder.skipped",
+        extra={"slug": layout.slug, "reason": "semantic/tags_raw.json assente"},
+    )
+    return "skipped"
 
 
 def main() -> int:
@@ -317,6 +339,7 @@ def main() -> int:
     # (dopo argparse, così --help resta quiet)
     ensure_strict_runtime(context="cli.semantic_onboarding")
     get_repo_root()
+
     run_id = uuid.uuid4().hex
     settings = get_observability_settings()
     logger = get_structured_logger(
@@ -339,7 +362,7 @@ def main() -> int:
     )
     layout = WorkspaceLayout.from_context(ctx)
     requested, effective = _resolve_requested_effective(args)
-    ledger_conn = None
+
     ledger_conn = decision_ledger.open_ledger(layout)
     decision_ledger.start_run(
         ledger_conn,
@@ -349,15 +372,14 @@ def main() -> int:
     )
 
     try:
-        # Imposta flag UX nel contesto (contratto esplicito del semantic context)
         _apply_cli_flags_to_context(ctx, args)
 
         env = os.getenv("TIMMY_ENV", "dev")
-        overall_slug = slug
         logger.info("cli.semantic_onboarding.started", extra={"slug": slug})
+
         with start_root_trace(
             "onboarding",
-            slug=overall_slug,
+            slug=slug,
             run_id=run_id,
             entry_point="cli",
             env=env,
@@ -367,6 +389,7 @@ def main() -> int:
                 tag_kg_effective: str | None = None
 
                 _require_normalize_raw_gate(ledger_conn, slug=slug, layout=layout)
+
                 try:
                     _run_qa_gate_and_record(
                         ledger_conn,
@@ -377,18 +400,18 @@ def main() -> int:
                 except QaGateViolation as qa_exc:
                     logger.error(
                         "cli.semantic_onboarding.qa_gate_failed",
-                        extra={"slug": slug, "error": str(qa_exc)},
+                        extra={"slug": slug, "error": _summarize_error(qa_exc)},
                     )
                     return int(exit_code_for(qa_exc))
-                repo_root_dir, _mds, touched = run_semantic_pipeline(
-                    ctx,
-                    logger,
-                    slug=slug,
-                )
+
+                _repo_root_dir, _mds, touched = run_semantic_pipeline(ctx, logger, slug=slug)
+
                 enforce_core_artifacts("semantic_onboarding", layout=layout)
+
                 cfg = get_client_config(ctx) or {}
                 drive_raw_id = get_drive_id(cfg, "raw_folder_id")
                 if drive_raw_id:
+                    # Re-load layout (tollera evoluzioni del context durante pipeline)
                     layout = WorkspaceLayout.from_context(ctx)
                     mapping_path = ensure_within_and_resolve(
                         layout.semantic_dir,
@@ -408,6 +431,7 @@ def main() -> int:
                         parent_folder_id=drive_raw_id,
                         log=logger,
                     )
+
                 tag_kg_effective = _run_tag_kg_builder(ctx, layout, logger)
                 if tag_kg_effective == "built":
                     semantic_dir = layout.semantic_dir
@@ -465,6 +489,7 @@ def main() -> int:
                             "Tag KG builder ha prodotto output incompleti (kg.tags.json/kg.tags.md mancanti).",
                             slug=slug,
                         )
+
                 # PASS del gate semantic_onboarding SOLO a valle anche del KG (built o skipped)
                 decision_ledger.record_normative_decision(
                     ledger_conn,
@@ -489,8 +514,8 @@ def main() -> int:
                         reason_code="ok",
                     ),
                 )
+
             except (ConfigError, PipelineError) as exc:
-                # Mappa verso exit code deterministici (no traceback non gestiti)
                 original_error = _summarize_error(exc)
                 code: int = int(exit_code_for(exc))  # exit_code_for non è tipizzato: forza int per mypy
                 try:
@@ -542,8 +567,13 @@ def main() -> int:
                         slug=slug,
                         run_id=run_id,
                     ) from ledger_exc
-                logger.error("cli.semantic_onboarding.failed", extra={"slug": slug, "error": str(exc)})
+
+                logger.error(
+                    "cli.semantic_onboarding.failed",
+                    extra={"slug": slug, "error": original_error},
+                )
                 return code
+
             except Exception as exc:
                 original_error = _summarize_error(exc)
                 code = 99
@@ -592,19 +622,23 @@ def main() -> int:
                         slug=slug,
                         run_id=run_id,
                     ) from ledger_exc
-                logger.exception("cli.semantic_onboarding.unexpected_error", extra={"slug": slug, "error": str(exc)})
+
+                logger.exception(
+                    "cli.semantic_onboarding.unexpected_error",
+                    extra={"slug": slug, "error_type": type(exc).__name__},
+                )
                 return code
 
-        # Riepilogo artefatti (best-effort (non influenza artefatti/gate/ledger/exit code), non influenza l'exit code)
+        # Riepilogo artefatti: best-effort (non influenza artefatti/gate/ledger/exit code) ma non silenzioso.
         summary_extra = _log_semantic_summary(logger, layout, touched, slug)
         logger.info(
             "cli.semantic_onboarding.completed",
             extra={"slug": slug, "artifacts": int(len(touched)), **summary_extra},
         )
         return 0
+
     finally:
-        if ledger_conn is not None:
-            ledger_conn.close()
+        ledger_conn.close()
 
 
 if __name__ == "__main__":
@@ -612,15 +646,3 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except KeyboardInterrupt:
         raise SystemExit(130)
-
-
-def _run_tag_kg_builder(ctx: SemanticContextProtocol, layout: WorkspaceLayout, logger) -> str:
-    """Esegue il KG builder se tags_raw.json esiste, ritorna 'built'/'skipped'."""
-    semantic_dir = layout.semantic_dir
-    tags_raw_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags_raw.json")
-    if tags_raw_path.exists():
-        with phase_scope(logger, stage="cli.tag_kg_builder", customer=layout.slug):
-            build_kg_for_workspace(ctx, namespace=layout.slug)
-        return "built"
-    logger.info("cli.tag_kg_builder.skipped", extra={"slug": layout.slug, "reason": "semantic/tags_raw.json assente"})
-    return "skipped"
