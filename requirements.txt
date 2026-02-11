@@ -61,7 +61,7 @@ confection==0.1.5
     # via
     #   thinc
     #   weasel
-cryptography==46.0.3
+cryptography==46.0.5
     # via pyjwt
 cymem==2.0.11
     # via
@@ -174,7 +174,6 @@ networkx==3.5
     # via
     #   torch
     #   yake
-# pinned at 1.26.4 to satisfy Windows Thinc/SpaCy ABI requirements
 numpy==1.26.4
     # via
     #   -r requirements.in
@@ -205,7 +204,7 @@ packaging==25.0
     #   weasel
 pandas==2.3.3
     # via streamlit
-pillow==11.1.0
+pillow==12.1.1
     # via
     #   -r requirements.in
     #   reportlab
@@ -356,7 +355,7 @@ srsly==2.5.1
     #   spacy
     #   thinc
     #   weasel
-streamlit==1.50.0
+streamlit==1.54.0
     # via -r requirements.in
 sympy==1.14.0
     # via torch

@@ -75,7 +75,7 @@ confection==0.1.5
     #   weasel
 coverage[toml]==7.11.0
     # via pytest-cov
-cryptography==46.0.3
+cryptography==46.0.5
     # via pyjwt
 cyclonedx-python-lib==6.4.4
     # via pip-audit
@@ -221,7 +221,6 @@ networkx==3.5
     #   yake
 nodeenv==1.9.1
     # via pre-commit
-# pinned at 1.26.4 to satisfy Windows Thinc/SpaCy ABI requirements
 numpy==1.26.4
     # via
     #   -r requirements.in
@@ -260,7 +259,7 @@ pandas==2.3.3
     # via streamlit
 pathspec==0.12.1
     # via black
-pillow==11.1.0
+pillow==12.1.1
     # via
     #   -r requirements-dev.in
     #   -r requirements.in
@@ -468,7 +467,7 @@ srsly==2.5.1
     #   spacy
     #   thinc
     #   weasel
-streamlit==1.50.0
+streamlit==1.54.0
     # via -r requirements.in
 sympy==1.14.0
     # via torch

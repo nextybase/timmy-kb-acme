@@ -136,7 +136,7 @@ packaging==25.0
     #   thinc
     #   transformers
     #   weasel
-pillow==11.1.0
+pillow==12.1.1
     # via
     #   -c constraints.txt
     #   sentence-transformers
