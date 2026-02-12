@@ -533,7 +533,7 @@ def run_nlp_to_db(
         enriched_stats["entities_status"] = entities_status
         enriched_stats["entities_backend"] = entities_backend
         if entities_reason is not None:
-            enriched_stats["entities triggering_reason"] = entities_reason  # NOTE: kept for log readability
+            enriched_stats["entities_reason"] = entities_reason
         if entities_processed_pdfs is not None:
             enriched_stats["entities_processed_pdfs"] = entities_processed_pdfs
         if entities_skipped is not None:
