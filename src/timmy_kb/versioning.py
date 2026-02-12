@@ -41,8 +41,18 @@ def _safe_get_distribution_version(dist_name: str) -> str | None:
 
 def _best_effort_git_sha() -> str | None:
     """
-    Best-effort: ritorna l'HEAD SHA se disponibile.
-    Non deve mai causare failure (policy: evidence, non enforcement).
+    Best-effort: tenta di leggere l'HEAD SHA (se disponibile).
+
+    Nota determinismo / entropia:
+    - Questo dato è *solo evidence* per fingerprint/audit e NON deve mai influenzare:
+      artefatti, policy gate, decision ledger, exit code o flussi di orchestrazione.
+    - È ammesso che ritorni `None` (ambiente senza git / checkout non completo / sandbox).
+    - Eventuali errori vengono sempre assorbiti: questa funzione non deve mai causare failure.
+
+    Eccezione "no-strict":
+    - La natura best-effort è intenzionale ed è compatibile con la filosofia di Dummy:
+      informazione accessoria, non normativa. Se in futuro viene usata fuori dal fingerprint,
+      va considerato un bug di policy.
     """
     try:
         import subprocess

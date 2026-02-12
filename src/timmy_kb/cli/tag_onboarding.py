@@ -261,7 +261,21 @@ def scan_normalized_to_db(
     *,
     repo_root_dir: Path | None = None,
 ) -> dict[str, int]:
-    """Indicizza cartelle e markdown di `normalized/` dentro il DB (schema v2)."""
+    """
+    Indicizza cartelle e Markdown di `normalized/` dentro il DB (schema v2).
+
+    Determinismo / perimetro:
+    - Il comportamento è deterministico rispetto a:
+      (normalized_dir, db_path, repo_root_dir) e al contenuto dei file `.md` (sha256).
+    - In *strict mode* (`TIMMY_BETA_STRICT=1`) `repo_root_dir` è obbligatorio
+      per evitare euristiche e mantenere il perimetro esplicito.
+
+    Fallback ammesso (service-only):
+    - Se `repo_root_dir` è `None` e NON siamo in strict mode, viene usato
+      `Path(normalized_dir).resolve().parent` come perimetro *solo* per CLI/tooling.
+    - Questo fallback è intenzionale, tracciato via log `service_only=True`,
+      e non va considerato una policy di runtime/prod.
+    """
 
     strict_mode = is_beta_strict()
     log = get_structured_logger("tag_onboarding", **_obs_kwargs())
@@ -350,6 +364,7 @@ def scan_normalized_to_db(
 def run_nlp_to_db(
     slug: str,
     normalized_dir: Path | str,
+    raw_dir: Path | str,
     db_path: str | Path,
     *,
     repo_root_dir: Path | None = None,
@@ -386,6 +401,7 @@ def run_nlp_to_db(
     perimeter_root = repo_root_dir_path
 
     normalized_dir_path = ensure_within_and_resolve(perimeter_root, normalized_dir)
+    raw_dir_path = Path(raw_dir).resolve()
 
     db_path_path = ensure_within_and_resolve(perimeter_root, db_path)
 
@@ -427,7 +443,12 @@ def run_nlp_to_db(
             logger=log,
         )
 
+    # Entities = core (Beta): outcome deve essere sempre esplicito.
     entities_status: str | None = None
+    entities_backend = (os.getenv("TAGS_NLP_BACKEND") or "spacy").strip().lower()
+    entities_reason: str | None = None
+    entities_processed_pdfs: int | None = None
+    entities_skipped: bool | None = None
     if enable_entities:
         try:
             entities_module = importlib.import_module("semantic.entities_runner")
@@ -435,7 +456,13 @@ def run_nlp_to_db(
         except Exception as exc:
             log.error(
                 "tag_onboarding.entities.failed",
-                extra={"slug": slug, "error_type": type(exc).__name__, "strict": strict_mode},
+                extra={
+                    "slug": slug,
+                    "error_type": type(exc).__name__,
+                    "strict": strict_mode,
+                    "backend": entities_backend,
+                    "phase": "import",
+                },
             )
             raise PipelineError(
                 "Entities pipeline non disponibile.",
@@ -446,18 +473,50 @@ def run_nlp_to_db(
             # repo_root_dir here is workspace root, not the system REPO_ROOT_DIR.
             ent_stats = run_doc_entities_pipeline(
                 repo_root_dir=repo_root_dir_path,
-                raw_dir=normalized_dir_path,
+                raw_dir=raw_dir_path,
                 semantic_dir=repo_root_dir_path / "semantic",
                 db_path=db_path_path,
                 slug=slug,
                 logger=log,
             )
-            stats = {**stats, **ent_stats}
-            entities_status = "ok"
+            # Consumo esplicito (no ambiguita' su "0").
+            entities_written = int(ent_stats.get("entities_written", 0) or 0)
+            entities_processed_pdfs = (
+                int(ent_stats.get("processed_pdfs", 0) or 0) if "processed_pdfs" in ent_stats else None
+            )
+            entities_skipped = bool(ent_stats.get("skipped", False)) if "skipped" in ent_stats else None
+            entities_reason = str(ent_stats.get("reason")) if ent_stats.get("reason") is not None else None
+            entities_backend = str(ent_stats.get("backend", entities_backend) or entities_backend)
+
+            # Status semantico: processed vs skipped vs zero-hit
+            if entities_skipped is True:
+                entities_status = "skipped"
+            else:
+                # Se processed_pdfs e' presente, distinguiamo "0 hit" da "no-op".
+                if entities_processed_pdfs is not None and entities_processed_pdfs > 0 and entities_written == 0:
+                    entities_status = "zero_hit"
+                else:
+                    entities_status = "processed"
+
+            # Non "mescoliamo" le chiavi entities con stats NLP: prefisso dedicato.
+            stats = {
+                **stats,
+                "entities_written": entities_written,
+                "entities_processed_pdfs": entities_processed_pdfs if entities_processed_pdfs is not None else 0,
+                "entities_skipped": bool(entities_skipped) if entities_skipped is not None else False,
+                "entities_reason": entities_reason or "processed",
+                "entities_backend": entities_backend,
+            }
         except Exception as exc:  # pragma: no cover
             log.error(
                 "tag_onboarding.entities.failed",
-                extra={"slug": slug, "error_type": type(exc).__name__, "strict": strict_mode},
+                extra={
+                    "slug": slug,
+                    "error_type": type(exc).__name__,
+                    "strict": strict_mode,
+                    "backend": entities_backend,
+                    "phase": "run",
+                },
             )
             raise PipelineError(
                 "Entities pipeline fallita.",
@@ -472,6 +531,13 @@ def run_nlp_to_db(
     }
     if entities_status is not None:
         enriched_stats["entities_status"] = entities_status
+        enriched_stats["entities_backend"] = entities_backend
+        if entities_reason is not None:
+            enriched_stats["entities triggering_reason"] = entities_reason  # NOTE: kept for log readability
+        if entities_processed_pdfs is not None:
+            enriched_stats["entities_processed_pdfs"] = entities_processed_pdfs
+        if entities_skipped is not None:
+            enriched_stats["entities_skipped"] = bool(entities_skipped)
 
     log.info("cli.tag_onboarding.nlp_completed", extra=enriched_stats)
 
@@ -1045,7 +1111,7 @@ def main(args: argparse.Namespace) -> int | None:
                 stage="nlp",
                 bootstrap_config=False,
             )
-            repo_root_dir, normalized_dir, db_path, _ = _resolve_cli_paths(
+            repo_root_dir, normalized_dir, db_path, raw_dir = _resolve_cli_paths(
                 ctx,
                 normalized_override=args.normalized_dir,
                 db_override=args.db,
@@ -1055,6 +1121,7 @@ def main(args: argparse.Namespace) -> int | None:
             stats = run_nlp_to_db(
                 slug,
                 normalized_dir,
+                raw_dir,
                 db_path,
                 repo_root_dir=repo_root_dir,
                 lang=lang,

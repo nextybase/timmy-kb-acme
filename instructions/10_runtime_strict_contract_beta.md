@@ -215,6 +215,44 @@ The system MUST hard-fail in the following cases:
 
 ---
 
+## 5bis. Entities Pipeline (CORE Artifact) – Guardrail Deterministico
+
+La tabella `doc_entities` è considerata **CORE artifact** della Beta 1.0.
+
+Quando `enable_entities=True`, la pipeline deve produrre un esito
+deterministico ed esplicito. Sono ammessi esclusivamente i seguenti outcome:
+
+1. `processed`
+   - `processed_pdfs > 0`
+   - `skipped = False`
+   - `entities_written >= 0`
+   - Anche il caso `entities_written == 0` è valido se `processed_pdfs > 0`
+     (zero-hit dopo elaborazione reale).
+
+2. `skipped`
+   - `processed_pdfs == 0`
+   - `skipped = True`
+   - `reason` obbligatorio (es. `no_pdfs`, `backend_not_supported`, `config_error`)
+
+### Strict Mode
+
+In modalità strict (`TIMMY_BETA_STRICT=1`):
+
+- `no_pdfs` ⇒ ERRORE (ConfigError)
+- backend non supportato ⇒ ERRORE
+- prerequisiti mancanti (mapping, modello NLP, ecc.) ⇒ ERRORE
+
+Non è ammesso:
+- restituire `entities_written = 0` senza indicare
+  `processed_pdfs`
+- confondere "zero entità trovate" con "nessun documento processato"
+- degradare silenziosamente il backend NLP
+
+`TAGS_NLP_BACKEND` è un selettore di backend, non un interruttore di severità.
+La severità è governata esclusivamente da `TIMMY_BETA_STRICT`.
+
+---
+
 ## 6. Explicitly Out of Scope for Beta 1.0
 
 The following are NOT supported:
