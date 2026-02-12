@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence, Set, cast
 
 import pipeline.path_utils as ppath  # late-bound per testability
+from pipeline.beta_flags import is_beta_strict
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 
@@ -264,6 +265,18 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
     def _raise_invalid() -> None:
         raise ConfigError("Canonical vocab shape invalid")
 
+    def _tooling_shape_guard(shape: str) -> None:
+        """
+        Tooling shapes (simple_mapping, sequence_rows) sono ammessi solo
+        fuori dalla modalità strict (Envelope runtime).
+        """
+        if is_beta_strict():
+            raise ConfigError(f"Canonical vocab tooling shape not allowed in strict mode: {shape}")
+        _safe_structured_warning(
+            "semantic.vocab.tooling_shape_accepted",
+            extra={"shape": shape},
+        )
+
     if isinstance(data, Mapping):
         normalized = _parse_normalized_vocab_mapping(cast(Mapping[str, Any], data))
         if normalized:
@@ -283,6 +296,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
         simple = _parse_simple_vocab_mapping(cast(Mapping[str, Iterable[Any]], data))
         if simple:
             LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "simple_mapping"})
+            _tooling_shape_guard("simple_mapping")
             return simple
         _raise_invalid()
 
@@ -290,6 +304,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
         parsed_sequence = _parse_sequence_rows(data)
         if parsed_sequence:
             LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "sequence_rows"})
+            _tooling_shape_guard("sequence_rows")
             return parsed_sequence
 
     _raise_invalid()

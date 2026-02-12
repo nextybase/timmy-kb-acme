@@ -10,6 +10,14 @@ import pytest
 from pipeline.exceptions import ConfigError
 from semantic import vocab_loader as vl
 
+
+@pytest.fixture(autouse=True)
+def _non_strict_for_tooling_shapes(monkeypatch: pytest.MonkeyPatch) -> None:
+    # I test in questo modulo verificano la compatibilita' di parsing
+    # delle tooling shapes. In strict non sono ammesse.
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
+
+
 FIXTURE_INPUTS: dict[str, Any] = {
     "simple": {"Alpha": ["a1", "a2"]},
     "storage": {

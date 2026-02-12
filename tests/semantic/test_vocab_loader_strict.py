@@ -22,6 +22,12 @@ def test_to_vocab_invalid_shape_raises() -> None:
         vl._to_vocab("invalid")
 
 
+def test_tooling_shape_blocked_in_strict(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    with pytest.raises(ConfigError, match="tooling shape not allowed in strict mode"):
+        vl._to_vocab({"Alpha": ["a1", "a2"]})
+
+
 def test_load_reviewed_vocab_missing_db_raises(tmp_path: Path) -> None:
     base = local_workspace_dir(tmp_path / "output", "dummy")
     (base / "semantic").mkdir(parents=True, exist_ok=True)
