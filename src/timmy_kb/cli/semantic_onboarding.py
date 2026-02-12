@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
+# Regola CLI: dichiarare bootstrap_config esplicitamente (il default è vietato).
 
 from __future__ import annotations
 
@@ -296,7 +296,7 @@ def _log_semantic_summary(
             extra=summary_extra,
         )
     except (OSError, ValueError) as exc:
-        # Evita payload ad alta entropia: tipo sì, messaggio no (resta nel traceback se serve).
+        # Evita payload ad alta entropia: tipo si, messaggio no (resta nel traceback se serve).
         logger.warning(
             "cli.semantic_onboarding.summary_failed",
             extra={
@@ -337,7 +337,8 @@ def main() -> int:
     if not slug:
         raise ConfigError("Slug vuoto non valido per semantic_onboarding.")
 
-    # ENTRYPOINT BOOTSTRAP - consentito: CLI standalone usa la repo root per il workspace.
+    # ENTRYPOINT STRICT (no bootstrap): la CLI risolve la repo root per il perimetro,
+    # ma NON crea/rigenera config/struttura. Prerequisito: workspace già configurato.
     # (dopo argparse, così --help resta quiet)
     ensure_strict_runtime(context="cli.semantic_onboarding")
     get_repo_root()
@@ -360,7 +361,7 @@ def main() -> int:
         slug=slug,
         require_drive_env=False,
         run_id=run_id,
-        bootstrap_config=True,
+        bootstrap_config=False,
     )
     layout = WorkspaceLayout.from_context(ctx)
     requested, effective = _resolve_requested_effective(args)

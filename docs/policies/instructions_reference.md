@@ -24,7 +24,7 @@ non sono agency e non prendono decisioni di merito.
 La governance (ruoli, gate, responsabilita) vive in `instructions/*`.
 
 Per i developer: quando trovi un comportamento strano, la prima domanda non e
-dove lo refactoriamo?, ma e un vincolo di governance o un bug di implementazione?
+dove lo miglioriamo?, ma e un vincolo di governance o un bug di implementazione?
 
 ### 2) Prompt Chain e gate (ruoli, stati, criteri)
 
@@ -47,7 +47,7 @@ Il riferimento normativo resta `instructions/13_artifacts_policy.md`.
 
 ## Zone a rischio entropia (e come NON scambiarle per bug)
 
-> Obiettivo: preservare semplicita senza introdurre overengineering difensivo.
+> Obiettivo: preservare semplicita senza introdurre complessita difensiva.
 > Se una zona di entropia e utile, deve essere confinata, osservabile e
 > documentata.
 
@@ -93,7 +93,7 @@ E ammessa come perimetro di test controllato (smoke e2e), mai come runtime alter
 Se un comportamento diverge dal core, quella divergenza:
 - deve essere strettamente necessaria,
 - confinata in `tools/`,
-- documentata e loggata,
+- documentata e tracciata nei log,
 - non deve introdurre contratti alternativi.
 
 Questa e una delle aree piu delicate per la Beta: e facile che diventi scappatoia.
@@ -103,7 +103,7 @@ Questa e una delle aree piu delicate per la Beta: e facile che diventi scappatoi
 Degrado controllato ammesso solo se:
 - deterministico,
 - osservabile,
-- disambiguabile (capisci perche e successo).
+- distinguibile (capisci perche e successo).
 
 Fallback silenzioso e sempre un anti-pattern (Beta error).
 
@@ -125,6 +125,6 @@ Riferimenti operativi in docs:
 Se aggiungi o modifichi un vincolo in `instructions/*`,
 questa pagina va aggiornata solo se cambia:
 - la mappa mentale per developer,
-- oppure la lista delle entropy hotspots riconosciute come intenzionali.
+- oppure la lista dei punti critici di entropia riconosciuti come intenzionali.
 
 Se la modifica e solo dettagliata/locale, non duplicarla qui: evita drift.

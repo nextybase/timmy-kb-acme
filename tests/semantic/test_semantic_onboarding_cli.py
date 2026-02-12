@@ -47,7 +47,13 @@ def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_
     monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
 
     ctx = _ctx(tmp_path / "output" / "dummy")
-    monkeypatch.setattr(cli.ClientContext, "load", classmethod(lambda cls, slug, **_: ctx))
+    load_kwargs: dict[str, object] = {}
+
+    def _load_stub(cls: type[object], slug: str, **kwargs: object) -> TestClientCtx:
+        load_kwargs.update(kwargs)
+        return ctx
+
+    monkeypatch.setattr(cli.ClientContext, "load", classmethod(_load_stub))
     book_dir = ctx.repo_root_dir / "book"
     book_dir.mkdir(parents=True, exist_ok=True)
     (book_dir / "README.md").write_text("# Dummy\n", encoding="utf-8")
@@ -89,6 +95,7 @@ def test_main_uses_vocab_before_enrichment(monkeypatch: pytest.MonkeyPatch, tmp_
 
     assert exit_code == 0
     assert calls[:3] == ["convert", ("require", "dummy"), ("enrich", vocab)]
+    assert load_kwargs.get("bootstrap_config") is False
 
 
 def test_main_bubbles_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
