@@ -17,18 +17,17 @@ from semantic.types import ClientContextProtocol
 
 
 def _normalize_provider(cfg: dict[str, str | bool], source: str, *, slug: str | None, logger: logging.Logger) -> str:
-    if "skip_drive" in cfg:
-        logger.error(
-            "tag_onboarding.ingest.legacy_skip_drive",
-            extra={"slug": slug, "value": cfg.get("skip_drive")},
-        )
-        logger.error(
-            "cli.tag_onboarding.ingest.legacy_skip_drive",
-            extra={"slug": slug, "value": cfg.get("skip_drive")},
+    if bool(cfg.get("skip_drive", False)):
+        logger.warning(
+            "cli.tag_onboarding_raw.legacy_skip_drive",
+            extra={
+                "stage": "provider_normalization",
+                "reason": "legacy_flag_skip_drive",
+            },
         )
         raise ConfigError(
-            "Config legacy: 'skip_drive' non supportato. Usa ingest_provider: local.",
-            slug=slug,
+            "Config legacy: skip_drive non è più supportato.",
+            code="legacy_skip_drive",
         )
     provider = cfg.get("ingest_provider")
     if provider in {"drive", "local"}:

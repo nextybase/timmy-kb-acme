@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from pipeline.exceptions import ConfigError
 from pipeline.workspace_layout import WorkspaceLayout
 
 __all__ = ["ContextPaths", "resolve_context_paths"]
@@ -42,7 +41,3 @@ def __getattr__(name: str) -> Any:  # pragma: no cover
     if name == "ContextProtocol":
         raise AttributeError("ContextProtocol rimosso (1.0 Beta): usa WorkspaceLayout e resolve_context_paths(layout).")
     raise AttributeError(name)
-
-
-def _legacy_resolve_context_paths(*_a: Any, **_k: Any) -> None:  # pragma: no cover
-    raise ConfigError("API legacy disabilitata (1.0 Beta): resolve_context_paths accetta solo WorkspaceLayout.")
