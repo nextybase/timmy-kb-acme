@@ -92,8 +92,14 @@ def _log_preview_unavailable(logger: logging.Logger, slug: str, reason: str) -> 
             "ui.preview.unavailable",
             extra={"slug": slug, "reason": reason, "mode": _PREVIEW_MODE},
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        try:
+            logger.error(
+                "ui.preview.telemetry_failure",
+                extra={"error_type": type(exc).__name__},
+            )
+        except Exception:
+            pass
 
 
 def _start_preview(ctx: ClientContext, logger: logging.Logger, status_widget: Any) -> str:

@@ -9,6 +9,7 @@ from typing import Any, TypedDict, cast
 import yaml
 
 from pipeline.config_utils import load_client_settings
+from pipeline.context import ClientContext
 from pipeline.env_constants import UI_CONFIG_FILE_ENV
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
@@ -18,11 +19,6 @@ from pipeline.settings import Settings
 from ui.utils.context_cache import get_client_context
 from ui.utils.repo_root import get_repo_root
 from ui.utils.stubs import get_streamlit
-
-try:
-    from pipeline.context import ClientContext
-except Exception:  # pragma: no cover
-    ClientContext = type("ClientContext", (), {})
 
 # Base sicura ancorata al repo
 REPO_ROOT: Path = get_repo_root(allow_env=True)
