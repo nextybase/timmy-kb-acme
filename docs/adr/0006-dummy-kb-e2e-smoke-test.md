@@ -65,7 +65,7 @@ La decisione si articola in sei punti:
 4. **Health Report nel payload JSON**
    - Viene aggiunta una chiave `"health"` che riporta:
      - stato Vision,
-     - uso fallback semantico,
+     - uso degradazione compatibile smoke (semantica),
      - conteggio PDF raw,
      - validità mapping semantico,
      - presenza di SUMMARY.md,
@@ -92,7 +92,7 @@ La modalità deep testing descrive lo stesso flusso controllato della Dummy KB s
 Questa sezione applica i "smoke vs deep modes" del Manifesto e non introduce regole globali.
 
 - **Smoke** è l'esecuzione cablata: genera un workspace fittizio, valida la struttura e produce l'health report senza Vision/Drive reali quando disabilitati.
-- **Deep** è la stessa pipeline con Vision e Drive attivi, senza fallback: ogni chiamata reale viene osservata, i controlli falliscono duramente (health.status="failed") e viene chiesto all'utente di riprovare solo quando i secrets/permessi sono adeguati.
+- **Deep** è la stessa pipeline con Vision e Drive attivi, senza degradazioni automatiche: ogni chiamata reale viene osservata, i controlli falliscono duramente (health.status="failed") e viene chiesto all'utente di riprovare solo quando i secrets/permessi sono adeguati.
 - In deep non si ignora mai un errore Vision o Drive; una failure viene trasformata in `HardCheckError` e il payload health espone `errors`, `checks` ed `external_checks` con messaggi che collegano direttamente all'esito della Secrets Healthcheck UI.
 - Il flag CLI `--deep-testing` (e la checkbox "Attiva testing profondo") attivano questa modalità e scrivono `health.mode="deep"` nel payload finale, insieme a un'entry `golden_pdf` con path, sha256 e dimensione (solo in deep).
 - La selezione dei passi del Manifesto resta valida: passi disabilitati non eseguono e non modificano artefatti.

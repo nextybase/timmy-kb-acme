@@ -195,9 +195,9 @@ def _st_notify(level: str, message: str) -> None:
     log.warning("ui.landing_slug.notify_unhandled", extra={"requested_level": level})
 
 
-def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str, str]:
+def _enter_existing_workspace(slug: str, default_name: str) -> Tuple[bool, str, str]:
     _require_streamlit()
-    client_name: str = fallback_name or slug
+    client_name: str = default_name or slug
     try:
         ctx = get_client_context(slug, require_drive_env=False)
         from pipeline.config_utils import get_client_config
@@ -207,7 +207,7 @@ def _enter_existing_workspace(slug: str, fallback_name: str) -> Tuple[bool, str,
         meta_client_name = meta_section.get("client_name") if isinstance(meta_section, dict) else None
         client_name = str(meta_client_name or slug)
     except Exception:  # pragma: no cover
-        client_name = fallback_name or slug
+        client_name = default_name or slug
 
     _state_set("slug", slug)
     _state_set("client_name", client_name)

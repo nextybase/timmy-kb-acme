@@ -186,7 +186,7 @@ References: [.codex/WORKFLOWS.md](../../.codex/WORKFLOWS.md), [User Guide](../..
 - Log every step; keep PRs/commits atomic and traceable.
 
 ### 5.4 Multi-agent alignment
-- Ensure adapters (`ui.services.tags_adapter`, Drive services) load or that the UI shows stub help/fallback.
+- Ensure adapters (`ui.services.tags_adapter`, Drive services) load or that the UI shows stub help/degradazione compatibile UI.
 - Reset shared caches (`clients_store`, `safe_pdf_cache`) after atomic writes and log `reset_gating_cache`.
 
 ### 5.5 Prompt Chain execution

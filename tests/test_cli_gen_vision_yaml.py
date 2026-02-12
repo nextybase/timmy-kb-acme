@@ -63,7 +63,7 @@ def test_cli_success_returns_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         rc = cli.main()
         assert rc == 0
         out, err = capsys.readouterr()
-        # Sanity check rispettando sia log strutturato che console fallback
+        # Sanity check: accettiamo sia evento strutturato sia output testuale su console.
         assert (
             "vision_yaml_generated" in out
             or "vision_yaml_generated" in err

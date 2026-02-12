@@ -42,7 +42,7 @@ TASKS = {
     "Semantica": (
         "Allineamento `semantic.api` vs service<br>"
         "Rigenerazione/migrazione `tags.db`<br>"
-        "Fallback README/SUMMARY idempotenti"
+        "Rigenerazione README/SUMMARY idempotente"
     ),
     "UI (Streamlit)": (
         "Refactor orchestratori UI onboarding<br>"
@@ -82,7 +82,7 @@ def extract_summary(md: str) -> Tuple[str, str]:
     Estrae due righe sintetiche:
     - Override: riconosce varianti di heading e prende 1-2 bullet.
     - Accettazione: contiene i criteri/acceptance.
-    Fallback: 'Non definito'
+    Default: 'Non definito'
     """
 
     def bullets_after(heading_regex: str, take: int = 2) -> List[str]:
@@ -110,11 +110,11 @@ def extract_summary(md: str) -> Tuple[str, str]:
         take=1,
     )
 
-    fallback_override = "Non definito"
-    fallback_accept = "Non definito"
+    default_override = "Non definito"
+    default_accept = "Non definito"
 
-    override_txt = "; ".join(override) if override else fallback_override
-    accept_txt = "; ".join(accept) if accept else fallback_accept
+    override_txt = "; ".join(override) if override else default_override
+    accept_txt = "; ".join(accept) if accept else default_accept
     return override_txt, accept_txt
 
 

@@ -43,7 +43,7 @@ def _resolve_base_dir(slug: str, log: Optional[logging.Logger] = None) -> Path:
         base = sem_get_paths(slug)["base"]
         return base if isinstance(base, Path) else Path(str(base))
     except Exception:
-        # 3) Ultimo fallback: legacy locale
+        # 3) Ultima degradazione compatibile: legacy locale
         return Path("output") / f"timmy-kb-{slug}"
 
 
@@ -54,7 +54,7 @@ def render_finance_tab(*, st: Any, log: logging.Logger, slug: str) -> None:
     Dipendenze runtime:
       - finance.api.import_csv
       - finance.api.summarize_metrics
-      - (opzionale) semantic.api.get_paths  ?????¶? usata solo come fallback
+      - (opzionale) semantic.api.get_paths  ?????¶? usata solo come degradazione compatibile
     """
     # Import lazy (evita side-effects a import-time del modulo)
     from finance.api import import_csv as fin_import_csv

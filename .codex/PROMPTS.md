@@ -281,7 +281,7 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 ## Enrichment front matter
 - Use `semantic.api` (avoid `_private`); treat `tags.db` as the SSoT for canonical tags.
 - If `tags.db` is missing, propose a safe migration/regeneration (no silent fallback).
-- Generate README/SUMMARY files via repository utilities with idempotent fallbacks.
+- Generate README/SUMMARY files via repository utilities with idempotent compatibility degradation.
 
 ## Facade vs services alignment
 - Confirm signature parity between `semantic.api` and services (`convert/frontmatter/embedding`).
@@ -300,7 +300,7 @@ Return ONLY the payload corresponding to NEED_INPUT / CONTRACT_ERROR / OK.
 
 ## Deprecation sweep and layout
 - Remove `st.cache`, `st.experimental_*`, `unsafe_allow_html`, and `use_container_width`.
-- Keep layouts stub-friendly (avoid unsupported `with col` blocks); prefer `st.dialog` with fallbacks.
+- Keep layouts stub-friendly (avoid unsupported `with col` blocks); prefer `st.dialog` with compatibility degradation paths.
 - Log via `get_structured_logger("ui.<page>")`; avoid `print()` and PII leaks.
 
 # Test & QA

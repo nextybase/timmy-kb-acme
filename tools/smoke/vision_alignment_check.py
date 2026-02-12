@@ -38,7 +38,7 @@ def _print_json(payload: Dict[str, Any], exit_code: Optional[int] = None) -> Non
     try:
         print(json.dumps(payload, ensure_ascii=False, indent=2), flush=True)
     except Exception:
-        # fallback minimale se la console ha problemi di encoding
+        # degradazione minima se la console ha problemi di encoding
         print(str(payload), flush=True)
     if exit_code is not None:
         sys.exit(exit_code)
@@ -112,7 +112,7 @@ def main() -> None:
         },
     )
 
-    # Modello da usare per Vision. Se non specificato, fallback ragionevole.
+    # Modello da usare per Vision. Se non specificato, default ragionevole.
     model = _env("VISION_MODEL", "OPENAI_MODEL")
     if not model and settings and settings.vision_model:
         model = settings.vision_model

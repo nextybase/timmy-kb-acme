@@ -18,18 +18,15 @@ Nota: nessuna rete; usa un client embedding fittizio.
 import argparse
 import json
 import statistics
-import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, List
 
 from pipeline.beta_flags import is_test_mode
-from pipeline.constants import OUTPUT_DIR_NAME, REPO_NAME_PREFIX
 from pipeline.context import ClientContext
-from pipeline.path_utils import ensure_within_and_resolve
-from timmy_kb.cli.retriever import QueryParams, search
 from storage.kb_store import KbStore
+from timmy_kb.cli.retriever import QueryParams, search
 
 
 class _DummyEmbeddings:
@@ -53,10 +50,7 @@ class BenchRow:
     runs: int
 
 
-def _parse_queries(path: Path | None) -> list[dict[str, Any]]:
-    if path is None:
-        # fallback minimale incorporato (ripetibile)
-        return [{"q": "onboarding"}, {"q": "drive setup"}, {"q": "semantic tags"}]
+def _parse_queries(path: Path) -> list[dict[str, Any]]:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, list):
         raise ValueError("Input JSON deve essere una lista di oggetti {q: str, ...}")
@@ -97,21 +91,24 @@ def main() -> None:
     if args.db is not None and not is_test_mode():
         ap.error("Override --db consentito solo con TEST_MODE attivo (override bloccato in runtime)")
 
+    if args.queries is None:
+        ap.error("Parametro obbligatorio: --queries (Beta: no fallback incorporati)")
     queries = _parse_queries(args.queries)
     candidates_list = [int(x.strip()) for x in str(args.candidates).split(",") if x.strip()]
     emb = _DummyEmbeddings()
 
-    workspace = None
     try:
         ctx = ClientContext.load(slug=args.slug, require_env=False, run_id=None, bootstrap_config=False)
         base_dir = getattr(ctx, "base_dir", None)
         if isinstance(base_dir, Path):
             workspace = base_dir
-    except Exception:
-        workspace = None
-    if workspace is None:
-        root = Path(OUTPUT_DIR_NAME)
-        workspace = ensure_within_and_resolve(root, root / f"{REPO_NAME_PREFIX}{args.slug}")
+        else:
+            ap.error("ClientContext.load completato ma base_dir non valido (Beta: richiede workspace esplicito)")
+    except Exception as e:
+        ap.error(
+            f"Impossibile caricare ClientContext per slug={args.slug!r} (Beta: no workspace fallback). "
+            f"{type(e).__name__}: {e}"
+        )
 
     store = KbStore.for_slug(slug=args.slug, repo_root_dir=workspace, db_path=args.db)
     db_path = store.effective_db_path()

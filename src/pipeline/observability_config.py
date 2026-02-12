@@ -103,18 +103,27 @@ def load_observability_settings() -> ObservabilitySettings:
     """
     Carica le impostazioni globali di osservabilità dal file YAML.
 
-    In caso di assenza o errore di parsing, ritorna i default safe.
+    Policy Beta:
+    - file mancante => hard fail (ConfigError)
+    - errore I/O o YAML => hard fail (ConfigError)
     """
+    from pipeline.exceptions import ConfigError
+
     path = get_observability_config_path()
     path_safe = _ensure_within_and_resolve(path.parent, path)
     if not path_safe.exists():
-        return ObservabilitySettings()
+        raise ConfigError(
+            f"Configurazione osservabilita' mancante: {path_safe}",
+            file_path=str(path_safe),
+        )
 
     try:
         raw: Dict[str, Any] = yaml.safe_load(_read_text(path_safe)) or {}
-    except Exception:
-        # In caso di file corrotto, usa i default
-        return ObservabilitySettings()
+    except Exception as exc:
+        raise ConfigError(
+            f"Errore caricamento configurazione osservabilita': {path_safe}; error_type={type(exc).__name__}",
+            file_path=str(path_safe),
+        ) from exc
 
     return ObservabilitySettings(
         stack_enabled=bool(raw.get("stack_enabled", False)),
@@ -167,10 +176,7 @@ def update_observability_settings(
     from pipeline.file_utils import safe_write_text
 
     path = get_observability_config_path()
-    try:
-        path_safe = _ensure_within_and_resolve(path.parent, path)
-    except ValueError:
-        path_safe = path.resolve()
+    path_safe = _ensure_within_and_resolve(path.parent, path)
     path_safe.parent.mkdir(parents=True, exist_ok=True)
 
     data: Dict[str, Any] = {

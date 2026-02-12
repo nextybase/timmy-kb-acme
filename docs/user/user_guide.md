@@ -21,7 +21,7 @@ Questo progetto adotta una separazione intenzionale tra:
 Le guide in `docs/` descrivono *come* utilizzare ed estendere il sistema.
 I vincoli su *cosa è consentito o vietato*, i ruoli, i gate decisionali e le
 macchine a stati sono definiti esclusivamente nelle fonti normative.
-Vedi anche: `instructions/13_artifacts_policy.md` (core vs service artifacts, fallback e determinismo).
+Vedi anche: `instructions/13_artifacts_policy.md` (core vs service artifacts, degradazione controllata e determinismo).
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
 > Avvio interfaccia: `streamlit run onboarding_ui.py` (la UI risolve il repo root via SSoT e non si affida a `REPO_ROOT_DIR`).
@@ -108,7 +108,7 @@ Il file `onboarding_ui.py` risolve la directory del repository via SSoT e non si
 
 Nella **sidebar**, sezione *Azioni rapide*, trovi il pulsante **Guida UI**: apre questa guida **nella stessa scheda** e funziona anche senza uno *slug* cliente attivo. In alternativa, la trovi anche nella barra in alto: **Tools -> Guida UI** (deep-link: `/guida` oppure `?tab=guida`).
 
-> Nota tecnica: la navigazione usa `switch_page` quando disponibile; in fallback aggiorna automaticamente `?tab=guida` e forza il rerun. Segnale: nessun segnale/log esplicito documentato.
+> Nota tecnica: la navigazione usa `switch_page` quando disponibile; in degradazione compatibile UI aggiorna automaticamente `?tab=guida` e forza il rerun. Segnale: nessun segnale/log esplicito documentato.
 > Routing attuale: `st.Page` + `st.navigation` (UI index); evitati hack su query params/`switch_page`.
 
 ---
@@ -307,7 +307,7 @@ Prerequisito: `normalized/` deve essere pronta (generata da `raw_ingest`).
 4. **Anteprima Docker (HonKit)** *(facoltativa)*
    - **Cosa fa:** avvia un container che serve il sito statico generato da `book/`.
    - **Quando usarla:** per QA visivo prima della pubblicazione; chiudi il container al termine.
-   - **Log stub:** imposta `PREVIEW_LOG_DIR` con path relativi o assoluti. Se il percorso non esiste o non e scrivibile la preview si ferma con errore esplicito (nessun fallback).
+   - **Log stub:** imposta `PREVIEW_LOG_DIR` con path relativi o assoluti. Se il percorso non esiste o non e scrivibile la preview si ferma con errore esplicito (nessuna degradazione automatica).
 
 - La pagina Semantica e accessibile da stato **pronto** in poi (con Markdown in `normalized/`).
 - La **Preview/finishing** resta vincolata agli stati **arricchito/finito**.

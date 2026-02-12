@@ -141,18 +141,18 @@ Per i dettagli operativi vedi `.codex/PROMPTS.md`, `system/ops/runbook_codex.md`
 
 ## Telemetria & sicurezza
 - **Workspace slug-based:** Tutti i log operativi vivono nel workspace cliente; in setup locali tipicamente sotto `output/timmy-kb-<slug>/logs/` con redazione automatica dei segreti. Ogni componente scrive sotto il proprio slug/workspace e rispetta path-safety e scritture atomiche.
-- **Global UI log guard:** L'handler condiviso dei log UI globali serve al viewer (Log dashboard) ma non ospita dati operativi o fallback di ingest; quando il workspace ? locale, Promtail ? configurato per leggere `output/timmy-kb-*/logs/*.log` e i log UI globali per le dashboard di grafana/tempo.
+- **Global UI log guard:** L'handler condiviso dei log UI globali serve al viewer (Log dashboard) ma non ospita dati operativi o degradazioni di ingest; quando il workspace ? locale, Promtail ? configurato per leggere `output/timmy-kb-*/logs/*.log` e i log UI globali per le dashboard di grafana/tempo.
 - Rotazione file (`RotatingFileHandler`) e tracing OTEL (configurazioni `TIMMY_LOG_*`, `TIMMY_OTEL_*`) sono gestiti come prima, senza introdurre meccanismi legacy.
 - `pre-commit` include CSpell, gitleaks e controlli SPDX per mantenere documentazione e codice coerenti.
 
 ### Observability stack (Loki + Grafana + Promtail)
-- `observability/docker-compose.yaml` (Loki + Grafana + Promtail) legge i log del workspace locale (`output/timmy-kb-*/logs/*.log`) e i log UI globali; non usa alcun fallback di storage.
+- `observability/docker-compose.yaml` (Loki + Grafana + Promtail) legge i log del workspace locale (`output/timmy-kb-*/logs/*.log`) e i log UI globali; non usa alcuna degradazione di storage.
 - Le righe structured `slug=... run_id=... event=...` sono esportate come label Loki (`slug`, `run_id`, `event`) e alimentano liste di alert o dashboard.
 - Avvia con:
   ```bash
   docker compose --env-file ./.env -f observability/docker-compose.yaml up -d
   ```
-  Grafana (`http://localhost:3000`) usa `GRAFANA_ADMIN_PASSWORD` (fallback solo per dev); Loki è su `http://localhost:3100`.
+  Grafana (`http://localhost:3000`) usa `GRAFANA_ADMIN_PASSWORD` (default solo per dev); Loki è su `http://localhost:3100`.
 - Personalizza i bind `./promtail-config.yaml` e `output` a seconda del filesystem locale; spegni con `docker compose down`.
 
 Per altre note operative (preview Docker, ingest CSV, gestione extras Drive) rimandiamo alle sezioni dedicate della [User Guide](docs/user/user_guide.md) e della [Developer Guide](docs/developer/developer_guide.md).

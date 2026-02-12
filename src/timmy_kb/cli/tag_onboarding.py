@@ -267,14 +267,13 @@ def scan_normalized_to_db(
     Determinismo / perimetro:
     - Il comportamento è deterministico rispetto a:
       (normalized_dir, db_path, repo_root_dir) e al contenuto dei file `.md` (sha256).
-    - In Beta, `repo_root_dir` è sempre obbligatorio per evitare euristiche e mantenere
-      il perimetro esplicito.
+    - `repo_root_dir` è obbligatorio per mantenere il perimetro esplicito.
     """
 
     log = get_structured_logger("tag_onboarding", **_obs_kwargs())
     if repo_root_dir is None:
         raise ConfigError(
-            "repo_root_dir mancante: richiesto per scan_normalized_to_db (Beta: no fallback).",
+            "repo_root_dir mancante: richiesto per scan_normalized_to_db.",
         )
     repo_root_dir_path = Path(repo_root_dir).resolve()
     perimeter_root = repo_root_dir_path
@@ -369,7 +368,7 @@ def run_nlp_to_db(
     log = get_structured_logger("tag_onboarding", **_obs_kwargs())
     if repo_root_dir is None:
         raise ConfigError(
-            "repo_root_dir mancante: richiesto per run_nlp_to_db (Beta: no fallback).",
+            "repo_root_dir mancante: richiesto per run_nlp_to_db.",
             slug=slug,
         )
     repo_root_dir_path = Path(repo_root_dir).resolve()

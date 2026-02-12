@@ -22,12 +22,12 @@ from pipeline.path_utils import ensure_within, ensure_within_and_resolve, valida
 __all__ = ["WorkspaceLayout", "get_workspace_layout"]
 
 
-def _to_path(value: Any, fallback: Path) -> Path:
+def _to_path(value: Any, default_path: Path) -> Path:
     if isinstance(value, Path):
         return value
     if isinstance(value, (str, os.PathLike)):
         return Path(value)
-    return fallback
+    return default_path
 
 
 @dataclass(frozen=True)
