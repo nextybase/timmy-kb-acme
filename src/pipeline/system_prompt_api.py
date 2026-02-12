@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from pipeline.capabilities import get_openai_ctor
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.import_utils import import_from_candidates
@@ -27,7 +26,7 @@ def resolve_assistant_id() -> str:
 
 
 def build_openai_client() -> Any:
-    """Costruisce il client OpenAI usando il factory del progetto o il fallback."""
+    """Costruisce il client OpenAI usando SOLO il factory del progetto (Beta: no fallback)."""
     try:
         factory = import_from_candidates(
             _CANDIDATES,
@@ -36,29 +35,14 @@ def build_openai_client() -> Any:
             logger=LOG,
         )
         return factory()
-    except ImportError:
-        try:
-            ctor = get_openai_ctor()
-            return ctor()
-        except Exception as exc:  # pragma: no cover
-            raise RuntimeError(f"Impossibile inizializzare il client OpenAI: {exc}") from exc
+    except ImportError as exc:
+        raise ConfigError("Factory OpenAI mancante: make_openai_client non risolto (Beta: no fallback).") from exc
 
 
-def _retrieve_assistant(client: Any, assistant_id: str, *, allow_beta_fallback: bool) -> Any:
+def _retrieve_assistant(client: Any, assistant_id: str) -> Any:
     assistants = getattr(client, "assistants", None)
     if assistants is not None and hasattr(assistants, "retrieve"):
         return assistants.retrieve(assistant_id)
-
-    if allow_beta_fallback:
-        beta = getattr(client, "beta", None)
-        if beta is not None:
-            beta_assistants = getattr(beta, "assistants", None)
-            if beta_assistants is not None and hasattr(beta_assistants, "retrieve"):
-                LOG.warning(
-                    "system_prompt.beta_retrieve_used",
-                    extra={"assistant_id": assistant_id},
-                )
-                return beta_assistants.retrieve(assistant_id)
 
     raise ConfigError("Client OpenAI non espone l'API assistants.")
 
@@ -68,22 +52,10 @@ def _update_assistant(
     assistant_id: str,
     *,
     instructions: str,
-    allow_beta_fallback: bool,
 ) -> Any:
     assistants = getattr(client, "assistants", None)
     if assistants is not None and hasattr(assistants, "update"):
         return assistants.update(assistant_id, instructions=instructions)
-
-    if allow_beta_fallback:
-        beta = getattr(client, "beta", None)
-        if beta is not None:
-            beta_assistants = getattr(beta, "assistants", None)
-            if beta_assistants is not None and hasattr(beta_assistants, "update"):
-                LOG.warning(
-                    "system_prompt.beta_update_used",
-                    extra={"assistant_id": assistant_id},
-                )
-                return beta_assistants.update(assistant_id, instructions=instructions)
 
     raise ConfigError("Client OpenAI non espone l'API assistants.")
 
@@ -91,11 +63,9 @@ def _update_assistant(
 def load_remote_system_prompt(
     assistant_id: str,
     client: Any,
-    *,
-    allow_beta_fallback: bool = False,
 ) -> Dict[str, str]:
     """Recupera modello e istruzioni dell'assistant in modo sicuro."""
-    assistant = _retrieve_assistant(client, assistant_id, allow_beta_fallback=allow_beta_fallback)
+    assistant = _retrieve_assistant(client, assistant_id)
     model = getattr(assistant, "model", "") or ""
     instructions = getattr(assistant, "instructions", "") or ""
     return {
@@ -108,15 +78,12 @@ def save_remote_system_prompt(
     assistant_id: str,
     instructions: str,
     client: Any,
-    *,
-    allow_beta_fallback: bool = False,
 ) -> None:
     """Aggiorna le istruzioni dell'assistant in modo control-plane."""
     _update_assistant(
         client,
         assistant_id,
         instructions=instructions,
-        allow_beta_fallback=allow_beta_fallback,
     )
 
 

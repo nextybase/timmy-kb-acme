@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.exceptions import ConfigError
 from pipeline import observability_config as oc
+from pipeline.exceptions import ConfigError
 
 
 def test_load_observability_settings_missing_file_raises(

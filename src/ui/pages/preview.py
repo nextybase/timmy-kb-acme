@@ -24,7 +24,6 @@ from ui.utils.workspace import normalized_ready, tagging_ready
 st = get_streamlit()
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_PREVIEW_LOG_DIR = REPO_ROOT / "logs" / "preview"
 
 from pipeline.logging_utils import get_structured_logger, tail_path
 from ui.chrome import render_chrome_then_require
@@ -122,31 +121,6 @@ def _stop_preview(logger: logging.Logger, container_name: Optional[str], status_
     _STOP_PREVIEW(logger, container_name)
     if status_widget is not None and hasattr(status_widget, "update"):
         status_widget.update(label="Preview arrestata.", state="complete")
-
-
-def _preview_stub_warning(message: str, *, error: Exception | None = None, base: Path | None = None) -> None:
-    details: list[str] = []
-    if base is not None:
-        details.append(f"path={base}")
-    if error is not None:
-        details.append(f"reason={error}")
-    decorated = f"{message} ({'; '.join(details)})" if details else message
-    try:
-        st.warning(decorated)
-    except Exception:
-        pass
-    try:
-        logger = get_structured_logger("ui.preview.stub")
-        logger.warning(
-            "ui.preview.stub_log_dir_fallback",
-            extra={
-                "detail": message,
-                "error": str(error) if error else "",
-                "base": str(base) if base else "",
-            },
-        )
-    except Exception:
-        pass
 
 
 def _resolve_preview_dir(base_setting: Path) -> Path:

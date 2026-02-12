@@ -50,8 +50,8 @@ def _resolve_assistant_id(args: argparse.Namespace) -> str:
     return resolve_assistant_id()
 
 
-def _load_prompt(client: Any, assistant_id: str, *, allow_beta_fallback: bool) -> Dict[str, Any]:
-    data = load_remote_system_prompt(assistant_id, client, allow_beta_fallback=allow_beta_fallback)
+def _load_prompt(client: Any, assistant_id: str) -> Dict[str, Any]:
+    data = load_remote_system_prompt(assistant_id, client)
     return {
         "status": "ok",
         "model": data.get("model"),
@@ -64,14 +64,11 @@ def _save_prompt(
     client: Any,
     assistant_id: str,
     instructions: str,
-    *,
-    allow_beta_fallback: bool,
 ) -> Dict[str, Any]:
     save_remote_system_prompt(
         assistant_id,
         instructions,
         client,
-        allow_beta_fallback=allow_beta_fallback,
     )
     return {
         "status": "ok",
@@ -97,11 +94,6 @@ def main(argv: List[str] | None = None) -> int:
         "--instructions",
         help="Prompt completo da inviare (richiesto con --mode set)",
     )
-    parser.add_argument(
-        "--allow-beta",
-        action="store_true",
-        help="Consente il fallback alle API beta (solo laddove documentato, non usato di default)",
-    )
     args = parser.parse_args(argv)
 
     payload = _build_payload(slug=args.slug, action=f"system_prompt.{args.mode}")
@@ -109,9 +101,8 @@ def main(argv: List[str] | None = None) -> int:
         try:
             assistant_id = _resolve_assistant_id(args)
             client = build_openai_client()
-            allow_beta = args.allow_beta
             if args.mode == "get":
-                result = _load_prompt(client, assistant_id, allow_beta_fallback=allow_beta)
+                result = _load_prompt(client, assistant_id)
             else:
                 if not args.instructions:
                     raise ValueError("--instructions obbligatorio con --mode set")
@@ -119,7 +110,6 @@ def main(argv: List[str] | None = None) -> int:
                     client,
                     assistant_id,
                     args.instructions,
-                    allow_beta_fallback=allow_beta,
                 )
             payload.update(result)
             payload["status"] = result.get("status", "ok")

@@ -83,11 +83,9 @@ def test_system_prompt_tool_uses_non_strict_step(monkeypatch):
 
     monkeypatch.setattr(prompt_tool, "non_strict_step", fake_step)
     monkeypatch.setattr(prompt_tool, "build_openai_client", lambda: object())
-    monkeypatch.setattr(prompt_tool, "load_remote_system_prompt", lambda assistant_id, client, allow_beta_fallback: {})
+    monkeypatch.setattr(prompt_tool, "load_remote_system_prompt", lambda assistant_id, client: {})
     monkeypatch.setattr(prompt_tool, "resolve_assistant_id", lambda: "A")
-    monkeypatch.setattr(
-        prompt_tool, "save_remote_system_prompt", lambda assistant_id, instructions, client, allow_beta_fallback: None
-    )
+    monkeypatch.setattr(prompt_tool, "save_remote_system_prompt", lambda assistant_id, instructions, client: None)
 
     ret = prompt_tool.main(["--slug", "dummy", "--mode", "get"])
     assert ret == 0

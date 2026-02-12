@@ -275,12 +275,9 @@ def get_retriever_settings(slug: str | None = None) -> tuple[int, int, bool]:
             _, client_cfg = _load_client_config(slug)
             if client_cfg:
                 source_cfg = client_cfg
-        except ConfigError as exc:
-            _logger.debug(
-                "get_retriever_settings.client_fallback",
-                exc_info=exc,
-                extra={"slug": slug, "error": str(exc)},
-            )
+        except ConfigError:
+            # Beta invariant: nessun fallback a globale quando slug e' esplicito.
+            raise
 
     # Atteso: pipeline.retriever.throttle.* + pipeline.retriever.auto_by_budget.
     pipeline_section: Any = source_cfg.get("pipeline") if isinstance(source_cfg, dict) else {}
@@ -335,12 +332,9 @@ def set_retriever_settings(
     if slug:
         try:
             target_path, target_cfg = _load_client_config(slug)
-        except ConfigError as exc:
-            _logger.warning(
-                "set_retriever_settings.client_fallback",
-                extra={"slug": slug, "error": str(exc)},
-            )
-            target_cfg = cfg
+        except ConfigError:
+            # Beta invariant: nessuna persistenza su globale quando slug e' esplicito.
+            raise
 
     pipeline_section: dict[str, Any] = {}
     if isinstance(target_cfg.get("pipeline"), dict):
