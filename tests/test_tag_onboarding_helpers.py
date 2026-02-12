@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 import pytest
@@ -116,48 +115,19 @@ def _ensure_dirs(tmp_path: Path) -> tuple[Path, Path]:
     return normalized, semantic
 
 
-def test_scan_normalized_strict_requires_repo_root(tmp_path: Path, monkeypatch):
+def test_repo_root_none_always_raises_config_error(monkeypatch, tmp_path: Path):
     normalized, semantic = _ensure_dirs(tmp_path)
     db_path = semantic / "tags.db"
-    monkeypatch.setattr(tag_onboarding, "is_beta_strict", lambda *_: True, raising=False)
+    monkeypatch.setattr(tag_onboarding, "is_beta_strict", lambda *_: False, raising=False)
+    monkeypatch.setattr(tag_onboarding.nlp_runner, "run_doc_terms_pipeline", lambda *_, **__: {}, raising=False)
     with pytest.raises(ConfigError):
         scan_normalized_to_db(normalized_dir=normalized, db_path=db_path, repo_root_dir=None)
-
-
-def test_scan_normalized_non_strict_logs_fallback(monkeypatch, tmp_path: Path, caplog):
-    normalized, semantic = _ensure_dirs(tmp_path)
-    db_path = semantic / "tags.db"
-    monkeypatch.setattr(tag_onboarding, "is_beta_strict", lambda *_: False, raising=False)
-    caplog.set_level(logging.WARNING)
-    stats = scan_normalized_to_db(normalized_dir=normalized, db_path=db_path, repo_root_dir=None)
-    assert stats["folders"] == 0
-    assert stats["documents"] == 0
-    record = next(r for r in caplog.records if r.msg == "cli.tag_onboarding.repo_root_fallback")
-    assert getattr(record, "service_only", None) is True
-
-
-def test_run_nlp_strict_requires_repo_root(tmp_path: Path, monkeypatch):
-    normalized, semantic = _ensure_dirs(tmp_path)
-    db_path = semantic / "tags.db"
-    monkeypatch.setattr(tag_onboarding.nlp_runner, "run_doc_terms_pipeline", lambda *_, **__: {}, raising=False)
-    monkeypatch.setattr(tag_onboarding, "is_beta_strict", lambda *_: True, raising=False)
     with pytest.raises(ConfigError):
-        run_nlp_to_db(slug="s", normalized_dir=normalized, raw_dir=normalized, db_path=db_path, repo_root_dir=None)
-
-
-def test_run_nlp_non_strict_logs_fallback(monkeypatch, tmp_path: Path, caplog):
-    normalized, semantic = _ensure_dirs(tmp_path)
-    db_path = semantic / "tags.db"
-    monkeypatch.setattr(tag_onboarding, "is_beta_strict", lambda *_: False, raising=False)
-    monkeypatch.setattr(tag_onboarding.nlp_runner, "run_doc_terms_pipeline", lambda *_, **__: {}, raising=False)
-    caplog.set_level(logging.WARNING)
-    run_nlp_to_db(
-        slug="s",
-        normalized_dir=normalized,
-        raw_dir=normalized,
-        db_path=db_path,
-        repo_root_dir=None,
-        enable_entities=False,
-    )
-    record = next(r for r in caplog.records if r.msg == "cli.tag_onboarding.repo_root_fallback")
-    assert getattr(record, "service_only", None) is True
+        run_nlp_to_db(
+            slug="s",
+            normalized_dir=normalized,
+            raw_dir=normalized,
+            db_path=db_path,
+            repo_root_dir=None,
+            enable_entities=False,
+        )

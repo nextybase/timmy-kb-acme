@@ -267,32 +267,16 @@ def scan_normalized_to_db(
     Determinismo / perimetro:
     - Il comportamento è deterministico rispetto a:
       (normalized_dir, db_path, repo_root_dir) e al contenuto dei file `.md` (sha256).
-    - In *strict mode* (`TIMMY_BETA_STRICT=1`) `repo_root_dir` è obbligatorio
-      per evitare euristiche e mantenere il perimetro esplicito.
-
-    Fallback ammesso (service-only):
-    - Se `repo_root_dir` è `None` e NON siamo in strict mode, viene usato
-      `Path(normalized_dir).resolve().parent` come perimetro *solo* per CLI/tooling.
-    - Questo fallback è intenzionale, tracciato via log `service_only=True`,
-      e non va considerato una policy di runtime/prod.
+    - In Beta, `repo_root_dir` è sempre obbligatorio per evitare euristiche e mantenere
+      il perimetro esplicito.
     """
 
-    strict_mode = is_beta_strict()
     log = get_structured_logger("tag_onboarding", **_obs_kwargs())
-    fallback_used = repo_root_dir is None
-    if strict_mode and fallback_used:
+    if repo_root_dir is None:
         raise ConfigError(
-            "repo_root_dir mancante: richiesto in strict mode per scan_normalized_to_db.",
+            "repo_root_dir mancante: richiesto per scan_normalized_to_db (Beta: no fallback).",
         )
-    if fallback_used:
-        log.warning(
-            "cli.tag_onboarding.repo_root_fallback",
-            extra={"service_only": True, "mode": "scan_normalized"},
-        )
-    # Il fallback è riservato esclusivamente alla CLI/tooling; evitare euristiche e preferire ClientContext/WorkspaceLayout quando disponibili.
-    repo_root_dir_path = (
-        Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(normalized_dir).resolve().parent
-    )
+    repo_root_dir_path = Path(repo_root_dir).resolve()
     perimeter_root = repo_root_dir_path
 
     normalized_dir_path = ensure_within_and_resolve(perimeter_root, normalized_dir)
@@ -383,21 +367,12 @@ def run_nlp_to_db(
 
     strict_mode = is_beta_strict()
     log = get_structured_logger("tag_onboarding", **_obs_kwargs())
-    fallback_used = repo_root_dir is None
-    if strict_mode and fallback_used:
+    if repo_root_dir is None:
         raise ConfigError(
-            "repo_root_dir mancante: richiesto in strict mode per run_nlp_to_db.",
+            "repo_root_dir mancante: richiesto per run_nlp_to_db (Beta: no fallback).",
             slug=slug,
         )
-    if fallback_used:
-        log.warning(
-            "cli.tag_onboarding.repo_root_fallback",
-            extra={"service_only": True, "mode": "run_nlp_to_db"},
-        )
-    # Il fallback è riservato esclusivamente alla CLI/tooling; evitare euristiche e preferire ClientContext/WorkspaceLayout quando disponibili.
-    repo_root_dir_path = (
-        Path(repo_root_dir).resolve() if repo_root_dir is not None else Path(normalized_dir).resolve().parent
-    )
+    repo_root_dir_path = Path(repo_root_dir).resolve()
     perimeter_root = repo_root_dir_path
 
     normalized_dir_path = ensure_within_and_resolve(perimeter_root, normalized_dir)
