@@ -35,10 +35,6 @@ def _normalize_provider(cfg: dict[str, str | bool], source: str, *, slug: str | 
     if source in {"drive", "local"}:
         return source
     logger.error(
-        "tag_onboarding.ingest.provider_invalid",
-        extra={"slug": slug, "provider": provider, "source": source},
-    )
-    logger.error(
         "cli.tag_onboarding.ingest.provider_invalid",
         extra={"slug": slug, "provider": provider, "source": source},
     )
