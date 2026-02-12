@@ -62,6 +62,26 @@ GATE_EVENT_NAMES = {
 BRIDGE_FIELDS_ALWAYS = {"run_id", "slug", "phase_id", "state_id", "intent_id", "action_id"}
 BRIDGE_FIELDS_OTEL = {"trace_id", "span_id"}
 _STREAMLIT_NOISE_SUPPRESSED = False
+_telemetry_error_reported = False
+LOG = logging.getLogger("pipeline.logging_utils")
+
+
+def _report_telemetry_error(context: str, exc: Exception) -> None:
+    """Best-effort: segnala una sola volta errori della telemetria senza bloccare la pipeline."""
+    global _telemetry_error_reported
+    if _telemetry_error_reported:
+        return
+    _telemetry_error_reported = True
+    try:
+        LOG.error(
+            "telemetry.failure",
+            extra={
+                "context": context,
+                "error_type": type(exc).__name__,
+            },
+        )
+    except Exception:
+        pass
 
 
 def redact_secrets(msg: str) -> str:
@@ -177,11 +197,11 @@ class _RedactFilter(logging.Filter):
                 if field in redact_keys or any(sub in field.lower() for sub in sensitive_substrings):
                     try:
                         setattr(record, field, "***")
-                    except Exception:
-                        pass
-        except Exception:
+                    except Exception as exc:
+                        _report_telemetry_error("redact.filter.setattr", exc)
+        except Exception as exc:
             # mai bloccare il logging per un errore di redazione
-            pass
+            _report_telemetry_error("redact.filter", exc)
         return True
 
 
@@ -196,9 +216,9 @@ class _EventDefaultFilter(logging.Filter):
                     record.event = msg.strip() or "log"
                 else:
                     record.event = "log"
-        except Exception:
+        except Exception as exc:
             # mai bloccare il logging
-            pass
+            _report_telemetry_error("event.default.filter", exc)
         return True
 
 
@@ -237,8 +257,8 @@ class _KVFormatter(logging.Formatter):
                 if ctx is not None and ctx.is_valid:
                     kv.append(f"trace_id={ctx.trace_id:032x}")
                     kv.append(f"span_id={ctx.span_id:016x}")
-            except Exception:
-                pass
+            except Exception as exc:
+                _report_telemetry_error("kv.formatter.otel_bridge", exc)
         if kv:
             return f"{base} | " + " ".join(kv)
         return base
@@ -338,8 +358,8 @@ class _PhaseInjectFilter(logging.Filter):
         if not hasattr(record, "phase"):
             try:
                 record.phase = self.phase
-            except Exception:
-                pass
+            except Exception as exc:
+                _report_telemetry_error("phase.inject.filter", exc)
         return True
 
 
@@ -431,9 +451,9 @@ def get_structured_logger(
         try:
             if log_file.suffix:
                 log_file = log_file.with_name(f"{log_file.stem}-{run_id}{log_file.suffix}")
-        except Exception:
+        except Exception as exc:
             # In caso di errore, usa il path originale.
-            pass
+            _report_telemetry_error("logger.log_file.resolve", exc)
 
     lg = logging.getLogger(name)
     lg.setLevel(level)
@@ -479,8 +499,8 @@ def get_structured_logger(
     # esponi il contesto sul logger per i consumer (es. phase_scope)
     try:
         setattr(lg, "_logging_ctx_view", ctx)
-    except Exception:
-        pass
+    except Exception as exc:
+        _report_telemetry_error("logger.set_context_view", exc)
 
     # console handler (idempotente per chiave)
     key_console = f"{name}::console"
@@ -540,8 +560,9 @@ def get_structured_logger(
 
     try:
         from pipeline import tracing as _tracing
-    except Exception:
+    except Exception as exc:
         _tracing = None
+        _report_telemetry_error("logger.ensure_tracer.import", exc)
     ensure_tracer = getattr(_tracing, "ensure_tracer", None) if _tracing is not None else None
     if callable(ensure_tracer):
         ensure_tracer(context=context, enable_tracing=bool(effective_tracing))
@@ -594,8 +615,9 @@ class phase_scope:
             from time import monotonic as _monotonic
 
             self._t0 = _monotonic()
-        except Exception:
+        except Exception as exc:
             self._t0 = None
+            _report_telemetry_error("phase_scope.enter.monotonic", exc)
         try:
             from pipeline.tracing import start_phase_span
 
@@ -607,15 +629,17 @@ class phase_scope:
             )
             if self._span_ctx is not None:
                 self._span = self._span_ctx.__enter__()
-        except Exception:
+        except Exception as exc:
             self._span = None
             self._span_ctx = None
+            _report_telemetry_error("phase_scope.enter.start_span", exc)
         try:
             self._phase_filter = _PhaseInjectFilter(self.stage)
             # se il logger supporta chiavi dei filtri, usa lo stesso schema di _set_logger_filter
             self.logger.addFilter(self._phase_filter)
-        except Exception:
+        except Exception as exc:
             self._phase_filter = None
+            _report_telemetry_error("phase_scope.enter.add_filter", exc)
         extra = self._base_extra()
         extra.update({"event": "phase_started", "status": "start"})
         self.logger.info("phase_started", extra=extra)
@@ -633,8 +657,9 @@ class phase_scope:
                 from time import monotonic as _monotonic
 
                 duration_ms = int(round((_monotonic() - self._t0) * 1000))
-            except Exception:
+            except Exception as exc:
                 duration_ms = None
+                _report_telemetry_error("phase_scope.exit.monotonic", exc)
 
         extra: dict[str, Any] = self._base_extra()
         if duration_ms is not None:
@@ -651,13 +676,13 @@ class phase_scope:
             self.logger.error("phase_failed", extra={"event": "phase_failed", **extra})
             try:
                 record_phase_failed(self.customer, self.stage)
-            except Exception:
-                pass
+            except Exception as exc_metrics:
+                _report_telemetry_error("phase_scope.exit.metrics_failed", exc_metrics)
             try:
                 if self._span is not None:
                     self._span.record_exception(exc)
-            except Exception:
-                pass
+            except Exception as exc_trace:
+                _report_telemetry_error("phase_scope.exit.span_record_exception", exc_trace)
             if self._span is not None:
                 try:
                     self._span.set_attribute("status", "failed")
@@ -665,13 +690,13 @@ class phase_scope:
                         self._span.set_attribute("duration_ms", duration_ms)
                     if self._artifact_count is not None:
                         self._span.set_attribute("artifact_count", self._artifact_count)
-                except Exception:
-                    pass
+                except Exception as exc_trace:
+                    _report_telemetry_error("phase_scope.exit.span_set_attributes_failed", exc_trace)
             if self._span_ctx is not None:
                 try:
                     self._span_ctx.__exit__(exc_type, exc, tb)
-                except Exception:
-                    pass
+                except Exception as exc_trace:
+                    _report_telemetry_error("phase_scope.exit.span_ctx_failed", exc_trace)
             return False
         # Successo: 'status=success'
         extra["status"] = "success"
@@ -683,23 +708,23 @@ class phase_scope:
                     self._span.set_attribute("duration_ms", duration_ms)
                 if self._artifact_count is not None:
                     self._span.set_attribute("artifact_count", self._artifact_count)
-            except Exception:
-                pass
+            except Exception as exc_trace:
+                _report_telemetry_error("phase_scope.exit.span_set_attributes_success", exc_trace)
         if self._span_ctx is not None:
             try:
                 self._span_ctx.__exit__(None, None, None)
-            except Exception:
-                pass
+            except Exception as exc_trace:
+                _report_telemetry_error("phase_scope.exit.span_ctx_success", exc_trace)
         if duration_ms is not None:
             try:
                 observe_phase_duration(self.customer, self.stage, duration_ms / 1000.0)
-            except Exception:
-                pass
+            except Exception as exc_metrics:
+                _report_telemetry_error("phase_scope.exit.observe_duration", exc_metrics)
         if self._phase_filter is not None:
             try:
                 self.logger.removeFilter(self._phase_filter)
-            except Exception:
-                pass
+            except Exception as exc_filter:
+                _report_telemetry_error("phase_scope.exit.remove_filter", exc_filter)
         return False
 
     def _base_extra(self) -> dict[str, Any]:
@@ -770,8 +795,9 @@ def log_gate_event(
         from pipeline.observability_config import get_observability_settings
 
         tracing_enabled = bool(get_observability_settings().tracing_enabled)
-    except Exception:
+    except Exception as exc:
         tracing_enabled = False
+        _report_telemetry_error("gate_event.observability_settings", exc)
 
     if tracing_enabled and _otel_trace is not None:
         try:
@@ -780,8 +806,8 @@ def log_gate_event(
             if ctx is not None and ctx.is_valid:
                 payload.setdefault("trace_id", f"{ctx.trace_id:032x}")
                 payload.setdefault("span_id", f"{ctx.span_id:016x}")
-        except Exception:
-            pass
+        except Exception as exc:
+            _report_telemetry_error("gate_event.otel_context", exc)
         missing.extend([k for k in BRIDGE_FIELDS_OTEL if not payload.get(k)])
 
     if missing:
