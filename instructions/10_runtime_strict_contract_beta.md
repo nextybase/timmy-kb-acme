@@ -215,7 +215,7 @@ The system MUST hard-fail in the following cases:
 
 ---
 
-## 5bis. Entities Pipeline (CORE Artifact) – Guardrail Deterministico
+## 5bis. Entities Pipeline (CORE Artifact) - Guardrail Deterministico
 
 La tabella `doc_entities` è considerata **CORE artifact** della Beta 1.0.
 
