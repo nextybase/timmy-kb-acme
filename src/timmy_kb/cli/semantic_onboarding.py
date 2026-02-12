@@ -176,6 +176,11 @@ def _require_normalize_raw_gate(conn: Any, *, slug: str, layout: WorkspaceLayout
     )
 
 
+def _qa_evidence_refs(layout: WorkspaceLayout, qa_path: Path, *, status: str) -> list[str]:
+    # Evidence refs deterministici e "low entropy"
+    return [_path_ref(qa_path, layout), f"qa_status:{status}"]
+
+
 def _run_qa_gate_and_record(conn: Any, *, layout: WorkspaceLayout, slug: str, run_id: str) -> None:
     logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
     if logs_dir is None:
@@ -187,10 +192,7 @@ def _run_qa_gate_and_record(conn: Any, *, layout: WorkspaceLayout, slug: str, ru
     try:
         result = require_qa_gate_pass(logs_dir, slug=slug)
     except QaGateViolation as exc:
-        evidence_refs = [
-            _path_ref(qa_path, layout),
-            "qa_status:failed",
-        ]
+        evidence_refs = _qa_evidence_refs(layout, qa_path, status="failed")
         try:
             decision_ledger.record_normative_decision(
                 conn,

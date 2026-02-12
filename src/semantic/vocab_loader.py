@@ -267,6 +267,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
     if isinstance(data, Mapping):
         normalized = _parse_normalized_vocab_mapping(cast(Mapping[str, Any], data))
         if normalized:
+            LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "normalized_mapping"})
             return normalized
 
         items = cast(Any, data).get("tags") if hasattr(data, "get") else None
@@ -276,6 +277,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
             else None
         )
         if parsed_storage:
+            LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "storage_tags"})
             return parsed_storage
 
         simple = _parse_simple_vocab_mapping(cast(Mapping[str, Iterable[Any]], data))
