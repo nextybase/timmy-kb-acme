@@ -162,6 +162,7 @@ def _log_retriever_metrics(
     candidates_count: int,
     evaluated_count: int,
     coerce_stats: Mapping[str, int],
+    response_id: str | None = None,
 ) -> None:
     try:
         LOGGER.info(
@@ -169,6 +170,7 @@ def _log_retriever_metrics(
             extra={
                 "slug": params.slug,
                 "scope": params.scope,
+                "response_id": response_id,
                 "k": int(params.k),
                 "candidate_limit": int(params.candidate_limit),
                 "candidates": int(candidates_count),

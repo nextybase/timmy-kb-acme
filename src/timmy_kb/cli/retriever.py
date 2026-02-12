@@ -430,6 +430,7 @@ def search(
             candidates_count=candidates_count,
             evaluated_count=evaluated_count,
             coerce_stats=coerce_stats,
+            response_id=response_id,
         )
 
         evidence_ids = manifest_mod._build_evidence_ids(scored_items)

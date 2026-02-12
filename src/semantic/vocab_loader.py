@@ -282,12 +282,14 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
 
         simple = _parse_simple_vocab_mapping(cast(Mapping[str, Iterable[Any]], data))
         if simple:
+            LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "simple_mapping"})
             return simple
         _raise_invalid()
 
     if isinstance(data, Sequence) and not isinstance(data, (str, bytes)):
         parsed_sequence = _parse_sequence_rows(data)
         if parsed_sequence:
+            LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "sequence_rows"})
             return parsed_sequence
 
     _raise_invalid()
