@@ -15,6 +15,19 @@ Le guide in `docs/` descrivono *come* utilizzare ed estendere il sistema.
 I vincoli su *cosa è consentito o vietato*, i ruoli, i gate decisionali e le
 macchine a stati sono definiti esclusivamente nelle fonti normative.
 
+### Mappa derivata (per developer)
+
+Per ridurre ambiguita e falsi positivi nelle review (soprattutto quando si parla
+di determinismo e low-entropy), esiste una mappa derivata delle regole normative:
+
+- [`docs/policies/instructions_reference.md`](../policies/instructions_reference.md)
+
+Quella policy non introduce nuove regole: serve a riportare dentro `docs/` le
+invarianti operative piu usate da chi sviluppa (Prompt Chain, gate, contratti di
+runtime) e soprattutto a evidenziare dove l'entropia e ammessa (service artifacts,
+cache, state UI, env capability), cosi da evitare che controlli futuri scambino
+scelte intenzionali per regressioni.
+
 ## Executive summary
 
 Questo testo accompagna chi costruisce il sistema, ricordando che il valore è nel disegnare condizioni epistemiche condivise, non nel consegnare soluzioni autonome: ogni scelta tecnica nasce dal confronto con un contesto incerto e ogni modifica aggiorna una narrativa di responsabilità collettiva.

@@ -22,6 +22,31 @@ Regole di sviluppo per **Timmy KB**. Questa e la base iniziale: nessun riferimen
 
 ---
 
+## 1quarto) Entropy punti critici (consentiti, ma *solo* se espliciti)
+
+In Beta (pre-1.0), qualsiasi fallback, shim non necessario o retro-compatibilita
+non richiesta e considerata un errore di perimetro: il sistema deve restare
+deterministico nei processi e nella gestione degli artefatti.
+
+Detto questo, esistono zone dove una quota di entropia e intenzionale perche:
+1) riduce eccesso di ingegnerizzazione, 2) abilita strumenti/UX, 3) resta distinguibile via log,
+4) non contamina gli artefatti core.
+
+Per evitare falsi positivi nelle analisi successive, queste zone vanno trattate cosi:
+
+- devono vivere in **service layer** (UI/tooling) o in artefatti marcati come service,
+  mai nel core deterministico;
+- devono essere **osservabili** (evento/log esplicito) e non silenziose;
+- devono avere una **nota** in una policy derivata quando sono strutturali.
+
+Riferimento operativo (mappa derivata delle regole in `instructions/*`):
+`docs/policies/instructions_reference.md`.
+
+Riferimento normativo:
+`MANIFEST.md` e `instructions/*` (in particolare artifacts policy e contratti di gate/runtime).
+
+---
+
 ## 1bis) Configurazione (SSoT)
 
 Il file `config/config.yaml` e la fonte unica per i parametri condivisi. Esempio
