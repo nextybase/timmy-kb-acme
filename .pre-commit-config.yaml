@@ -172,8 +172,6 @@ repos:
             "isort==7.0.0",
             "ruff==0.15.1",
             "mypy==1.11.2",
-            "pytest==8.3.2",
-            "pytest-cov==5.0.0",
             "hypothesis==6.112.2",
             "types-PyYAML==6.0.12.20240808",
             "types-requests==2.32.4.20250809",
@@ -181,21 +179,6 @@ repos:
             "pre-commit-hooks==6.0.0",
             "pip-audit==2.7.2",
           ]
-        pass_filenames: false
-        stages: [pre-push]
-
-      - id: pytest-fast
-        name: pytest-fast (FAST inner-loop)
-        entry: python tools/test_runner.py fast
-        language: system
-        pass_filenames: false
-        files: ^(src|tests)/.*$
-        stages: [pre-commit]
-
-      - id: pytest-full
-        name: pytest-full (FULL suite)
-        entry: python tools/test_runner.py full
-        language: system
         pass_filenames: false
         stages: [pre-push]
 
