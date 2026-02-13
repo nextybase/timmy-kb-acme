@@ -21,6 +21,7 @@ def test_convert_structured_markdown_handles_symlink_category(tmp_path: Path) ->
     raw = base / "raw"
     book = base / "book"
     normalized = base / "normalized"
+    logs = base / "logs"
     semantic_dir = base / "semantic"
     config_dir = base / "config"
     real = raw / "real"
@@ -30,8 +31,11 @@ def test_convert_structured_markdown_handles_symlink_category(tmp_path: Path) ->
     config_dir.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     normalized.mkdir(parents=True, exist_ok=True)
+    logs.mkdir(parents=True, exist_ok=True)
     (semantic_dir / "semantic_mapping.yaml").write_text("areas: {}\n", encoding="utf-8")
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
+    (book / "README.md").write_text("# Test\n", encoding="utf-8")
+    (book / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     pdf = sub / "doc.pdf"
     pdf.write_bytes(b"%PDF-1.4\n%\n")
 
