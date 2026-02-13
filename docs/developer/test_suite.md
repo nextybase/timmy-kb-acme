@@ -19,6 +19,7 @@ La fonte di verità è lo script cross-platform:
 python tools/test_runner.py fast
 python tools/test_runner.py arch
 python tools/test_runner.py full
+python tools/test_runner.py linux
 ```
 
 Il Makefile è solo un alias comodo:
@@ -99,6 +100,22 @@ python tools/test_runner.py full
 ```
 
 **Regola**: FULL deve essere affidabile, ripetibile e "non sorprendente". Se un test è flaky, va reso deterministico oppure spostato/isolato (o rimosso se non porta valore reale).
+
+---
+
+## Linux (Docker)
+
+**Scopo**: validare localmente il comportamento target Linux prima del push, includendo pre-commit + suite pytest completa in container.
+
+Prerequisito:
+
+- Docker disponibile in PATH.
+
+Comando:
+
+```bash
+python tools/test_runner.py linux
+```
 
 ---
 

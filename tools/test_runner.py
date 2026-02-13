@@ -12,6 +12,7 @@ BINARIES = {
     "arch": "arch or contract",
     "full": None,
 }
+LINUX_BINARY = "linux"
 
 TEST_TEMP_DIR = Path("test-temp")
 CLIENTS_TEMP_DIR = TEST_TEMP_DIR / "clients_db"
@@ -63,6 +64,33 @@ def _build_pytest_command(binary: str, extra_args: list[str]) -> list[str]:
     return cmd
 
 
+def _build_linux_command(repo_root: Path) -> list[str]:
+    return [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{repo_root.resolve()}:/repo",
+        "-w",
+        "/repo",
+        "-e",
+        "TIMMY_OBSERVABILITY_CONFIG=/repo/tools/smoke/fixtures/observability.ci.yaml",
+        "python:3.11.8-slim-bookworm",
+        "sh",
+        "-lc",
+        (
+            "apt-get update && "
+            "apt-get install -y --no-install-recommends git ripgrep && "
+            "rm -rf /var/lib/apt/lists/* && "
+            "python -m pip install --upgrade pip && "
+            "pip install -r requirements-dev.txt && "
+            "pip install -e . && "
+            "pre-commit run --all-files && "
+            "python -m pytest -q --maxfail=0"
+        ),
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Cross-platform test runner for FAST/ARCH/FULL binaries."
@@ -75,8 +103,8 @@ def main() -> int:
     parser.add_argument(
         "binary",
         nargs="?",
-        choices=BINARIES.keys(),
-        help="Test binary to run: fast, arch, or full.",
+        choices=tuple(BINARIES.keys()) + (LINUX_BINARY,),
+        help="Test binary to run: fast, arch, full, or linux.",
     )
     parser.add_argument(
         "pytest_args",
@@ -89,16 +117,25 @@ def main() -> int:
         for name, expr in BINARIES.items():
             marker = expr if expr else "(no marker filter)"
             print(f"{name}: {marker}")
+        print(f"{LINUX_BINARY}: pre-commit + full pytest in Linux Docker")
         return 0
     if not args.binary:
         parser.error("binary is required unless --list is used")
+
+    repo_root = Path(__file__).resolve().parents[1]
+    if args.binary == LINUX_BINARY:
+        if shutil.which("docker") is None:
+            print("Error: docker not found in PATH; required for 'linux' mode.", file=sys.stderr)
+            return 2
+        cmd = _build_linux_command(repo_root)
+        print("Running:", " ".join(cmd))
+        return subprocess.call(cmd)
 
     extra_args = args.pytest_args
     if extra_args[:1] == ["--"]:
         extra_args = extra_args[1:]
 
     _prepare_test_temp()
-    repo_root = Path(__file__).resolve().parents[1]
     src_path = repo_root / "src"
     subprocess_env = os.environ.copy()
     python_path = subprocess_env.get("PYTHONPATH")
