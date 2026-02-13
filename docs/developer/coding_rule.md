@@ -290,6 +290,14 @@ invarianti vedi [Architecture Overview](../../system/architecture.md).
 
 ---
 
+## 6c) No Silent Degrade (Beta)
+- Nel CORE e vietato usare `except Exception: pass/return/continue` quando nasconde errori o altera implicitamente output/esito.
+- In SERVICE/UI e TOOLING confinato e ammesso best-effort solo se tracciato (evento/log esplicito) o chiaramente non impattante sul CORE.
+- Per CORE observability (metrics/logging/telemetry) gli errori non devono interrompere il flusso operativo, ma devono essere surfaced-once.
+- I fallback devono essere espliciti e documentati; in Beta sono vietati salvo eccezioni motivate e verificate da test dedicati.
+
+---
+
 ## 6bis) Retriever (ricerca)
 
 - `search(...)` restituisce `list[SearchResult]` tipizzata (`content`, `meta`, `score`).

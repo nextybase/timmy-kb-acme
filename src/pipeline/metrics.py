@@ -44,7 +44,7 @@ def _report_metrics_record_failure_once(metric: str, exc: Exception) -> None:
         )
     except Exception:
         # Ultima difesa: non rompere il core per logging failure.
-        pass
+        return
 
 
 def _metrics_requested(port: Optional[int]) -> bool:

@@ -79,3 +79,30 @@ def test_start_metrics_server_skips_when_not_requested(monkeypatch, caplog):
     assert module._METRICS_STARTED is False
     rec = next((r for r in caplog.records if r.getMessage() == "observability.metrics.skipped"), None)
     assert rec is not None
+
+
+def test_metrics_record_failure_is_reported_once(monkeypatch):
+    module = importlib.reload(metrics)
+
+    class _FailingCounter:
+        def labels(self, **_kwargs):
+            return self
+
+        def inc(self, *_args, **_kwargs) -> None:
+            raise RuntimeError("metrics write failed")
+
+    calls: list[tuple[str, object]] = []
+
+    def _fake_error(msg, **kwargs):
+        calls.append((msg, kwargs.get("extra")))
+
+    module._METRICS_RECORD_FAILURE_REPORTED = False
+    module._METRICS_INITIALIZED = True
+    module.documents_processed_total = _FailingCounter()
+    monkeypatch.setattr(module._log, "error", _fake_error)
+
+    module.record_document_processed("acme", 1)
+    module.record_document_processed("acme", 1)
+
+    assert len(calls) == 1
+    assert calls[0][0] == "observability.metrics.record_failed"

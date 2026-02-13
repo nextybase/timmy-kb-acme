@@ -82,6 +82,19 @@ Its absence or corruption blocks the gate.
 
 The `timestamp` field may exist as telemetry, but it **must not** be part of the deterministic comparison between core artifacts.
 
+### 7) CORE observability (metrics/logging/telemetry)
+Metrics and logging/telemetry channels are classified as **CORE observability** controls.
+
+CORE observability must not:
+- alter core artifacts or their semantics;
+- change gate outcomes or process selection logic;
+- interrupt operational flow when telemetry emission fails.
+
+Allowed behavior on telemetry emission failure is **surface once**:
+- emit one explicit structured error event for diagnosability;
+- suppress repeated equivalent errors to avoid noise flood;
+- do not introduce fallback paths that modify process behavior.
+
 ## Classification rule (practical)
 When a module produces a file:
 - if the file ends up in a pipeline directory (workspace layout) or is cited as a prerequisite → treat it as CORE (or CORE-GATE when it gates);
