@@ -215,7 +215,8 @@ pip install -r requirements-optional.txt
 
 ## 5) I/O sicuro & Path-safety
 ### Workspace discipline (repo vs runtime)
-- **Decisione Beta:** la repo root non deve mai diventare stato runtime; contiene solo artefacts versionati.
+- **Decisione Beta:** la repo root non deve diventare stato runtime dell'Envelope; contiene artefacts versionati.
+  Eccezione controllata: sono ammessi state store UI `SERVICE_ONLY` classificati `INSTANCE_GLOBAL` + `TRANSIENT` (es. `clients_db/` ProtoTimmy), fuori dal perimetro workspace/ledger.
 - **Definizioni (rigide):**
   - *Artefacts* = input versionati che determinano il comportamento (codice, config, policy, schemi).
   - *Derivatives* = output generati a runtime (output, log, cache, index, tmp, build).

@@ -24,7 +24,7 @@ macchine a stati sono definiti esclusivamente nelle fonti normative.
 Vedi anche: `instructions/13_artifacts_policy.md` (core vs service artifacts, degradazione controllata e determinismo).
 
 > **Doppio approccio:** puoi lavorare da **terminale** (orchestratori in sequenza) **oppure** tramite **interfaccia (Streamlit)**.
-> Avvio interfaccia: `streamlit run onboarding_ui.py` (la UI risolve il repo root via SSoT e non si affida a `REPO_ROOT_DIR`).
+> Avvio interfaccia: `streamlit run onboarding_ui.py` (la UI non usa `REPO_ROOT_DIR` per derivare workspace/artifact Envelope; il clients registry `clients_db/` e un caso separato instance-global, solo ProtoTimmy).
 
 Nota: la UI e gli orchestratori CLI delegano alle funzioni modulari
 `semantic.convert_service`, `semantic.frontmatter_service`,
@@ -103,7 +103,9 @@ Usa la UI per:
 streamlit run onboarding_ui.py
 ```
 
-Il file `onboarding_ui.py` risolve la directory del repository via SSoT e non si affida a `REPO_ROOT_DIR`, quindi non serve piu un wrapper: Streamlit viene eseguito direttamente dal repo e la pipeline scrive/legge i workspace sotto `output/timmy-kb-<slug>`.
+Il file `onboarding_ui.py` risolve la directory del repository via SSoT e non usa `REPO_ROOT_DIR` per derivare workspace/artifact Envelope, quindi non serve piu un wrapper: Streamlit viene eseguito direttamente dal repo e la pipeline scrive/legge i workspace sotto `output/timmy-kb-<slug>`.
+
+Nota onboarding/UI: il clients registry (`clients_db/`) e uno state store globale d'istanza (non workspace), usato nella sola fase ProtoTimmy multi-cliente e non rilevante dopo la transizione a Timmy.
 #### Accesso rapido alla Guida (sidebar)
 
 Nella **sidebar**, sezione *Azioni rapide*, trovi il pulsante **Guida UI**: apre questa guida **nella stessa scheda** e funziona anche senza uno *slug* cliente attivo. In alternativa, la trovi anche nella barra in alto: **Tools -> Guida UI** (deep-link: `/guida` oppure `?tab=guida`).

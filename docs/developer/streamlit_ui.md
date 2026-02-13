@@ -186,7 +186,8 @@ Checklist minima per una pagina nuova:
 ### Workspace root (REPO_ROOT_DIR / WORKSPACE_ROOT_DIR)
 
 - `REPO_ROOT_DIR` definisce la **root della repo** (dev/tooling/registry): se contiene `.git` o `pyproject.toml` viene trattato come root repo.
-  - In strict runtime non deve mai essere usato per derivare o selezionare la workspace cliente.
+  - In strict runtime non deve essere usato per derivare o selezionare la workspace cliente o gli artifact Envelope.
+  - Eccezione controllata: puo ospitare state store UI `INSTANCE_GLOBAL` (es. `clients_db/`), classificati `SERVICE_ONLY` e `TRANSIENT`.
 - `WORKSPACE_ROOT_DIR` definisce la **workspace cliente canonica**. Accetta il placeholder `<slug>` e viene risolto in un path assoluto.
   - In strict (`TIMMY_BETA_STRICT=1`) deve puntare direttamente a `.../output/timmy-kb-<slug>` (non al parent `output`).
   - Qualsiasi semantica "REPO_ROOT_DIR come workspace diretta" è considerata legacy/test-only e non è ammessa nel runtime strict.
@@ -230,9 +231,10 @@ Per trovare il DB dei tag o il VisionStatement.pdf basta usare `layout.tags_db` 
 
 ### Registry clienti (CLIENTS_DB_*)
 
-- `CLIENTS_DB_PATH` (alias) o la coppia `CLIENTS_DB_DIR`/`CLIENTS_DB_FILE` accettano **solo** percorsi relativi al workspace; niente drive letter o path assoluti.
-- Il file deve vivere sotto `clients_db/`; eventuali sottocartelle sono consentite (`clients_db/archive/clients.yaml`).
-- Gli helper della UI rifiutano componenti `..`: se serve un percorso alternativo, monta un workspace dedicato e aggiorna `REPO_ROOT_DIR`.
+- Il clients registry (`clients_db/clients.yaml`) e uno state store UI `INSTANCE_GLOBAL` e `TRANSIENT`: non e un artifact workspace e non fa parte dell'Epistemic Envelope.
+- Lo scope e di istanza/progetto (ProtoTimmy/UI multi-cliente), non per-singolo cliente workspace.
+- Deve restare `SERVICE_ONLY`: non puo influire su determinismo pipeline, gating Envelope o ledger.
+- In ottica lifecycle, e previsto solo nella fase ProtoTimmy; dopo la transizione ProtoTimmy -> Timmy viene dismesso (nei cloni a cliente singolo non e previsto).
 - Lo smoke dummy registra un entry `dummy` con flag `dummy: true` e un campo opzionale `created_at`; la UI deve ignorare eventuali campi extra (es. `health` nel payload CLI) mantenendo compatibilita forward.
 
 ## Scan PDF sicuro (DRY)

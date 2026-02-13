@@ -26,6 +26,26 @@ A service artifact:
 
 Examples: zipped logs, workspace summaries, in-memory cache, previews, "service" reports.
 
+### INSTANCE_GLOBAL state store (service-only)
+An `INSTANCE_GLOBAL` state store:
+- is scoped to the running instance/project (not to a single customer workspace);
+- may live at repo root (for example under `clients_db/`);
+- is never an Epistemic Envelope artifact and never a pipeline/ledger prerequisite.
+
+### TRANSIENT state store
+A `TRANSIENT` state store:
+- exists only for a bounded lifecycle (for example ProtoTimmy/UI onboarding);
+- must be dismissible after the lifecycle transition (ProtoTimmy -> Timmy);
+- must not become a runtime dependency for envelope phases.
+
+### Clients Registry (formal classification)
+`clients_db/clients.yaml` (and related `clients_db/*` UI state files) are classified as:
+- `SERVICE_ONLY`
+- `INSTANCE_GLOBAL`
+- `TRANSIENT`
+
+They support ProtoTimmy/UI multi-client onboarding only, are outside workspace scope by design, and must not drive deterministic pipeline outputs.
+
 ### Conditional CORE artifact
 Some artifacts are CORE **only when** a capability or pipeline stage is active. In those situations:
 - if the condition is active and the artifact is missing → FAIL-FAST (no fallback);
@@ -56,6 +76,13 @@ Service artifacts are allowed to follow best-effort or fallback behavior only un
 - they do not alter or replace core artifacts;
 - they are explicit (structured log) and marked as "SERVICE_ONLY";
 - they do not introduce implicit dependencies for subsequent steps.
+
+### 3bis) Controlled exception: instance-global UI state stores
+Workspace remains the only perimeter for Envelope/Pipeline/Ledger artifacts.
+Controlled exception: `SERVICE_ONLY` UI state stores may live outside workspace when all conditions hold:
+- explicitly classified as `INSTANCE_GLOBAL` and `TRANSIENT`;
+- no influence on deterministic pipeline, gate decisions, or ledger lineage;
+- no runtime dependency introduced for envelope phases.
 
 ### Determinism & Observability (P1)
 CORE artifacts MUST be deterministic and reproducible at parity of inputs, configuration, and capability flags.
