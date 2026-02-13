@@ -50,9 +50,9 @@ def _write_minimal_layout(base: Path) -> None:
 
 def test_auto_tagger_skips_symlink_outside_base(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     base = tmp_path / "kb"
+    _write_minimal_layout(base)
     raw = base / "raw"
     outside = tmp_path / "outside"
-    raw.mkdir(parents=True, exist_ok=True)
     outside.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("TAGS_NLP_BACKEND", "spacy")
 

@@ -78,8 +78,9 @@ repos:
     hooks:
       - id: cspell
         name: cspell (docs + README + src + tests)
-        entry: npx --yes -p cspell -p @cspell/dict-it-it cspell lint --no-progress --config cspell.json
-        language: system
+        entry: cspell lint --no-progress --config cspell.json
+        language: node
+        additional_dependencies: ["cspell@9.2.1", "@cspell/dict-it-it@3.1.6"]
         pass_filenames: true
         files: ^(README\.md|docs/.*\.md|src/.*\.py|tests/.*\.py)$
         stages: [pre-commit]
