@@ -62,7 +62,7 @@ def test_auto_tagger_skips_symlink_outside_base(tmp_path: Path, monkeypatch: pyt
     link = raw / "link.pdf"
     make_symlink(target_pdf, link)
 
-    cfg = SemanticConfig(repo_root_dir=str(base))
+    cfg = SemanticConfig(repo_root_dir=str(base), slug="proj")
     cands = extract_semantic_candidates(raw, cfg)
     assert cands == {}
 
