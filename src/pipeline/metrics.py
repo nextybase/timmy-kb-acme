@@ -19,6 +19,7 @@ from .exceptions import ConfigError
 
 _log = logging.getLogger("pipeline.metrics")
 
+_METRICS_RECORD_FAILURE_REPORTED = False
 _METRICS_STARTED = False
 _METRICS_INITIALIZED = False
 _PROMETHEUS_COUNTER: Any | None = None
@@ -27,6 +28,23 @@ start_http_server: Callable[[int], None] | None = None
 documents_processed_total: Any | None = None
 phase_failed_total: Any | None = None
 phase_duration_seconds: Any | None = None
+
+
+def _report_metrics_record_failure_once(metric: str, exc: Exception) -> None:
+    """Segnala una sola volta failure di record metriche (no crash; Beta: no silent)."""
+    global _METRICS_RECORD_FAILURE_REPORTED
+    if _METRICS_RECORD_FAILURE_REPORTED:
+        return
+    _METRICS_RECORD_FAILURE_REPORTED = True
+    try:
+        _log.error(
+            "observability.metrics.record_failed",
+            extra={"metric": metric, "error_type": type(exc).__name__},
+            exc_info=exc,
+        )
+    except Exception:
+        # Ultima difesa: non rompere il core per logging failure.
+        pass
 
 
 def _metrics_requested(port: Optional[int]) -> bool:
@@ -122,7 +140,8 @@ def record_document_processed(slug: Optional[str], count: int = 1) -> None:
         return
     try:
         documents_processed_total.labels(slug=slug or "-").inc(count)
-    except Exception:
+    except Exception as exc:
+        _report_metrics_record_failure_once("documents_processed_total", exc)
         return
 
 
@@ -131,7 +150,8 @@ def record_phase_failed(slug: Optional[str], phase: str) -> None:
         return
     try:
         phase_failed_total.labels(slug=slug or "-", phase=phase).inc()
-    except Exception:
+    except Exception as exc:
+        _report_metrics_record_failure_once("phase_failed_total", exc)
         return
 
 
@@ -140,7 +160,8 @@ def observe_phase_duration(slug: Optional[str], phase: str, duration_seconds: fl
         return
     try:
         phase_duration_seconds.labels(slug=slug or "-", phase=phase).observe(max(0.0, float(duration_seconds)))
-    except Exception:
+    except Exception as exc:
+        _report_metrics_record_failure_once("phase_duration_seconds", exc)
         return
 
 
