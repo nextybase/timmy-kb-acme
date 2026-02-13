@@ -2,6 +2,7 @@
 """
 Utilità minime per integrare OIDC in CI senza effetti collaterali.
 """
+
 from __future__ import annotations
 
 import json

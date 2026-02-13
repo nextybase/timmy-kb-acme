@@ -17,6 +17,7 @@ Note architetturali:
 - Path-safety STRONG: `ensure_within()` prima di ogni write/copy/delete.
 - Non stampare segreti nei log (mascheratura parziale per ID e percorsi).
 """
+
 # Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
 
 # Fase pre-Vision (MINIMAL): nessun output semantico.

@@ -27,16 +27,11 @@ __all__ = [
     "open_tags_raw_modal",
 ]
 
-DEFAULT_TAGS_YAML = (
-    dedent(
-        """\
+DEFAULT_TAGS_YAML = dedent("""\
     version: 2
     keep_only_listed: true
     tags: []
-    """
-    ).strip()
-    + "\n"
-)
+    """).strip() + "\n"
 
 DEFAULT_TAGS_CSV = "relative_path,suggested_tags,entities,keyphrases,score,sources\n"
 

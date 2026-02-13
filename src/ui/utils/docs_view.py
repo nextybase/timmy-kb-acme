@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Utility condivise per visualizzare documentazione Markdown nella UI."""
+
 from __future__ import annotations
 
 from pathlib import Path

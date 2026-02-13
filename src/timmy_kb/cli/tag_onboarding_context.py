@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Utility di setup contesto per l'orchestratore tag_onboarding."""
+
 # Regola CLI: dichiarare bootstrap_config esplicitamente (il default e' vietato).
 
 from __future__ import annotations

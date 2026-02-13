@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Helper per determinare la root del repository (SSoT pipeline.paths)."""
+
 from __future__ import annotations
 
 from pathlib import Path

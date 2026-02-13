@@ -79,8 +79,7 @@ st.caption(
     "Di default viene mostrato `docs/index.md`, ma puoi scegliere altri file dal menu."
 )
 
-st.html(
-    """
+st.html("""
 <style>
 /* Scope: contenitori markdown di Streamlit */
 div[data-testid="stMarkdownContainer"] p,
@@ -89,8 +88,7 @@ div[data-testid="stMarkdownContainer"] dd { font-size: 1.06rem; line-height: 1.8
 div[data-testid="stMarkdownContainer"] code { font-size: .95rem; }
 div[data-testid="stMarkdownContainer"] pre code { font-size: .90rem; }
 </style>
-"""
-)
+""")
 
 selected_label = st.selectbox(
     "Seleziona un file di documentazione",

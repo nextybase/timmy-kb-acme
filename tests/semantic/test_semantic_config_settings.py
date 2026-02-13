@@ -34,8 +34,7 @@ def test_semantic_config_merges_settings(tmp_path: Path) -> None:
 semantic_defaults:
   top_k: 7
   score_min: 0.55
-"""
-        + "\n",
+""" + "\n",
     )
     _write_file(
         mapping_yaml,
@@ -44,8 +43,7 @@ semantic_tagger:
   top_k: 9
   stop_tags:
     - bozza
-"""
-        + "\n",
+""" + "\n",
     )
 
     config_snapshot = config_yaml.read_text(encoding="utf-8")

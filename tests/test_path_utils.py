@@ -7,6 +7,7 @@ This suite owns the unit-level guarantees for `ensure_within` and
 - resolve symlinks/links according to policy (OS skips included)
 Other suites should not duplicate these invariants.
 """
+
 from __future__ import annotations
 
 import os

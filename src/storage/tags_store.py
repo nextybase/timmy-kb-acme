@@ -48,8 +48,7 @@ LOG = get_structured_logger("storage.tags_store")
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys = ON;")
-    conn.executescript(
-        """
+    conn.executescript("""
         CREATE TABLE IF NOT EXISTS meta(
           id INTEGER PRIMARY KEY CHECK (id=1),
           version TEXT NOT NULL,
@@ -68,8 +67,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
           pos INTEGER NOT NULL DEFAULT 0,
           PRIMARY KEY(tag_id, alias)
         );
-        """
-    )
+        """)
 
 
 def _to_bool(x: Any) -> bool:
@@ -214,8 +212,7 @@ def save_tags_reviewed(db_path: str, data: dict[str, Any]) -> None:
 
 def _create_v2_tables(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys = ON;")
-    conn.executescript(
-        """
+    conn.executescript("""
         CREATE TABLE IF NOT EXISTS folders(
           id INTEGER PRIMARY KEY,
           path TEXT UNIQUE NOT NULL,
@@ -286,8 +283,7 @@ def _create_v2_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_doc_entities_area ON doc_entities(area_key);
         CREATE INDEX IF NOT EXISTS idx_doc_entities_entity ON doc_entities(entity_id);
         CREATE INDEX IF NOT EXISTS idx_doc_entities_status ON doc_entities(status);
-        """
-    )
+        """)
 
 
 _V2_TABLES = [

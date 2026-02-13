@@ -10,8 +10,7 @@ def inject_theme_css() -> None:
     if _INJECTED:
         return
 
-    _st.html(
-        """
+    _st.html("""
 <style>
 /* Override robusto del layout principale */
 [data-testid="stAppViewContainer"] .block-container {
@@ -21,6 +20,5 @@ def inject_theme_css() -> None:
     min-width: auto;
 }
 </style>
-"""
-    )
+""")
     _INJECTED = True

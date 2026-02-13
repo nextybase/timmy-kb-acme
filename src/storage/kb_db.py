@@ -113,8 +113,7 @@ def connect(db_path: Optional[Path] = None) -> Iterator[sqlite3.Connection]:
 def init_db(db_path: Optional[Path] = None) -> None:
     """Crea tabelle e indici se mancanti."""
     with connect(db_path) as con:
-        con.execute(
-            """
+        con.execute("""
             CREATE TABLE IF NOT EXISTS chunks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 slug TEXT NOT NULL,
@@ -126,25 +125,20 @@ def init_db(db_path: Optional[Path] = None) -> None:
                 embedding_json TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
-            """
-        )
+            """)
         # Crea un indice composito per ricerche rapide su slug e scope
-        con.execute(
-            """
+        con.execute("""
             CREATE INDEX IF NOT EXISTS idx_chunks_slug_scope
             ON chunks(slug, scope);
-            """
-        )
+            """)
         # Indice UNIQUE per idempotenza su chiave naturale (slug, scope, path, version, content)
         # Strict init: su IntegrityError l'inizializzazione fallisce immediatamente, indicando la necessità
         # di rigenerare il DB (non c'è recover o warn).
         try:
-            con.execute(
-                """
+            con.execute("""
                 CREATE UNIQUE INDEX IF NOT EXISTS ux_chunks_natural
                 ON chunks(slug, scope, path, version, content);
-                """
-            )
+                """)
         except sqlite3.IntegrityError:
             raise ConfigError(
                 "DB KB non conforme: duplicati presenti e indice UNIQUE non applicabile. "

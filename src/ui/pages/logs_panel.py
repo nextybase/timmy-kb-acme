@@ -14,7 +14,6 @@ Dashboard dei log globali della UI + pannello osservabilità.
 Questa pagina NON richiede slug attivo: opera a livello globale.
 """
 
-
 from __future__ import annotations
 
 import logging
@@ -419,8 +418,7 @@ def _render_observability_controls() -> None:
         )
 
     with st.expander("Come usare Grafana/OTEL da qui", expanded=False):
-        st.markdown(
-            """
+        st.markdown("""
 1. **Avvia lo stack di osservabilità** (Grafana/Loki/Promtail, e Tempo se presente) da shell
     oppure dalla pagina *Configurazione* se sono disponibili i bottoni Docker.
 2. Imposta `TIMMY_GRAFANA_URL` e, se vuoi tracing, `TIMMY_OTEL_ENDPOINT` nell'ambiente
@@ -431,8 +429,7 @@ def _render_observability_controls() -> None:
    - controllare redazione e livello di log.
 4. Da qui puoi aprire Grafana con **Apri Grafana** e usare le dashboard
    per filtrare log ed errori per cliente (`slug`) e fase.
-"""
-        )
+""")
 
     # Se qualcosa è cambiato, persisti le nuove impostazioni
     if (

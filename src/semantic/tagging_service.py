@@ -76,16 +76,14 @@ def _load_folder_terms(tags_db_path: Path, *, slug: str | None = None) -> Dict[s
     try:
         _ensure_tags_schema_v2(str(tags_db_path))
         with _get_tags_conn(str(tags_db_path)) as conn:
-            rows = conn.execute(
-                """
+            rows = conn.execute("""
                 SELECT f.path AS folder_path, t.canonical AS term, SUM(ft.weight) AS weight
                 FROM folder_terms ft
                 JOIN folders f ON f.id = ft.folder_id
                 JOIN terms   t ON t.id = ft.term_id
                 GROUP BY f.path, t.canonical
                 ORDER BY f.path, weight DESC
-                """
-            ).fetchall()
+                """).fetchall()
     except Exception as exc:  # pragma: no cover - fail-fast wrapping
         raise ConfigError("Errore accesso tags.db", slug=slug, file_path=tags_db_path) from exc
     for row in rows:
