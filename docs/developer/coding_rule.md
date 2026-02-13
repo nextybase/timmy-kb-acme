@@ -200,6 +200,7 @@ pip-compile requirements.in
 pip-compile requirements-dev.in
 pip-compile requirements-optional.in
 ```
+- I lockfile ufficiali (`requirements*.txt`, `constraints.txt`) vanno rigenerati in ambiente Linux (CI runner o container Linux) per evitare drift platform-specific.
 - Installazioni standard:
 ```bash
 pip install -r requirements.txt
