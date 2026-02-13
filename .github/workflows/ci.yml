@@ -45,7 +45,12 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -r requirements-dev.txt
+          pip install -e .
+
+      - name: Sanity check pytest install
+        run: |
+          python -c "import pytest; print(pytest.__version__)"
 
       - name: Run pytest
         env:
