@@ -48,12 +48,13 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "logs").mkdir(parents=True, exist_ok=True)
 
 
-def test_auto_tagger_skips_symlink_outside_base(tmp_path: Path):
+def test_auto_tagger_skips_symlink_outside_base(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     base = tmp_path / "kb"
     raw = base / "raw"
     outside = tmp_path / "outside"
     raw.mkdir(parents=True, exist_ok=True)
     outside.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TAGS_NLP_BACKEND", "spacy")
 
     target_pdf = outside / "evil.pdf"
     target_pdf.write_bytes(b"%PDF-1.4\n%\n")
