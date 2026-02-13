@@ -32,6 +32,7 @@ repos:
         stages: [pre-commit]
       - id: mixed-line-ending
         args: ["--fix=lf"]
+        exclude: \.(ps1|cmd|bat)$
         stages: [pre-commit]
       - id: fix-byte-order-marker
         stages: [pre-commit]
@@ -77,7 +78,7 @@ repos:
     hooks:
       - id: cspell
         name: cspell (docs + README + src + tests)
-        entry: npx --yes -p @cspell/dict-it-it cspell lint --no-progress --config cspell.json
+        entry: npx --yes -p cspell -p @cspell/dict-it-it cspell lint --no-progress --config cspell.json
         language: system
         pass_filenames: true
         files: ^(README\.md|docs/.*\.md|src/.*\.py|tests/.*\.py)$
