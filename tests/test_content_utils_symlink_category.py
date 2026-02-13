@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pypdf import PdfWriter
+from reportlab.pdfgen import canvas
 
 from pipeline.content_utils import convert_files_to_structured_markdown
 from tests.utils.symlink import make_symlink
@@ -39,10 +39,10 @@ def test_convert_structured_markdown_handles_symlink_category(tmp_path: Path) ->
     (book / "README.md").write_text("# Test\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     pdf = sub / "doc.pdf"
-    writer = PdfWriter()
-    writer.add_blank_page(width=72, height=72)
-    with pdf.open("wb") as f:
-        writer.write(f)
+    c = canvas.Canvas(str(pdf))
+    c.drawString(100, 750, "Hello PDF")
+    c.showPage()
+    c.save()
 
     alias = raw / "alias"
     make_symlink(real, alias, is_dir=True)
