@@ -108,7 +108,7 @@ Il file `onboarding_ui.py` risolve la directory del repository via SSoT e non si
 
 Nella **sidebar**, sezione *Azioni rapide*, trovi il pulsante **Guida UI**: apre questa guida **nella stessa scheda** e funziona anche senza uno *slug* cliente attivo. In alternativa, la trovi anche nella barra in alto: **Tools -> Guida UI** (deep-link: `/guida` oppure `?tab=guida`).
 
-> Nota tecnica: la navigazione usa `switch_page` quando disponibile; in degradazione compatibile UI aggiorna automaticamente `?tab=guida` e forza il rerun. Segnale: nessun segnale/log esplicito documentato.
+> Nota tecnica: la navigazione usa `switch_page` quando disponibile; in alternativa aggiorna `?tab=guida` e forza il rerun. Eventuali fallimenti di routing/navigazione sono tracciati nei log UI con eventi `ui.*`.
 > Routing attuale: `st.Page` + `st.navigation` (UI index); evitati hack su query params/`switch_page`.
 
 ---

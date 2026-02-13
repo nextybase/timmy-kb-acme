@@ -23,6 +23,7 @@ from ui.types import StreamlitLike
 
 LOGGER = get_structured_logger("ui.bootstrap")
 _ENV_BOOTSTRAPPED = False
+_NAV_PAGES_DEBUG_FAILURE_REPORTED = False
 
 # REPO_ROOT_DIR deve puntare alla repo root; WORKSPACE_ROOT_DIR definisce il workspace.
 
@@ -39,6 +40,22 @@ def _init_ui_logging(repo_root: Path) -> None:
     get_structured_logger("ai", log_file=log_file, propagate=True)
     get_structured_logger("ai.responses", log_file=log_file, propagate=True)
     LOGGER.debug("ui.logging.ai_wired")
+
+
+def _report_nav_pages_debug_failure_once(logger: logging.Logger, exc: Exception) -> None:
+    """UI-only: surfaced-once per failure debug logging (no crash, no silent pass)."""
+    global _NAV_PAGES_DEBUG_FAILURE_REPORTED
+    if _NAV_PAGES_DEBUG_FAILURE_REPORTED:
+        return
+    _NAV_PAGES_DEBUG_FAILURE_REPORTED = True
+    try:
+        logger.warning(
+            "ui.navigation.pages_log_failed",
+            extra={"error_type": type(exc).__name__, "error": repr(exc)},
+        )
+    except Exception:
+        # Ultima difesa: non rompere la UI per failure di logging.
+        return
 
 
 LOGGER: logging.Logger = get_structured_logger("ui.preflight")
@@ -314,8 +331,8 @@ def build_navigation(
                 "pages": {group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()}
             },
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        _report_nav_pages_debug_failure_once(logger, exc)
 
     navigation = st.navigation(pages, position="top")
     navigation.run()
