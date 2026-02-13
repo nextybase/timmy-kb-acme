@@ -1,0 +1,6 @@
+# Fixture CI per Smoke / Strict Gates.
+# In Beta: observability.yaml è obbligatorio (no silent default).
+stack_enabled: false
+tracing_enabled: false
+redact_logs: true
+log_level: INFO

@@ -24,6 +24,8 @@ jobs:
           pip install -e .
 
       - name: Run strict gate smoke
+        env:
+          TIMMY_OBSERVABILITY_CONFIG: ${{ github.workspace }}/tools/smoke/fixtures/observability.ci.yaml
         run: |
           python tools/smoke/check_strict_workspace_gates.py
 
