@@ -22,7 +22,7 @@ exclude: |
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: check-yaml
         stages: [pre-commit]
@@ -47,7 +47,7 @@ repos:
 
   # 1) isort prima di black (anche su pre-push, write-mode)
   - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+    rev: 7.0.0
     hooks:
       - id: isort
         args: ["--profile=black", "--line-length=120"]
@@ -57,7 +57,7 @@ repos:
 
   # 2) black in write-mode (anche su pre-push)
   - repo: https://github.com/psf/black
-    rev: 24.8.0
+    rev: 26.1.0
     hooks:
       - id: black
         types_or: [python]
@@ -66,7 +66,7 @@ repos:
 
   # 3) ruff come lint/fix "leggero"
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.8
+    rev: v0.15.1
     hooks:
       - id: ruff
         args: ["--fix"]
@@ -167,9 +167,9 @@ repos:
             "scikit-learn==1.5.1",
             "yake==0.4.8",
             "torch==2.8.0",
-            "black==24.8.0",
-            "isort==5.13.2",
-            "ruff==0.6.4",
+            "black==26.1.0",
+            "isort==7.0.0",
+            "ruff==0.15.1",
             "mypy==1.11.2",
             "pytest==8.3.2",
             "pytest-cov==5.0.0",
@@ -177,7 +177,7 @@ repos:
             "types-PyYAML==6.0.12.20240808",
             "types-requests==2.32.4.20250809",
             "pre-commit==4.3.0",
-            "pre-commit-hooks==4.6.0",
+            "pre-commit-hooks==6.0.0",
             "pip-audit==2.7.2",
           ]
         pass_filenames: false
@@ -301,7 +301,7 @@ repos:
         stages: [pre-commit]
 
   - repo: https://github.com/zricethezav/gitleaks
-    rev: v8.18.1
+    rev: v8.30.0
     hooks:
       - id: gitleaks
         args: [detect, --no-banner, --redact, --config, .gitleaks.toml]

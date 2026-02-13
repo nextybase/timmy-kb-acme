@@ -54,8 +54,8 @@ _CANONICAL_STATE_ORDER: Final[tuple[str, ...]] = (
     STATE_PREVIEW_READY,
 )
 _CANONICAL_STATES: Final[set[str]] = set(_CANONICAL_STATE_ORDER)
-NORMATIVE_PASS: Final[str] = "PASS"
-NORMATIVE_PASS_WITH_CONDITIONS: Final[str] = "PASS_WITH_CONDITIONS"
+NORMATIVE_PASS: Final[str] = "PASS"  # noqa: S105 - normative state token, not a secret
+NORMATIVE_PASS_WITH_CONDITIONS: Final[str] = "PASS_WITH_CONDITIONS"  # noqa: S105 - normative state token
 NORMATIVE_BLOCK: Final[str] = "BLOCK"
 NORMATIVE_FAIL: Final[str] = "FAIL"
 STOP_CODE_CONFIG_ERROR: Final[str] = "CONFIG_ERROR"
@@ -70,9 +70,7 @@ STOP_CODE_VISION_PROMPT_FAILURE: Final[str] = "VISION_PROMPT_FAILURE"
 _NORMATIVE_ALLOW: Final[set[str]] = {NORMATIVE_PASS, NORMATIVE_PASS_WITH_CONDITIONS}
 _NORMATIVE_DENY: Final[set[str]] = {NORMATIVE_BLOCK, NORMATIVE_FAIL}
 
-_SCHEMA_SQL: Final[
-    str
-] = """
+_SCHEMA_SQL: Final[str] = """
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
     slug TEXT NOT NULL,
