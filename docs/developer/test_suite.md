@@ -178,6 +178,16 @@ Gli hook Git coordinano formattazione, linting e test preliminari senza costring
 pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
+Su macchine nuove, prima di lanciare `pre-commit`, esporta anche:
+
+```bash
+export TIMMY_OBSERVABILITY_CONFIG=tools/smoke/fixtures/observability.ci.yaml
+```
+
+```powershell
+$env:TIMMY_OBSERVABILITY_CONFIG="tools/smoke/fixtures/observability.ci.yaml"
+```
+
 ### Debug (quando fallisce il pre-push)
 
 ```bash
