@@ -244,7 +244,7 @@ def _validate_layout_assets(
     logs_dir: Path,
     config_path: Path,
     semantic_dir: Path,
-    mapping_path: Path | None = None,
+    mapping_path: Path,
 ) -> None:
     """Fail-fast se gli asset minimi del layout non esistono.
 
@@ -252,6 +252,7 @@ def _validate_layout_assets(
     WorkspaceLayoutInconsistent tramite `_ensure_layout_consistency`.
     Questa validazione è ora sempre obbligatoria e non può essere disattivata.
     """
+    # semantic/semantic_mapping.yaml e un asset minimo richiesto del layout.
     _ensure_directory(workspace_root, slug, description="workspace root")
     _ensure_file(config_path, slug, description="config/config.yaml")
     _ensure_directory(raw_dir, slug, description="raw directory")
@@ -260,6 +261,7 @@ def _validate_layout_assets(
     _ensure_file(book_dir / "README.md", slug, description="book/README.md")
     _ensure_file(book_dir / "SUMMARY.md", slug, description="book/SUMMARY.md")
     _ensure_directory(semantic_dir, slug, description="semantic directory")
+    _ensure_file(mapping_path, slug, description="semantic/semantic_mapping.yaml")
     _ensure_directory(logs_dir, slug, description="logs directory")
     _ensure_layout_consistency(
         slug=slug,
@@ -302,7 +304,7 @@ def _ensure_layout_consistency(
     book_dir: Path,
     logs_dir: Path,
     semantic_dir: Path,
-    mapping_path: Path | None = None,
+    mapping_path: Path,
 ) -> None:
     """Fail-fast se il layout contiene path fuori perimetro o incoerenti."""
     try:
@@ -312,12 +314,11 @@ def _ensure_layout_consistency(
         ensure_within(workspace_root, semantic_dir)
         ensure_within(workspace_root, logs_dir)
         ensure_within(workspace_root, config_path)
-        if mapping_path is not None:
-            ensure_within(workspace_root, mapping_path)
-            ensure_within(semantic_dir, mapping_path)
+        ensure_within(workspace_root, mapping_path)
+        ensure_within(semantic_dir, mapping_path)
     except Exception as exc:
         raise WorkspaceLayoutInconsistent(
             f"Layout incoerente: path fuori perimetro per workspace {slug}: {exc}",
             slug=slug,
-            file_path=mapping_path or config_path,
+            file_path=mapping_path,
         ) from exc

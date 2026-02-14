@@ -22,3 +22,7 @@ def ensure_minimal_workspace_layout(base: Path, *, client_name: str = "proj") ->
         file_path = book_dir / doc
         if not file_path.exists():
             file_path.write_text(f"# {doc.replace('.md', '')}\n", encoding="utf-8")
+
+    mapping_path = base / "semantic" / "semantic_mapping.yaml"
+    if not mapping_path.exists():
+        mapping_path.write_text("{}", encoding="utf-8")
