@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+# cspell:ignore elts
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = REPO_ROOT / "src"
 
@@ -29,9 +31,7 @@ SERVICE_ONLY_FILES = {
 EXCLUDED_FILES: set[str] = set()
 
 # Pattern "except Exception: pass" (tolleriamo spazi e commenti inline)
-RE_EXCEPT_EXCEPTION_PASS = re.compile(
-    r"except\s+Exception\s*:\s*(?:#.*\n\s*)?pass\b", re.MULTILINE
-)
+RE_EXCEPT_EXCEPTION_PASS = re.compile(r"except\s+Exception\s*:\s*(?:#.*\n\s*)?pass\b", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -107,7 +107,10 @@ def _find_return_empty_list_in_except(rel: str, tree: ast.AST) -> list[Issue]:
                         lineno=getattr(inner, "lineno", 1),
                         col=getattr(inner, "col_offset", 0),
                         rule="return-empty-list-in-except",
-                        detail="Trovato 'return []' dentro except in modulo non service-only (fallback silenzioso su errore)",
+                        detail=(
+                            "Trovato 'return []' dentro except in modulo non service-only "
+                            "(fallback silenzioso su errore)"
+                        ),
                     )
                 )
     return issues

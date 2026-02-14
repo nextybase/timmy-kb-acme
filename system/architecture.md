@@ -180,6 +180,9 @@ Responsibilities:
 
 This layer contains the **core deterministic guarantees** of the system.
 
+Not every module under `src/pipeline/` belongs to the operational Epistemic Envelope perimeter.
+Some modules are support utilities (for example log viewer and layout summary) classified as service-only: they do not produce core artifacts and are excluded from the strictest entropy constraints applied to deterministic pipeline/semantic/storage/ledger paths.
+
 Key single sources of truth (SSoT):
 - `workspace_layout.py`
 - `context.py`

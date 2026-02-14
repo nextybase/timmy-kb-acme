@@ -122,6 +122,18 @@ Allowed behavior on telemetry emission failure is **surface once**:
 - suppress repeated equivalent errors to avoid noise flood;
 - do not introduce fallback paths that modify process behavior.
 
+### Service-only utilities & entropy guards
+The Epistemic Envelope perimeter (pipeline deterministic core, semantic core, storage, ledger) does not allow silent fallbacks.
+
+`return []` is allowed only when it represents a legitimate semantic "no data" outcome; it is not allowed as exception masking.
+
+`SERVICE_ONLY` modules (for example UI utilities, observability support, and retriever CLI best-effort helpers) may use controlled fallback behaviors only when:
+- they do not produce/replace Envelope artifacts;
+- they do not affect deterministic gate decisions or ledger lineage;
+- they are explicitly classified as service-only.
+
+`tests/architecture/test_entropy_guards.py` enforces this distinction: strict checks on Envelope/core runtime, controlled exceptions for service-only modules.
+
 ## Classification rule (practical)
 When a module produces a file:
 - if the file ends up in a pipeline directory (workspace layout) or is cited as a prerequisite → treat it as CORE (or CORE-GATE when it gates);
