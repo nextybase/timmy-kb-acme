@@ -287,6 +287,12 @@ Defines:
 - required directories and files,
 - validation rules.
 
+Phase A/Phase B contract (anti-entropy):
+- Phase A (pre-semantic): workspace layout is valid even if `semantic/semantic_mapping.yaml` is missing.
+- Phase B+ (semantic workflows): `semantic/semantic_mapping.yaml` is mandatory and must fail-fast if missing.
+- Canonical Phase B gate: `WorkspaceLayout.require_phase_b_assets()`.
+- Parallel gates based on `mapping.exists()` are non-canonical and must not replace the gate above.
+
 No module may reconstruct paths manually or assume directory names.
 
 ### Execution Context (SSoT of state)
