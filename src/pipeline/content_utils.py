@@ -80,6 +80,7 @@ class _ReadmeCtx(Protocol):
 
 # Alias per annotazioni lunghe (evita E501)
 CategoryGroups: TypeAlias = list[tuple[Path, list[Path]]]
+BlockedPdfItem: TypeAlias = dict[str, str]
 
 
 class FrontmatterCache:
@@ -202,6 +203,7 @@ def _filter_safe_pdfs(
     *,
     slug: str | None = None,
     logger: logging.Logger | None = None,
+    blocked: list[BlockedPdfItem] | None = None,
 ) -> list[Path]:
     """Applica path-safety per-file e scarta symlink o path fuori perimetro. Mantiene l'ordinamento ricevuto."""
     log = logger or get_structured_logger("pipeline.content_utils")
@@ -212,6 +214,8 @@ def _filter_safe_pdfs(
     def _log_blocked_path(path: Path, *, reason: str, exc: BaseException) -> None:
         message = str(exc)
         error_type = type(exc).__name__
+        if blocked is not None:
+            blocked.append({"file_path": str(path), "reason": reason})
         with start_decision_span(
             "filter",
             slug=slug,
@@ -245,6 +249,8 @@ def _filter_safe_pdfs(
     for p in pdfs:
         try:
             if p.is_symlink():
+                if blocked is not None:
+                    blocked.append({"file_path": str(p), "reason": "symlink"})
                 with start_decision_span(
                     "filter",
                     slug=slug,
@@ -576,6 +582,40 @@ def _plan_pdf_groups(
     )
 
 
+def _plan_and_validate_pdf_groups(
+    *,
+    perimeter_root: Path,
+    raw_root: Path,
+    safe_pdfs: list[Path] | None,
+    slug: str | None,
+    logger: logging.Logger,
+) -> tuple[list[Path], CategoryGroups, list[BlockedPdfItem]]:
+    """Pianifica e valida una sola volta i gruppi PDF restituendo anche i blocked con reason."""
+    root_pdfs, cat_items = _plan_pdf_groups(
+        perimeter_root=perimeter_root,
+        raw_root=raw_root,
+        safe_pdfs=safe_pdfs,
+        slug=slug,
+        logger=logger,
+    )
+    if safe_pdfs is not None:
+        return root_pdfs, cat_items, []
+
+    blocked: list[BlockedPdfItem] = []
+    validated_items: CategoryGroups = []
+    for cat_dir, pdfs in cat_items:
+        safe_list = _filter_safe_pdfs(
+            perimeter_root,
+            raw_root,
+            pdfs,
+            slug=slug,
+            logger=logger,
+            blocked=blocked,
+        )
+        validated_items.append((cat_dir, safe_list))
+    return root_pdfs, validated_items, blocked
+
+
 def _cleanup_orphan_markdown(
     target: Path,
     written: set[Path],
@@ -803,7 +843,7 @@ def convert_files_to_structured_markdown(
             )
         validated_safe_pdfs = filtered
 
-    root_pdfs, cat_items = _plan_pdf_groups(
+    root_pdfs, cat_items, _blocked = _plan_and_validate_pdf_groups(
         perimeter_root=base,
         raw_root=raw_root,
         safe_pdfs=validated_safe_pdfs,
@@ -816,18 +856,7 @@ def convert_files_to_structured_markdown(
         written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg, slug=slug))
 
     for _cat_dir, pdfs in cat_items:
-        safe_list = (
-            pdfs
-            if safe_pdfs is not None
-            else _filter_safe_pdfs(
-                base,
-                raw_root,
-                pdfs,
-                slug=getattr(ctx, "slug", None),
-                logger=logger,
-            )
-        )
-        for pdf in safe_list:
+        for pdf in pdfs:
             written.add(_write_markdown_for_pdf(pdf, raw_root, target, candidates, cfg, slug=slug))
 
     _cleanup_orphan_markdown(target, written, logger=logger)
