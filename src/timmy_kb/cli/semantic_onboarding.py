@@ -487,9 +487,7 @@ def _run_semantic_flow(
                 mapping_path=Path(mapping_path),
             )
             if not categories:
-                raise ConfigError(
-                    "semantic_mapping.yaml non contiene aree valide: impossibile creare raw su Drive"
-                )
+                raise ConfigError("semantic_mapping.yaml non contiene aree valide: impossibile creare raw su Drive")
             create_drive_structure_from_names(
                 ctx=ctx,
                 folder_names=categories,
