@@ -264,7 +264,17 @@ def tagging_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, O
         )
         return False, None
     semantic_dir = layout.semantic_dir
-    tags_db = layout.tags_db or (semantic_dir / "tags.db")
+    tags_db = layout.tags_db
+    if tags_db is None:
+        contract_exc = ConfigError("WorkspaceLayout missing tags_db path.", slug=slug or None)
+        if strict:
+            raise contract_exc
+        _log_workspace_failure(
+            "ui.workspace.tagging_ready_failed",
+            contract_exc,
+            extra={"slug": slug or "", "stage": "layout_contract", "strict": bool(strict)},
+        )
+        return False, semantic_dir
     tags_yaml = semantic_dir / "tags_reviewed.yaml"
     try:
         db_ok = tags_db.exists()

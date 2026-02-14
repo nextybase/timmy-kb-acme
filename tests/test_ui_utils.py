@@ -121,3 +121,63 @@ def test_tagging_ready_false_in_stub_mode(tmp_path: Path, monkeypatch: pytest.Mo
 
     ready, _ = ws.tagging_ready("dummy")
     assert ready is False
+
+
+def test_tagging_ready_no_legacy_fallback_when_layout_tags_db_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sem_dir = tmp_path / "semantic"
+    sem_dir.mkdir(parents=True)
+    tags_db = sem_dir / "tags.db"
+    tags_yaml = sem_dir / "tags_reviewed.yaml"
+    tags_yaml.write_text(
+        "version: 2\n"
+        "reviewed_at: 2025-01-01T00:00:00\n"
+        "keep_only_listed: true\n"
+        "tags:\n  - name: demo\n    action: keep\n",
+        encoding="utf-8",
+    )
+    save_tags_reviewed(
+        str(tags_db),
+        {
+            "version": "2",
+            "reviewed_at": "2025-01-01T00:00:00",
+            "keep_only_listed": True,
+            "tags": [{"name": "demo", "action": "keep", "synonyms": [], "note": ""}],
+        },
+    )
+
+    monkeypatch.setattr(
+        ws,
+        "get_ui_workspace_layout",
+        lambda *_a, **_k: SimpleNamespace(
+            semantic_dir=sem_dir,
+            tags_db=None,
+            normalized_dir=tmp_path / "normalized",
+        ),
+    )
+    monkeypatch.setattr(ws, "normalized_ready", lambda _slug, **_kwargs: (True, tmp_path / "normalized"))
+
+    ready, path = ws.tagging_ready("dummy")
+    assert ready is False
+    assert path == sem_dir
+
+
+def test_tagging_ready_strict_raises_when_layout_tags_db_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sem_dir = tmp_path / "semantic"
+    sem_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        ws,
+        "get_ui_workspace_layout",
+        lambda *_a, **_k: SimpleNamespace(
+            semantic_dir=sem_dir,
+            tags_db=None,
+            normalized_dir=tmp_path / "normalized",
+        ),
+    )
+    monkeypatch.setattr(ws, "normalized_ready", lambda _slug, **_kwargs: (True, tmp_path / "normalized"))
+
+    with pytest.raises(ConfigError, match="missing tags_db path"):
+        ws.tagging_ready("dummy", strict=True)
