@@ -153,12 +153,16 @@ def _parse_storage_tags_rows(rows: Sequence[Any]) -> Dict[str, Dict[str, list[st
     def _resolve_target(name: str) -> str:
         visited: set[str] = set()
         current = name
-        while True:
+        max_hops = 256
+        while max_hops > 0:
             next_target = merge_map.get(current)
             if not next_target or next_target in visited:
                 break
             visited.add(current)
             current = next_target
+            max_hops -= 1
+        if max_hops == 0:
+            raise ConfigError("Canonical vocab merge chain too deep")
         return current
 
     final_aliases: dict[str, list[str]] = defaultdict(list)

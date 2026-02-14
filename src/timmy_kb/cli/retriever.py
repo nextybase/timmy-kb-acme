@@ -547,6 +547,7 @@ def search(
             response_id=response_id,
         )
         if fetch_result is None:
+            _safe_info("retriever.query.result", extra={**common_extra, "status": "soft_fail", "reason": "fetch"})
             return []
         candidates, t_fetch_ms = fetch_result
 

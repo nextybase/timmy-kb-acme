@@ -119,6 +119,41 @@ def _build_evidence_refs(
     return refs
 
 
+def _record_normative_pass(
+    *,
+    ledger_conn: Any,
+    slug: str,
+    run_id: str,
+    layout: WorkspaceLayout,
+    requested: dict[str, object],
+    effective: dict[str, object],
+    tag_kg_effective: str | None,
+) -> None:
+    decision_ledger.record_normative_decision(
+        ledger_conn,
+        decision_ledger.NormativeDecisionRecord(
+            decision_id=uuid.uuid4().hex,
+            run_id=run_id,
+            slug=slug,
+            gate_name="semantic_onboarding",
+            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+            to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+            verdict=decision_ledger.NORMATIVE_PASS,
+            subject="semantic_onboarding",
+            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            actor="cli.semantic_onboarding",
+            evidence_refs=_build_evidence_refs(
+                layout=layout,
+                requested=requested,
+                effective=effective,
+                outcome="ok",
+                tag_kg_effective=tag_kg_effective,
+            ),
+            reason_code="ok",
+        ),
+    )
+
+
 def _normative_verdict_for_error(exc: BaseException) -> tuple[str, str]:
     if isinstance(exc, ArtifactPolicyViolation):
         return decision_ledger.NORMATIVE_BLOCK, decision_ledger.STOP_CODE_ARTIFACT_POLICY_VIOLATION
@@ -549,28 +584,14 @@ def _run_semantic_flow(
                 )
 
         # PASS del gate semantic_onboarding SOLO a valle anche del KG (built o skipped)
-        decision_ledger.record_normative_decision(
-            ledger_conn,
-            decision_ledger.NormativeDecisionRecord(
-                decision_id=uuid.uuid4().hex,
-                run_id=run_id,
-                slug=slug,
-                gate_name="semantic_onboarding",
-                from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                verdict=decision_ledger.NORMATIVE_PASS,
-                subject="semantic_onboarding",
-                decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                actor="cli.semantic_onboarding",
-                evidence_refs=_build_evidence_refs(
-                    layout=layout,
-                    requested=requested,
-                    effective=effective,
-                    outcome="ok",
-                    tag_kg_effective=tag_kg_effective,
-                ),
-                reason_code="ok",
-            ),
+        _record_normative_pass(
+            ledger_conn=ledger_conn,
+            slug=slug,
+            run_id=run_id,
+            layout=layout,
+            requested=requested,
+            effective=effective,
+            tag_kg_effective=tag_kg_effective,
         )
         return 0, touched, layout
 

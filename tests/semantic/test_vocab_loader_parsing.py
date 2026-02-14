@@ -6,6 +6,8 @@ from collections import defaultdict
 from typing import Any, Iterable, Mapping, Sequence, cast
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from pipeline.exceptions import ConfigError
 from semantic import vocab_loader as vl
@@ -321,3 +323,25 @@ def test_refactor_preserves_reference_vocab_outputs(fixture_name: str) -> None:
     expected = REFERENCE_VOCAB_OUTPUTS[fixture_name]
     actual = vl._to_vocab(data)
     assert _normalize_for_comparison(actual) == _normalize_for_comparison(expected)
+
+
+@given(
+    st.lists(
+        st.tuples(
+            st.text(min_size=1, max_size=12),
+            st.text(min_size=1, max_size=12),
+        ),
+        min_size=1,
+        max_size=200,
+    )
+)
+def test_to_vocab_casefold_dedup_property(rows: list[tuple[str, str]]) -> None:
+    data: dict[str, list[str]] = defaultdict(list)
+    for canon, alias in rows:
+        data[canon].append(alias)
+
+    vocab = vl._to_vocab(data)
+    for payload in vocab.values():
+        aliases = payload["aliases"]
+        lowered = [value.casefold() for value in aliases]
+        assert len(lowered) == len(set(lowered))
