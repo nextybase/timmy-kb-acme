@@ -115,19 +115,10 @@ def _mapping_metrics(repo_root_dir: Path, mapping_path: Path) -> dict[str, Any]:
 def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_dir: Path, slug: str) -> Dict[str, Any]:
     layout = WorkspaceLayout.from_workspace(Path(repo_root_dir), slug=slug)
     mapping_path = ensure_within_and_resolve(layout.semantic_dir, layout.semantic_dir / "semantic_mapping.yaml")
-    categories: list[str] | None = None
-    try:
-        categories = raw_categories_from_semantic_mapping(
-            semantic_dir=layout.semantic_dir,
-            mapping_path=Path(mapping_path),
-        )
-    except ConfigError as exc:
-        logger.error(
-            "vision_mapping_missing_areas",
-            extra={"slug": slug, "path": str(mapping_path), "error": str(exc)},
-        )
-        if categories is None:
-            raise ConfigError(str(exc), slug=slug, file_path=str(mapping_path)) from exc
+    categories = raw_categories_from_semantic_mapping(
+        semantic_dir=layout.semantic_dir,
+        mapping_path=Path(mapping_path),
+    )
     if not categories:
         logger.error(
             "vision_mapping_missing_areas",
@@ -273,6 +264,7 @@ def run_vision_with_gating(
         repo_root_dir = Path(ctx.repo_root_dir_required())
     except AttributeError as exc:
         raise ConfigError("Context privo di repo_root_dir_required per Vision onboarding.", slug=slug) from exc
+    layout = WorkspaceLayout.from_context(cast(Any, ctx))
     pdf_path = Path(pdf_path)
     safe_pdf = cast(Path, ensure_within_and_resolve(repo_root_dir, pdf_path))
     if not safe_pdf.exists():
@@ -283,8 +275,12 @@ def run_vision_with_gating(
     last = _load_last_hash(repo_root_dir)
     last_digest = (last or {}).get("hash")
 
-    art = _artifacts_paths(repo_root_dir)
-    gate_hit = (last_digest == digest) and art["mapping"].exists()
+    phase_b_ready = True
+    try:
+        layout.require_phase_b_assets()
+    except Exception:
+        phase_b_ready = False
+    gate_hit = (last_digest == digest) and phase_b_ready
     logger.info("ui.vision.gate", extra={"slug": slug, "hit": gate_hit})
 
     resolved_config = resolve_vision_config(ctx, override_model=model)
@@ -320,6 +316,8 @@ def run_vision_with_gating(
             )
     except HaltError:
         raise
+
+    layout.require_phase_b_assets()
 
     try:
         metrics = _mapping_metrics(Path(repo_root_dir), _artifacts_paths(repo_root_dir)["mapping"])
