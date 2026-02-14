@@ -11,7 +11,7 @@ from pipeline.config_utils import update_config_with_drive_ids
 from pipeline.context import ClientContext, validate_slug
 from pipeline.env_constants import WORKSPACE_ROOT_ENV
 from pipeline.env_utils import get_env_var
-from pipeline.exceptions import ConfigError
+from pipeline.exceptions import ConfigError, WorkspaceLayoutInvalid
 from pipeline.file_utils import safe_write_bytes
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
@@ -294,12 +294,14 @@ def run_vision_provision_for_client(
             slug=safe_slug,
         )
     layout = WorkspaceLayout.from_context(ctx)
-    if not layout.mapping_path.exists():
+    try:
+        layout.require_phase_b_assets()
+    except WorkspaceLayoutInvalid as exc:
         raise ConfigError(
             "semantic/semantic_mapping.yaml mancante dopo Vision",
             slug=safe_slug,
             file_path=str(layout.mapping_path),
-        )
+        ) from exc
     _notify_progress(progress, 95, "Vision completata e mapping disponibile")
     return {
         "workspace_root_dir": str(layout.repo_root_dir),

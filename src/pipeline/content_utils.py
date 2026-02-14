@@ -598,16 +598,19 @@ def _plan_and_validate_pdf_groups(
         slug=slug,
         logger=logger,
     )
+    root_pdfs = sorted(root_pdfs, key=lambda p: p.as_posix().lower())
+    cat_items = sorted(cat_items, key=lambda item: item[0].as_posix().lower())
     if safe_pdfs is not None:
         return root_pdfs, cat_items, []
 
     blocked: list[BlockedPdfItem] = []
     validated_items: CategoryGroups = []
     for cat_dir, pdfs in cat_items:
+        ordered_pdfs = sorted(pdfs, key=lambda p: p.as_posix().lower())
         safe_list = _filter_safe_pdfs(
             perimeter_root,
             raw_root,
-            pdfs,
+            ordered_pdfs,
             slug=slug,
             logger=logger,
             blocked=blocked,

@@ -52,6 +52,24 @@ def test_filter_safe_pdfs_logs_unsafe_event_with_slug(tmp_path: Path, caplog):
     assert hasattr(rec, "error")
 
 
+def test_filter_safe_pdfs_logs_one_event_per_blocked_pdf(tmp_path: Path, caplog):
+    raw = tmp_path / "kb" / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    outside_1 = tmp_path / "outside-1.pdf"
+    outside_2 = tmp_path / "outside-2.pdf"
+    outside_1.write_bytes(b"%PDF-1.4\n")
+    outside_2.write_bytes(b"%PDF-1.4\n")
+
+    caplog.set_level(logging.WARNING)
+    out = _filter_safe_pdfs(tmp_path, raw, [outside_1, outside_2], slug="dummy")
+    assert out == []
+
+    recs = [r for r in caplog.records if r.msg == "pipeline.content.skip_unsafe"]
+    assert len(recs) == 2
+    assert {getattr(r, "file_path", None) for r in recs} == {str(outside_1), str(outside_2)}
+    assert all(getattr(r, "reason", None) == "path_traversal" for r in recs)
+
+
 @pytest.mark.parametrize("error_cls", [PermissionError, FileNotFoundError])
 def test_filter_safe_pdfs_logs_io_error(tmp_path: Path, caplog, monkeypatch, error_cls):
     raw = tmp_path / "kb" / "raw"

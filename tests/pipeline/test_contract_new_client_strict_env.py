@@ -7,7 +7,8 @@ from typing import Any
 
 import pytest
 
-from pipeline.capabilities.new_client import create_new_client_workspace
+from pipeline.capabilities.new_client import create_new_client_workspace, run_vision_provision_for_client
+from pipeline.exceptions import ConfigError
 
 
 def test_new_client_strict_does_not_require_workspace_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -61,3 +62,39 @@ def test_new_client_strict_does_not_require_workspace_override(monkeypatch: pyte
     )
 
     assert Path(result["workspace_root_dir"]).name == f"timmy-kb-{slug}"
+    assert not Path(result["semantic_mapping_path"]).exists()
+
+
+def test_run_vision_provision_phase_b_requires_mapping(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    slug = "acme"
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir(parents=True, exist_ok=True)
+    ws_root = tmp_path / f"timmy-kb-{slug}"
+    for name in ("raw", "normalized", "logs", "semantic", "book", "config"):
+        (ws_root / name).mkdir(parents=True, exist_ok=True)
+    (ws_root / "book" / "README.md").write_text("# README\n", encoding="utf-8")
+    (ws_root / "book" / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+    (ws_root / "config" / "config.yaml").write_text("meta:\n  client_name: ACME\n", encoding="utf-8")
+
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(ws_root))
+
+    class _FakeClientContext:
+        @staticmethod
+        def load(**_kwargs: Any) -> Any:
+            return SimpleNamespace(slug=slug, repo_root_dir=ws_root)
+
+    monkeypatch.setattr("pipeline.capabilities.new_client.ClientContext", _FakeClientContext)
+    monkeypatch.setattr(
+        "pipeline.capabilities.new_client._run_tool_with_repo_env",
+        lambda **_kwargs: {"payload": {"status": "ok", "errors": []}},
+    )
+
+    with pytest.raises(ConfigError, match="semantic/semantic_mapping.yaml mancante dopo Vision"):
+        run_vision_provision_for_client(
+            slug=slug,
+            repo_root=repo_root,
+            vision_model="dummy",
+            run_control_plane_tool=lambda **_kwargs: {"payload": {"status": "ok"}},
+            progress=None,
+        )

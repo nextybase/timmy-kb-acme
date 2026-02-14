@@ -339,7 +339,9 @@ def _precondition_failure(
 def _require_semantic_mapping(ctx: ClientContext) -> Path:
     layout = _require_layout_from_context(ctx)
     mapping_path = layout.mapping_path
-    if not mapping_path.exists():
+    try:
+        layout.require_phase_b_assets()
+    except WorkspaceLayoutInvalid:
         _precondition_failure(
             ctx,
             missing_component="semantic_mapping",

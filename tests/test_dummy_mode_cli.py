@@ -8,6 +8,7 @@ import subprocess
 import sys
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -94,3 +95,89 @@ def test_dummy_capability_forbidden_is_blocked_and_recorded(tmp_path: Path, monk
         assert row is not None
         payload = json.loads(row[0])
         assert payload.get("stop_code") == "CAPABILITY_DUMMY_FORBIDDEN"
+
+
+def test_strict_by_default_does_not_enable_dummy_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    from timmy_kb.cli import tag_onboarding as mod
+
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    monkeypatch.setenv("TIMMY_ALLOW_DUMMY", "1")
+
+    requested_mode, effective_mode, rationale = mod._resolve_modes(dummy_mode=False, strict_mode=True)
+
+    assert requested_mode == "standard"
+    assert effective_mode == "standard"
+    assert rationale == "checkpoint_proceeded_no_stub"
+
+
+def test_strict_mode_blocks_dummy_path_even_when_capability_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from timmy_kb.cli import tag_onboarding as mod
+
+    slug = "dummy-strict"
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    monkeypatch.setenv("TIMMY_ALLOW_DUMMY", "1")
+    monkeypatch.delenv("TIMMY_ALLOW_BOOTSTRAP", raising=False)
+
+    workspace = tmp_path / "ws"
+    normalized = workspace / "normalized"
+    semantic = workspace / "semantic"
+    config = workspace / "config"
+    logs = workspace / "logs"
+    for p in (normalized, semantic, config, logs):
+        p.mkdir(parents=True, exist_ok=True)
+    (config / "config.yaml").write_text("client_name: Dummy\n", encoding="utf-8")
+
+    called = {"stub": 0}
+    recorded: list[object] = []
+
+    def _stub_phase(*_args, **_kwargs):
+        called["stub"] += 1
+        raise AssertionError("stub phase non deve essere eseguita in strict mode")
+
+    fake_layout = SimpleNamespace(
+        slug=slug,
+        repo_root_dir=workspace,
+        normalized_dir=normalized,
+        semantic_dir=semantic,
+        config_path=config / "config.yaml",
+    )
+    fake_ctx = SimpleNamespace(slug=slug, repo_root_dir=workspace, semantic_dir=semantic)
+    fake_logger = SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None, error=lambda *a, **k: None)
+    fake_resources = SimpleNamespace(
+        context=fake_ctx,
+        repo_root_dir=workspace,
+        normalized_dir=normalized,
+        semantic_dir=semantic,
+        logger=fake_logger,
+        log_file=logs / "tag_onboarding.log",
+    )
+
+    monkeypatch.setattr(mod, "prepare_context", lambda **_kwargs: fake_resources, raising=True)
+    monkeypatch.setattr(mod, "_require_layout", lambda _ctx: fake_layout, raising=True)
+    monkeypatch.setattr(mod, "_require_normalized_index", lambda *_a, **_k: None, raising=True)
+    monkeypatch.setattr(mod, "emit_csv_phase", lambda *_a, **_k: semantic / "tags_reviewed.csv", raising=True)
+    monkeypatch.setattr(mod, "enforce_core_artifacts", lambda *_a, **_k: None, raising=True)
+    monkeypatch.setattr(mod, "_should_proceed", lambda **_kwargs: True, raising=True)
+    monkeypatch.setattr(mod, "emit_stub_phase", _stub_phase, raising=True)
+    monkeypatch.setattr(
+        mod.decision_ledger,
+        "open_ledger",
+        lambda _layout: SimpleNamespace(close=lambda: None),
+        raising=True,
+    )
+    monkeypatch.setattr(mod.decision_ledger, "start_run", lambda *a, **k: None, raising=True)
+    monkeypatch.setattr(mod.decision_ledger, "record_normative_decision", lambda _conn, rec: recorded.append(rec))
+
+    mod.tag_onboarding_main(
+        slug=slug,
+        non_interactive=True,
+        proceed_after_csv=True,
+        dummy_mode=True,
+        run_id=None,
+    )
+
+    assert called["stub"] == 0
+    assert recorded
+    assert getattr(recorded[-1], "reason_code", None) == mod.REASON_DUMMY_BLOCKED_BY_STRICT

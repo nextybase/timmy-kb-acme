@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 import semantic.api as sapi
-from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
+from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, exit_code_for
 from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
 from tests._helpers.workspace_paths import local_workspace_dir
 from tests.utils.workspace import ensure_minimal_workspace_layout
@@ -313,6 +313,13 @@ def test_main_raises_pipelineerror_when_failure_ledger_write_fails(tmp_path: Pat
     ("exc", "code", "expected_reason", "expected_stop", "expected_verdict"),
     [
         (
+            ArtifactPolicyViolation("artifact boom", slug="dummy"),
+            90,
+            "deny_artifact_policy_violation",
+            mod.decision_ledger.STOP_CODE_ARTIFACT_POLICY_VIOLATION,
+            mod.decision_ledger.NORMATIVE_BLOCK,
+        ),
+        (
             ConfigError("cfg boom", slug="dummy"),
             exit_code_for(ConfigError("cfg boom", slug="dummy")),
             "deny_config_error",
@@ -361,3 +368,45 @@ def test_build_normative_failure_record_mapping(
     assert record.stop_code == expected_stop
     assert record.verdict == expected_verdict
     assert f"exit_code:{int(code)}" in record.evidence_refs
+
+
+def test_build_normative_failure_record_shape_and_determinism(tmp_path: Path) -> None:
+    ctx = _make_ctx(tmp_path, "dummy")
+    layout = mod.WorkspaceLayout.from_workspace(ctx.base_dir, slug="dummy")
+    kwargs = {
+        "exc": ConfigError("cfg boom", slug="dummy"),
+        "code": int(exit_code_for(ConfigError("cfg boom", slug="dummy"))),
+        "layout": layout,
+        "requested": {"preview": "enabled", "interactive": "disabled", "tag_kg": "auto"},
+        "effective": {"preview": "enabled", "interactive": "disabled", "tag_kg": "auto"},
+        "slug": "dummy",
+        "run_id": "run-1",
+        "decision_id": "dec-1",
+        "decided_at": "2026-02-14T00:00:00Z",
+    }
+
+    record_a = mod.build_normative_failure_record(**kwargs)
+    record_b = mod.build_normative_failure_record(**kwargs)
+
+    required_fields = (
+        "decision_id",
+        "run_id",
+        "slug",
+        "gate_name",
+        "from_state",
+        "to_state",
+        "verdict",
+        "subject",
+        "decided_at",
+        "actor",
+        "evidence_refs",
+        "stop_code",
+        "reason_code",
+    )
+    for field in required_fields:
+        assert hasattr(record_a, field), f"field mancante: {field}"
+
+    assert record_a.gate_name == "semantic_onboarding"
+    assert record_a.subject == "semantic_onboarding"
+    assert isinstance(record_a.evidence_refs, list) and record_a.evidence_refs
+    assert record_a == record_b

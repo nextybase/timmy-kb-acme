@@ -80,3 +80,40 @@ def test_plan_and_validate_pdf_groups_skips_refilter_when_safe_pdfs_given(monkey
     assert blocked == []
     assert root == [raw_root / "root.pdf"]
     assert validated == [(cat, [cat / "ok.pdf"])]
+
+
+def test_plan_and_validate_pdf_groups_normalizes_ordering(monkeypatch) -> None:
+    raw_root = Path("/raw")
+    cat_b = raw_root / "B-cat"
+    cat_a = raw_root / "a-cat"
+    root_b = raw_root / "z.pdf"
+    root_a = raw_root / "A.pdf"
+
+    monkeypatch.setattr(
+        cu,
+        "_plan_pdf_groups",
+        lambda **_k: (
+            [root_b, root_a],
+            [
+                (cat_b, [cat_b / "z.pdf", cat_b / "A.pdf"]),
+                (cat_a, [cat_a / "B.pdf", cat_a / "a.pdf"]),
+            ],
+        ),
+        raising=True,
+    )
+    monkeypatch.setattr(cu, "_filter_safe_pdfs", lambda *_a, **_k: list(_a[2]), raising=True)
+
+    root, validated, blocked = cu._plan_and_validate_pdf_groups(
+        perimeter_root=raw_root,
+        raw_root=raw_root,
+        safe_pdfs=None,
+        slug="dummy",
+        logger=cu.get_structured_logger("test.content_utils"),
+    )
+
+    assert blocked == []
+    assert root == [root_a, root_b]
+    assert validated == [
+        (cat_a, [cat_a / "a.pdf", cat_a / "B.pdf"]),
+        (cat_b, [cat_b / "A.pdf", cat_b / "z.pdf"]),
+    ]

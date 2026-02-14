@@ -56,7 +56,13 @@ def test_load_workspace_drive_folders_spec():
 
 
 def test_require_semantic_mapping_raises(monkeypatch, tmp_path):
-    layout = types.SimpleNamespace(mapping_path=tmp_path / "semantic_mapping.yaml", slug="acme")
+    layout = types.SimpleNamespace(
+        mapping_path=tmp_path / "semantic_mapping.yaml",
+        slug="acme",
+        require_phase_b_assets=lambda: (_ for _ in ()).throw(
+            dr.WorkspaceLayoutInvalid("semantic/semantic_mapping.yaml mancante", slug="acme")
+        ),
+    )
     monkeypatch.setattr(dr, "_require_layout_from_context", lambda ctx: layout)
     with pytest.raises(RuntimeError, match="semantic/semantic_mapping\\.yaml"):
         dr._require_semantic_mapping(DummyCtx("acme"))

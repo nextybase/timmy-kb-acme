@@ -79,6 +79,7 @@ from .tag_onboarding_context import ContextResources, prepare_context
 from .tag_onboarding_semantic import emit_csv_phase, emit_stub_phase
 
 _DUMMY_TRUTHY = {"1", "true", "yes", "on"}
+REASON_DUMMY_BLOCKED_BY_STRICT = "dummy_blocked_by_strict"
 
 
 def _prompt(msg: str) -> str:
@@ -172,7 +173,7 @@ def _resolve_modes(*, dummy_mode: bool, strict_mode: bool) -> tuple[str, str, st
     requested_mode = "dummy" if dummy_mode else "standard"
     if dummy_mode and strict_mode:
         effective_mode = "strict"
-        rationale = "dummy_blocked_by_strict"
+        rationale = REASON_DUMMY_BLOCKED_BY_STRICT
     elif dummy_mode:
         effective_mode = "dummy"
         rationale = "dummy_allowed"
