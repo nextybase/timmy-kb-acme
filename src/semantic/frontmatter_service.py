@@ -81,8 +81,12 @@ def _build_layout_constraints(base_yaml: Dict[str, Any]) -> Dict[str, Any]:
 def _read_layout_top_levels(layout_path: Path) -> list[str]:
     try:
         import yaml
-    except Exception:
-        return []
+    except ModuleNotFoundError as exc:
+        raise ConfigError(
+            "Dipendenza opzionale mancante: impossibile importare 'yaml'.", file_path=layout_path
+        ) from exc
+    except Exception as exc:
+        raise ConfigError(f"Import modulo yaml fallito: {exc!r}", file_path=layout_path) from exc
 
     if not layout_path.exists():
         return []
@@ -90,8 +94,10 @@ def _read_layout_top_levels(layout_path: Path) -> list[str]:
         safe = ensure_within_and_resolve(layout_path.parent, layout_path)
         text = read_text_safe(safe.parent, safe, encoding="utf-8")
         data_raw = yaml.safe_load(text)
-    except Exception:
+    except (FileNotFoundError, OSError):
         return []
+    except Exception as exc:
+        raise ConfigError(f"Lettura layout_proposal.yaml fallita: {exc!r}", file_path=layout_path) from exc
     if not isinstance(data_raw, dict):
         return []
     data: Dict[str, Any] = dict(data_raw)

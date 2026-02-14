@@ -15,7 +15,7 @@ _PERFORM_CLEANUP_PATHS: Sequence[str] = ("tools.clean_client_workspace:perform_c
 
 def _first_available(paths: Sequence[str]) -> Optional[Callable[..., Any]]:
     for path in paths:
-        candidate = manage_helpers.safe_get(path)
+        candidate = manage_helpers.safe_get(path, strict=True)
         if callable(candidate):
             return cast(Callable[..., Any], candidate)
     return None

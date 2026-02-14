@@ -81,7 +81,7 @@ def _report_telemetry_error(context: str, exc: Exception) -> None:
             },
         )
     except Exception:
-        pass
+        return
 
 
 def redact_secrets(msg: str) -> str:

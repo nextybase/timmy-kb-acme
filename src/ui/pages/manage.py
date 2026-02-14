@@ -119,19 +119,21 @@ def _render_missing_layout(slug: str) -> None:
 
 
 # Services (gestiscono cache e bridging verso i component)
-_render_drive_diff = manage_helpers.safe_get("ui.services.drive:render_drive_diff")
-_invalidate_drive_index = manage_helpers.safe_get("ui.services.drive:invalidate_drive_index")
-_emit_readmes_for_raw = manage_helpers.safe_get("ui.services.drive_runner:emit_readmes_for_raw")
+_render_drive_diff = manage_helpers.safe_get("ui.services.drive:render_drive_diff", strict=True)
+_invalidate_drive_index = manage_helpers.safe_get("ui.services.drive:invalidate_drive_index", strict=True)
+_emit_readmes_for_raw = manage_helpers.safe_get("ui.services.drive_runner:emit_readmes_for_raw", strict=True)
 
 # Download & pre-analisi (nuovo servizio estratto)
-_plan_raw_download = manage_helpers.safe_get("ui.services.drive_runner:plan_raw_download")
-_download_with_progress = manage_helpers.safe_get("ui.services.drive_runner:download_raw_from_drive_with_progress")
-_download_simple = manage_helpers.safe_get("ui.services.drive_runner:download_raw_from_drive")
+_plan_raw_download = manage_helpers.safe_get("ui.services.drive_runner:plan_raw_download", strict=True)
+_download_with_progress = manage_helpers.safe_get(
+    "ui.services.drive_runner:download_raw_from_drive_with_progress", strict=True
+)
+_download_simple = manage_helpers.safe_get("ui.services.drive_runner:download_raw_from_drive", strict=True)
 
 # Arricchimento semantico (estrazione tag ? stub + YAML)
-_run_tags_update = manage_helpers.safe_get("ui.services.tags_adapter:run_tags_update")
+_run_tags_update = manage_helpers.safe_get("ui.services.tags_adapter:run_tags_update", strict=True)
 # Tag KG Builder (Knowledge Graph dei tag)
-_run_tag_kg_builder = manage_helpers.safe_get("ui.services.tag_kg_builder:run_tag_kg_builder")
+_run_tag_kg_builder = manage_helpers.safe_get("ui.services.tag_kg_builder:run_tag_kg_builder", strict=True)
 
 
 # ---------------- Action handlers ----------------

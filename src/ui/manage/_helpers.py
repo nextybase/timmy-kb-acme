@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import importlib
 import inspect
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, cast
@@ -8,7 +9,6 @@ from typing import Any, Callable, Optional, TypeVar, cast
 from pipeline.exceptions import ConfigError
 from pipeline.workspace_layout import WorkspaceLayout
 from ui.clients_store import get_all as get_clients
-from ui.utils.workspace import resolve_raw_dir
 
 T = TypeVar("T")
 
@@ -26,17 +26,14 @@ def clients_db_path(manage_file: Path) -> Path:
     return repo_root(manage_file) / "clients_db" / "clients.yaml"
 
 
-def workspace_root(slug: str, *, layout: WorkspaceLayout | None = None) -> Path:
+def workspace_root(*, layout: WorkspaceLayout) -> Path:
     """
     Helper storico: restituisce la root workspace.
 
     In contesti moderni dove il layout è disponibile, preferire `layout.repo_root_dir` direttamente.
     Questo wrapper rimane per non modificare le chiamate esistenti dalla pagina `manage`.
     """
-    if layout is not None:
-        return cast(Path, layout.repo_root_dir)
-    raw_dir = Path(resolve_raw_dir(slug))
-    return raw_dir.parent
+    return cast(Path, layout.repo_root_dir)
 
 
 def load_clients(logger: Any, manage_file: Path) -> list[dict[str, Any]]:
@@ -57,15 +54,41 @@ def load_clients(logger: Any, manage_file: Path) -> list[dict[str, Any]]:
         return []
 
 
-def safe_get(fn_path: str) -> Optional[Callable[..., Any]]:
-    """Importa una funzione (modulo:callable) se disponibile, altrimenti None."""
+def safe_get(fn_path: str, *, strict: bool = True) -> Optional[Callable[..., Any]]:
+    """
+    Resolve optional UI/service callables via 'module:callable'.
+
+    - Missing module/attribute => returns None (capability not installed).
+    - Import-time/runtime error inside module => raises ConfigError in strict mode
+      to block the action (avoid silent feature masking).
+    """
+    mod_name, _, attr = fn_path.partition(":")
+    if not mod_name or not attr:
+        raise ConfigError(f"Invalid service path '{fn_path}'. Expected 'module:callable'.")
+
     try:
-        pkg, func = fn_path.split(":")
-        module = __import__(pkg, fromlist=[func])
-        candidate = getattr(module, func, None)
-        return candidate if callable(candidate) else None
-    except Exception:  # pragma: no cover - risoluzioni opzionali
+        module = importlib.import_module(mod_name)
+    except ModuleNotFoundError as exc:
+        if exc.name == mod_name:
+            return None
+        if strict:
+            raise ConfigError(f"Service '{fn_path}' failed to import due to missing dependency '{exc.name}'.") from exc
         return None
+    except Exception as exc:
+        if strict:
+            raise ConfigError(f"Service '{fn_path}' failed to import: {exc!r}") from exc
+        return None
+
+    try:
+        candidate = getattr(module, attr)
+    except AttributeError:
+        return None
+
+    if not callable(candidate):
+        if strict:
+            raise ConfigError(f"Service '{fn_path}' resolved to a non-callable object.")
+        return None
+    return cast(Callable[..., Any], candidate)
 
 
 def call_strict(fn: Callable[..., T], *, logger: Any, **kwargs: Any) -> T:

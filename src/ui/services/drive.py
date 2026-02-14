@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict
 
+from pipeline.exceptions import ConfigError
+
 from ..app_services.drive_cache import _clear_drive_tree_cache, get_drive_tree_cache
 from ..components.diff_view import render_drive_local_diff as _render_diff_component
 
@@ -11,8 +13,8 @@ def invalidate_drive_index(slug: str | None = None) -> None:
     """Svuota la cache dell'indice Drive (delegato alla cache centralizzata)."""
     try:
         _clear_drive_tree_cache()
-    except Exception:
-        pass
+    except Exception as exc:
+        raise ConfigError(f"Drive index cache invalidation failed: {exc!r}") from exc
 
 
 def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
@@ -26,6 +28,6 @@ def render_drive_diff(slug: str) -> None:
     try:
         getter: Callable[[str], Dict[str, Dict[str, Any]]] = get_drive_tree_cache()
         index = getter(slug)
-    except Exception:
-        index = {}
+    except Exception as exc:
+        raise ConfigError(f"Drive index load failed (diff unavailable): {exc!r}") from exc
     _render_diff_component(slug, index)
