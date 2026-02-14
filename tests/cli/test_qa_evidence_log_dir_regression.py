@@ -12,13 +12,7 @@ from tests._helpers.workspace_paths import local_workspace_dir
 
 
 def _resolve_logs_dir(layout: WorkspaceLayout) -> Path:
-    """
-    Regression helper: accetta entrambe le varianti (logs_dir/log_dir).
-    L'obiettivo e' verificare che la CLI non "rompa" per mismatch naming.
-    """
-    logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
-    assert isinstance(logs_dir, Path), "WorkspaceLayout must expose logs_dir or log_dir"
-    return logs_dir
+    return layout.logs_dir
 
 
 def test_cli_qa_evidence_writes_in_logs_dir(tmp_path: Path, monkeypatch) -> None:

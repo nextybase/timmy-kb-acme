@@ -859,16 +859,7 @@ def build_dummy_payload(
         )
         semantic_convert_markdown(semantic_ctx, logger_semantic, slug=slug)
         layout = WorkspaceLayout.from_context(semantic_ctx)
-        logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
-        if logs_dir is None:
-            raise HardCheckError(
-                "Logs dir mancante per QA evidence.",
-                build_hardcheck_health(
-                    "qa_evidence",
-                    "logs dir mancante",
-                    mode=policy.mode,
-                ),
-            )
+        logs_dir = layout.logs_dir
         qa_checks = ["raw_ingest", "semantic.convert_markdown", "semantic.write_summary_and_readme"]
         write_qa_evidence(logs_dir, checks_executed=qa_checks, qa_status="pass", logger=logger_semantic)
         semantic_write_summary_and_readme(semantic_ctx, logger_semantic, slug=slug)

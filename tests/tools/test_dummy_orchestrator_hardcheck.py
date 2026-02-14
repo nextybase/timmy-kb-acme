@@ -481,7 +481,6 @@ def test_dummy_pipeline_outputs_normalized_index_and_book_assets(
             class _Ctx:
                 def __init__(self) -> None:
                     self.logs_dir = layout.logs_dir
-                    self.log_dir = layout.logs_dir
 
                 def with_run_id(self, run_id: str) -> "_Ctx":
                     return self

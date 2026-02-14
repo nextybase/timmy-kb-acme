@@ -46,8 +46,6 @@ def main() -> int:
     ctx = ClientContext.load(slug=slug, require_drive_env=False, run_id=run_id, bootstrap_config=False)
     layout = WorkspaceLayout.from_context(ctx)
     logs_dir = layout.logs_dir
-    if logs_dir is None:
-        raise ConfigError("WorkspaceLayout non espone logs_dir/log_dir: impossibile scrivere qa_passed.json")
 
     checks = [
         ("pre-commit run --all-files", ["pre-commit", "run", "--all-files"]),

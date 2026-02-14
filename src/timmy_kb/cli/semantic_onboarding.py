@@ -182,10 +182,7 @@ def _qa_evidence_refs(layout: WorkspaceLayout, qa_path: Path, *, status: str) ->
 
 
 def _run_qa_gate_and_record(conn: Any, *, layout: WorkspaceLayout, slug: str, run_id: str) -> None:
-    logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
-    if logs_dir is None:
-        raise ConfigError("Directory log mancante per QA evidence.", code="qa_evidence_invalid", slug=slug)
-
+    logs_dir = layout.logs_dir
     qa_path = qa_evidence_path(logs_dir)
     decided_at = _dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 

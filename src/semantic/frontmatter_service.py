@@ -431,10 +431,7 @@ def write_summary_and_readme(context: ClientContextProtocol, logger: logging.Log
     paths = resolve_context_paths(layout)
     repo_root_dir = paths.repo_root_dir
     book_dir = paths.book_dir
-    logs_dir = getattr(layout, "logs_dir", None) or getattr(layout, "log_dir", None)
-    if logs_dir is None:
-        raise ConfigError("Directory log mancante per QA evidence.")
-    require_qa_gate_pass(logs_dir, slug=slug)
+    require_qa_gate_pass(layout.logs_dir, slug=slug)
     summary_func = _gen_summary
     readme_func = _gen_readme
     validate_func = _validate_md
