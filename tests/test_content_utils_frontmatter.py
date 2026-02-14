@@ -81,3 +81,20 @@ def test_build_chunk_records_raises_on_unexpected_frontmatter_error(monkeypatch:
             [md_path],
             perimeter_root=tmp_path,
         )
+
+
+def test_build_chunk_records_raises_on_unicode_frontmatter_error(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    md_path = tmp_path / "doc.md"
+    md_path.write_text("# Titolo\n\ncontenuto", encoding="utf-8")
+
+    def _raise_unicode_error(*_: object, **__: object) -> tuple[dict[str, object], str]:
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+    monkeypatch.setattr(cu, "read_frontmatter", _raise_unicode_error)
+
+    with pytest.raises(UnicodeDecodeError):
+        cu.build_chunk_records_from_markdown_files(
+            "dummy",
+            [md_path],
+            perimeter_root=tmp_path,
+        )

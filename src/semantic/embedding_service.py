@@ -71,6 +71,8 @@ def _collect_markdown_inputs(
     for candidate in files:
         try:
             meta, body = _read_fm(book_dir, candidate, encoding="utf-8", use_cache=True)
+        except UnicodeError:
+            raise
         except Exception as exc:  # noqa: BLE001 - vogliamo loggare tutti i casi
             logger.warning(
                 "semantic.index.read_failed",
