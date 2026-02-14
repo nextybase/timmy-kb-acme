@@ -39,7 +39,7 @@ def test_call_convert_md_calls_without_book_dir() -> None:
         assert isinstance(ctx, ContextPaths)
         called["ok"] = True
 
-    _call_convert_md(f, _ctx(), Path("book"))
+    _call_convert_md(f, _ctx(), None)
     assert called["ok"] is True
 
 

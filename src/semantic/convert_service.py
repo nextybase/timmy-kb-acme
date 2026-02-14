@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import datetime as _dt
-import inspect
 import logging
 import time
 from dataclasses import dataclass
@@ -103,25 +102,22 @@ def discover_normalized_inputs(normalized_dir: Path, logger: logging.Logger, slu
     return NormalizedDiscovery(safe_mds=tuple(safe), discarded_unsafe=discarded)
 
 
-def _call_convert_md(convert_fn, ctx: ContextPaths, book_dir: Path) -> None:
+def _call_convert_md(convert_fn, ctx: ContextPaths, book_dir: Path | None = None) -> None:
     if not callable(convert_fn):
         raise ConversionError(
             "convert_md call failed: not callable",
             slug=ctx.slug,
             file_path=book_dir,
         )
+    fn_name = getattr(convert_fn, "__name__", type(convert_fn).__name__)
     try:
-        signature = inspect.signature(convert_fn)
-        if "book_dir" in signature.parameters:
-            try:
-                convert_fn(ctx, book_dir=book_dir)
-            except TypeError:
-                convert_fn(ctx, book_dir)
-        else:
+        if book_dir is None:
             convert_fn(ctx)
+        else:
+            convert_fn(ctx, book_dir=book_dir)
     except TypeError as exc:
         raise ConversionError(
-            "convert_md call failed",
+            f"convert_md call failed for {fn_name}: required signature is convert_fn(ctx, book_dir=...)",
             slug=ctx.slug,
             file_path=book_dir,
         ) from exc
