@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-import inspect
 from typing import Any, Callable, ContextManager, Optional, Protocol, Sequence, cast
 
 from ui.manage._helpers import call_strict
@@ -84,13 +83,8 @@ def execute_drive_download(
             call_args: dict[str, Any] = {
                 "slug": slug,
                 "overwrite": overwrite_existing,
+                "require_env": True,
             }
-            try:
-                signature = inspect.signature(download_fn)
-            except (TypeError, ValueError):
-                signature = None
-            if signature and "require_env" in signature.parameters:
-                call_args["require_env"] = True
             paths = call_strict(download_fn, logger=logger, **call_args)
             count = len(paths or [])
             if status_widget is not None and hasattr(status_widget, "update"):
