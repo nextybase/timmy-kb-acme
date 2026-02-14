@@ -117,7 +117,7 @@ def _call_convert_md(convert_fn, ctx: ContextPaths, book_dir: Path | None = None
             convert_fn(ctx, book_dir=book_dir)
     except TypeError as exc:
         raise ConversionError(
-            f"convert_md call failed for {fn_name}: required signature is convert_fn(ctx, book_dir=...)",
+            f"convert_md call failed for {fn_name}: required signature is {fn_name}(ctx, book_dir=...)",
             slug=ctx.slug,
             file_path=book_dir,
         ) from exc

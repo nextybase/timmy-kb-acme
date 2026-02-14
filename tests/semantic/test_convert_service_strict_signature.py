@@ -47,5 +47,5 @@ def test_call_convert_md_rejects_legacy_positional_signature(tmp_path: Path) -> 
     def legacy_convert(ctx: ContextPaths, book_dir: Path, /) -> None:
         _ = (ctx, book_dir)
 
-    with pytest.raises(ConversionError, match=r"required signature is convert_fn\(ctx, book_dir=\.\.\.\)"):
+    with pytest.raises(ConversionError, match=r"required signature is legacy_convert\(ctx, book_dir=\.\.\.\)"):
         _call_convert_md(legacy_convert, ctx, ctx.book_dir)
