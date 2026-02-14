@@ -374,6 +374,9 @@ def run_semantic_pipeline(
     per garantire isolamento tra esecuzioni consecutive.
     """
 
+    layout = WorkspaceLayout.from_context(cast(Any, context))
+    layout.require_phase_b_assets()
+
     return _run_build_workflow(
         context,
         logger,

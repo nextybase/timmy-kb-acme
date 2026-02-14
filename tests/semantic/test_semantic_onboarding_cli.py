@@ -21,6 +21,7 @@ def _ctx(base_dir: Path) -> TestClientCtx:
     (config_dir / "config.yaml").write_text("client_name: dummy\n", encoding="utf-8")
     for child in ("raw", "normalized", "book", "semantic", "logs"):
         (base_dir / child).mkdir(parents=True, exist_ok=True)
+    (base_dir / "semantic" / "semantic_mapping.yaml").write_text("version: 1\nareas: {}\n", encoding="utf-8")
     book_dir = base_dir / "book"
     (book_dir / "README.md").write_text("# Dummy\n", encoding="utf-8")
     (book_dir / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
