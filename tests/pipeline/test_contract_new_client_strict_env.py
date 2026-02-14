@@ -98,3 +98,44 @@ def test_run_vision_provision_phase_b_requires_mapping(monkeypatch: pytest.Monke
             run_control_plane_tool=lambda **_kwargs: {"payload": {"status": "ok"}},
             progress=None,
         )
+
+
+def test_run_vision_provision_reloads_context_after_tool_call(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    slug = "acme"
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir(parents=True, exist_ok=True)
+    ws_root = tmp_path / f"timmy-kb-{slug}"
+    for name in ("raw", "normalized", "logs", "semantic", "book", "config"):
+        (ws_root / name).mkdir(parents=True, exist_ok=True)
+    (ws_root / "book" / "README.md").write_text("# README\n", encoding="utf-8")
+    (ws_root / "book" / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+    (ws_root / "config" / "config.yaml").write_text("meta:\n  client_name: ACME\n", encoding="utf-8")
+    (ws_root / "semantic" / "semantic_mapping.yaml").write_text("areas:\n  - key: Area One\n", encoding="utf-8")
+
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(ws_root))
+
+    calls = {"count": 0}
+
+    class _FakeClientContext:
+        @staticmethod
+        def load(**_kwargs: Any) -> Any:
+            calls["count"] += 1
+            return SimpleNamespace(slug=slug, repo_root_dir=ws_root)
+
+    monkeypatch.setattr("pipeline.capabilities.new_client.ClientContext", _FakeClientContext)
+    monkeypatch.setattr(
+        "pipeline.capabilities.new_client._run_tool_with_repo_env",
+        lambda **_kwargs: {"payload": {"status": "ok", "errors": []}},
+    )
+
+    result = run_vision_provision_for_client(
+        slug=slug,
+        repo_root=repo_root,
+        vision_model="dummy",
+        run_control_plane_tool=lambda **_kwargs: {"payload": {"status": "ok"}},
+        progress=None,
+    )
+
+    assert calls["count"] == 2
+    assert result["semantic_mapping_path"] == str(ws_root / "semantic" / "semantic_mapping.yaml")

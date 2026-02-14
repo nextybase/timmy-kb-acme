@@ -293,6 +293,13 @@ def run_vision_provision_for_client(
             "Provisioning Vision fallito: " + (errors or "errore sconosciuto"),
             slug=safe_slug,
         )
+    with _scoped_workspace_env(workspace_root=workspace_root):
+        ctx = ClientContext.load(
+            slug=safe_slug,
+            require_drive_env=False,
+            bootstrap_config=False,
+            logger=LOGGER,
+        )
     layout = WorkspaceLayout.from_context(ctx)
     try:
         layout.require_phase_b_assets()

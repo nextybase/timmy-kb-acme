@@ -23,7 +23,7 @@ from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.drive.upload import create_drive_structure_from_names
 from pipeline.env_utils import get_env_var
-from pipeline.exceptions import ConfigError
+from pipeline.exceptions import ConfigError, WorkspaceLayoutInvalid
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
@@ -197,11 +197,6 @@ def materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_dir
     return _materialize_raw_structure(ctx, logger, repo_root_dir=repo_root_dir, slug=slug)
 
 
-def _ensure_dummy_area(mapping_path: Path, logger: logging.Logger, *, slug: str) -> bool:
-    _ = (mapping_path, logger, slug)
-    return False
-
-
 def _load_last_hash(repo_root_dir: Path) -> Optional[Dict[str, Any]]:
     """
     Legge il sentinel JSON se presente.
@@ -272,26 +267,57 @@ def run_vision_with_gating(
     yaml_path = vision_yaml_workspace_path(Path(repo_root_dir), pdf_path=safe_pdf)
 
     digest = _sha256_of_file(repo_root_dir, safe_pdf)
-    last = _load_last_hash(repo_root_dir)
-    last_digest = (last or {}).get("hash")
-
-    phase_b_ready = True
-    try:
-        layout.require_phase_b_assets()
-    except Exception:
-        phase_b_ready = False
-    gate_hit = (last_digest == digest) and phase_b_ready
-    logger.info("ui.vision.gate", extra={"slug": slug, "hit": gate_hit})
-
     resolved_config = resolve_vision_config(ctx, override_model=model)
     retention_days = resolve_vision_retention_days(ctx)
+    last = _load_last_hash(repo_root_dir)
+    last_digest = (last or {}).get("hash")
+    last_model = (last or {}).get("model")
+    strict_mode = is_beta_strict()
 
-    provision_from_semantic_module = getattr(_provision_from_vision_with_config, "__module__", "").endswith(
-        "vision_provision"
-    )
-    use_yaml = (
-        _provision_from_vision_yaml_with_config is not None and provision_from_semantic_module and yaml_path.exists()
-    )
+    phase_b_ready = True
+    phase_b_reason = "ready"
+    try:
+        layout.require_phase_b_assets()
+    except WorkspaceLayoutInvalid:
+        phase_b_ready = False
+        phase_b_reason = "phase_b_not_ready"
+
+    model_missing = last is not None and not isinstance(last_model, str)
+    model_match = isinstance(last_model, str) and (last_model == resolved_config.model)
+    gate_hit = (last_digest == digest) and model_match and phase_b_ready
+    if gate_hit:
+        gate_reason = "hash+model"
+    elif not phase_b_ready:
+        gate_reason = phase_b_reason
+    elif last is None:
+        gate_reason = "sentinel_missing"
+    elif last_digest != digest:
+        gate_reason = "hash_miss"
+    elif model_missing:
+        gate_reason = "model_missing_strict" if strict_mode else "model_missing_non_strict"
+    else:
+        gate_reason = "model_miss"
+    logger.info("ui.vision.gate", extra={"slug": slug, "hit": gate_hit, "reason": gate_reason})
+    if gate_hit:
+        layout.require_phase_b_assets()
+        try:
+            metrics = _mapping_metrics(Path(repo_root_dir), layout.mapping_path)
+        except (ConfigError, OSError, ValueError, UnicodeError) as exc:
+            raise ConfigError(
+                f"semantic_mapping.yaml non leggibile: {exc}",
+                slug=slug,
+                file_path=str(layout.mapping_path),
+            ) from exc
+        logger.info("vision_completed", extra={"slug": slug, **metrics})
+        raw_info = _materialize_raw_structure(ctx, logger, repo_root_dir=Path(repo_root_dir), slug=slug)
+        return {
+            "skipped": True,
+            "hash": digest,
+            "mapping": str(layout.mapping_path),
+            "raw_structure": raw_info,
+        }
+
+    use_yaml = _provision_from_vision_yaml_with_config is not None and yaml_path.exists()
 
     try:
         if use_yaml:

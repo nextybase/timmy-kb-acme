@@ -16,7 +16,7 @@ from typing import Any, cast
 
 from pipeline.constants import LOG_FILE_NAME, LOGS_DIR_NAME
 from pipeline.context import ClientContext
-from pipeline.exceptions import WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
+from pipeline.exceptions import ConfigError, WorkspaceLayoutInconsistent, WorkspaceLayoutInvalid, WorkspaceNotFound
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, validate_slug
 
 __all__ = ["WorkspaceLayout", "get_workspace_layout"]
@@ -323,7 +323,7 @@ def _ensure_layout_consistency(
         ensure_within(workspace_root, config_path)
         ensure_within(workspace_root, mapping_path)
         ensure_within(semantic_dir, mapping_path)
-    except Exception as exc:
+    except (ConfigError, ValueError, RuntimeError) as exc:
         raise WorkspaceLayoutInconsistent(
             f"Layout incoerente: path fuori perimetro per workspace {slug}: {exc}",
             slug=slug,

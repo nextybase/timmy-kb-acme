@@ -21,7 +21,6 @@ Design:
 
 from __future__ import annotations
 
-import sys
 import time
 from contextlib import nullcontext
 from dataclasses import MISSING, replace
@@ -29,27 +28,25 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, TypedDict
 
 from pipeline.exceptions import RetrieverError  # modulo comune degli errori
-from pipeline.logging_utils import get_structured_logger
+from pipeline.logging_utils import get_structured_logger as _get_structured_logger
 from semantic.types import EmbeddingsClient
 from storage.kb_db import fetch_candidates
 from timmy_kb.cli import retriever_embeddings as embeddings_mod
+from timmy_kb.cli import retriever_errors as retriever_errors_mod
+from timmy_kb.cli import retriever_logging as retriever_logging_mod
 from timmy_kb.cli import retriever_manifest as manifest_mod
 from timmy_kb.cli import retriever_ranking as ranking_mod
 from timmy_kb.cli import retriever_throttle as throttle_mod
 from timmy_kb.cli import retriever_validation as validation_mod
+from timmy_kb.cli.retriever_ranking import _rank_candidates, cosine
+from timmy_kb.cli.retriever_throttle import ThrottleSettings
+from timmy_kb.cli.retriever_validation import MAX_CANDIDATE_LIMIT, MIN_CANDIDATE_LIMIT, QueryParams, SearchResult
 
-LOGGER = get_structured_logger("timmy_kb.retriever")
-_FALLBACK_LOG = get_structured_logger("timmy_kb.retriever.fallback")
+LOGGER = retriever_logging_mod.LOGGER
+_FALLBACK_LOG = retriever_logging_mod._FALLBACK_LOG
 
-QueryParams = validation_mod.QueryParams
-SearchResult = validation_mod.SearchResult
-MIN_CANDIDATE_LIMIT = validation_mod.MIN_CANDIDATE_LIMIT
-MAX_CANDIDATE_LIMIT = validation_mod.MAX_CANDIDATE_LIMIT
-cosine = ranking_mod.cosine
-_rank_candidates = ranking_mod._rank_candidates
-ThrottleSettings = throttle_mod.ThrottleSettings
-_ThrottleState = throttle_mod._ThrottleState
 _THROTTLE_REGISTRY = throttle_mod._THROTTLE_REGISTRY
+_ThrottleState = throttle_mod._ThrottleState
 _normalize_throttle_settings = throttle_mod._normalize_throttle_settings
 _deadline_from_settings = throttle_mod._deadline_from_settings
 reset_throttle_registry = throttle_mod.reset_throttle_registry
@@ -60,72 +57,32 @@ ERR_INVALID_QUERY = "retriever_invalid_query"
 ERR_EMBEDDING_FAILED = "retriever_embedding_failed"
 ERR_EMBEDDING_INVALID = "retriever_embedding_invalid"
 ERR_BUDGET_HIT_PARTIAL = "retriever_budget_hit_partial"
+_safe_log = retriever_logging_mod._safe_log
+_safe_info = retriever_logging_mod._safe_info
+_safe_warning = retriever_logging_mod._safe_warning
+_safe_debug = retriever_logging_mod._safe_debug
+_apply_error_context = retriever_errors_mod._apply_error_context
+_raise_retriever_error = retriever_errors_mod._raise_retriever_error
+get_structured_logger = _get_structured_logger
 
 
-def _safe_log(level: str, event: str, *, extra: Mapping[str, Any] | None = None) -> None:
-    """Logging strutturato con fallback deterministico in caso di failure del logger."""
-    payload = dict(extra or {})
-
-    # 1) Logger primario
-    try:
-        log_fn = getattr(LOGGER, level, None)
-        if callable(log_fn):
-            log_fn(event, extra=payload)
-            return
-    except Exception as exc:  # pragma: no cover - best-effort
-        _FALLBACK_LOG.warning(
-            "retriever.log_failed",
-            extra={"event": event, "level": level, "stage": "primary", "error": repr(exc)},
+def _throttle_guard(
+    key: str,
+    settings: Optional[ThrottleSettings],
+    *,
+    deadline: float | None = None,
+) -> Any:
+    prev_registry = throttle_mod._THROTTLE_REGISTRY
+    if prev_registry is not _THROTTLE_REGISTRY:
+        throttle_mod._THROTTLE_REGISTRY = _THROTTLE_REGISTRY
+        _safe_debug(
+            "retriever.throttle.registry_rebound",
+            extra={
+                "slug": key,
+                "previous": repr(type(prev_registry)),
+                "service_only": True,
+            },
         )
-
-    # 2) Logger fallback (stesso schema)
-    try:
-        fallback_fn = getattr(_FALLBACK_LOG, level, None)
-        if callable(fallback_fn):
-            fallback_fn(event, extra=payload)
-            return
-    except Exception as exc:  # pragma: no cover - ultima risorsa
-        _FALLBACK_LOG.warning(
-            "retriever.log_failed",
-            extra={"event": event, "level": level, "stage": "fallback", "error": repr(exc)},
-        )
-
-    # 3) Ultima linea di difesa: stderr
-    try:
-        sys.stderr.write(f"[timmy_kb.retriever.log_failed] level={level} event={event} extra={payload!r}\n")
-    except Exception:  # pragma: no cover - fallback finale
-        return
-
-
-def _safe_info(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
-    _safe_log("info", event, extra=extra)
-
-
-def _safe_warning(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
-    _safe_log("warning", event, extra=extra)
-
-
-def _safe_debug(event: str, *, extra: Mapping[str, Any] | None = None) -> None:
-    _safe_log("debug", event, extra=extra)
-
-
-def _apply_error_context(exc: RetrieverError, *, code: str, **extra: Any) -> RetrieverError:
-    if getattr(exc, "code", None) is None:
-        setattr(exc, "code", code)
-    for key, value in extra.items():
-        if value is not None and not hasattr(exc, key):
-            setattr(exc, key, value)
-    return exc
-
-
-def _raise_retriever_error(message: str, *, code: str, **extra: Any) -> None:
-    err = RetrieverError(message)
-    _apply_error_context(err, code=code, **extra)
-    raise err
-
-
-def _throttle_guard(key: str, settings: Optional[ThrottleSettings], *, deadline: float | None = None):
-    throttle_mod._THROTTLE_REGISTRY = _THROTTLE_REGISTRY
     return throttle_mod._throttle_guard(key, settings, deadline=deadline)
 
 
@@ -209,6 +166,299 @@ def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
     return candidates
 
 
+def _resolve_embedding_model(embeddings_client: EmbeddingsClient, embedding_model: str | None) -> str | None:
+    return (
+        embedding_model
+        or getattr(embeddings_client, "model", None)
+        or getattr(embeddings_client, "embedding_model", None)
+    )
+
+
+def _log_query_started(
+    params: QueryParams,
+    embeddings_client: EmbeddingsClient,
+    throttle_cfg: ThrottleSettings | None,
+    throttle_key: str,
+    response_id: str | None,
+    embedding_model: str | None,
+) -> None:
+    _safe_info(
+        "retriever.query.started",
+        extra={
+            "slug": params.slug,
+            "scope": params.scope,
+            "response_id": response_id,
+            "k": int(params.k),
+            "candidate_limit": int(params.candidate_limit),
+            "latency_budget_ms": int(throttle_cfg.latency_budget_ms) if throttle_cfg else None,
+            "throttle_key": throttle_key,
+            "query_len": len(params.query or ""),
+            "embedding_model": _resolve_embedding_model(embeddings_client, embedding_model),
+        },
+    )
+
+
+def _preflight_soft_fails(
+    params: QueryParams,
+    *,
+    deadline: float | None,
+    common_extra: Mapping[str, Any],
+    response_id: str | None,
+    check_deadline: bool = True,
+    check_input: bool = True,
+) -> list[SearchResult] | None:
+    if check_deadline and throttle_mod._deadline_exceeded(deadline):
+        _safe_warning(
+            "retriever.throttle.deadline",
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "stage": "preflight",
+                "response_id": response_id,
+            },
+        )
+        return []
+
+    if check_input and params.k == 0:
+        _safe_info("retriever.query.skipped", extra={**common_extra, "reason": "k_is_zero"})
+        return []
+
+    if check_input and not params.query.strip():
+        _safe_warning("retriever.query.invalid", extra={**common_extra, "reason": "empty_query"})
+        return []
+    return None
+
+
+def _embed_query_or_soft_fail(
+    params: QueryParams,
+    embeddings_client: EmbeddingsClient,
+    *,
+    deadline: float | None,
+    common_extra: Mapping[str, Any],
+    response_id: str | None,
+    embedding_model: str | None,
+) -> tuple[list[float], float] | None:
+    if throttle_mod._deadline_exceeded(deadline):
+        _safe_warning(
+            "retriever.latency_budget.hit",
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "stage": "embedding",
+                "response_id": response_id,
+            },
+        )
+        return None
+
+    try:
+        query_vector, t_emb_ms = embeddings_mod._materialize_query_vector(
+            params,
+            embeddings_client,
+            embedding_model=embedding_model,
+        )
+    except RetrieverError as exc:
+        _apply_error_context(exc, code=ERR_EMBEDDING_FAILED, slug=params.slug, scope=params.scope)
+        _safe_warning(
+            "retriever.query.embed_failed",
+            extra={
+                **common_extra,
+                "code": ERR_EMBEDDING_FAILED,
+                "error": repr(getattr(exc, "__cause__", None) or exc),
+            },
+        )
+        return None
+
+    if query_vector is None:
+        _safe_warning(
+            "retriever.query.invalid",
+            extra={**common_extra, "reason": "empty_embedding", "code": ERR_EMBEDDING_INVALID},
+        )
+        return None
+
+    _safe_info(
+        "retriever.query.embedded",
+        extra={
+            "slug": params.slug,
+            "scope": params.scope,
+            "response_id": response_id,
+            "ms": float(t_emb_ms),
+            "embedding_dims": len(query_vector),
+            "embedding_model": _resolve_embedding_model(embeddings_client, embedding_model),
+        },
+    )
+
+    if throttle_mod._deadline_exceeded(deadline):
+        _safe_warning(
+            "retriever.latency_budget.hit",
+            extra={"slug": params.slug, "scope": params.scope, "stage": "embedding", "response_id": response_id},
+        )
+        return None
+    return query_vector, t_emb_ms
+
+
+def _fetch_candidates_or_soft_fail(
+    params: QueryParams,
+    *,
+    deadline: float | None,
+    common_extra: Mapping[str, Any],
+    response_id: str | None,
+) -> tuple[list[dict[str, Any]], float] | None:
+    if throttle_mod._deadline_exceeded(deadline):
+        _safe_warning(
+            "retriever.latency_budget.hit",
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "stage": "fetch_candidates",
+                "response_id": response_id,
+            },
+        )
+        return None
+
+    candidates, t_fetch_ms = _load_candidates(params)
+    fetch_budget_hit = throttle_mod._deadline_exceeded(deadline)
+
+    _safe_info(
+        "retriever.candidates.fetched",
+        extra={
+            **common_extra,
+            "candidates_loaded": int(len(candidates)),
+            "ms": float(t_fetch_ms),
+            "budget_hit": bool(fetch_budget_hit),
+        },
+    )
+
+    if throttle_mod._deadline_exceeded(deadline):
+        _safe_warning(
+            "retriever.latency_budget.hit",
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "stage": "fetch_candidates",
+                "response_id": response_id,
+            },
+        )
+        return None
+    return candidates, t_fetch_ms
+
+
+def _rank_or_soft_fail(
+    query_vector: list[float],
+    candidates: list[dict[str, Any]],
+    params: QueryParams,
+    *,
+    deadline: float | None,
+    response_id: str | None,
+) -> tuple[list[SearchResult], dict[str, Any]] | None:
+    (
+        scored_items,
+        candidates_count,
+        coerce_stats,
+        t_score_sort_ms,
+        evaluated_count,
+        rank_budget_hit,
+    ) = _rank_candidates(
+        query_vector,
+        candidates,
+        params.k,
+        deadline=deadline,
+        abort_if_deadline=True,
+    )
+
+    budget_hit = rank_budget_hit
+    if budget_hit:
+        _safe_warning(
+            "retriever.latency_budget.hit",
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "stage": "ranking",
+                "response_id": response_id,
+            },
+        )
+        return None
+    return scored_items, {
+        "candidates_count": candidates_count,
+        "evaluated_count": evaluated_count,
+        "coerce_stats": coerce_stats,
+        "t_score_sort_ms": t_score_sort_ms,
+        "budget_hit": budget_hit,
+    }
+
+
+def _emit_post_metrics_and_manifest(
+    params: QueryParams,
+    scored_items: list[SearchResult],
+    *,
+    response_id: str | None,
+    embeddings_client: EmbeddingsClient,
+    embedding_model: str | None,
+    explain_base_dir: Path | None,
+    throttle_cfg: ThrottleSettings | None,
+    candidates_count: int,
+    evaluated_count: int,
+    coerce_stats: Mapping[str, int],
+    t_emb_ms: float,
+    t_fetch_ms: float,
+    t_score_sort_ms: float,
+    total_ms: float,
+    budget_hit: bool,
+) -> None:
+    ranking_mod._log_retriever_metrics(
+        params=params,
+        total_ms=total_ms,
+        t_emb_ms=t_emb_ms,
+        t_fetch_ms=t_fetch_ms,
+        t_score_sort_ms=t_score_sort_ms,
+        candidates_count=candidates_count,
+        evaluated_count=evaluated_count,
+        coerce_stats=coerce_stats,
+        response_id=response_id,
+    )
+
+    evidence_ids = manifest_mod._build_evidence_ids(scored_items)
+    manifest_mod._log_evidence_selected(
+        params=params,
+        scored_items=scored_items,
+        evidence_ids=evidence_ids,
+        response_id=response_id,
+        budget_hit=budget_hit,
+    )
+    manifest_mod._write_manifest_if_configured(
+        params=params,
+        scored_items=scored_items,
+        response_id=response_id,
+        embeddings_client=embeddings_client,
+        embedding_model=embedding_model,
+        explain_base_dir=explain_base_dir,
+        throttle_cfg=throttle_cfg,
+        candidates_count=candidates_count,
+        evaluated_count=evaluated_count,
+        t_emb_ms=t_emb_ms,
+        t_fetch_ms=t_fetch_ms,
+        t_score_sort_ms=t_score_sort_ms,
+        total_ms=total_ms,
+        budget_hit=budget_hit,
+        evidence_ids=evidence_ids,
+    )
+
+    if throttle_cfg:
+        _safe_info(
+            "retriever.throttle.metrics",
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "throttle": {
+                    "latency_budget_ms": int(throttle_cfg.latency_budget_ms),
+                    "parallelism": int(throttle_cfg.parallelism),
+                    "sleep_ms_between_calls": int(throttle_cfg.sleep_ms_between_calls),
+                    "budget_hit": bool(budget_hit),
+                    "evaluated": int(evaluated_count),
+                },
+            },
+        )
+
+
 def search(
     params: QueryParams,
     embeddings_client: EmbeddingsClient,
@@ -224,45 +474,39 @@ def search(
     """Esegue una ricerca vettoriale sui chunk del workspace indicato."""
     throttle_cfg = throttle_mod._normalize_throttle_settings(throttle)
     deadline = throttle_mod._deadline_from_settings(throttle_cfg)
+    throttle_key_eff = throttle_key or params.slug or "retriever"
     try:
         validation_mod._validate_params_logged(params)
     except RetrieverError as exc:
         _apply_error_context(exc, code="retriever_invalid_params", slug=params.slug, scope=params.scope)
         raise
 
-    if throttle_mod._deadline_exceeded(deadline):
-        _safe_warning(
-            "retriever.throttle.deadline",
-            extra={
-                "slug": params.slug,
-                "scope": params.scope,
-                "stage": "preflight",
-                "response_id": response_id,
-            },
-        )
-        return []
-
-    throttle_ctx = (
-        _throttle_guard(throttle_key or params.slug or "retriever", throttle_cfg, deadline=deadline)
-        if throttle_cfg
-        else nullcontext()
+    common_extra = {
+        "slug": params.slug,
+        "scope": params.scope,
+        "candidate_limit": int(params.candidate_limit),
+        "response_id": response_id,
+    }
+    preflight_result = _preflight_soft_fails(
+        params,
+        deadline=deadline,
+        common_extra=common_extra,
+        response_id=response_id,
+        check_deadline=True,
+        check_input=False,
     )
+    if preflight_result is not None:
+        return preflight_result
 
-    _safe_info(
-        "retriever.query.started",
-        extra={
-            "slug": params.slug,
-            "scope": params.scope,
-            "response_id": response_id,
-            "k": int(params.k),
-            "candidate_limit": int(params.candidate_limit),
-            "latency_budget_ms": int(throttle_cfg.latency_budget_ms) if throttle_cfg else None,
-            "throttle_key": throttle_key or params.slug or "retriever",
-            "query_len": len(params.query or ""),
-            "embedding_model": embedding_model
-            or getattr(embeddings_client, "model", None)
-            or getattr(embeddings_client, "embedding_model", None),
-        },
+    throttle_ctx = _throttle_guard(throttle_key_eff, throttle_cfg, deadline=deadline) if throttle_cfg else nullcontext()
+
+    _log_query_started(
+        params,
+        embeddings_client,
+        throttle_cfg,
+        throttle_key_eff,
+        response_id,
+        embedding_model,
     )
 
     with throttle_ctx:
@@ -271,210 +515,70 @@ def search(
         if throttle_check is not None:
             throttle_check(params)
 
-        common_extra = {
-            "slug": params.slug,
-            "scope": params.scope,
-            "candidate_limit": int(params.candidate_limit),
-            "response_id": response_id,
-        }
-
-        # Soft-fail per input non utili
-        if params.k == 0:
-            _safe_info("retriever.query.skipped", extra={**common_extra, "reason": "k_is_zero"})
-            return []
-
-        if not params.query.strip():
-            _safe_warning("retriever.query.invalid", extra={**common_extra, "reason": "empty_query"})
-            return []
+        preflight_result = _preflight_soft_fails(
+            params,
+            deadline=deadline,
+            common_extra=common_extra,
+            response_id=response_id,
+            check_deadline=False,
+            check_input=True,
+        )
+        if preflight_result is not None:
+            return preflight_result
 
         t_total_start = time.perf_counter()
 
-        # 1) Embedding della query
-        if throttle_mod._deadline_exceeded(deadline):
-            _safe_warning(
-                "retriever.latency_budget.hit",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "stage": "embedding",
-                    "response_id": response_id,
-                },
-            )
-            return []
-
-        try:
-            query_vector, t_emb_ms = embeddings_mod._materialize_query_vector(
-                params,
-                embeddings_client,
-                embedding_model=embedding_model,
-            )
-        except RetrieverError as exc:
-            _apply_error_context(exc, code=ERR_EMBEDDING_FAILED, slug=params.slug, scope=params.scope)
-            _safe_warning(
-                "retriever.query.embed_failed",
-                extra={
-                    **common_extra,
-                    "code": ERR_EMBEDDING_FAILED,
-                    "error": repr(getattr(exc, "__cause__", None) or exc),
-                },
-            )
-            return []
-
-        if query_vector is None:
-            _safe_warning(
-                "retriever.query.invalid",
-                extra={**common_extra, "reason": "empty_embedding", "code": ERR_EMBEDDING_INVALID},
-            )
-            return []
-
-        _safe_info(
-            "retriever.query.embedded",
-            extra={
-                "slug": params.slug,
-                "scope": params.scope,
-                "response_id": response_id,
-                "ms": float(t_emb_ms),
-                "embedding_dims": len(query_vector),
-                "embedding_model": embedding_model
-                or getattr(embeddings_client, "model", None)
-                or getattr(embeddings_client, "embedding_model", None),
-            },
+        embed_result = _embed_query_or_soft_fail(
+            params,
+            embeddings_client,
+            deadline=deadline,
+            common_extra=common_extra,
+            response_id=response_id,
+            embedding_model=embedding_model,
         )
-
-        if throttle_mod._deadline_exceeded(deadline):
-            _safe_warning(
-                "retriever.latency_budget.hit",
-                extra={"slug": params.slug, "scope": params.scope, "stage": "embedding", "response_id": response_id},
-            )
+        if embed_result is None:
             return []
+        query_vector, t_emb_ms = embed_result
 
-        # 2) Caricamento candidati dal DB
-        if throttle_mod._deadline_exceeded(deadline):
-            _safe_warning(
-                "retriever.latency_budget.hit",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "stage": "fetch_candidates",
-                    "response_id": response_id,
-                },
-            )
-            return []
-
-        candidates, t_fetch_ms = _load_candidates(params)
-        fetch_budget_hit = throttle_mod._deadline_exceeded(deadline)
-
-        _safe_info(
-            "retriever.candidates.fetched",
-            extra={
-                "slug": params.slug,
-                "scope": params.scope,
-                "response_id": response_id,
-                "candidates_loaded": int(len(candidates)),
-                "candidate_limit": int(params.candidate_limit),
-                "ms": float(t_fetch_ms),
-                "budget_hit": bool(fetch_budget_hit),
-            },
+        fetch_result = _fetch_candidates_or_soft_fail(
+            params,
+            deadline=deadline,
+            common_extra=common_extra,
+            response_id=response_id,
         )
-
-        if throttle_mod._deadline_exceeded(deadline):
-            _safe_warning(
-                "retriever.latency_budget.hit",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "stage": "fetch_candidates",
-                    "response_id": response_id,
-                },
-            )
+        if fetch_result is None:
             return []
+        candidates, t_fetch_ms = fetch_result
 
-        # 3) Scoring + ranking deterministico
-        (
-            scored_items,
-            candidates_count,
-            coerce_stats,
-            t_score_sort_ms,
-            evaluated_count,
-            rank_budget_hit,
-        ) = _rank_candidates(
+        rank_result = _rank_or_soft_fail(
             query_vector,
             candidates,
-            params.k,
+            params,
             deadline=deadline,
-            abort_if_deadline=True,
+            response_id=response_id,
         )
-
-        budget_hit = rank_budget_hit
-
-        # Policy: budget hit => evento + soft-fail deterministico
-        if budget_hit:
-            _safe_warning(
-                "retriever.latency_budget.hit",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "stage": "ranking",
-                    "response_id": response_id,
-                },
-            )
+        if rank_result is None:
             return []
+        scored_items, rank_meta = rank_result
 
         total_ms = (time.perf_counter() - t_total_start) * 1000.0
-        ranking_mod._log_retriever_metrics(
-            params=params,
-            total_ms=total_ms,
-            t_emb_ms=t_emb_ms,
-            t_fetch_ms=t_fetch_ms,
-            t_score_sort_ms=t_score_sort_ms,
-            candidates_count=candidates_count,
-            evaluated_count=evaluated_count,
-            coerce_stats=coerce_stats,
-            response_id=response_id,
-        )
-
-        evidence_ids = manifest_mod._build_evidence_ids(scored_items)
-        manifest_mod._log_evidence_selected(
-            params=params,
-            scored_items=scored_items,
-            evidence_ids=evidence_ids,
-            response_id=response_id,
-            budget_hit=budget_hit,
-        )
-        manifest_mod._write_manifest_if_configured(
-            params=params,
-            scored_items=scored_items,
+        _emit_post_metrics_and_manifest(
+            params,
+            scored_items,
             response_id=response_id,
             embeddings_client=embeddings_client,
             embedding_model=embedding_model,
             explain_base_dir=explain_base_dir,
             throttle_cfg=throttle_cfg,
-            candidates_count=candidates_count,
-            evaluated_count=evaluated_count,
-            t_emb_ms=t_emb_ms,
-            t_fetch_ms=t_fetch_ms,
-            t_score_sort_ms=t_score_sort_ms,
-            total_ms=total_ms,
-            budget_hit=budget_hit,
-            evidence_ids=evidence_ids,
+            candidates_count=int(rank_meta["candidates_count"]),
+            evaluated_count=int(rank_meta["evaluated_count"]),
+            coerce_stats=rank_meta["coerce_stats"],
+            t_emb_ms=float(t_emb_ms),
+            t_fetch_ms=float(t_fetch_ms),
+            t_score_sort_ms=float(rank_meta["t_score_sort_ms"]),
+            total_ms=float(total_ms),
+            budget_hit=bool(rank_meta["budget_hit"]),
         )
-
-        if throttle_cfg:
-            _safe_info(
-                "retriever.throttle.metrics",
-                extra={
-                    "slug": params.slug,
-                    "scope": params.scope,
-                    "throttle": {
-                        "latency_budget_ms": int(throttle_cfg.latency_budget_ms),
-                        "parallelism": int(throttle_cfg.parallelism),
-                        "sleep_ms_between_calls": int(throttle_cfg.sleep_ms_between_calls),
-                        "budget_hit": bool(budget_hit),
-                        "evaluated": int(evaluated_count),
-                    },
-                },
-            )
-
         return scored_items
 
 

@@ -169,6 +169,42 @@ def _deny_rationale(exc: BaseException) -> str:
     return "deny_unexpected_error"
 
 
+def _build_gate_decision_record(
+    *,
+    run_id: str,
+    slug: str,
+    evidence_refs: list[str],
+    verdict: str,
+    reason_code: str,
+    stop_code: str | None = None,
+    decided_at: str | None = None,
+    gate_name: str = "tag_onboarding",
+    from_state: str = decision_ledger.STATE_SEMANTIC_INGEST,
+    to_state: str = decision_ledger.STATE_SEMANTIC_INGEST,
+    actor: str = "cli.tag_onboarding",
+    subject: str = "tag_onboarding",
+) -> decision_ledger.NormativeDecisionRecord:
+    return decision_ledger.NormativeDecisionRecord(
+        decision_id=uuid.uuid4().hex,
+        run_id=run_id,
+        slug=slug,
+        gate_name=gate_name,
+        from_state=from_state,
+        to_state=to_state,
+        verdict=verdict,
+        subject=subject,
+        decided_at=decided_at or _utc_now_iso(),
+        actor=actor,
+        evidence_refs=evidence_refs,
+        stop_code=stop_code,
+        reason_code=reason_code,
+    )
+
+
+def _record_gate_decision(conn: Any, record: decision_ledger.NormativeDecisionRecord) -> None:
+    decision_ledger.record_normative_decision(conn, record)
+
+
 def _resolve_modes(*, dummy_mode: bool, strict_mode: bool) -> tuple[str, str, str]:
     requested_mode = "dummy" if dummy_mode else "standard"
     if dummy_mode and strict_mode:
@@ -706,20 +742,13 @@ def tag_onboarding_main(
             strict_mode=False,
             effective_mode="forbidden",
         )
-        decision_ledger.record_normative_decision(
+        _record_gate_decision(
             ledger_conn,
-            decision_ledger.NormativeDecisionRecord(
-                decision_id=uuid.uuid4().hex,
+            _build_gate_decision_record(
                 run_id=run_id,
                 slug=slug,
-                gate_name="tag_onboarding",
-                from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                to_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                verdict=decision_ledger.NORMATIVE_BLOCK,
-                subject="tag_onboarding",
-                decided_at=_utc_now_iso(),
-                actor="cli.tag_onboarding",
                 evidence_refs=evidence_refs,
+                verdict=decision_ledger.NORMATIVE_BLOCK,
                 stop_code=decision_ledger.STOP_CODE_CAPABILITY_DUMMY_FORBIDDEN,
                 reason_code="deny_dummy_capability_forbidden",
             ),
@@ -773,40 +802,26 @@ def tag_onboarding_main(
 
         current_stage = "checkpoint"
         if not _should_proceed(non_interactive=non_interactive, proceed_after_csv=proceed_after_csv, logger=logger):
-            decision_ledger.record_normative_decision(
+            _record_gate_decision(
                 ledger_conn,
-                decision_ledger.NormativeDecisionRecord(
-                    decision_id=uuid.uuid4().hex,
+                _build_gate_decision_record(
                     run_id=run_id,
                     slug=slug,
-                    gate_name="tag_onboarding",
-                    from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                    to_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                    verdict=decision_ledger.NORMATIVE_PASS,
-                    subject="tag_onboarding",
-                    decided_at=_utc_now_iso(),
-                    actor="cli.tag_onboarding",
                     evidence_refs=evidence_refs,
+                    verdict=decision_ledger.NORMATIVE_PASS,
                     reason_code="ok",
                 ),
             )
             return
 
         if effective_mode != "dummy":
-            decision_ledger.record_normative_decision(
+            _record_gate_decision(
                 ledger_conn,
-                decision_ledger.NormativeDecisionRecord(
-                    decision_id=uuid.uuid4().hex,
+                _build_gate_decision_record(
                     run_id=run_id,
                     slug=slug,
-                    gate_name="tag_onboarding",
-                    from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                    to_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                    verdict=decision_ledger.NORMATIVE_PASS,
-                    subject="tag_onboarding",
-                    decided_at=_utc_now_iso(),
-                    actor="cli.tag_onboarding",
                     evidence_refs=evidence_refs,
+                    verdict=decision_ledger.NORMATIVE_PASS,
                     reason_code=effective_rationale,
                 ),
             )
@@ -823,20 +838,13 @@ def tag_onboarding_main(
                 "proceed_after_csv": proceed_after_csv_flag,
             },
         )
-        decision_ledger.record_normative_decision(
+        _record_gate_decision(
             ledger_conn,
-            decision_ledger.NormativeDecisionRecord(
-                decision_id=uuid.uuid4().hex,
+            _build_gate_decision_record(
                 run_id=run_id,
                 slug=slug,
-                gate_name="tag_onboarding",
-                from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                to_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                verdict=decision_ledger.NORMATIVE_PASS,
-                subject="tag_onboarding",
-                decided_at=_utc_now_iso(),
-                actor="cli.tag_onboarding",
                 evidence_refs=evidence_refs,
+                verdict=decision_ledger.NORMATIVE_PASS,
                 reason_code="ok_dummy_mode",
             ),
         )
@@ -846,20 +854,13 @@ def tag_onboarding_main(
         original_error = _summarize_error(exc)
         try:
             verdict, stop_code = _normative_verdict_for_error(exc)
-            decision_ledger.record_normative_decision(
+            _record_gate_decision(
                 ledger_conn,
-                decision_ledger.NormativeDecisionRecord(
-                    decision_id=uuid.uuid4().hex,
+                _build_gate_decision_record(
                     run_id=run_id,
                     slug=slug,
-                    gate_name="tag_onboarding",
-                    from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                    to_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                    verdict=verdict,
-                    subject="tag_onboarding",
-                    decided_at=_utc_now_iso(),
-                    actor="cli.tag_onboarding",
                     evidence_refs=_merge_evidence_refs(evidence_refs, exc),
+                    verdict=verdict,
                     stop_code=stop_code,
                     reason_code=_deny_rationale(exc),
                 ),

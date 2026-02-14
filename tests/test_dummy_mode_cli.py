@@ -110,6 +110,30 @@ def test_strict_by_default_does_not_enable_dummy_mode(monkeypatch: pytest.Monkey
     assert rationale == "checkpoint_proceeded_no_stub"
 
 
+def test_build_gate_decision_record_populates_optional_stop_code() -> None:
+    from timmy_kb.cli import tag_onboarding as mod
+
+    base = dict(
+        run_id="rid",
+        slug="acme",
+        evidence_refs=["slug:acme"],
+        verdict="PASS",
+        reason_code="ok",
+        decided_at="2026-01-01T00:00:00Z",
+    )
+    rec_without = mod._build_gate_decision_record(**base)
+    rec_with = mod._build_gate_decision_record(**base, stop_code="SAMPLE_STOP")
+
+    assert rec_without.stop_code is None
+    assert rec_with.stop_code == "SAMPLE_STOP"
+    assert rec_with.gate_name == "tag_onboarding"
+    assert rec_with.actor == "cli.tag_onboarding"
+    assert rec_with.subject == "tag_onboarding"
+    assert rec_with.from_state == mod.decision_ledger.STATE_SEMANTIC_INGEST
+    assert rec_with.to_state == mod.decision_ledger.STATE_SEMANTIC_INGEST
+    assert rec_with.decision_id
+
+
 def test_strict_mode_blocks_dummy_path_even_when_capability_enabled(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

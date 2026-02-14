@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import time
+from contextlib import nullcontext
 
 import pytest
 
@@ -40,3 +41,23 @@ def test_throttle_guard_logs_deadline(monkeypatch, caplog: pytest.LogCaptureFixt
         pass
 
     assert any(rec.getMessage() == "retriever.throttle.deadline" for rec in caplog.records)
+
+
+def test_throttle_guard_registry_rebind_is_idempotent(monkeypatch) -> None:
+    old_registry = {}
+    captured: list[object] = []
+
+    def _fake_guard(_key, _settings, *, deadline=None):  # noqa: ARG001
+        captured.append(retriever.throttle_mod._THROTTLE_REGISTRY)
+        return nullcontext()
+
+    monkeypatch.setattr(retriever.throttle_mod, "_THROTTLE_REGISTRY", old_registry)
+    monkeypatch.setattr(retriever.throttle_mod, "_throttle_guard", _fake_guard)
+
+    with retriever._throttle_guard("k", None, deadline=None):  # noqa: SLF001
+        pass
+    with retriever._throttle_guard("k", None, deadline=None):  # noqa: SLF001
+        pass
+
+    assert captured == [retriever._THROTTLE_REGISTRY, retriever._THROTTLE_REGISTRY]  # noqa: SLF001
+    assert retriever.throttle_mod._THROTTLE_REGISTRY is retriever._THROTTLE_REGISTRY  # noqa: SLF001

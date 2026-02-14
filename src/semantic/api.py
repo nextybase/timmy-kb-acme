@@ -237,6 +237,73 @@ def _log_frontmatter_cache_failure(
         )
 
 
+def _cleanup_frontmatter_cache(logger: logging.Logger, context: ClientContextType, *, slug: str) -> None:
+    clear_frontmatter_cache = None
+    log_frontmatter_cache_stats = None
+    try:
+        from pipeline.content_utils import clear_frontmatter_cache, log_frontmatter_cache_stats
+    except Exception as exc:
+        _log_frontmatter_cache_failure(
+            logger,
+            slug=slug,
+            context=context,
+            operation="import",
+            exc=exc,
+        )
+        # Non interrompere il return della pipeline; log-only.
+        pass
+
+    if callable(log_frontmatter_cache_stats):
+        try:
+            log_frontmatter_cache_stats(
+                logger,
+                "semantic.frontmatter_cache.stats_before_clear",
+                slug=slug,
+            )
+        except Exception as exc:
+            logger.warning(
+                "semantic.frontmatter_cache.stats_log_failed",
+                extra={
+                    "slug": slug,
+                    "service_only": True,
+                    "service": "semantic.frontmatter_cache",
+                    "operation": "stats",
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "run_id": getattr(context, "run_id", None),
+                },
+            )
+
+    if callable(clear_frontmatter_cache):
+        try:
+            clear_frontmatter_cache()
+        except Exception as exc:
+            _log_frontmatter_cache_failure(
+                logger,
+                slug=slug,
+                context=context,
+                operation="clear",
+                exc=exc,
+            )
+    if callable(log_frontmatter_cache_stats):
+        try:
+            log_frontmatter_cache_stats(
+                logger,
+                "semantic.frontmatter_cache.stats_after_clear",
+                slug=slug,
+            )
+        except Exception as exc:
+            logger.warning(
+                "semantic.frontmatter_cache.stats_log_failed",
+                extra={
+                    "slug": slug,
+                    "service_only": True,
+                    "service": "semantic.frontmatter_cache",
+                    "error": str(exc),
+                },
+            )
+
+
 def _run_build_workflow(
     context: ClientContextType,
     logger: logging.Logger,
@@ -300,65 +367,7 @@ def _run_build_workflow(
         _wrap("write_summary_and_readme", lambda: summary_impl(context, logger, slug=slug))
         return repo_root_dir, mds, touched
     finally:
-        try:
-            from pipeline.content_utils import clear_frontmatter_cache, log_frontmatter_cache_stats
-        except Exception as exc:
-            _log_frontmatter_cache_failure(
-                logger,
-                slug=slug,
-                context=context,
-                operation="import",
-                exc=exc,
-            )
-            # Non interrompere il return della pipeline; log-only.
-            pass
-
-        try:
-            log_frontmatter_cache_stats(
-                logger,
-                "semantic.frontmatter_cache.stats_before_clear",
-                slug=slug,
-            )
-        except Exception as exc:
-            logger.warning(
-                "semantic.frontmatter_cache.stats_log_failed",
-                extra={
-                    "slug": slug,
-                    "service_only": True,
-                    "service": "semantic.frontmatter_cache",
-                    "operation": "stats",
-                    "error": str(exc),
-                    "error_type": type(exc).__name__,
-                    "run_id": getattr(context, "run_id", None),
-                },
-            )
-
-        try:
-            clear_frontmatter_cache()
-        except Exception as exc:
-            _log_frontmatter_cache_failure(
-                logger,
-                slug=slug,
-                context=context,
-                operation="clear",
-                exc=exc,
-            )
-        try:
-            log_frontmatter_cache_stats(
-                logger,
-                "semantic.frontmatter_cache.stats_after_clear",
-                slug=slug,
-            )
-        except Exception as exc:
-            logger.warning(
-                "semantic.frontmatter_cache.stats_log_failed",
-                extra={
-                    "slug": slug,
-                    "service_only": True,
-                    "service": "semantic.frontmatter_cache",
-                    "error": str(exc),
-                },
-            )
+        _cleanup_frontmatter_cache(logger, context, slug=slug)
 
 
 def run_semantic_pipeline(
@@ -394,13 +403,14 @@ def run_semantic_pipeline_for_slug(
     *,
     context_factory: Callable[[str], "ClientContextType"],
     logger: logging.Logger | None = None,
-    gating: Callable[[str], tuple[str, bool, Path | None]] | None = None,
+    gating: Callable[[str], None] | None = None,
     stage_wrapper: StageWrapper | None = None,
 ) -> BuildWorkflowResult:
     """
     Esegue la pipeline semantica standard per uno slug.
 
-    - Facoltativamente applica un gating headless (es. `_require_semantic_gating`).
+    - Facoltativamente applica un gating headless (es. `_require_semantic_gating`),
+      che deve bloccare il flusso sollevando eccezione in caso di deny (fail-fast).
     - Costruisce il contesto cliente tramite `context_factory(slug)`.
     - Delega a `run_semantic_pipeline(context, logger, slug=slug, stage_wrapper=...)`.
 
