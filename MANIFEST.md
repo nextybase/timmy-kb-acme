@@ -202,6 +202,7 @@ Timmy-KB distingue nettamente i domini di tolleranza all'errore:
 
 Runtime behavior is governed by `instructions/10_runtime_strict_contract_beta.md`.
 Questa asimmetria protegge l'envelope epistemico: l'incertezza del dialogo agentico resta osservabile e governata, mentre l'operatività pretende fallimenti espliciti e telemetria (log/eventi/exit code) che rendano verificabili cause e impatti.
+This repository enforces the Beta 1.0 deterministic contract. See `instructions/14_beta_contract_checklist.md`.
 
 ---
 

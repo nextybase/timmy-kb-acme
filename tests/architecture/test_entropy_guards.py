@@ -195,3 +195,28 @@ def test_entropy_guards() -> None:
         for it in issues:
             msg_lines.append(f"- {it.path}:{it.lineno}:{it.col} [{it.rule}] {it.detail}")
         raise AssertionError("\n".join(msg_lines))
+
+
+def test_no_entropy_patterns_in_core() -> None:
+    """Guardrail Beta: pattern vietati nel CORE (src/semantic + src/pipeline)."""
+    forbidden = [
+        "getattr(layout",
+        "inspect.signature",
+        "skipped=True",
+        "mapping_all = {}",
+    ]
+    core_roots = (REPO_ROOT / "src" / "semantic", REPO_ROOT / "src" / "pipeline")
+    hits: list[str] = []
+
+    for root in core_roots:
+        for path in _iter_py_files(root):
+            rel = _rel(path)
+            if rel in EXCLUDED_FILES:
+                continue
+            text = _read_text(path)
+            for token in forbidden:
+                if token in text:
+                    hits.append(f"{rel}: contains forbidden pattern '{token}'")
+
+    if hits:
+        raise AssertionError("Forbidden entropy patterns found in CORE:\n" + "\n".join(sorted(hits)))

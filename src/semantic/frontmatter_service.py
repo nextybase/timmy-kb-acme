@@ -303,11 +303,10 @@ def enrich_frontmatter(
         cfg = load_semantic_config(context)
         mapping_all = cfg.mapping if isinstance(cfg.mapping, dict) else {}
     except Exception as exc:
-        config_path = getattr(layout, "config_path", repo_root_dir / "config" / "config.yaml")
         raise ConfigError(
             f"Semantic config load failed for slug={slug}.",
             slug=slug,
-            file_path=config_path,
+            file_path=layout.config_path,
         ) from exc
     vision_entities: list[str] = []
     entities_raw = mapping_all.get("entities")

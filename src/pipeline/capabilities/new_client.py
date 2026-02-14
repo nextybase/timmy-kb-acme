@@ -98,7 +98,7 @@ def _vision_pdf_path(layout: WorkspaceLayout) -> Path:
     if candidate is None:
         raise ConfigError(
             "WorkspaceLayout missing vision_pdf path: expected config/VisionStatement.pdf",
-            slug=getattr(layout, "slug", None),
+            slug=layout.slug,
         )
     return ensure_within_and_resolve(layout.repo_root_dir, candidate)
 
