@@ -9,6 +9,7 @@ import pytest
 
 import semantic.api as sapi
 import timmy_kb.cli.ingest as ingest_mod
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from tests._helpers.workspace_paths import local_workspace_dir
 from timmy_kb.cli.ingest import ingest_path
@@ -38,7 +39,7 @@ def _prepare_workspace(base: Path, *, slug: str) -> SimpleNamespace:
     return SimpleNamespace(repo_root_dir=base, slug=slug)
 
 
-def test_embedding_error_is_logged_and_fall_back(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+def test_embedding_error_is_logged_and_hard_fail(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     base = local_workspace_dir(tmp_path / "output", "dummy")
     book = base / "book"
     db_path = base / "kb.sqlite"
@@ -55,10 +56,10 @@ def test_embedding_error_is_logged_and_fall_back(tmp_path: Path, caplog: pytest.
 
     caplog.set_level(logging.INFO, logger="tests.index.emb_error")
 
-    result = sapi.index_markdown_to_db(
-        ctx, logger, slug="dummy", scope="book", embeddings_client=_BoomEmb(), db_path=db_path
-    )
-    assert result == 0
+    with pytest.raises(ConfigError, match="Embedding computation failed for slug=dummy"):
+        sapi.index_markdown_to_db(
+            ctx, logger, slug="dummy", scope="book", embeddings_client=_BoomEmb(), db_path=db_path
+        )
 
     # Deve essere presente l'evento strutturato con dettaglio dell'errore
     events = [r for r in caplog.records if getattr(r, "event", r.getMessage()) == "semantic.index.embedding_error"]

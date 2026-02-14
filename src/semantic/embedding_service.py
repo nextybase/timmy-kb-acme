@@ -8,7 +8,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence
 
 from pipeline.content_utils import build_chunk_records_from_markdown_files
 from pipeline.embedding_utils import normalize_embeddings
@@ -152,9 +152,12 @@ def _compute_embeddings_for_markdown(
     embeddings_client: _EmbeddingsClient,
     logger: logging.Logger,
     slug: str,
-) -> Tuple[Optional[_EmbeddingResult], int]:
+) -> _EmbeddingResult:
     if not collected.contents:
-        return None, 0
+        raise ConfigError(
+            "Embedding computation failed: no markdown payloads to embed.",
+            slug=slug,
+        )
 
     try:
         vectors_raw = embeddings_client.embed_texts(collected.contents)
@@ -169,14 +172,22 @@ def _compute_embeddings_for_markdown(
                 "provider": getattr(embeddings_client, "__class__", type("x", (), {})).__name__,
             },
         )
-        return None, 0
+        raise ConfigError(
+            f"Embedding computation failed for slug={slug}.",
+            slug=slug,
+            file_path=(collected.rel_paths[0] if collected.rel_paths else None),
+        ) from exc
 
     vectors = normalize_embeddings(vectors_raw)
     vectors_empty = 0
 
     if len(vectors) == 0:
         logger.warning("semantic.index.no_embeddings", extra={"slug": slug, "count": 0})
-        return None, 0
+        raise ConfigError(
+            f"Embedding computation returned zero vectors for slug={slug}.",
+            slug=slug,
+            file_path=(collected.rel_paths[0] if collected.rel_paths else None),
+        )
 
     contents = list(collected.contents)
     rel_paths = list(collected.rel_paths)
@@ -239,7 +250,11 @@ def _compute_embeddings_for_markdown(
             extra={"event": "semantic.index.all_embeddings_empty", "slug": slug, "count": len(vectors)},
         )
         vectors_empty += max(0, dropped_empty)
-        return None, vectors_empty
+        raise ConfigError(
+            f"Embedding computation produced only empty vectors for slug={slug}.",
+            slug=slug,
+            file_path=(collected.rel_paths[0] if collected.rel_paths else None),
+        )
 
     if dropped_empty > 0:
         logger.info(
@@ -254,15 +269,12 @@ def _compute_embeddings_for_markdown(
         )
         vectors_empty += max(0, dropped_empty)
 
-    return (
-        _EmbeddingResult(
-            contents=filtered_contents,
-            rel_paths=filtered_paths,
-            frontmatters=filtered_frontmatters,
-            embeddings=filtered_vectors,
-            vectors_empty=vectors_empty,
-        ),
-        vectors_empty,
+    return _EmbeddingResult(
+        contents=filtered_contents,
+        rel_paths=filtered_paths,
+        frontmatters=filtered_frontmatters,
+        embeddings=filtered_vectors,
+        vectors_empty=vectors_empty,
     )
 
 
@@ -548,30 +560,12 @@ def index_markdown_to_db(
             "semantic.index.embed.start",
             extra={"slug": slug, "count": len(collected.contents)},
         )
-        embeddings_result, vectors_empty = _compute_embeddings_for_markdown(
+        embeddings_result = _compute_embeddings_for_markdown(
             collected,
             embeddings_client,
             logger,
             slug,
         )
-        if embeddings_result is None:
-            _log_index_skips(
-                logger,
-                slug,
-                skipped_io=collected.skipped_io,
-                skipped_empty=collected.skipped_empty,
-                vectors_empty=vectors_empty,
-            )
-            try:
-                phase.set_artifacts(0)
-            except Exception:
-                phase.set_artifacts(None)
-            duration_ms = int((time.perf_counter() - start_ts) * 1000)
-            logger.info(
-                "semantic.index.done",
-                extra={"slug": slug, "ms": duration_ms, "artifacts": {"inserted": 0, "files": total_files}},
-            )
-            return 0
 
         logger.info(
             "semantic.index.embed.done",

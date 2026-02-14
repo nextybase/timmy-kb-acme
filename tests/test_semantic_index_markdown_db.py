@@ -8,6 +8,7 @@ from typing import Any, Iterable, cast
 import numpy as np
 
 import semantic.embedding_service as emb_service
+from pipeline.exceptions import ConfigError
 from semantic.api import index_markdown_to_db
 from storage.kb_db import fetch_candidates
 from tests._helpers.workspace_paths import local_workspace_dir, local_workspace_name
@@ -129,20 +130,22 @@ def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
     )
     assert ok == 1
 
-    # Vettori di lunghezza zero -> warning e ritorno 0
+    # Vettori di lunghezza zero -> hard-fail (niente fallback a 0)
     class EmptyVecEmb:
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
             return [[] for _ in texts]
 
-    ret = index_markdown_to_db(
-        cast(Any, _ctx(base)),
-        logging.getLogger("test"),
-        slug="dummy",
-        scope="book",
-        embeddings_client=EmptyVecEmb(),
-        db_path=semantic_dir / "db_empty.sqlite",
-    )
-    assert ret == 0
+    import pytest
+
+    with pytest.raises(ConfigError, match="empty vectors|zero vectors|Embedding computation"):
+        index_markdown_to_db(
+            cast(Any, _ctx(base)),
+            logging.getLogger("test"),
+            slug="dummy",
+            scope="book",
+            embeddings_client=EmptyVecEmb(),
+            db_path=semantic_dir / "db_empty.sqlite",
+        )
     # Verifica i log strutturati emessi quando gli embeddings risultano vuoti
     assert any(r.getMessage() == "semantic.index.first_embedding_empty" for r in caplog.records)
     assert any(r.getMessage() == "semantic.index.all_embeddings_empty" for r in caplog.records)
