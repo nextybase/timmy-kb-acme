@@ -20,8 +20,11 @@ if __name__ == "__main__":
     from pathlib import Path
 
     _repo_root = Path(__file__).resolve().parents[1]
+    _src_root = _repo_root / "src"
     if str(_repo_root) not in sys.path:
         sys.path.insert(0, str(_repo_root))
+    if str(_src_root) not in sys.path:
+        sys.path.append(str(_src_root))
 
 import argparse
 import importlib

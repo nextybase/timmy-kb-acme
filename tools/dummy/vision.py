@@ -63,6 +63,9 @@ class _Ctx:
                 f"Caricamento Settings fallito nel dummy workspace (config/config.yaml non valida?): {config_path}"
             ) from exc
 
+    def repo_root_dir_required(self) -> Path:
+        return Path(self.repo_root_dir)
+
 
 def _vision_worker(queue: mp.Queue, slug: str, base_dir: str, pdf_path: str, run_vision: Callable[..., Any]) -> None:
     """Esegue run_vision in un sottoprocesso e restituisce esito tramite queue."""
