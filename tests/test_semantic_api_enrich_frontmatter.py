@@ -31,7 +31,7 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "logs").mkdir(parents=True, exist_ok=True)
     _write(base / "book" / "README.md", "# KB\n")
     _write(base / "book" / "SUMMARY.md", "# Summary\n")
-    _write(base / "semantic" / "semantic_mapping.yaml", "{}")
+    _write(base / "semantic" / "semantic_mapping.yaml", "semantic_tagger: {}\n")
 
 
 def test_enrich_frontmatter_end_to_end(monkeypatch, tmp_path: Path) -> None:

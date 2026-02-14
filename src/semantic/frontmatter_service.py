@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, cast
 from pipeline.content_utils import generate_readme_markdown as _gen_readme
 from pipeline.content_utils import generate_summary_markdown as _gen_summary
 from pipeline.content_utils import validate_markdown_dir as _validate_md
-from pipeline.exceptions import ConfigError, ConversionError
+from pipeline.exceptions import ConfigError, ConversionError, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
 from pipeline.frontmatter_utils import parse_frontmatter as _shared_parse_frontmatter
@@ -302,8 +302,13 @@ def enrich_frontmatter(
     try:
         cfg = load_semantic_config(context)
         mapping_all = cfg.mapping if isinstance(cfg.mapping, dict) else {}
-    except Exception:
-        mapping_all = {}
+    except Exception as exc:
+        config_path = getattr(layout, "config_path", repo_root_dir / "config" / "config.yaml")
+        raise ConfigError(
+            f"Semantic config load failed for slug={slug}.",
+            slug=slug,
+            file_path=config_path,
+        ) from exc
     vision_entities: list[str] = []
     entities_raw = mapping_all.get("entities")
     if isinstance(entities_raw, list):
@@ -333,11 +338,11 @@ def enrich_frontmatter(
             try:
                 meta, body = _read_fm(book_dir, md, encoding="utf-8", use_cache=True)
             except OSError as exc:
-                logger.warning(
-                    "semantic.frontmatter.read_failed",
-                    extra={"slug": slug, "file_path": str(md), "error": str(exc)},
-                )
-                continue
+                raise PipelineError(
+                    f"Frontmatter read failed for slug={slug}.",
+                    slug=slug,
+                    file_path=md,
+                ) from exc
 
             raw_list = _as_list_str(meta.get("tags_raw"))
             canonical_from_raw = _canonicalize_tags(raw_list, inv)
@@ -358,17 +363,15 @@ def enrich_frontmatter(
             if not new_meta.get("relation_hints") and new_meta.get("entity"):
                 rel_hints: list[dict[str, str]] = []
                 for rel in relations_all:
-                    if not isinstance(rel, dict):
-                        continue
-                    src = str(rel.get("from", "")).strip()
-                    dst = str(rel.get("to", "")).strip()
-                    rtype = str(rel.get("type", "")).strip()
-                    if not (src and dst and rtype):
-                        continue
-                    if src == new_meta["entity"]:
-                        rel_hints.append({"type": rtype, "target": dst})
-                    elif dst == new_meta["entity"]:
-                        rel_hints.append({"type": rtype, "target": src})
+                    if isinstance(rel, dict):
+                        src = str(rel.get("from", "")).strip()
+                        dst = str(rel.get("to", "")).strip()
+                        rtype = str(rel.get("type", "")).strip()
+                        if src and dst and rtype:
+                            if src == new_meta["entity"]:
+                                rel_hints.append({"type": rtype, "target": dst})
+                            elif dst == new_meta["entity"]:
+                                rel_hints.append({"type": rtype, "target": src})
                 if rel_hints:
                     new_meta["relation_hints"] = rel_hints
             # Arricchimento additivo da doc_entities (se presenti e approvate)
@@ -389,29 +392,28 @@ def enrich_frontmatter(
                     slug=slug,
                     file_path=tags_db,
                 ) from exc
-            if meta == new_meta:
-                continue
-
-            fm = _dump_frontmatter(new_meta)
-            try:
-                ensure_within(book_dir, md)
-                safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
-                touched.append(md)
-                logger.info(
-                    "semantic.frontmatter.updated",
-                    extra={
-                        "slug": slug,
-                        "file_path": str(md),
-                        "tags": tags,
-                        "tags_raw": raw_list,
-                        "canonical_from_raw": canonical_from_raw,
-                    },
-                )
-            except OSError as exc:
-                logger.warning(
-                    "semantic.frontmatter.write_failed",
-                    extra={"slug": slug, "file_path": str(md), "error": str(exc)},
-                )
+            if meta != new_meta:
+                fm = _dump_frontmatter(new_meta)
+                try:
+                    ensure_within(book_dir, md)
+                    safe_write_text(md, fm + body, encoding="utf-8", atomic=True)
+                    touched.append(md)
+                    logger.info(
+                        "semantic.frontmatter.updated",
+                        extra={
+                            "slug": slug,
+                            "file_path": str(md),
+                            "tags": tags,
+                            "tags_raw": raw_list,
+                            "canonical_from_raw": canonical_from_raw,
+                        },
+                    )
+                except OSError as exc:
+                    raise PipelineError(
+                        f"Frontmatter write failed for slug={slug}.",
+                        slug=slug,
+                        file_path=md,
+                    ) from exc
         try:
             scope.set_artifacts(len(touched))
         except Exception:

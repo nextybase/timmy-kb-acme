@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 import pytest
+
 import semantic.api as sapi
 from pipeline.exceptions import ConfigError
 from tests.support.contexts import TestClientCtx
@@ -20,9 +21,7 @@ def _ctx(base: Path) -> TestClientCtx:
     )
 
 
-def test_index_markdown_to_db_hard_fails_on_embedding_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_index_markdown_to_db_hard_fails_on_embedding_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = tmp_path / "output" / "timmy-kb-dummy"
     ensure_minimal_workspace_layout(base, client_name="dummy")
     book_dir = base / "book"
