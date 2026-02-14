@@ -71,7 +71,7 @@ def test_new_client_strict_does_not_require_workspace_override(monkeypatch: pyte
     assert not Path(result["semantic_mapping_path"]).exists()
 
 
-def test_new_client_non_strict_bootstrap_works_without_env_flag(
+def test_new_client_requires_workspace_root_env_even_non_strict(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     slug = "beta"
@@ -99,22 +99,19 @@ def test_new_client_non_strict_bootstrap_works_without_env_flag(
             }
         }
 
-    result = create_new_client_workspace(
-        slug=slug,
-        client_name="Beta",
-        pdf_bytes=b"%PDF-1.4\n%fake\n",
-        repo_root=repo_root,
-        vision_model="dummy",
-        enable_drive=False,
-        ui_allow_local_only=True,
-        ensure_drive_minimal=None,
-        run_control_plane_tool=_fake_run_control_plane_tool,
-        progress=None,
-    )
-
-    config_path = Path(result["config_path"])
-    assert config_path.exists()
-    assert config_path.name == "config.yaml"
+    with pytest.raises(ConfigError, match="WORKSPACE_ROOT_DIR obbligatorio"):
+        create_new_client_workspace(
+            slug=slug,
+            client_name="Beta",
+            pdf_bytes=b"%PDF-1.4\n%fake\n",
+            repo_root=repo_root,
+            vision_model="dummy",
+            enable_drive=False,
+            ui_allow_local_only=True,
+            ensure_drive_minimal=None,
+            run_control_plane_tool=_fake_run_control_plane_tool,
+            progress=None,
+        )
 
 
 def test_scoped_workspace_env_restores_bootstrap_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
