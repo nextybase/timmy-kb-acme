@@ -10,6 +10,7 @@ import pytest
 
 from pipeline.capabilities.new_client import (
     _scoped_workspace_env,
+    _vision_pdf_path,
     create_new_client_workspace,
     run_vision_provision_for_client,
 )
@@ -207,3 +208,33 @@ def test_run_vision_provision_reloads_context_after_tool_call(monkeypatch: pytes
 
     assert calls["count"] == 2
     assert result["semantic_mapping_path"] == str(ws_root / "semantic" / "semantic_mapping.yaml")
+
+
+def test_vision_pdf_path_uses_layout_canonical_path(tmp_path: Path) -> None:
+    workspace = tmp_path / "timmy-kb-acme"
+    config_dir = workspace / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    layout = SimpleNamespace(
+        slug="acme",
+        repo_root_dir=workspace,
+        config_path=config_dir / "config.yaml",
+        vision_pdf=config_dir / "VisionStatement.pdf",
+    )
+
+    resolved = _vision_pdf_path(layout)
+    assert resolved == config_dir / "VisionStatement.pdf"
+
+
+def test_vision_pdf_path_fails_when_layout_has_no_vision_pdf(tmp_path: Path) -> None:
+    workspace = tmp_path / "timmy-kb-acme"
+    config_dir = workspace / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    layout = SimpleNamespace(
+        slug="acme",
+        repo_root_dir=workspace,
+        config_path=config_dir / "config.yaml",
+        vision_pdf=None,
+    )
+
+    with pytest.raises(ConfigError, match="missing vision_pdf path"):
+        _vision_pdf_path(layout)
