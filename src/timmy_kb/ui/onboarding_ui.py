@@ -8,7 +8,6 @@ Onboarding UI entrypoint (Beta 1.0).
 
 from __future__ import annotations
 
-import importlib
 import logging
 import os
 from pathlib import Path
@@ -157,35 +156,25 @@ def _ensure_streamlit_api(st_module: StreamlitLike) -> None:
         )
 
 
-def _hydrate_query_defaults() -> None:
+def _hydrate_query_defaults(
+    *,
+    st_module: StreamlitLike,
+    get_tab,
+    get_slug_from_qp,
+) -> None:
     """Hydrate defaults for query parameters without forzare ?tab=home nell'URL."""
     try:
-        route_state = importlib.import_module("ui.utils.route_state")
-        _get_slug = getattr(route_state, "get_slug_from_qp")
-        _get_tab = getattr(route_state, "get_tab")
-    except Exception as exc:
-        PREFLIGHT_LOG.error(
-            "ui.route_state.import_failed",
-            extra={"error": str(exc)},
-        )
-        from ui.utils.stubs import get_streamlit
-
-        st = get_streamlit()
-        st.error("Router UI non disponibile: impossibile inizializzare i parametri di query.")
-        st.stop()
-    try:
-        _ = _get_tab("home")
-        _ = _get_slug()
+        _ = get_tab("home")
+        _ = get_slug_from_qp()
     except Exception as exc:
         PREFLIGHT_LOG.error(
             "ui.route_state.hydration_failed",
             extra={"error": str(exc)},
         )
-        from ui.utils.stubs import get_streamlit
-
-        st = get_streamlit()
-        st.error("Errore nel routing UI: impossibile leggere i parametri di query.")
-        st.stop()
+        if st_module is None:
+            return
+        st_module.error("Errore nel routing UI: impossibile leggere i parametri di query.")
+        st_module.stop()
 
 
 def _truthy(v: object) -> bool:
@@ -385,9 +374,8 @@ def main() -> None:
     from ui.utils.stubs import get_streamlit as _get_streamlit  # noqa: E402
     from ui.utils.workspace import has_normalized_markdown  # noqa: E402
 
-    global clear_tab, get_slug_from_qp, get_tab, set_tab
     try:  # noqa: E402
-        from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab
+        from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab
     except Exception as exc:  # pragma: no cover
         logger.error(
             "ui.preflight.route_state_missing",
@@ -427,7 +415,11 @@ def main() -> None:
             },
         )
 
-    _hydrate_query_defaults()
+    _hydrate_query_defaults(
+        st_module=st,
+        get_tab=get_tab,
+        get_slug_from_qp=get_slug_from_qp,
+    )
 
     # Gestione del parametro di uscita (?exit=1)
     if _handle_exit_param(
