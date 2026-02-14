@@ -388,6 +388,73 @@ def main() -> int:
             env=env,
             trace_kind="onboarding",
         ):
+
+            def _record_failure(exc: Exception, code: int) -> None:
+                original_error = _summarize_error(exc)
+                if isinstance(exc, (ConfigError, PipelineError)):
+                    verdict, stop_code = _normative_verdict_for_error(exc)
+                    rationale = _deny_rationale(exc)
+                    evidence_refs = _merge_evidence_refs(
+                        _build_evidence_refs(
+                            layout=layout,
+                            requested=requested,
+                            effective=effective,
+                            outcome=rationale,
+                            exit_code=code,
+                        ),
+                        exc,
+                    )
+                else:
+                    verdict = decision_ledger.NORMATIVE_FAIL
+                    stop_code = decision_ledger.STOP_CODE_UNEXPECTED_ERROR
+                    rationale = "deny_unexpected_error"
+                    evidence_refs = _build_evidence_refs(
+                        layout=layout,
+                        requested=requested,
+                        effective=effective,
+                        outcome=rationale,
+                        exit_code=code,
+                    )
+                try:
+                    decision_ledger.record_normative_decision(
+                        ledger_conn,
+                        decision_ledger.NormativeDecisionRecord(
+                            decision_id=uuid.uuid4().hex,
+                            run_id=run_id,
+                            slug=slug,
+                            gate_name="semantic_onboarding",
+                            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                            to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                            verdict=verdict,
+                            subject="semantic_onboarding",
+                            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            actor="cli.semantic_onboarding",
+                            evidence_refs=evidence_refs,
+                            stop_code=stop_code,
+                            reason_code=rationale,
+                        ),
+                    )
+                except Exception as ledger_exc:
+                    ledger_error = _summarize_error(ledger_exc)
+                    logger.error(
+                        "cli.semantic_onboarding.ledger_write_failed",
+                        extra={
+                            "slug": slug,
+                            "run_id": run_id,
+                            "stage": "semantic_onboarding",
+                            "gate": "semantic_onboarding",
+                            "ledger_error": ledger_error,
+                            "original_error": original_error,
+                        },
+                    )
+                    raise PipelineError(
+                        "Ledger write failed for gate=semantic_onboarding "
+                        f"slug={slug} run_id={run_id} stage=semantic_onboarding; "
+                        f"ledger_error={ledger_error}; original_error={original_error}",
+                        slug=slug,
+                        run_id=run_id,
+                    ) from ledger_exc
+
             try:
                 tag_kg_effective: str | None = None
 
@@ -521,55 +588,7 @@ def main() -> int:
             except (ConfigError, PipelineError) as exc:
                 original_error = _summarize_error(exc)
                 code: int = int(exit_code_for(exc))  # exit_code_for non è tipizzato: forza int per mypy
-                try:
-                    verdict, stop_code = _normative_verdict_for_error(exc)
-                    decision_ledger.record_normative_decision(
-                        ledger_conn,
-                        decision_ledger.NormativeDecisionRecord(
-                            decision_id=uuid.uuid4().hex,
-                            run_id=run_id,
-                            slug=slug,
-                            gate_name="semantic_onboarding",
-                            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                            to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                            verdict=verdict,
-                            subject="semantic_onboarding",
-                            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                            actor="cli.semantic_onboarding",
-                            evidence_refs=_merge_evidence_refs(
-                                _build_evidence_refs(
-                                    layout=layout,
-                                    requested=requested,
-                                    effective=effective,
-                                    outcome=_deny_rationale(exc),
-                                    exit_code=code,
-                                ),
-                                exc,
-                            ),
-                            stop_code=stop_code,
-                            reason_code=_deny_rationale(exc),
-                        ),
-                    )
-                except Exception as ledger_exc:
-                    ledger_error = _summarize_error(ledger_exc)
-                    logger.error(
-                        "cli.semantic_onboarding.ledger_write_failed",
-                        extra={
-                            "slug": slug,
-                            "run_id": run_id,
-                            "stage": "semantic_onboarding",
-                            "gate": "semantic_onboarding",
-                            "ledger_error": ledger_error,
-                            "original_error": original_error,
-                        },
-                    )
-                    raise PipelineError(
-                        "Ledger write failed for gate=semantic_onboarding "
-                        f"slug={slug} run_id={run_id} stage=semantic_onboarding; "
-                        f"ledger_error={ledger_error}; original_error={original_error}",
-                        slug=slug,
-                        run_id=run_id,
-                    ) from ledger_exc
+                _record_failure(exc, code)
 
                 logger.error(
                     "cli.semantic_onboarding.failed",
@@ -578,53 +597,8 @@ def main() -> int:
                 return code
 
             except Exception as exc:
-                original_error = _summarize_error(exc)
                 code = 99
-                try:
-                    decision_ledger.record_normative_decision(
-                        ledger_conn,
-                        decision_ledger.NormativeDecisionRecord(
-                            decision_id=uuid.uuid4().hex,
-                            run_id=run_id,
-                            slug=slug,
-                            gate_name="semantic_onboarding",
-                            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                            to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                            verdict=decision_ledger.NORMATIVE_FAIL,
-                            subject="semantic_onboarding",
-                            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                            actor="cli.semantic_onboarding",
-                            evidence_refs=_build_evidence_refs(
-                                layout=layout,
-                                requested=requested,
-                                effective=effective,
-                                outcome="deny_unexpected_error",
-                                exit_code=code,
-                            ),
-                            stop_code=decision_ledger.STOP_CODE_UNEXPECTED_ERROR,
-                            reason_code="deny_unexpected_error",
-                        ),
-                    )
-                except Exception as ledger_exc:
-                    ledger_error = _summarize_error(ledger_exc)
-                    logger.error(
-                        "cli.semantic_onboarding.ledger_write_failed",
-                        extra={
-                            "slug": slug,
-                            "run_id": run_id,
-                            "stage": "semantic_onboarding",
-                            "gate": "semantic_onboarding",
-                            "ledger_error": ledger_error,
-                            "original_error": original_error,
-                        },
-                    )
-                    raise PipelineError(
-                        "Ledger write failed for gate=semantic_onboarding "
-                        f"slug={slug} run_id={run_id} stage=semantic_onboarding; "
-                        f"ledger_error={ledger_error}; original_error={original_error}",
-                        slug=slug,
-                        run_id=run_id,
-                    ) from ledger_exc
+                _record_failure(exc, code)
 
                 logger.exception(
                     "cli.semantic_onboarding.unexpected_error",

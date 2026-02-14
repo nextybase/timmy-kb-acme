@@ -213,3 +213,97 @@ def test_cli_summary_log_excludes_readme_summary(tmp_path: Path, monkeypatch: An
     assert tracker.summary_extra.get("markdown") == 1
     assert tracker.summary_extra.get("summary_exists") is True
     assert tracker.summary_extra.get("readme_exists") is True
+
+
+def test_main_records_failure_once_for_configerror(tmp_path: Path, monkeypatch: Any) -> None:
+    _set_argv("dummy")
+    ctx = _make_ctx(tmp_path, "dummy")
+    monkeypatch.setattr(
+        mod,
+        "ClientContext",
+        SimpleNamespace(load=lambda **_: ctx),
+        raising=True,
+    )
+    monkeypatch.setattr(mod, "_require_normalize_raw_gate", lambda *_a, **_k: None, raising=True)
+    monkeypatch.setattr(mod, "_run_qa_gate_and_record", lambda *_a, **_k: None, raising=True)
+
+    def _raise_cfg(*_a: Any, **_k: Any) -> Any:
+        raise ConfigError("cfg boom", slug="dummy")
+
+    monkeypatch.setattr(mod, "run_semantic_pipeline", _raise_cfg, raising=True)
+
+    captured: dict[str, Any] = {"records": []}
+
+    def _record(_conn: Any, record: Any) -> None:
+        captured["records"].append(record)
+
+    monkeypatch.setattr(mod.decision_ledger, "record_normative_decision", _record, raising=True)
+
+    code = mod.main()
+    assert code == exit_code_for(ConfigError("cfg boom", slug="dummy"))
+    assert len(captured["records"]) == 1
+    record = captured["records"][0]
+    assert getattr(record, "reason_code", None) == "deny_config_error"
+    assert getattr(record, "stop_code", None) == mod.decision_ledger.STOP_CODE_CONFIG_ERROR
+
+
+def test_main_records_failure_once_for_unexpected_exception(tmp_path: Path, monkeypatch: Any) -> None:
+    _set_argv("dummy")
+    ctx = _make_ctx(tmp_path, "dummy")
+    monkeypatch.setattr(
+        mod,
+        "ClientContext",
+        SimpleNamespace(load=lambda **_: ctx),
+        raising=True,
+    )
+    monkeypatch.setattr(mod, "_require_normalize_raw_gate", lambda *_a, **_k: None, raising=True)
+    monkeypatch.setattr(mod, "_run_qa_gate_and_record", lambda *_a, **_k: None, raising=True)
+
+    def _raise_unexpected(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(mod, "run_semantic_pipeline", _raise_unexpected, raising=True)
+
+    captured: dict[str, Any] = {"records": []}
+
+    def _record(_conn: Any, record: Any) -> None:
+        captured["records"].append(record)
+
+    monkeypatch.setattr(mod.decision_ledger, "record_normative_decision", _record, raising=True)
+
+    code = mod.main()
+    assert code == 99
+    assert len(captured["records"]) == 1
+    record = captured["records"][0]
+    assert getattr(record, "reason_code", None) == "deny_unexpected_error"
+    assert getattr(record, "stop_code", None) == mod.decision_ledger.STOP_CODE_UNEXPECTED_ERROR
+
+
+def test_main_raises_pipelineerror_when_failure_ledger_write_fails(tmp_path: Path, monkeypatch: Any) -> None:
+    _set_argv("dummy")
+    ctx = _make_ctx(tmp_path, "dummy")
+    monkeypatch.setattr(
+        mod,
+        "ClientContext",
+        SimpleNamespace(load=lambda **_: ctx),
+        raising=True,
+    )
+    monkeypatch.setattr(mod, "_require_normalize_raw_gate", lambda *_a, **_k: None, raising=True)
+    monkeypatch.setattr(mod, "_run_qa_gate_and_record", lambda *_a, **_k: None, raising=True)
+
+    def _raise_cfg(*_a: Any, **_k: Any) -> Any:
+        raise ConfigError("cfg boom", slug="dummy")
+
+    monkeypatch.setattr(mod, "run_semantic_pipeline", _raise_cfg, raising=True)
+
+    def _record_boom(_conn: Any, _record: Any) -> None:
+        raise RuntimeError("ledger down")
+
+    monkeypatch.setattr(mod.decision_ledger, "record_normative_decision", _record_boom, raising=True)
+
+    with pytest.raises(PipelineError) as excinfo:
+        mod.main()
+
+    text = str(excinfo.value)
+    assert "Ledger write failed for gate=semantic_onboarding" in text
+    assert "original_error=" in text
