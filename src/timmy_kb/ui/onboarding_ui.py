@@ -21,7 +21,8 @@ from timmy_kb.versioning import build_env_fingerprint, build_identity
 from ui import config_store
 from ui.types import StreamlitLike
 
-LOGGER = get_structured_logger("ui.bootstrap")
+BOOT_LOG = get_structured_logger("ui.bootstrap")
+PREFLIGHT_LOG: logging.Logger = get_structured_logger("ui.preflight")
 _ENV_BOOTSTRAPPED = False
 _NAV_PAGES_DEBUG_FAILURE_REPORTED = False
 
@@ -39,7 +40,7 @@ def _init_ui_logging(repo_root: Path) -> None:
     get_structured_logger("ui", log_file=log_file, propagate=True)
     get_structured_logger("ai", log_file=log_file, propagate=True)
     get_structured_logger("ai.responses", log_file=log_file, propagate=True)
-    LOGGER.debug("ui.logging.ai_wired")
+    BOOT_LOG.debug("ui.logging.ai_wired")
 
 
 def _report_nav_pages_debug_failure_once(logger: logging.Logger, exc: Exception) -> None:
@@ -56,9 +57,6 @@ def _report_nav_pages_debug_failure_once(logger: logging.Logger, exc: Exception)
     except Exception:
         # Ultima difesa: non rompere la UI per failure di logging.
         return
-
-
-LOGGER: logging.Logger = get_structured_logger("ui.preflight")
 
 
 def _lazy_bootstrap(repo_root: Path) -> logging.Logger:
@@ -80,7 +78,14 @@ def _ensure_env_loaded_once() -> None:
     _ENV_BOOTSTRAPPED = True
     from pipeline import env_utils
 
-    env_utils.ensure_dotenv_loaded(strict=False)
+    # Strict-by-default per la Beta (bassa entropia). Override esplicito: TIMMY_UI_DOTENV_STRICT=0
+    raw = os.getenv("TIMMY_UI_DOTENV_STRICT", "1").strip().lower()
+    strict = raw not in {"0", "false", "no", "off"}
+    env_utils.ensure_dotenv_loaded(strict=strict)
+    BOOT_LOG.info(
+        "ui.env.dotenv_loaded",
+        extra={"strict": strict},
+    )
 
 
 def _render_preflight_header(st_module: StreamlitLike, logger: logging.Logger, *, repo_root: Path) -> None:
@@ -159,7 +164,7 @@ def _hydrate_query_defaults() -> None:
         _get_slug = getattr(route_state, "get_slug_from_qp")
         _get_tab = getattr(route_state, "get_tab")
     except Exception as exc:
-        LOGGER.error(
+        PREFLIGHT_LOG.error(
             "ui.route_state.import_failed",
             extra={"error": str(exc)},
         )
@@ -172,7 +177,7 @@ def _hydrate_query_defaults() -> None:
         _ = _get_tab("home")
         _ = _get_slug()
     except Exception as exc:
-        LOGGER.error(
+        PREFLIGHT_LOG.error(
             "ui.route_state.hydration_failed",
             extra={"error": str(exc)},
         )
@@ -304,13 +309,17 @@ def build_navigation(
         slug = None
 
     # Layout preservato anche se non usiamo direttamente le colonne.
-    st.columns([4, 1])
+    _ = st.columns([4, 1])
 
     if slug:
         try:
             has_normalized_markdown(slug)
-        except ConfigError:
-            pass
+        except ConfigError as exc:
+            # Non blocca la UI, ma non deve essere silenzioso (segnale di stato non pronto).
+            logger.info(
+                "ui.workspace.normalized_missing_or_invalid",
+                extra={"slug": slug, "error": str(exc)},
+            )
         except (
             Exception
         ) as exc:  # pragma: no cover - best effort (non influenza artefatti/gate/ledger/exit code) logging
@@ -356,7 +365,7 @@ def main() -> None:
     try:
         repo_root = get_repo_root()
     except ConfigError as exc:
-        LOGGER.error("ui.bootstrap.repo_root_invalid", extra={"error": str(exc)})
+        BOOT_LOG.error("ui.bootstrap.repo_root_invalid", extra={"error": str(exc)})
         raise
 
     logger = _lazy_bootstrap(repo_root)
