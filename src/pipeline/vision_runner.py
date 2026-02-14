@@ -269,12 +269,10 @@ def run_vision_with_gating(
     """
     _resolve_vision_mode(ctx)
 
-    repo_root_dir = getattr(ctx, "repo_root_dir", None)
-    if not repo_root_dir:
-        raise ConfigError("Context privo di repo_root_dir per Vision onboarding.", slug=slug)
-    if hasattr(ctx, "slug") and getattr(ctx, "slug", None) is None:
-        raise ConfigError("Context privo di slug per Vision onboarding.", slug=slug)
-
+    try:
+        repo_root_dir = Path(ctx.repo_root_dir_required())
+    except AttributeError as exc:
+        raise ConfigError("Context privo di repo_root_dir_required per Vision onboarding.", slug=slug) from exc
     pdf_path = Path(pdf_path)
     safe_pdf = cast(Path, ensure_within_and_resolve(repo_root_dir, pdf_path))
     if not safe_pdf.exists():

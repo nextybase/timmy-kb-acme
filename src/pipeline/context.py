@@ -245,6 +245,24 @@ class ClientContext:
             redact_logs=redact,
         )
 
+    def repo_root_dir_required(self) -> Path:
+        """Ritorna `repo_root_dir` o solleva errore se il contesto e incompleto."""
+        if self.repo_root_dir is None:
+            raise ConfigError("ClientContext incomplete: repo_root_dir missing", slug=self.slug)
+        return self.repo_root_dir
+
+    def config_path_required(self) -> Path:
+        """Ritorna `config_path` o solleva errore se il contesto e incompleto."""
+        if self.config_path is None:
+            raise ConfigError("ClientContext incomplete: config_path missing", slug=self.slug)
+        return self.config_path
+
+    def mapping_path_required(self) -> Path:
+        """Ritorna `mapping_path` o solleva errore se il contesto e incompleto."""
+        if self.mapping_path is None:
+            raise ConfigError("ClientContext incomplete: mapping_path missing", slug=self.slug)
+        return self.mapping_path
+
     # =============================== Helper interni ===============================
 
     @staticmethod
