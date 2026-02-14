@@ -61,12 +61,15 @@ def _resolve_assistant_env_name(settings: Settings, path: str, default_env: str)
 
 def _resolve_assistant_id(env_name: str, *, primary_env_name: str) -> str:
     primary_value = _optional_env(env_name)
-    if primary_value is not None and not primary_value.strip():
-        LOGGER.warning(
-            "ai.assistant_registry.env_var_empty",
-            extra={"env": env_name, "primary_env": primary_env_name},
+    # Strict guard: niente downgrade a None.
+    # Copre anche eventuali ritorni anomali da env_utils.get_env_var().
+    if primary_value is not None and not str(primary_value).strip():
+        raise ConfigError(
+            f"Variabile ambiente vuota: {env_name}.",
+            code="assistant.env.empty",
+            component="assistant_registry",
+            env=env_name,
         )
-        primary_value = None
     return resolve_assistant_id(
         primary_value,
         primary_env_name,
