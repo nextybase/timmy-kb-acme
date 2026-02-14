@@ -297,7 +297,7 @@ repos:
     rev: v1.5.0
     hooks:
       - id: detect-secrets
-        args: ["--baseline", ".secrets.baseline"]
+        args: ["--baseline", ".secrets.baseline", "--exclude-files", "(?i)^(share[\\\\/]).*"]
         # Exclude deterministic SHA256 fixture; not a secret.
         exclude: "^(src/ui/pages/secrets_guide\\.yaml|tests/fixtures/determinism_manifest\\.json)$"
         stages: [pre-commit]
