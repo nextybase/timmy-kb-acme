@@ -55,10 +55,11 @@ def test_execute_drive_download_passes_require_env_true() -> None:
     logger = _DummyLogger()
     received: dict[str, Any] = {}
 
-    def _download(slug: str, *, overwrite: bool, require_env: bool) -> list[Path]:
+    def _download(slug: str, *, overwrite: bool, require_env: bool, logger: Any = None) -> list[Path]:
         received["slug"] = slug
         received["overwrite"] = overwrite
         received["require_env"] = require_env
+        received["logger"] = logger
         return []
 
     ok = execute_drive_download(
@@ -77,14 +78,15 @@ def test_execute_drive_download_passes_require_env_true() -> None:
     assert received["slug"] == "acme"
     assert received["overwrite"] is False
     assert received["require_env"] is True
+    assert received["logger"] is None
 
 
 def test_execute_drive_download_fails_on_legacy_signature_without_require_env() -> None:
     st = _DummySt()
     logger = _DummyLogger()
 
-    def _legacy_download(slug: str, *, overwrite: bool) -> list[Path]:
-        _ = (slug, overwrite)
+    def _legacy_download(slug: str, *, overwrite: bool, logger: Any = None) -> list[Path]:
+        _ = (slug, overwrite, logger)
         return []
 
     ok = execute_drive_download(
