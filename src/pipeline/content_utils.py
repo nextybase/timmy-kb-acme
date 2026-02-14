@@ -904,7 +904,7 @@ def build_chunk_records_from_markdown_files(
         try:
             file_meta, body = read_frontmatter(safe_path.parent, safe_path, encoding="utf-8", use_cache=True)
             text = (body or "").lstrip("\ufeff")
-        except Exception as exc:
+        except (OSError, ValueError, PipelineError) as exc:
             # fallback non silenzioso: segnaliamo e ripieghiamo sulla lettura raw
             _safe_log(
                 get_structured_logger("pipeline.content_utils"),

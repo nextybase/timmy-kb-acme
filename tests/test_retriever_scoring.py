@@ -2,10 +2,12 @@
 # tests/test_retriever_scoring.py
 from __future__ import annotations
 
+from itertools import permutations
 from pathlib import Path
 from typing import Sequence
 
 import numpy as np
+import pytest
 
 import timmy_kb.cli.retriever as r
 from tests.conftest import DUMMY_SLUG
@@ -145,3 +147,26 @@ def test_search_large_vectors_preserve_order(monkeypatch, kb_sqlite_path: Path) 
     contents = [x["content"] for x in out]
     assert contents == ["best", "slightly-worse", "orth"]
     assert out[0]["score"] >= out[1]["score"] > out[2]["score"]
+
+
+@pytest.mark.parametrize("order", list(permutations((0, 1, 2))))
+def test_topk_invariant_under_candidate_order_without_ties(monkeypatch, kb_sqlite_path: Path, order) -> None:
+    embeddings = EmbedOne([1.0, 0.0])
+    base_candidates = [
+        _cand("best", [1.0, 0.0]),
+        _cand("mid", [0.6, 0.8]),
+        _cand("low", [0.0, 1.0]),
+    ]
+    cands = [base_candidates[i] for i in order]
+    monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: cands)
+
+    params = QueryParams(
+        db_path=kb_sqlite_path,
+        slug=DUMMY_SLUG,
+        scope="kb",
+        query="q",
+        k=3,
+        candidate_limit=r.MIN_CANDIDATE_LIMIT,
+    )
+    out = search(params, embeddings)
+    assert [x["content"] for x in out] == ["best", "mid", "low"]

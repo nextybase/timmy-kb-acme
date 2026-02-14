@@ -11,6 +11,7 @@ import pytest
 import semantic.api as sapi
 from pipeline.exceptions import ConfigError, exit_code_for
 from pipeline.qa_evidence import QA_EVIDENCE_FILENAME
+from storage import decision_ledger
 from tests.support.contexts import TestClientCtx
 from timmy_kb.cli import semantic_onboarding as cli
 
@@ -188,3 +189,25 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
     assert exit_code == 0
     assert called
     assert layout.semantic_dir / "tags_raw.json" in called
+
+
+def test_failure_record_contract_unexpected_error(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path / "output" / "dummy")
+    layout = cli.WorkspaceLayout.from_context(ctx)
+    requested = {"preview": "enabled", "interactive": "enabled", "tag_kg": "auto"}
+    effective = dict(requested)
+
+    record = cli.build_normative_failure_record(
+        exc=RuntimeError("boom"),
+        code=99,
+        layout=layout,
+        requested=requested,
+        effective=effective,
+        slug="dummy",
+        run_id="run-1",
+        decision_id="decision-1",
+        decided_at="2026-01-01T00:00:00Z",
+    )
+
+    assert record.reason_code == "deny_unexpected_error"
+    assert record.stop_code == decision_ledger.STOP_CODE_UNEXPECTED_ERROR
