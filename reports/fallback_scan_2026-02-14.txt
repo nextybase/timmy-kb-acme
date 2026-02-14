@@ -4,7 +4,7 @@
 
 tools/smoke\vision_alignment_check.py:304:        # compat con vecchia struttura (thread/run) anche se qui usiamo Responses:
 tools/smoke\smoke_streamlit_finance.py:46:        # 3) Ultima degradazione compatibile: legacy locale
-tools/smoke\smoke_streamlit_finance.py:57:      - (opzionale) semantic.api.get_paths  ?????¶? usata solo come degradazione compatibile
+tools/smoke\smoke_streamlit_finance.py:57:      - (opzionale) semantic.api.get_paths  ?????Â¶? usata solo come degradazione compatibile
 tools/smoke\kb_healthcheck.py:119:    """Unico percorso ammesso: REPO_ROOT/config/VisionStatement.pdf (niente fallback)."""
 src/pipeline\system_prompt_api.py:29:    """Costruisce il client OpenAI usando SOLO il factory del progetto (Beta: no fallback)."""
 src/pipeline\system_prompt_api.py:39:        raise ConfigError("Factory OpenAI mancante: make_openai_client non risolto (Beta: no fallback).") from exc
@@ -13,16 +13,16 @@ tools/smoke\check_template_hardline.py:35:        "legacy_cartelle_raw_join",
 tools/smoke\check_template_hardline.py:37:        "cartelle_raw.yaml must not be resolved via src/config shims.",
 src/pipeline\secret_checks.py:108:    - struttura compatibile con un Service Account Google
 src/pipeline\secret_checks.py:140:        "File JSON valido e compatibile con un Service Account Google.",
-src/pipeline\raw_transform_service.py:6:-   I fallimenti sono segnalati tramite `PipelineError`; l'enum è conservato per compatibilità futura, ma il
+src/pipeline\raw_transform_service.py:6:-   I fallimenti sono segnalati tramite `PipelineError`; l'enum Ã¨ conservato per compatibilitÃ  futura, ma il
 tools/smoke\check_streamlit_deprecations.py:7:Fail if deprecated Streamlit API patterns are present."""
-src/pipeline\proc_utils.py:20:- Nessuna compatibilità retroattiva con funzioni dismesse.
+src/pipeline\proc_utils.py:20:- Nessuna compatibilitÃ  retroattiva con funzioni dismesse.
 src/pipeline\path_utils.py:20:  compatta separatori, NFKC, tronca a `max_length`.
 tools/retriever_benchmark.py:95:        ap.error("Parametro obbligatorio: --queries (Beta: no fallback incorporati)")
 tools/retriever_benchmark.py:109:            f"Impossibile caricare ClientContext per slug={args.slug!r} (Beta: no workspace fallback). "
 tools/retriever_benchmark.py:164:    # Stampa tabella compatta
 src/pipeline\logging_utils.py:27:    coda compatta di un path per log.
 src/pipeline\logging_utils.py:111:    """Restituisce la coda del path per logging compatto (accetta `Path` o `str`)."""
-tools/gen_dummy_kb.py:5:Non rappresenta un percorso runtime utente né un fallback supportato in ambienti strict.
+tools/gen_dummy_kb.py:5:Non rappresenta un percorso runtime utente nÃ© un fallback supportato in ambienti strict.
 tools/gen_dummy_kb.py:46:    """Assicura che stdout/stderr usino UTF-8 (usato anche nei test legacy)."""
 tools/gen_dummy_kb.py:81:    fallback_used: bool
 tools/gen_dummy_kb.py:420:# Alias pubblico mantenuto per compat dei test: percorso unico layout-first.
@@ -33,7 +33,7 @@ src/pipeline\content_utils.py:63:    # fallback minimale: stdlib logger, stesso 
 src/pipeline\content_utils.py:910:            # fallback non silenzioso: segnaliamo e ripieghiamo sulla lettura raw
 src/pipeline\content_utils.py:914:                "pipeline.content.frontmatter_fallback",
 tools/dummy\drive.py:21:    Contesto minimale layout-first compatibile con runner Drive.
-tools/dummy\drive.py:60:        # Dummy = smoke e2e: una firma sbagliata è regressione, non compat fallback.
+tools/dummy\drive.py:60:        # Dummy = smoke e2e: una firma sbagliata Ã¨ regressione, non compat fallback.
 tools/dummy\drive.py:62:            "Firma non compatibile per ensure_drive_minimal_and_upload_config_ui (attesa: (ctx, *, slug, client_folder_id, logger))."
 src/pipeline\config_utils.py:46:    class _SettingsConfigDict:  # shim per type checking
 tools/dummy\bootstrap.py:6:Helper di bootstrap per la dummy KB (path base, PDF vision di fallback)."""
@@ -41,7 +41,7 @@ tools/dummy\bootstrap.py:247:            else:  # pragma: no cover - fallback
 src/pipeline\cleanup_utils.py:7:- Limitarsi a rimuovere in sicurezza eventuali derivatives locali legacy
 src/pipeline\cleanup_utils.py:51:def clean_legacy_artifacts(
 src/pipeline\cleanup_utils.py:56:    """Rimuove in modo *idempotente* e *sicuro* eventuali derivatives locali legacy.
-src/pipeline\cleanup_utils.py:60:      tipico di run legacy che inizializzavano un repo lì.
+src/pipeline\cleanup_utils.py:60:      tipico di run legacy che inizializzavano un repo lÃ¬.
 src/pipeline\cleanup_utils.py:85:    # Derivative principale noto: repo Git locale legacy
 src/kg_models.py:125:        """Serializza il Knowledge Graph in un dict JSON-compatibile."""
 tools/ai_checks\vision_check.py:33:    meta_client_legacy = meta_section.get("client") if isinstance(meta_section, dict) else None
@@ -59,7 +59,7 @@ tests/test_yaml_validation.py:45:    payload = make_base_payload([make_base_tag(
 src/ui\config_store.py:275:            # Beta invariant: nessun fallback a globale quando slug e' esplicito.
 src/ui\services\drive_runner.py:425:    - Non introduce fallback: delega all'entrypoint UI esistente.
 tests/test_vision_provision_inline.py:255:    # YAML parsabili e consistenti (assert meno rigidi per compat con refactor)
-src/timmy_kb\versioning.py:53:    - La natura best-effort è intenzionale ed è compatibile con la filosofia di Dummy:
+src/timmy_kb\versioning.py:53:    - La natura best-effort Ã¨ intenzionale ed Ã¨ compatibile con la filosofia di Dummy:
 src/ui\chrome.py:52:    _shutdown(None)  # firma compatibile con _request_shutdown(log)
 tests/test_unit_tags_validator.py:16:            {"name": "legacy", "action": "drop"},
 tests/test_tags_store_schema_v2_failfast.py:23:    assert "legacy tags.db detected" in str(excinfo.value)
@@ -71,7 +71,7 @@ src/ui\pages\AGENTS.md:18:- No forbidden/deprecated APIs and the `check_streamli
 src/ui\pages\AGENTS.md:21:- Layout supports stubs (dialog fallback, no unsupported `with col` blocks).
 src/timmy_kb\cli\tag_onboarding_raw.py:22:            "cli.tag_onboarding_raw.legacy_skip_drive",
 src/timmy_kb\cli\tag_onboarding_raw.py:25:                "reason": "legacy_flag_skip_drive",
-src/timmy_kb\cli\tag_onboarding_raw.py:29:            "Config legacy: skip_drive non è più supportato.",
+src/timmy_kb\cli\tag_onboarding_raw.py:29:            "Config legacy: skip_drive non Ã¨ piÃ¹ supportato.",
 src/timmy_kb\cli\tag_onboarding_raw.py:30:            code="legacy_skip_drive",
 tests/test_semantic_extractor.py:257:    (book / "legacy.md").write_text("Legacy Cloud stack", encoding="utf-8")
 tests/test_semantic_extractor.py:262:            {"name": "Legacy Cloud", "action": "merge_into:Cloud", "synonyms": ["legacy cloud"]},
@@ -94,11 +94,11 @@ src/ui\pages\dummy_kb.py:57:        "fallback_used": health.get("fallback_used")
 src/ui\pages\dummy_kb.py:211:                "Vision non ha completato entro 120 secondi. Interrompo senza fallback automatico. "
 tests/test_retriever_validate.py:16:    """Stub compatibile con il Protocol EmbeddingsClient.
 src/timmy_kb\cli\kg_builder.py:65:  "status": "active | draft | deprecated",
-src/ui\pages\logs_panel.py:86:    """Resa compatta quando l'API `link_button` non è disponibile."""
+src/ui\pages\logs_panel.py:86:    """Resa compatta quando l'API `link_button` non Ã¨ disponibile."""
 src/ui\pages\home.py:22:# esponga `st.page_link`, quindi non c'e fallback.
 tests/test_retriever_scoring.py:18:    """Stub compatibile con il Protocol EmbeddingsClient: accetta `model` kw e
 src/ui\pages\new_client.py:652:        LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})
-tests/test_retriever_api.py:6:- compatibilità con EmbeddingsClient (protocollo) e top-k
+tests/test_retriever_api.py:6:- compatibilitÃ  con EmbeddingsClient (protocollo) e top-k
 tests/test_retriever_api.py:102:    # Stub di fetch_candidates: un solo candidato compatibile
 tests/test_retriever_api.py:217:    # Stub di fetch_candidates: un solo candidato compatibile
 src/storage\tags_store.py:302:    """Garantisce lo schema v2 e fallisce se rileva un DB legacy.

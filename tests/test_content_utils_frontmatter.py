@@ -98,3 +98,39 @@ def test_build_chunk_records_raises_on_unicode_frontmatter_error(monkeypatch: Mo
             [md_path],
             perimeter_root=tmp_path,
         )
+
+
+def test_build_chunk_records_fallback_on_frontmatter_pipeline_error(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    md_path = tmp_path / "doc.md"
+    md_path.write_text("# Titolo\n\ncontenuto", encoding="utf-8")
+
+    def _raise_pipeline_frontmatter(*_: object, **__: object) -> tuple[dict[str, object], str]:
+        raise PipelineError("frontmatter corrupted")
+
+    monkeypatch.setattr(cu, "read_frontmatter", _raise_pipeline_frontmatter)
+
+    records = cu.build_chunk_records_from_markdown_files(
+        "dummy",
+        [md_path],
+        perimeter_root=tmp_path,
+    )
+
+    assert len(records) == 1
+    assert records[0]["text"] == "# Titolo\n\ncontenuto"
+
+
+def test_build_chunk_records_raises_on_non_frontmatter_pipeline_error(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    md_path = tmp_path / "doc.md"
+    md_path.write_text("# Titolo\n\ncontenuto", encoding="utf-8")
+
+    def _raise_pipeline_non_frontmatter(*_: object, **__: object) -> tuple[dict[str, object], str]:
+        raise PipelineError("db unavailable")
+
+    monkeypatch.setattr(cu, "read_frontmatter", _raise_pipeline_non_frontmatter)
+
+    with pytest.raises(PipelineError, match="db unavailable"):
+        cu.build_chunk_records_from_markdown_files(
+            "dummy",
+            [md_path],
+            perimeter_root=tmp_path,
+        )

@@ -906,8 +906,20 @@ def build_chunk_records_from_markdown_files(
             text = (body or "").lstrip("\ufeff")
         except UnicodeError:
             raise
-        except (PipelineError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             # fallback non silenzioso: segnaliamo e ripieghiamo sulla lettura raw
+            _safe_log(
+                get_structured_logger("pipeline.content_utils"),
+                "warning",
+                "pipeline.content.frontmatter_fallback",
+                extra={"slug": slug, "path": str(safe_path), "error": str(exc)},
+            )
+            file_meta = {}
+            text = read_text_safe(safe_path.parent, safe_path, encoding="utf-8")
+        except PipelineError as exc:
+            # In strict mode il fallback e' ammesso solo per errori frontmatter attesi.
+            if "frontmatter" not in str(exc).lower():
+                raise
             _safe_log(
                 get_structured_logger("pipeline.content_utils"),
                 "warning",

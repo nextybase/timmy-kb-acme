@@ -19,7 +19,7 @@ Policy SSoT: `instructions/13_artifacts_policy.md`
 | `src/timmy_kb/cli/retriever_embeddings.py` | multiple `return []` on provider/runtime errors | SERVICE_ONLY | Ammesso se resta observabile; monitorare entropy guard. |
 | `src/ui/pages/logs_panel.py` | UI capability fallback (`link_button`/`button`) | SERVICE_ONLY | Ammesso (UX-only). |
 | `src/semantic/book_readiness.py` | import constants fallback | SERVICE_ONLY (preview/readiness helper) | Ammesso; non impatta core artifacts. |
-| `src/pipeline/content_utils.py:910` | frontmatter fallback -> raw read | CORE | Da monitorare: fallback non-silenzioso gi‡ loggato; non toccato in questo micro-PR. |
+| `src/pipeline/content_utils.py:910` | frontmatter fallback -> raw read | CORE | Da monitorare: fallback non-silenzioso gi√† loggato; non toccato in questo micro-PR. |
 | `src/pipeline/config_utils.py:46` | `_SettingsConfigDict` shim in TYPE_CHECKING | N/A (typing only) | Non-runtime, fuori scope hardening Beta runtime. |
 
 ## Micro-PR executed in this branch
