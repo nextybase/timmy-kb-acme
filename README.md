@@ -24,7 +24,7 @@ Timmy-KB è l'implementazione operativa che incarna i principi del framework NeX
 
 Cornice filosofica e di responsabilità: [MANIFEST.md](MANIFEST.md).
 
-Installazione step-by-step: [Guida installazione](docs/user/insitallation_guide.md).
+Installazione step-by-step: [Guida installazione](docs/user/installation_guide.md).
 
 ---
 
@@ -102,7 +102,7 @@ Usalo per interpretare il ledger in modo deterministico.
 ---
 
 ## Documentazione & riferimenti
-- [Guida installazione](docs/user/insitallation_guide.md) - setup passo-passo.
+- [Guida installazione](docs/user/installation_guide.md) - setup passo-passo.
 - [User Quickstart](docs/user/quickstart.md) - avvio rapido UI/CLI.
 - [User Guide](docs/user/user_guide.md) - flussi UI/CLI, Vision, workspace.
 - [Developer Guide](docs/developer/developer_guide.md) - contesto e onboarding (non normativo).
