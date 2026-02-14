@@ -43,10 +43,12 @@ def _summarize_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 @contextmanager
 def _scoped_workspace_env(*, workspace_root: Path) -> Any:
-    """Forza WORKSPACE_ROOT_DIR e rimuove REPO_ROOT_DIR per evitare drift non intenzionali."""
+    """Forza env workspace bootstrap-safe e ripristina sempre lo stato precedente."""
     prev_workspace = os.environ.get("WORKSPACE_ROOT_DIR")
     prev_repo = os.environ.get("REPO_ROOT_DIR")
+    prev_bootstrap = os.environ.get("TIMMY_ALLOW_BOOTSTRAP")
     os.environ["WORKSPACE_ROOT_DIR"] = str(workspace_root)
+    os.environ["TIMMY_ALLOW_BOOTSTRAP"] = "1"
     os.environ.pop("REPO_ROOT_DIR", None)
     try:
         yield
@@ -59,6 +61,10 @@ def _scoped_workspace_env(*, workspace_root: Path) -> Any:
             os.environ.pop("REPO_ROOT_DIR", None)
         else:
             os.environ["REPO_ROOT_DIR"] = prev_repo
+        if prev_bootstrap is None:
+            os.environ.pop("TIMMY_ALLOW_BOOTSTRAP", None)
+        else:
+            os.environ["TIMMY_ALLOW_BOOTSTRAP"] = prev_bootstrap
 
 
 def _run_tool_with_repo_env(

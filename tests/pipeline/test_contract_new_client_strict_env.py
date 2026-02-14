@@ -1,13 +1,18 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from pipeline.capabilities.new_client import create_new_client_workspace, run_vision_provision_for_client
+from pipeline.capabilities.new_client import (
+    _scoped_workspace_env,
+    create_new_client_workspace,
+    run_vision_provision_for_client,
+)
 from pipeline.exceptions import ConfigError
 
 
@@ -63,6 +68,69 @@ def test_new_client_strict_does_not_require_workspace_override(monkeypatch: pyte
 
     assert Path(result["workspace_root_dir"]).name == f"timmy-kb-{slug}"
     assert not Path(result["semantic_mapping_path"]).exists()
+
+
+def test_new_client_non_strict_bootstrap_works_without_env_flag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    slug = "beta"
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
+    monkeypatch.delenv("TIMMY_ALLOW_BOOTSTRAP", raising=False)
+    monkeypatch.delenv("WORKSPACE_ROOT_DIR", raising=False)
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        "pipeline.capabilities.new_client.run_system_self_check", lambda _p: SimpleNamespace(ok=True, items=[])
+    )
+
+    def _fake_run_control_plane_tool(
+        *, tool_module: str, slug: str, action: str, args: list[str] | None = None
+    ) -> dict[str, Any]:
+        return {
+            "payload": {
+                "action": action,
+                "status": "ok",
+                "returncode": 0,
+                "errors": [],
+                "warnings": [],
+                "artifacts": [],
+            }
+        }
+
+    result = create_new_client_workspace(
+        slug=slug,
+        client_name="Beta",
+        pdf_bytes=b"%PDF-1.4\n%fake\n",
+        repo_root=repo_root,
+        vision_model="dummy",
+        enable_drive=False,
+        ui_allow_local_only=True,
+        ensure_drive_minimal=None,
+        run_control_plane_tool=_fake_run_control_plane_tool,
+        progress=None,
+    )
+
+    config_path = Path(result["config_path"])
+    assert config_path.exists()
+    assert config_path.name == "config.yaml"
+
+
+def test_scoped_workspace_env_restores_bootstrap_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    workspace_root = tmp_path / "timmy-kb-restore"
+    workspace_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("TIMMY_ALLOW_BOOTSTRAP", "keep")
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", "old_workspace")
+    monkeypatch.setenv("REPO_ROOT_DIR", "old_repo")
+
+    with _scoped_workspace_env(workspace_root=workspace_root):
+        assert os.environ["WORKSPACE_ROOT_DIR"] == str(workspace_root)
+        assert os.environ["TIMMY_ALLOW_BOOTSTRAP"] == "1"
+        assert "REPO_ROOT_DIR" not in os.environ
+
+    assert os.environ["TIMMY_ALLOW_BOOTSTRAP"] == "keep"
+    assert os.environ["WORKSPACE_ROOT_DIR"] == "old_workspace"
+    assert os.environ["REPO_ROOT_DIR"] == "old_repo"
 
 
 def test_run_vision_provision_phase_b_requires_mapping(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -309,13 +309,26 @@ def build_navigation(
     if slug:
         try:
             has_normalized_markdown(slug)
+        except ConfigError:
+            pass
         except (
             Exception
         ) as exc:  # pragma: no cover - best effort (non influenza artefatti/gate/ledger/exit code) logging
-            logger.warning(
-                "ui.workspace.normalized_check_failed",
-                extra={"event": "ui.workspace.normalized_check_failed", "slug": slug, "error": str(exc)},
-            )
+            session_state = getattr(st, "session_state", None)
+            once_key = f"_normalized_check_failed_logged::{slug}"
+            already_logged = isinstance(session_state, dict) and bool(session_state.get(once_key))
+            if not already_logged:
+                logger.warning(
+                    "ui.workspace.normalized_check_failed",
+                    extra={
+                        "event": "ui.workspace.normalized_check_failed",
+                        "slug": slug,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
+                if isinstance(session_state, dict):
+                    session_state[once_key] = True
 
     _st = get_streamlit()
     _pages_specs = visible_page_specs(compute_gates())
