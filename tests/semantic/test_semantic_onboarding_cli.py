@@ -149,6 +149,7 @@ def test_tags_raw_path_is_resolved_within_semantic_dir(monkeypatch: pytest.Monke
 
     layout = SimpleNamespace(
         semantic_dir=ctx.semantic_dir,
+        normalized_dir=ctx.repo_root_dir / "normalized",
         book_dir=ctx.repo_root_dir / "book",
         base_dir=ctx.repo_root_dir,
         repo_root_dir=ctx.repo_root_dir,

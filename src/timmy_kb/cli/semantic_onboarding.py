@@ -108,9 +108,7 @@ def _build_evidence_refs(
         f"outcome:{outcome}",
     ]
 
-    normalized_dir = getattr(layout, "normalized_dir", None)
-    if normalized_dir is not None:
-        refs.append(_path_ref(normalized_dir, layout))
+    refs.append(_path_ref(layout.normalized_dir, layout))
 
     if exit_code is not None:
         refs.append(f"exit_code:{int(exit_code)}")

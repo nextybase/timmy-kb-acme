@@ -1,0 +1,819 @@
+# fallback scan 2026-02-14
+
+## rg legacy/shim
+
+tools/smoke\vision_alignment_check.py:304:        # compat con vecchia struttura (thread/run) anche se qui usiamo Responses:
+tools/smoke\smoke_streamlit_finance.py:46:        # 3) Ultima degradazione compatibile: legacy locale
+tools/smoke\smoke_streamlit_finance.py:57:      - (opzionale) semantic.api.get_paths  ?????¶? usata solo come degradazione compatibile
+tools/smoke\kb_healthcheck.py:119:    """Unico percorso ammesso: REPO_ROOT/config/VisionStatement.pdf (niente fallback)."""
+src/pipeline\system_prompt_api.py:29:    """Costruisce il client OpenAI usando SOLO il factory del progetto (Beta: no fallback)."""
+src/pipeline\system_prompt_api.py:39:        raise ConfigError("Factory OpenAI mancante: make_openai_client non risolto (Beta: no fallback).") from exc
+tools/smoke\check_template_hardline.py:30:        "legacy_cartelle_raw_path",
+tools/smoke\check_template_hardline.py:35:        "legacy_cartelle_raw_join",
+tools/smoke\check_template_hardline.py:37:        "cartelle_raw.yaml must not be resolved via src/config shims.",
+src/pipeline\secret_checks.py:108:    - struttura compatibile con un Service Account Google
+src/pipeline\secret_checks.py:140:        "File JSON valido e compatibile con un Service Account Google.",
+src/pipeline\raw_transform_service.py:6:-   I fallimenti sono segnalati tramite `PipelineError`; l'enum è conservato per compatibilità futura, ma il
+tools/smoke\check_streamlit_deprecations.py:7:Fail if deprecated Streamlit API patterns are present."""
+src/pipeline\proc_utils.py:20:- Nessuna compatibilità retroattiva con funzioni dismesse.
+src/pipeline\path_utils.py:20:  compatta separatori, NFKC, tronca a `max_length`.
+tools/retriever_benchmark.py:95:        ap.error("Parametro obbligatorio: --queries (Beta: no fallback incorporati)")
+tools/retriever_benchmark.py:109:            f"Impossibile caricare ClientContext per slug={args.slug!r} (Beta: no workspace fallback). "
+tools/retriever_benchmark.py:164:    # Stampa tabella compatta
+src/pipeline\logging_utils.py:27:    coda compatta di un path per log.
+src/pipeline\logging_utils.py:111:    """Restituisce la coda del path per logging compatto (accetta `Path` o `str`)."""
+tools/gen_dummy_kb.py:5:Non rappresenta un percorso runtime utente né un fallback supportato in ambienti strict.
+tools/gen_dummy_kb.py:46:    """Assicura che stdout/stderr usino UTF-8 (usato anche nei test legacy)."""
+tools/gen_dummy_kb.py:81:    fallback_used: bool
+tools/gen_dummy_kb.py:420:# Alias pubblico mantenuto per compat dei test: percorso unico layout-first.
+tools/gen_dummy_kb.py:432:    ap.add_argument("--with-drive", action="store_true", help="Abilita Drive se possibile (compat)")
+tools/dummy\vision.py:24:    """Contesto minimo compatibile con run_vision (serve .base_dir)."""
+src/pipeline\content_utils.py:44:    """Log best-effort non-throwing e mai silenzioso: ultimo fallback su stderr/os.write."""
+src/pipeline\content_utils.py:63:    # fallback minimale: stdlib logger, stesso event
+src/pipeline\content_utils.py:910:            # fallback non silenzioso: segnaliamo e ripieghiamo sulla lettura raw
+src/pipeline\content_utils.py:914:                "pipeline.content.frontmatter_fallback",
+tools/dummy\drive.py:21:    Contesto minimale layout-first compatibile con runner Drive.
+tools/dummy\drive.py:60:        # Dummy = smoke e2e: una firma sbagliata è regressione, non compat fallback.
+tools/dummy\drive.py:62:            "Firma non compatibile per ensure_drive_minimal_and_upload_config_ui (attesa: (ctx, *, slug, client_folder_id, logger))."
+src/pipeline\config_utils.py:46:    class _SettingsConfigDict:  # shim per type checking
+tools/dummy\bootstrap.py:6:Helper di bootstrap per la dummy KB (path base, PDF vision di fallback)."""
+tools/dummy\bootstrap.py:247:            else:  # pragma: no cover - fallback
+src/pipeline\cleanup_utils.py:7:- Limitarsi a rimuovere in sicurezza eventuali derivatives locali legacy
+src/pipeline\cleanup_utils.py:51:def clean_legacy_artifacts(
+src/pipeline\cleanup_utils.py:56:    """Rimuove in modo *idempotente* e *sicuro* eventuali derivatives locali legacy.
+src/pipeline\cleanup_utils.py:60:      tipico di run legacy che inizializzavano un repo lì.
+src/pipeline\cleanup_utils.py:85:    # Derivative principale noto: repo Git locale legacy
+src/kg_models.py:125:        """Serializza il Knowledge Graph in un dict JSON-compatibile."""
+tools/ai_checks\vision_check.py:33:    meta_client_legacy = meta_section.get("client") if isinstance(meta_section, dict) else None
+tools/ai_checks\vision_check.py:34:    client_name = meta_client_name or meta_client_legacy or workspace.name
+tools/ai_checks\ui_strict_runtime_guard.py:13:    ("allow_fallback=True", re.compile(r"\ballow_fallback\s*=\s*True\b")),
+tests/ui\test_manage_drive_strict_require_env.py:84:def test_execute_drive_download_fails_on_legacy_signature_without_require_env() -> None:
+tests/ui\test_manage_drive_strict_require_env.py:88:    def _legacy_download(slug: str, *, overwrite: bool, logger: Any = None) -> list[Path]:
+tests/ui\test_manage_drive_strict_require_env.py:95:        download_with_progress=_legacy_download,
+src/ai\vision_config.py:44:            "ai.vision_config.legacy_root_vision",
+src/ai\vision_config.py:47:        raise ConfigError("Config legacy rilevata: sposta 'vision' sotto 'ai.vision' in config/config.yaml")
+src/adapters\preview.py:88:        context: ClientContext o compatibile (richiesti: .slug; opzionale: .redact_logs).
+src/ai\responses.py:492:            "Chiamata Responses fallita per incompatibilita' SDK/argomenti.",
+tests/test_yaml_validation.py:39:    payload = make_base_payload([make_base_tag(notes="legacy field")])
+tests/test_yaml_validation.py:45:    payload = make_base_payload([make_base_tag(note="ok", notes="legacy")])
+src/ui\config_store.py:275:            # Beta invariant: nessun fallback a globale quando slug e' esplicito.
+src/ui\services\drive_runner.py:425:    - Non introduce fallback: delega all'entrypoint UI esistente.
+tests/test_vision_provision_inline.py:255:    # YAML parsabili e consistenti (assert meno rigidi per compat con refactor)
+src/timmy_kb\versioning.py:53:    - La natura best-effort è intenzionale ed è compatibile con la filosofia di Dummy:
+src/ui\chrome.py:52:    _shutdown(None)  # firma compatibile con _request_shutdown(log)
+tests/test_unit_tags_validator.py:16:            {"name": "legacy", "action": "drop"},
+tests/test_tags_store_schema_v2_failfast.py:23:    assert "legacy tags.db detected" in str(excinfo.value)
+tests/test_tags_store_schema_v2_failfast.py:45:    assert "legacy tags.db detected" in str(excinfo.value)
+tests/test_semantic_onboarding_exitcodes.py:92:    # get_paths compatto
+src/ui\pages\AGENTS.md:10:- Ban deprecated APIs: `st.cache`, any `st.experimental_*`, `unsafe_allow_html`, `use_container_width`, `use_column_width`, and legacy routers or query hacks.
+src/ui\pages\AGENTS.md:11:- Favor `st.dialog` with inline fallback when needed; avoid unsupported `with col` blocks during stub testing; centrally manage theme via `.streamlit/config.toml`; use `st.html` for safe HTML.
+src/ui\pages\AGENTS.md:18:- No forbidden/deprecated APIs and the `check_streamlit_deprecations` guard passes.
+src/ui\pages\AGENTS.md:21:- Layout supports stubs (dialog fallback, no unsupported `with col` blocks).
+src/timmy_kb\cli\tag_onboarding_raw.py:22:            "cli.tag_onboarding_raw.legacy_skip_drive",
+src/timmy_kb\cli\tag_onboarding_raw.py:25:                "reason": "legacy_flag_skip_drive",
+src/timmy_kb\cli\tag_onboarding_raw.py:29:            "Config legacy: skip_drive non è più supportato.",
+src/timmy_kb\cli\tag_onboarding_raw.py:30:            code="legacy_skip_drive",
+tests/test_semantic_extractor.py:257:    (book / "legacy.md").write_text("Legacy Cloud stack", encoding="utf-8")
+tests/test_semantic_extractor.py:262:            {"name": "Legacy Cloud", "action": "merge_into:Cloud", "synonyms": ["legacy cloud"]},
+tests/test_semantic_extractor.py:268:    assert out["Cloud"] == [{"file": "legacy.md", "keyword": "cloud"}]
+tests/test_semantic_extractor.py:281:            {"name": "Legacy Cloud Platform", "action": "merge_into:Cloud Platform", "synonyms": ["legacy platform"]},
+tests/test_semantic_extractor.py:298:    (book / "sample.md").write_text("first Cloud legacy roadmap", encoding="utf-8")
+src/timmy_kb\cli\retriever_logging.py:10:_FALLBACK_LOG = get_structured_logger("timmy_kb.retriever.fallback")
+src/timmy_kb\cli\retriever_logging.py:14:    """Logging strutturato con fallback deterministico in caso di failure del logger."""
+src/timmy_kb\cli\retriever_logging.py:29:    # 2) Logger fallback (stesso schema)
+src/timmy_kb\cli\retriever_logging.py:31:        fallback_fn = getattr(_FALLBACK_LOG, level, None)
+src/timmy_kb\cli\retriever_logging.py:32:        if callable(fallback_fn):
+src/timmy_kb\cli\retriever_logging.py:33:            fallback_fn(event, extra=payload)
+src/timmy_kb\cli\retriever_logging.py:38:            extra={"event": event, "level": level, "stage": "fallback", "error": repr(exc)},
+src/timmy_kb\cli\retriever_logging.py:44:    except Exception:  # pragma: no cover - fallback finale
+src/ui\landing_slug.py:163:        "repo_root_dir non disponibile nel ClientContext: risoluzione legacy da raw_dir disabilitata in Beta."
+src/timmy_kb\cli\retriever_embeddings.py:66:def _emit_log_fallback(event: str, exc: Exception, *, level: _LogLevel, extra: Mapping[str, Any] | None = None) -> None:
+src/timmy_kb\cli\retriever_embeddings.py:91:        _emit_log_fallback(event, log_exc, level=level, extra=extra)
+src/timmy_kb\cli\retriever.py:153:    # best-effort: se info fallisce, fallback su debug (entrambi safe)
+src/ui\pages\dummy_kb.py:57:        "fallback_used": health.get("fallback_used"),
+src/ui\pages\dummy_kb.py:211:                "Vision non ha completato entro 120 secondi. Interrompo senza fallback automatico. "
+tests/test_retriever_validate.py:16:    """Stub compatibile con il Protocol EmbeddingsClient.
+src/timmy_kb\cli\kg_builder.py:65:  "status": "active | draft | deprecated",
+src/ui\pages\logs_panel.py:86:    """Resa compatta quando l'API `link_button` non è disponibile."""
+src/ui\pages\home.py:22:# esponga `st.page_link`, quindi non c'e fallback.
+tests/test_retriever_scoring.py:18:    """Stub compatibile con il Protocol EmbeddingsClient: accetta `model` kw e
+src/ui\pages\new_client.py:652:        LOGGER.info("ui.wizard.local_fallback", extra={"slug": eff, "local_only": True})
+tests/test_retriever_api.py:6:- compatibilità con EmbeddingsClient (protocollo) e top-k
+tests/test_retriever_api.py:102:    # Stub di fetch_candidates: un solo candidato compatibile
+tests/test_retriever_api.py:217:    # Stub di fetch_candidates: un solo candidato compatibile
+src/storage\tags_store.py:302:    """Garantisce lo schema v2 e fallisce se rileva un DB legacy.
+src/storage\tags_store.py:320:                        "legacy tags.db detected; regenerate <workspace>/semantic/tags.db",
+src/storage\tags_store.py:327:                        "legacy tags.db detected; regenerate <workspace>/semantic/tags.db",
+src/storage\tags_store.py:333:                        "legacy tags.db detected; regenerate <workspace>/semantic/tags.db",
+src/storage\tags_store.py:796:        "Import YAML legacy non supportato: usa semantic/tags.db come SSoT.",
+src/storage\tags_store.py:919:    """Import YAML legacy non supportato: usare semantic/tags.db come SSoT."""
+src/storage\kb_db.py:69:            "DB globale legacy `data/kb.sqlite` non supportato: usa `<workspace>/semantic/kb.sqlite`.",
+src/storage\kb_db.py:70:            code="kb.db_path.legacy",
+tests/test_phase_scope_structured.py:38:    # Back-compat
+tests/test_dummy_mode_cli.py:28:def test_cli_rejects_removed_shims() -> None:
+tests/test_path_overrides_extended.py:13:    # Protocol minimale compatibile con semantic.api
+tests/support\contexts.py:14:    """Contesto minimale per i test, compatibile con ClientContextProtocol.
+tests/test_ownership_template.py:43:def test_load_ownership_does_not_use_legacy_path(tmp_path, caplog: pytest.LogCaptureFixture):
+tests/test_ownership_template.py:44:    slug = "legacy"
+tests/test_ownership_template.py:45:    legacy_path = tmp_path / "clients" / slug / "ownership.yaml"
+tests/test_ownership_template.py:46:    safe_write_text(legacy_path, 'schema_version: "1"\nowners: {}\n', encoding="utf-8")
+tests/test_ownership_template.py:52:    assert not any("ownership.legacy_path_used" in rec.getMessage() for rec in caplog.records)
+tests/test_convert_markdown_unsafe_message.py:52:    (ctx.book_dir / "legacy.md").write_text("# Legacy\n", encoding="utf-8")
+tests/test_kb_db_path_safety.py:11:def test_db_rejects_legacy_global_data_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+src/semantic\vocab_loader.py:18:_FALLBACK_LOG = get_structured_logger("semantic.vocab_loader.fallback")
+tests/test_content_utils_no_traversal_when_safe_pdfs.py:77:    # Se il codice provasse a usare i percorsi legacy, falliamo il test
+tests/test_content_utils_no_traversal_when_safe_pdfs.py:79:        raise AssertionError("legacy traversal used")
+tests/test_content_utils_no_traversal_when_safe_pdfs.py:84:    # Esegue la conversione passando safe_pdfs (niente traversal legacy)
+tests/test_content_utils_no_traversal_when_safe_pdfs.py:111:    # Idempotenza: seconda esecuzione non cambia i file generati e non esplora legacy
+src/semantic\validation.py:15:    Nessun side-effect; funzione interna per mantenere il codice compatto e difensivo.
+tests/semantic\test_vocab_loader_parsing.py:16:    # I test in questo modulo verificano la compatibilita' di parsing
+tests/test_imports.py:28:        pytest.skip("googleapiclient non installato: modulo non importabile (no fallback)")
+tests/test_content_utils_logging.py:194:            raise RuntimeError("fallback warning boom")
+tests/test_content_utils_logging.py:197:            raise RuntimeError("fallback info boom")
+src/semantic\semantic_mapping.py:104:            if source == "fallback":
+tests/test_content_utils_frontmatter.py:50:def test_build_chunk_records_fallback_on_expected_frontmatter_error(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+tests/semantic\test_convert_service_strict_signature.py:42:def test_call_convert_md_rejects_legacy_positional_signature(tmp_path: Path) -> None:
+tests/semantic\test_convert_service_strict_signature.py:47:    def legacy_convert(ctx: ContextPaths, book_dir: Path, /) -> None:
+tests/semantic\test_convert_service_strict_signature.py:50:    with pytest.raises(ConversionError, match=r"required signature is legacy_convert\(ctx, book_dir=\.\.\.\)"):
+tests/semantic\test_convert_service_strict_signature.py:51:        _call_convert_md(legacy_convert, ctx, ctx.book_dir)
+src/semantic\book_readiness.py:34:        "semantic.book_readiness.constants_fallback",
+src/semantic\exporters.py:18:    """Serializza una visione compatta del KG + explain output."""
+src/semantic\AGENTS.md:8:- Generate README/SUMMARY through repository utilities with idempotent fallbacks that avoid destructive overwrites.
+src/security\throttle.py:55:            "throttle.identity.fallback",
+src/security\throttle.py:56:            extra={"event": "throttle.identity.fallback", "identity": default},
+tests/architecture\test_strictness_discipline.py:68:            allow_fallback = _kw_value(call, "allow_fallback")
+tests/architecture\test_strictness_discipline.py:69:            if allow_fallback is not None:
+tests/architecture\test_strictness_discipline.py:70:                errors.append(_report(path, call, "sanitize_filename allow_fallback kw is not allowed in core"))
+tests/architecture\test_qa_evidence_low_entropy.py:55:def test_validator_rejects_legacy_top_level_timestamp() -> None:
+tests/architecture\test_qa_evidence_low_entropy.py:56:    legacy = {
+tests/architecture\test_qa_evidence_low_entropy.py:63:        validate_qa_evidence_payload(legacy)
+tests/ai\test_config_boundary.py:205:def test_legacy_root_vision_rejected(caplog):
+tests/ai\test_config_boundary.py:210:    assert any(rec.message == "ai.vision_config.legacy_root_vision" for rec in caplog.records)
+tests/architecture\test_entropy_guards.py:96:    # Cerca return [] SOLO dentro blocchi except (fallback su errore)
+tests/architecture\test_entropy_guards.py:112:                            "(fallback silenzioso su errore)"
+tests/architecture\test_entropy_guards.py:185:        # 2) return [] come fallback su errore (vietato fuori service-only)
+
+## rg getattr/hasattr/inspect.signature
+
+src/adapters\preview.py:45:    slug = getattr(context, "slug", "kb")
+src/adapters\preview.py:103:    redact = bool(getattr(context, "redact_logs", False))
+src/adapters\preview.py:114:            extra={"container": cname, "port": port, "redact_logs": redact, "slug": getattr(context, "slug", None)},
+src/adapters\preview.py:122:                extra={"container": cname, "port": port, "error": str(e), "slug": getattr(context, "slug", None)},
+src/adapters\preview.py:127:            extra={"container": cname, "port": port, "error": str(e), "slug": getattr(context, "slug", None)},
+src/adapters\book_purity.py:41:    book_dir = _as_path(getattr(context, "book_dir", None))
+src/adapters\book_purity.py:42:    repo_root = _as_path(getattr(context, "repo_root_dir", None))
+src/security\throttle.py:76:    state = getattr(streamlit, "session_state", None)
+src/ai\vision_config.py:81:    as_dict = getattr(source, "as_dict", None)
+src/ai\vision_config.py:106:    raw = getattr(ctx, "settings", None)
+src/ai\vision_config.py:143:        candidate = getattr(settings_obj, "vision_assistant_env", None)
+src/ai\vision_config.py:304:    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+src/ai\vision_config.py:328:    slug = getattr(ctx, "slug", None)
+src/security\authorization.py:47:    session_state = getattr(streamlit, "session_state", None)
+src/ai\responses.py:43:        signature_obj = inspect.signature(create_fn)
+src/ai\responses.py:56:        openai_version = getattr(openai, "__version__", "unknown")
+src/ai\responses.py:57:        openai_file = getattr(openai, "__file__", "unknown")
+src/ai\responses.py:156:    direct_text = getattr(response, "output_text", None)
+src/ai\responses.py:374:    resp_api = getattr(client, "responses", None)
+src/ai\responses.py:375:    create_fn = getattr(resp_api, "create", None) if resp_api is not None else None
+src/ai\responses.py:508:    status = getattr(resp, "status", None)
+src/ai\responses.py:512:            extra={"status": status, "id": getattr(resp, "id", None)},
+src/nlp\nlp_keywords.py:50:    for index, page in enumerate(getattr(reader, "pages", []) or []):
+src/nlp\nlp_keywords.py:123:    for ent in getattr(doc, "ents", []) or []:
+src/pipeline\embedding_utils.py:31:    return hasattr(x, "__len__") and hasattr(x, "__getitem__") and not isinstance(x, (str, bytes))
+src/pipeline\embedding_utils.py:36:        base = x.tolist() if hasattr(x, "tolist") else list(x)
+src/pipeline\embedding_utils.py:84:        outer = raw.tolist() if hasattr(raw, "tolist") else raw
+src/pipeline\embedding_utils.py:101:        is_batch = _is_seq_like(first) or hasattr(first, "tolist")
+src/pipeline\embedding_utils.py:109:            base = v.tolist() if hasattr(v, "tolist") else v
+src/explainability\service.py:194:            name = getattr(rec, "name", "")
+src/explainability\service.py:196:            extra_resp = getattr(rec, "response_id", None)
+src/explainability\service.py:197:            src_id = getattr(rec, "source_id", None)
+src/explainability\service.py:198:            chk_id = getattr(rec, "chunk_id", None)
+src/explainability\service.py:207:                "timestamp": getattr(rec, "asctime", None),
+src/explainability\service.py:211:                    k: getattr(rec, k)
+src/explainability\service.py:213:                    if hasattr(rec, k)
+src/explainability\manifest.py:166:        "latency_budget_ms": getattr(params, "latency_budget_ms", None),
+src/pipeline\config_utils.py:112:    settings_obj = getattr(context, "settings", None)
+src/pipeline\config_utils.py:161:        current = getattr(context, "settings", None)
+src/pipeline\config_utils.py:176:    if hasattr(settings_raw, "as_dict"):
+src/pipeline\config_utils.py:259:                extra={"slug": getattr(self, "slug", None), "error": repr(exc)},
+src/pipeline\config_utils.py:263:            if not getattr(self, key, None):
+src/pipeline\drive\upload.py:102:        status = getattr(getattr(e, "resp", None), "status", None)
+src/pipeline\drive\upload.py:114:        if hasattr(context, attr):
+src/pipeline\drive\upload.py:115:            cand = getattr(context, attr)
+src/pipeline\drive\upload.py:118:    if hasattr(context, "config_dir"):
+src/pipeline\drive\upload.py:119:        dir_path = getattr(context, "config_dir", None)
+src/pipeline\drive\upload.py:122:    if hasattr(context, "client_dir"):
+src/pipeline\drive\upload.py:123:        base = getattr(context, "client_dir", None)
+src/pipeline\drive\upload.py:169:    redact_logs = bool(redact_logs or getattr(context, "redact_logs", False))
+src/pipeline\drive\download.py:325:        raise PipelineError(msg, slug=getattr(context, "slug", None))
+src/pipeline\drive\client.py:184:                    resp = getattr(e, "resp", None)
+src/pipeline\drive\client.py:187:                    status_val = getattr(resp, "status", None)
+src/pipeline\drive\client.py:192:                    m.last_status = getattr(e, "status", None)
+src/pipeline\drive\client.py:234:        if hasattr(context, attr):
+src/pipeline\drive\client.py:235:            candidates.append(getattr(context, attr))
+src/pipeline\drive\client.py:236:    if hasattr(context, "env") and isinstance(context.env, dict):
+src/pipeline\context.py:62:    logger_name = getattr(target, "name", target.__class__.__name__)
+src/pipeline\context.py:220:        log_level_name = _coerce_log_level_name(getattr(settings, "ops_log_level", "INFO"))
+src/pipeline\context.py:283:        for handler in list(getattr(logger, "handlers", []) or []):
+src/pipeline\context.py:616:        level = getattr(logging, level_name, None)
+src/pipeline\context.py:637:    level = getattr(logging, value.upper(), None)
+src/pipeline\yaml_utils.py:82:            mtime_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9)))
+src/pipeline\yaml_utils.py:107:            mtime_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9)))
+src/pipeline\capabilities\vision.py:83:        halt_error = getattr(module, "HaltError", None)
+src/pipeline\capabilities\vision.py:84:        provision = getattr(module, "provision_from_vision_with_config", None)
+src/pipeline\capabilities\vision.py:85:        prepare = getattr(module, "prepare_assistant_input_with_config", None)
+src/pipeline\capabilities\vision.py:86:        provision_yaml = getattr(module, "provision_from_vision_yaml_with_config", None)
+src/pipeline\capabilities\vision.py:87:        prepare_yaml = getattr(module, "prepare_assistant_input_from_yaml_with_config", None)
+src/pipeline\content_utils.py:47:        log_fn = getattr(logger, level, None)
+src/pipeline\content_utils.py:65:        getattr(_FALLBACK_LOG, level, _FALLBACK_LOG.info)(event, extra={"payload": payload})
+src/pipeline\content_utils.py:193:    ctx = getattr(logger, "_logging_ctx_view", None)
+src/pipeline\content_utils.py:196:    return getattr(ctx, "run_id", None)
+src/pipeline\content_utils.py:659:    target = _ensure_safe(ctx.repo_root_dir, target_input, slug=getattr(ctx, "slug", None))
+src/pipeline\content_utils.py:664:            slug=getattr(ctx, "slug", None),
+src/pipeline\content_utils.py:670:            slug=getattr(ctx, "slug", None),
+src/pipeline\content_utils.py:683:    target = _ensure_safe(repo_root_dir, target_input, slug=getattr(ctx, "slug", None))
+src/pipeline\content_utils.py:686:    title = getattr(ctx, "slug", None) or "Knowledge Base"
+src/pipeline\content_utils.py:744:                "slug": getattr(ctx, "slug", None),
+src/pipeline\content_utils.py:764:    target = _ensure_safe(repo_root_dir, target_input, slug=getattr(ctx, "slug", None))
+src/pipeline\content_utils.py:810:    target = _ensure_safe(base, target_input, slug=getattr(ctx, "slug", None))
+src/pipeline\content_utils.py:811:    raw_root = _ensure_safe(base, raw_root, slug=getattr(ctx, "slug", None))
+src/pipeline\content_utils.py:817:            slug=getattr(ctx, "slug", None),
+src/pipeline\content_utils.py:823:            slug=getattr(ctx, "slug", None),
+src/pipeline\content_utils.py:831:    logger = get_structured_logger("pipeline.content_utils", context={"slug": getattr(ctx, "slug", None)})
+src/pipeline\content_utils.py:839:            slug=getattr(ctx, "slug", None),
+src/pipeline\content_utils.py:845:                slug=getattr(ctx, "slug", None),
+src/pipeline\content_utils.py:853:        slug=getattr(ctx, "slug", None),
+src/pipeline\content_utils.py:857:    slug = getattr(ctx, "slug", None)
+src/pipeline\workspace_layout.py:68:        if not hasattr(context, "repo_root_dir") or context.repo_root_dir is None:
+src/pipeline\workspace_layout.py:106:        client_name = getattr(context, "client_name", None)
+src/pipeline\workspace_layout.py:233:    env_data = getattr(context, "env", None)
+src/pipeline\capabilities\openai.py:16:    _openai_ctor = cast(Type["OpenAI"], getattr(module, "OpenAI"))
+src/pipeline\vision_runner.py:44:    settings = getattr(ctx, "settings", None)
+src/pipeline\vision_runner.py:46:        raw = getattr(settings, "vision_mode", None)
+src/pipeline\oidc_utils.py:77:        with getattr(urllib.request, "urlopen")(request, timeout=10) as resp:  # noqa: S310 - chiamata HTTPS controllata
+src/pipeline\oidc_utils.py:108:    data = settings.as_dict() if hasattr(settings, "as_dict") else dict(settings or {})
+src/pipeline\capabilities\dummy_kb.py:60:    HardCheckError = getattr(orchestrator, "HardCheckError", None)
+src/pipeline\capabilities\dummy_kb.py:62:        client_base=getattr(bootstrap, "client_base"),
+src/pipeline\capabilities\dummy_kb.py:63:        pdf_path=getattr(bootstrap, "pdf_path"),
+src/pipeline\capabilities\dummy_kb.py:64:        build_dummy_payload=getattr(orchestrator, "build_dummy_payload"),
+src/pipeline\capabilities\dummy_kb.py:65:        register_client=getattr(orchestrator, "register_client"),
+src/pipeline\capabilities\dummy_kb.py:66:        validate_dummy_structure=getattr(orchestrator, "validate_dummy_structure"),
+src/pipeline\capabilities\dummy_kb.py:67:        ensure_book_skeleton=getattr(semantic, "ensure_book_skeleton"),
+src/pipeline\capabilities\dummy_kb.py:68:        ensure_local_readmes=getattr(semantic, "ensure_local_readmes"),
+src/pipeline\capabilities\dummy_kb.py:69:        ensure_minimal_tags_db=getattr(semantic, "ensure_minimal_tags_db"),
+src/pipeline\capabilities\dummy_kb.py:70:        ensure_raw_pdfs=getattr(semantic, "ensure_raw_pdfs"),
+src/pipeline\capabilities\dummy_kb.py:71:        load_mapping_categories=getattr(semantic, "load_mapping_categories"),
+src/pipeline\capabilities\dummy_kb.py:72:        write_basic_semantic_yaml=getattr(semantic, "write_basic_semantic_yaml"),
+src/pipeline\capabilities\dummy_kb.py:73:        run_vision_with_timeout=getattr(vision, "run_vision_with_timeout"),
+src/pipeline\capabilities\dummy_kb.py:84:        call_drive_emit_readmes=getattr(drive, "call_drive_emit_readmes"),
+src/pipeline\capabilities\dummy_kb.py:85:        call_drive_min=getattr(drive, "call_drive_min"),
+src/pipeline\tracing.py:58:    enabled = bool(getattr(state, "effective_enabled", False))
+src/pipeline\frontmatter_utils.py:73:        mtime_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9)))
+src/pipeline\logging_utils.py:147:        cv.slug = getattr(context, "slug", None)
+src/pipeline\logging_utils.py:148:        cv.redact_logs = bool(getattr(context, "redact_logs", False))
+src/pipeline\logging_utils.py:150:        cv.run_id = getattr(context, "run_id", None) or run_id
+src/pipeline\logging_utils.py:165:        if not hasattr(record, "slug"):
+src/pipeline\logging_utils.py:167:        if not hasattr(record, "run_id"):
+src/pipeline\logging_utils.py:170:        if not hasattr(record, "file_path"):
+src/pipeline\logging_utils.py:171:            record.file_path = getattr(record, "pathname", None)
+src/pipeline\logging_utils.py:213:            if not hasattr(record, "event"):
+src/pipeline\logging_utils.py:214:                msg = record.getMessage() if hasattr(record, "getMessage") else getattr(record, "msg", "")
+src/pipeline\logging_utils.py:250:            v = getattr(record, k, None)
+src/pipeline\logging_utils.py:315:        if getattr(h, "_logging_utils_key", None) == key:
+src/pipeline\logging_utils.py:343:    to_remove = [f for f in lg.filters if getattr(f, "_logging_utils_key", None) == key]
+src/pipeline\logging_utils.py:358:        if not hasattr(record, "phase"):
+src/pipeline\logging_utils.py:428:        level = getattr(logging, level_name, logging.INFO)
+src/pipeline\logging_utils.py:430:        level = getattr(logging, level.upper(), logging.INFO)
+src/pipeline\logging_utils.py:437:        ctx_attr = getattr(context, "redact_logs", None)
+src/pipeline\logging_utils.py:519:        context_settings = getattr(context, "settings", None) if context is not None else None
+src/pipeline\logging_utils.py:523:            getter = getattr(context_settings, "get", None)
+src/pipeline\logging_utils.py:566:    ensure_tracer = getattr(_tracing, "ensure_tracer", None) if _tracing is not None else None
+src/pipeline\logging_utils.py:586:        ctx_view = getattr(logger, "_logging_ctx_view", None)
+src/pipeline\logging_utils.py:590:            inferred_slug = getattr(ctx_view, "slug", None)
+src/pipeline\logging_utils.py:591:            inferred_run = getattr(ctx_view, "run_id", None)
+src/pipeline\logging_utils.py:601:        self._phase_filter_key = f"{getattr(logger, 'name', 'logger')}::phase::{self.stage}"
+src/pipeline\logging_utils.py:787:    ctx_view = getattr(logger, "_logging_ctx_view", None)
+src/pipeline\logging_utils.py:789:        payload.setdefault("slug", getattr(ctx_view, "slug", None))
+src/pipeline\logging_utils.py:790:        payload.setdefault("run_id", getattr(ctx_view, "run_id", None))
+src/pipeline\file_utils.py:74:        flags = getattr(os, "O_DIRECTORY", 0)
+src/pipeline\system_prompt_api.py:43:    assistants = getattr(client, "assistants", None)
+src/pipeline\system_prompt_api.py:44:    if assistants is not None and hasattr(assistants, "retrieve"):
+src/pipeline\system_prompt_api.py:56:    assistants = getattr(client, "assistants", None)
+src/pipeline\system_prompt_api.py:57:    if assistants is not None and hasattr(assistants, "update"):
+src/pipeline\system_prompt_api.py:69:    model = getattr(assistant, "model", "") or ""
+src/pipeline\system_prompt_api.py:70:    instructions = getattr(assistant, "instructions", "") or ""
+src/pipeline\import_utils.py:49:            return getattr(module, attr) if sep else module
+src/pipeline\ingest\provider.py:59:        with phase_scope(logger, stage="drive_download", customer=getattr(context, "slug", None)) as phase:
+src/pipeline\ingest\provider.py:66:                redact_logs=getattr(context, "redact_logs", False),
+src/pipeline\ingest\provider.py:78:            extra={"folder_id": raw_folder_id, "slug": getattr(context, "slug", None)},
+src/pipeline\ingest\provider.py:91:        "slug": getattr(context, "slug", None),
+src/pipeline\ingest\provider.py:99:            slug=getattr(context, "slug", None),
+src/pipeline\ingest\provider.py:119:                extra={"raw": str(raw_dir), "slug": getattr(context, "slug", None)},
+src/pipeline\ingest\provider.py:127:                extra={"raw": str(raw_dir), "slug": getattr(context, "slug", None)},
+src/pipeline\ingest\provider.py:131:        with phase_scope(logger, stage="local_copy", customer=getattr(context, "slug", None)) as phase:
+src/pipeline\ingest\provider.py:140:            extra={"count": copied, "slug": getattr(context, "slug", None)},
+src/pipeline\honkit_preview.py:51:    cfg_source = getattr(context, "settings", None)
+src/pipeline\honkit_preview.py:123:        raise PreviewError(f"Porta host non valida per preview: {host_port}", slug=getattr(context, "slug", None))
+src/pipeline\honkit_preview.py:127:            slug=getattr(context, "slug", None),
+src/pipeline\honkit_preview.py:396:    if not getattr(context, "slug", None):
+src/pipeline\qa_gate.py:56:        reason = getattr(exc, "code", None) or "qa_evidence_invalid"
+src/pipeline\path_utils.py:165:        if hasattr(settings, "as_dict"):
+src/pipeline\path_utils.py:589:        if hasattr(settings, "get_value"):
+src/pipeline\path_utils.py:592:            candidate = getattr(settings, "slug_regex", default_regex)
+src/ui\app_services\drive_cache.py:31:if st is not None and hasattr(st, "cache_data"):
+src/ui\app_services\drive_cache.py:42:    clear_fn = getattr(_drive_tree_cached, "clear", None)
+src/storage\kb_db.py:37:    key = getattr(_handler, "_logging_utils_key", "")
+src/ui\chrome.py:89:    entry: Any = getattr(st, "sidebar", None)
+src/ui\chrome.py:93:        if sidebar_obj and hasattr(sidebar_obj, "__enter__") and hasattr(sidebar_obj, "__exit__"):
+src/ui\chrome.py:103:            fn = getattr(ui, method, None)
+src/ui\chrome.py:105:                fn = getattr(st, method, None)
+src/ui\chrome.py:153:            _run_action("rerun_page", lambda: getattr(st, "rerun")(), slug=slug)
+src/timmy_kb\ui\onboarding_ui.py:143:    version = getattr(st_module, "__version__", "0")
+src/timmy_kb\ui\onboarding_ui.py:146:        or not hasattr(st_module, "Page")
+src/timmy_kb\ui\onboarding_ui.py:147:        or not hasattr(st_module, "navigation")
+src/timmy_kb\ui\onboarding_ui.py:159:        _get_slug = getattr(route_state, "get_slug_from_qp")
+src/timmy_kb\ui\onboarding_ui.py:160:        _get_tab = getattr(route_state, "get_tab")
+src/timmy_kb\ui\onboarding_ui.py:205:    exit_flag = _truthy(getattr(st_module, "query_params", {}).get("exit"))
+src/timmy_kb\ui\onboarding_ui.py:275:                    if s is not None and hasattr(s, "update"):
+src/timmy_kb\ui\onboarding_ui.py:317:            session_state = getattr(st, "session_state", None)
+src/timmy_kb\ui\onboarding_ui.py:344:                "pages": {group: [getattr(spec, "path", "") for spec in specs] for group, specs in _pages_specs.items()}
+src/timmy_kb\ui\onboarding_ui.py:413:                "streamlit_version": getattr(st, "__version__", "unknown"),
+src/semantic\api.py:222:    run_id = getattr(context, "run_id", None)
+src/semantic\api.py:273:                    "run_id": getattr(context, "run_id", None),
+src/semantic\config.py:204:    repo_root_attr = getattr(context_or_root, "repo_root_dir", None)
+src/semantic\config.py:205:    slug_attr = getattr(context_or_root, "slug", None)
+src/semantic\config.py:227:            config_path = getattr(context_or_root, "config_path", None)
+src/semantic\auto_tagger.py:280:                    "dataset_area": getattr(cfg.mapping, "name", None),
+src/semantic\core.py:129:    vocab = load_reviewed_vocab(repo_root_dir, log, slug=getattr(context, "slug", None))
+src/semantic\core.py:133:            slug=getattr(context, "slug", None),
+src/semantic\core.py:220:    if not getattr(context, "enrich_enabled", True):
+src/semantic\convert_service.py:112:    fn_name = getattr(convert_fn, "__name__", type(convert_fn).__name__)
+src/semantic\frontmatter_service.py:382:                            getattr(paths, "semantic_mapping", {}),
+src/timmy_kb\cli\tag_onboarding_raw.py:57:    slug = getattr(context, "slug", None)
+src/timmy_kb\cli\tag_onboarding_raw.py:59:    logger_extra = getattr(logger, "extra", None)
+src/semantic\embedding_service.py:169:                "provider": getattr(embeddings_client, "__class__", type("x", (), {})).__name__,
+src/ui\errors.py:20:        details = getattr(exc, "missing", None)
+src/semantic\vocab_loader.py:286:        items = cast(Any, data).get("tags") if hasattr(data, "get") else None
+src/timmy_kb\cli\tag_onboarding.py:465:            run_doc_entities_pipeline = getattr(entities_module, "run_doc_entities_pipeline")
+src/timmy_kb\cli\tag_onboarding.py:684:    if getattr(context, "repo_root_dir", None) is None:
+src/timmy_kb\cli\tag_onboarding.py:687:            slug=getattr(context, "slug", None),
+src/timmy_kb\cli\tag_onboarding.py:1063:        if getattr(args, "scan_normalized", False):
+src/timmy_kb\cli\tag_onboarding.py:1081:        if getattr(args, "nlp", False):
+src/semantic\vision_provision.py:274:    display_name = getattr(ctx, "client_name", None) or slug
+src/semantic\vision_provision.py:356:        raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+src/semantic\vision_provision.py:710:    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+src/semantic\vision_provision.py:716:        raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+src/semantic\vision_provision.py:742:    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+src/semantic\vision_provision.py:748:        raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+src/semantic\vision_provision.py:771:    display_name = getattr(ctx, "client_name", None) or slug
+src/semantic\vision_provision.py:810:    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+src/semantic\vision_provision.py:858:    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+src/semantic\vision_provision.py:864:        raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+src/semantic\vision_provision.py:878:    display_name = getattr(ctx, "client_name", None) or slug
+src/semantic\vision_provision.py:1009:    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+src/semantic\vision_provision.py:1015:        raise exc.__class__(str(exc), slug=slug, file_path=getattr(exc, "file_path", None)) from exc
+src/timmy_kb\cli\semantic_headless.py:59:    if getattr(ctx, "repo_root_dir", None) is None:
+src/timmy_kb\cli\semantic_headless.py:120:    logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+src/ui\config_store.py:79:        if hasattr(ClientContext, "load"):
+src/ui\config_store.py:94:        error = getattr(st, "error", None)
+src/ui\config_store.py:106:        if hasattr(settings, "as_dict"):
+src/ui\config_store.py:163:        if hasattr(settings, "as_dict"):
+src/ui\config_store.py:189:        if hasattr(settings, "as_dict"):
+src/timmy_kb\cli\retriever_manifest.py:126:            or getattr(embeddings_client, "model", None)
+src/timmy_kb\cli\retriever_manifest.py:127:            or getattr(embeddings_client, "embedding_model", None)
+src/semantic\tagging_service.py:138:    if getattr(context, "repo_root_dir", None) is None:
+src/timmy_kb\cli\retriever_logging.py:19:        log_fn = getattr(LOGGER, level, None)
+src/timmy_kb\cli\retriever_logging.py:31:        fallback_fn = getattr(_FALLBACK_LOG, level, None)
+src/timmy_kb\cli\retriever_errors.py:10:    if getattr(exc, "code", None) is None:
+src/timmy_kb\cli\retriever_errors.py:13:        if value is not None and not hasattr(exc, key):
+src/ui\components\semantic_wizard.py:36:    divider_fn = getattr(st, "divider", None)
+src/ui\components\semantic_wizard.py:42:    progress_fn = getattr(st, "progress", None)
+src/timmy_kb\cli\retriever_embeddings.py:88:        fn = getattr(LOGGER, level)
+src/timmy_kb\cli\retriever_embeddings.py:95:    if getattr(exc, "code", None) is None:
+src/timmy_kb\cli\retriever_embeddings.py:98:        if value is not None and not hasattr(exc, key):
+src/timmy_kb\cli\retriever_embeddings.py:133:    if hasattr(value, "tolist"):
+src/timmy_kb\cli\retriever_embeddings.py:399:                    "error": repr(getattr(exc, "__cause__", None) or exc),
+src/timmy_kb\cli\retriever_embeddings.py:422:                or getattr(embeddings_client, "model", None)
+src/timmy_kb\cli\retriever_embeddings.py:423:                or getattr(embeddings_client, "embedding_model", None),
+src/ui\components\drive_tree.py:123:    drive_parent_id = getattr(ctx, "env", {}).get("DRIVE_ID") if getattr(ctx, "env", None) else None
+src/timmy_kb\cli\retriever.py:172:        or getattr(embeddings_client, "model", None)
+src/timmy_kb\cli\retriever.py:173:        or getattr(embeddings_client, "embedding_model", None)
+src/timmy_kb\cli\retriever.py:266:                "error": repr(getattr(exc, "__cause__", None) or exc),
+src/ui\components\diff_view.py:283:        expander_fn = getattr(target, "expander", None) or getattr(st_module, "expander", None)
+src/ui\components\diff_view.py:323:    expander_fn = getattr(target, "expander", None) or getattr(st_module, "expander", None)
+src/ui\components\diff_view.py:384:        metric_fn = getattr(col, "metric", None)
+src/ui\components\diff_view.py:398:    divider_fn = getattr(st, "divider", None)
+src/timmy_kb\cli\raw_ingest.py:137:        actual_raw = getattr(transform, attr_name, None)
+src/timmy_kb\cli\raw_ingest.py:234:                    transformer_name=getattr(transform, "transformer_name", "unknown"),
+src/timmy_kb\cli\raw_ingest.py:235:                    transformer_version=getattr(transform, "transformer_version", "unknown"),
+src/timmy_kb\cli\raw_ingest.py:236:                    ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
+src/timmy_kb\cli\raw_ingest.py:293:                        transformer_name=getattr(transform, "transformer_name", "unknown"),
+src/timmy_kb\cli\raw_ingest.py:294:                        transformer_version=getattr(transform, "transformer_version", "unknown"),
+src/timmy_kb\cli\raw_ingest.py:295:                        ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
+src/timmy_kb\cli\raw_ingest.py:322:                transformer_name=getattr(transform, "transformer_name", "unknown"),
+src/timmy_kb\cli\raw_ingest.py:323:                transformer_version=getattr(transform, "transformer_version", "unknown"),
+src/timmy_kb\cli\raw_ingest.py:324:                ruleset_hash=getattr(transform, "ruleset_hash", "unknown"),
+src/ui\imports.py:28:    obj = getattr(module, name, None)
+src/timmy_kb\cli\ingest.py:54:    ctx_slug = getattr(context, "slug", None)
+src/ui\gating.py:51:        cap = getattr(exc, "capability", None)
+src/ui\gating.py:52:        detail = getattr(exc, "capability_detail", None)
+src/ui\gating.py:53:        provider_issue = getattr(exc, "provider_issue", None)
+src/ui\gating.py:108:        target = getattr(module, attr)
+src/ui\gating.py:260:        if not getattr(gates, name, False):
+src/timmy_kb\cli\pre_onboarding.py:85:    create_drive_minimal_structure = getattr(_du, "create_drive_minimal_structure", None)
+src/timmy_kb\cli\pre_onboarding.py:238:        exc_code = getattr(exc, "code", None)
+src/timmy_kb\cli\pre_onboarding.py:542:    redact = bool(getattr(context, "redact_logs", False))
+src/ui\manage\_helpers.py:46:            extra={"code": getattr(exc, "code", None), "path": str(clients_db_path(manage_file))},
+src/ui\manage\_helpers.py:83:        candidate = getattr(module, attr)
+src/ui\manage\_helpers.py:96:    sig = inspect.signature(fn)
+src/ui\manage\_helpers.py:103:            raise TypeError(f"Unknown kwargs for {getattr(fn, '__name__', repr(fn))}: {unknown}. Allowed: {allowed}")
+src/ui\manage\_helpers.py:108:        raise TypeError(f"Signature mismatch for {getattr(fn, '__name__', repr(fn))}: {exc}") from exc
+src/ui\fine_tuning\vision_modal.py:39:    rerun = getattr(st, "rerun", None)
+src/ui\fine_tuning\vision_modal.py:49:    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+src/ui\fine_tuning\vision_modal.py:63:    dialog_factory = getattr(st, "dialog", None)
+src/ui\fine_tuning\vision_modal.py:68:        stop_fn = getattr(st, "stop", None)
+src/ui\fine_tuning\vision_modal.py:88:        stop_fn = getattr(st, "stop", None)
+src/ui\fine_tuning\vision_modal.py:96:        client_name_hint = getattr(ctx_for_prompt, "client_name", None)
+src/ui\manage\tags.py:42:    state = getattr(st, "session_state", None)
+src/ui\manage\tags.py:46:    if hasattr(state, "get"):
+src/ui\manage\tags.py:49:        role = getattr(state, "user_role", None) or getattr(state, "active_role", None)
+src/ui\manage\tags.py:63:    run_id = getattr(getattr(logger, "_logging_ctx_view", None), "run_id", None)
+src/ui\manage\tags.py:108:        stop_fn = getattr(st, "stop", None)
+src/ui\manage\tags.py:121:        stop_fn = getattr(st, "stop", None)
+src/ui\manage\tags.py:189:    run_id = getattr(getattr(logger, "_logging_ctx_view", None), "run_id", None)
+src/ui\manage\tags.py:261:                stop_fn = getattr(st, "stop", None)
+src/ui\manage\tags.py:317:        stop_fn = getattr(st, "stop", None)
+src/ui\manage\tags.py:438:        stop_fn = getattr(st, "stop", None)
+src/ui\manage\tags.py:481:    dialog_factory = getattr(st, "dialog", None)
+src/ui\manage\tags.py:484:        caption_fn = getattr(st, "caption", None)
+src/ui\manage\tags.py:488:        text_area_fn = getattr(st, "text_area", None)
+src/ui\manage\tags.py:597:    dialog_factory = getattr(st, "dialog", None)
+src/ui\manage\tags.py:600:        caption_fn = getattr(st, "caption", None)
+src/ui\fine_tuning\tools_check_sections.py:39:    rerun = getattr(st_module, "rerun", None)
+src/ui\fine_tuning\tools_check_sections.py:211:    json_renderer = getattr(st_module, "json", None)
+src/ui\manage\drive.py:90:            if status_widget is not None and hasattr(status_widget, "update"):
+src/ui\fine_tuning\system_prompt_modal.py:34:    rerun = getattr(st, "rerun", None)
+src/ui\fine_tuning\system_prompt_modal.py:70:    dialog_factory = getattr(st, "dialog", None)
+src/ui\fine_tuning\system_prompt_modal.py:75:        stop_fn = getattr(st, "stop", None)
+src/ui\fine_tuning\system_prompt_modal.py:99:            stop_fn = getattr(st, "stop", None)
+src/ui\fine_tuning\system_prompt_modal.py:153:            stop_fn = getattr(st, "stop", None)
+src/ui\manage\cleanup.py:38:            entry_slug = getattr(entry, "slug", "") or ""
+src/ui\manage\cleanup.py:40:                display = getattr(entry, "nome", "") or ""
+src/ui\landing_slug.py:49:    rerun_fn = getattr(st, "rerun", None)
+src/ui\landing_slug.py:158:    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+src/ui\landing_slug.py:179:        fn = getattr(st, name, None)
+src/ui\landing_slug.py:256:    html_renderer = getattr(st, "html", None)
+src/ui\landing_slug.py:260:        safe_write = getattr(st, "write", None)
+src/ui\fine_tuning\styles.py:12:    html_fn: Callable[[str], object] | None = getattr(st, "html", None)
+src/ui\pages\semantics.py:169:        if status is not None and hasattr(status, "update"):
+src/ui\pages\semantics.py:257:        if status is not None and hasattr(status, "update"):
+src/ui\pages\semantics.py:296:        reason = getattr(exc, "reason", None)
+src/ui\pages\semantics.py:335:        if status is not None and hasattr(status, "update"):
+src/ui\preflight.py:81:    pkg_file_raw = getattr(_ctx, "__file__", None)
+src/ui\pages\secrets_healthcheck.py:125:    dialog_factory = getattr(st, "dialog", None)
+src/ui\pages\dummy_kb.py:110:    if hasattr(st, "link_button"):
+src/ui\pages\config_editor.py:73:    sidebar = getattr(st_mod, "sidebar", st_mod)
+src/ui\pages\prototimmy_chat.py:168:    chat_message = getattr(st, "chat_message", None)
+src/ui\pages\prototimmy_chat.py:183:    if callable(getattr(st, "chat_input", None)):
+src/ui\pages\preview.py:114:    if status_widget is not None and hasattr(status_widget, "update"):
+src/ui\pages\preview.py:128:    if status_widget is not None and hasattr(status_widget, "update"):
+src/ui\pages\preview.py:191:    slug = getattr(ctx, "slug", "unknown")
+src/ui\pages\preview.py:193:    if status_widget is not None and hasattr(status_widget, "update"):
+src/ui\pages\preview.py:205:    if status_widget is not None and hasattr(status_widget, "update"):
+src/ui\pages\preview.py:333:        link_fn = getattr(st, "link_button", None)
+src/ui\pages\agents_network.py:274:    dlg = getattr(st, "dialog", None)
+src/ui\pages\agents_network.py:279:    html_fn = getattr(st, "html", None)
+src/ui\pages\agents_network.py:324:            Callable[[str], Callable[[Callable[[], None]], Callable[[], None]]], getattr(st, "dialog")
+src/ui\pages\new_client.py:216:    log_method = getattr(logger, level, None)
+src/ui\pages\new_client.py:329:        getattr(st, "rerun", lambda: None)()
+src/ui\pages\new_client.py:391:                if status is not None and hasattr(status, "update"):
+src/ui\pages\new_client.py:549:                if status is not None and hasattr(status, "update"):
+src/ui\pages\logs_panel.py:59:start_observability_stack: StackAction | None = getattr(observability_stack, "start_observability_stack", None)
+src/ui\pages\logs_panel.py:60:stop_observability_stack: StackAction | None = getattr(observability_stack, "stop_observability_stack", None)
+src/ui\pages\logs_panel.py:87:    link_btn = getattr(st, "link_button", None)
+src/ui\pages\logs_panel.py:93:    button = getattr(st, "button", None)
+src/ui\pages\logs_panel.py:104:    succ = getattr(st, "success", None)
+src/ui\pages\logs_panel.py:111:    write_fn = getattr(st, "write", None)
+src/ui\pages\logs_panel.py:131:    divider_fn = getattr(st, "divider", None)
+src/ui\pages\logs_panel.py:135:        write_fn = getattr(st, "write", None) or (lambda *_args, **_kwargs: None)
+src/ui\pages\logs_panel.py:345:    toggle = getattr(st, "toggle", None)
+src/ui\pages\logs_panel.py:348:    success = getattr(st, "success", None)
+src/ui\pages\logs_panel.py:349:    action_button = getattr(st, "button", None)
+src/ui\pages\manage.py:43:    rerun_fn = getattr(st, "rerun", None)
+src/ui\pages\manage.py:68:            to_dict = getattr(entry, "to_dict", None)
+src/ui\pages\manage.py:84:        stop_fn = getattr(st, "stop", None)
+src/ui\pages\manage.py:113:    stop_fn = getattr(st, "stop", None)
+src/ui\pages\manage.py:427:                        if status_widget is not None and hasattr(status_widget, "update"):
+src/ui\pages\manage.py:490:                    if HttpErrorType is not None and isinstance(e, HttpErrorType) and getattr(e, "resp", None):
+src/ui\pages\manage.py:491:                        status = getattr(getattr(e, "resp", None), "status", None)
+src/ui\services\tags_adapter.py:106:        entities_written = getattr(ctx, "last_entities_written", None)
+src/ui\services\tags_adapter.py:157:                    "error_code": getattr(exc, "code", None),
+src/ui\services\tags_adapter.py:158:                    "component": getattr(exc, "component", None),
+src/ui\services\vision_provision.py:75:    settings = getattr(ctx, "settings", None)
+src/ui\services\vision_provision.py:77:        vision_settings = getattr(settings, "vision_settings", None)
+src/ui\services\vision_provision.py:78:        strict_output = getattr(vision_settings, "strict_output", strict_output)
+src/ui\services\vision_provision.py:124:    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+src/ui\services\vision_provision.py:159:    repo_root_dir = getattr(ctx, "repo_root_dir", None)
+src/ui\services\tag_kg_builder.py:53:            "namespace": str(getattr(kg, "namespace", namespace or "")),
+src/ui\services\tag_kg_builder.py:54:            "tags": len(getattr(kg, "tags", [])),
+src/ui\services\tag_kg_builder.py:55:            "relations": len(getattr(kg, "relations", [])),
+src/ui\services\drive_runner.py:224:        redact_logs=bool(getattr(ctx, "redact_logs", False)),
+src/ui\services\drive_runner.py:265:            redact_logs=bool(getattr(ctx, "redact_logs", False)),
+src/ui\services\drive_runner.py:304:                extra={"slug": getattr(ctx, "slug", None), "category": clean_name, "folder_id": ids[0]},
+src/ui\services\drive_runner.py:311:            redact_logs=bool(getattr(ctx, "redact_logs", False)),
+src/ui\services\drive_runner.py:316:            extra={"slug": getattr(ctx, "slug", None), "category": clean_name, "folder_id": folder_id},
+src/ui\services\drive_runner.py:330:        "slug": getattr(ctx, "slug", None),
+src/ui\services\drive_runner.py:598:            "slug": getattr(ctx, "slug", None),
+src/ui\services\drive_runner.py:1012:        redact_logs=bool(getattr(ctx, "redact_logs", False)),
+src/ui\utils\branding.py:43:            get_opt = getattr(st_module, "get_option", None)
+src/ui\utils\branding.py:74:    token_logo = getattr(tokens, "LOGO_IMAGE", None)
+src/ui\utils\branding.py:120:        fn = getattr(obj, method, None)
+src/ui\utils\branding.py:132:        columns_fn = getattr(st_module, "columns", None)
+src/ui\utils\branding.py:181:    target = getattr(st_module, "sidebar", st_module)
+src/ui\utils\branding.py:182:    image_fn = getattr(target, "image", None)
+src/ui\utils\context_cache.py:22:        session_state = getattr(st, "session_state", None)
+src/ui\utils\context_cache.py:27:        session_state = getattr(st_module, "session_state", None) if st_module is not None else None
+src/ui\utils\core.py:64:    state = getattr(st, "session_state", None)
+src/ui\utils\core.py:66:    getter = getattr(st, "get_option", None)
+src/ui\utils\query_params.py:17:    params = getattr(st, "query_params", None)
+src/ui\utils\__init__.py:57:        return getattr(module, "get_active_slug")
+src/ui\utils\__init__.py:59:        return getattr(module, "set_active_slug")
+src/ui\utils\__init__.py:60:    return getattr(module, name)
+src/ui\utils\logging.py:13:    user_obj = getattr(st, "user", None)
+src/ui\utils\logging.py:14:    user_email = getattr(user_obj, "email", None)
+src/ui\utils\streamlit_baseline.py:14:    attr = getattr(module, feature, None)
+src/ui\utils\ui_controls.py:29:    fn = getattr(container, "button")
+src/ui\utils\ui_controls.py:37:    fn = getattr(container, "button")
+src/ui\utils\slug.py:162:    LOGGER.debug("ui.slug.persist_unavailable", extra={"code": getattr(exc, "code", None)})
+src/ui\utils\status.py:19:    status_cm = getattr(st, "status", None)
+src/ui\utils\status.py:28:            if status is not None and hasattr(status, "update"):
+src/ui\utils\workspace.py:32:    return getattr(st_module, "session_state", None)
+
+## rg or getattr
+
+src/ui\components\diff_view.py:283:        expander_fn = getattr(target, "expander", None) or getattr(st_module, "expander", None)
+src/ui\components\diff_view.py:323:    expander_fn = getattr(target, "expander", None) or getattr(st_module, "expander", None)
+src/pipeline\drive\upload.py:169:    redact_logs = bool(redact_logs or getattr(context, "redact_logs", False))
+src/ui\manage\tags.py:49:        role = getattr(state, "user_role", None) or getattr(state, "active_role", None)
+src/timmy_kb\cli\retriever.py:172:        or getattr(embeddings_client, "model", None)
+src/timmy_kb\cli\retriever.py:173:        or getattr(embeddings_client, "embedding_model", None)
+src/timmy_kb\cli\retriever_embeddings.py:422:                or getattr(embeddings_client, "model", None)
+src/timmy_kb\cli\retriever_embeddings.py:423:                or getattr(embeddings_client, "embedding_model", None),
+src/timmy_kb\cli\retriever_manifest.py:126:            or getattr(embeddings_client, "model", None)
+src/timmy_kb\cli\retriever_manifest.py:127:            or getattr(embeddings_client, "embedding_model", None)
+
+## rg try except TypeError (single-line heuristic)
+
+
+## rg return []/{} /None
+
+src/explainability\service.py:148:            return {}
+src/explainability\service.py:153:            return {}
+src/explainability\manifest.py:108:        return None
+src/explainability\manifest.py:110:        return None
+src/explainability\manifest.py:118:        return {}
+src/timmy_kb\versioning.py:39:        return None
+src/timmy_kb\versioning.py:74:    return None
+src/ai\vision_config.py:75:    return None
+src/ai\vision_config.py:111:        return None, cast(AiCfgRoot, mapping)
+src/ai\vision_config.py:112:    return None, cast(AiCfgRoot, {})
+src/ai\vision_config.py:127:        return None
+src/ai\vision_config.py:206:        return None
+src/pipeline\workspace_layout.py:227:        return None
+src/pipeline\workspace_layout.py:235:        return None
+src/pipeline\workspace_layout.py:242:    return None
+src/ui\utils\workspace.py:28:        return None
+src/ui\utils\workspace.py:49:        return None
+src/pipeline\vision_runner.py:207:        return None
+src/pipeline\vision_runner.py:231:        return None
+src/pipeline\tracing.py:72:        return None
+src/ai\responses.py:45:        return None, None, None
+src/ai\responses.py:145:        return None
+src/ai\responses.py:152:    return None
+src/ai\responses.py:168:        return {}
+src/ai\responses.py:178:        return {}
+src/pipeline\settings.py:35:        return {}
+src/pipeline\settings.py:457:            return {}
+src/ui\utils\slug.py:35:        return None
+src/ui\utils\slug.py:45:        return None
+src/ui\utils\slug.py:50:        return None
+src/ui\utils\slug.py:90:        return None
+src/ui\utils\slug.py:111:        return None
+src/ui\utils\slug.py:116:            return None
+src/ui\utils\slug.py:121:            return None
+src/ui\utils\slug.py:125:        return None
+src/ui\utils\slug.py:144:        return None
+src/ui\utils\slug.py:219:    return None
+src/ui\utils\route_state.py:35:    return None
+src/pipeline\proc_utils.py:105:        return None
+src/ui\utils\query_params.py:27:        return None
+src/ui\utils\query_params.py:31:        return None
+src/ui\utils\query_params.py:51:    return None
+src/ai\assistant_registry.py:30:        return None
+src/pipeline\path_utils.py:221:        return None
+src/pipeline\path_utils.py:226:    return None
+src/pipeline\paths.py:36:    return None
+src/pipeline\paths.py:48:    return None
+src/pipeline\ownership.py:173:        return []
+src/adapters\preview.py:75:    return None
+src/pipeline\ontology.py:48:        return []
+src/pipeline\ontology.py:77:        return None
+src/pipeline\ontology.py:83:    return None
+src/ui\utils\diagnostics.py:63:        return None
+src/ui\utils\diagnostics.py:85:        return None
+src/ui\utils\diagnostics.py:103:        return []
+src/ui\utils\diagnostics.py:107:        return []
+src/ui\utils\diagnostics.py:109:        return []
+src/ui\utils\diagnostics.py:123:        return []
+src/ui\utils\diagnostics.py:134:        return None
+src/ui\utils\diagnostics.py:161:        return None
+src/ui\utils\diagnostics.py:175:        return None
+src/ui\utils\diagnostics.py:236:        return None
+src/ui\utils\diagnostics.py:239:        return None
+src/adapters\book_purity.py:18:    return None
+src/pipeline\oidc_utils.py:33:        return None
+src/pipeline\oidc_utils.py:37:        return None
+src/pipeline\oidc_utils.py:40:    return None
+src/pipeline\oidc_utils.py:54:        return None
+src/pipeline\oidc_utils.py:60:        return None
+src/pipeline\oidc_utils.py:70:        return None
+src/pipeline\oidc_utils.py:84:        return None
+src/pipeline\oidc_utils.py:92:    return None
+src/pipeline\observability_config.py:219:        return None
+src/timmy_kb\cli\retriever_throttle.py:137:        return {}
+src/timmy_kb\cli\retriever_throttle.py:141:    return {}
+src/timmy_kb\cli\retriever_throttle.py:148:    return {}
+src/timmy_kb\cli\retriever_throttle.py:178:        return None
+src/timmy_kb\cli\retriever_throttle.py:191:        return None
+src/timmy_kb\cli\retriever_throttle.py:198:    return None
+src/pipeline\log_viewer.py:99:        return []
+src/pipeline\log_viewer.py:173:        return None
+src/pipeline\log_viewer.py:251:        return []
+src/pipeline\log_viewer.py:271:        return []
+src/timmy_kb\cli\retriever_manifest.py:36:        return None, None
+src/timmy_kb\cli\retriever_manifest.py:39:        return None, None
+src/pipeline\layout_summary.py:24:        return []
+src/pipeline\layout_summary.py:29:        return []
+src/ui\utils\core.py:26:    return None
+src/ui\utils\core.py:36:        return {}
+src/ui\utils\core.py:54:    return None
+src/pipeline\context.py:543:            return None
+src/timmy_kb\cli\retriever_embeddings.py:117:        return None
+src/timmy_kb\cli\retriever_embeddings.py:121:        return None
+src/timmy_kb\cli\retriever_embeddings.py:127:            return None
+src/timmy_kb\cli\retriever_embeddings.py:209:        return []
+src/timmy_kb\cli\retriever_embeddings.py:215:            return None
+src/timmy_kb\cli\retriever_embeddings.py:222:        return None
+src/timmy_kb\cli\retriever_embeddings.py:279:        return []
+src/timmy_kb\cli\retriever_embeddings.py:331:        return []
+src/timmy_kb\cli\retriever_embeddings.py:369:            return []
+src/timmy_kb\cli\retriever_embeddings.py:373:            return []
+src/timmy_kb\cli\retriever_embeddings.py:383:            return []
+src/timmy_kb\cli\retriever_embeddings.py:402:            return []
+src/timmy_kb\cli\retriever_embeddings.py:410:            return []
+src/timmy_kb\cli\retriever_embeddings.py:433:            return []
+src/timmy_kb\cli\retriever_embeddings.py:441:            return []
+src/timmy_kb\cli\retriever_embeddings.py:466:            return []
+src/timmy_kb\cli\retriever_embeddings.py:490:            return []
+src/pipeline\content_utils.py:106:            return None
+src/pipeline\content_utils.py:109:            return None
+src/pipeline\content_utils.py:195:        return None
+src/pipeline\content_utils.py:337:        return []
+src/pipeline\honkit_preview.py:56:            return {}
+src/pipeline\honkit_preview.py:61:            return {}
+src/pipeline\honkit_preview.py:62:    return {}
+src/ui\utils\context_cache.py:29:        return None
+src/ui\utils\context_cache.py:31:        return None
+src/pipeline\frontmatter_utils.py:78:        return None
+src/ui\utils\branding.py:16:        return None
+src/pipeline\config_utils.py:77:        return None
+src/pipeline\config_utils.py:98:        return {}
+src/pipeline\config_utils.py:101:        return {}
+src/pipeline\config_utils.py:116:        return None, dict(settings_obj), True
+src/pipeline\config_utils.py:117:    return None, {}, False
+src/timmy_kb\cli\kg_builder.py:166:        return []
+src/timmy_kb\cli\kg_builder.py:170:        return []
+src/timmy_kb\cli\kg_builder.py:178:            return []
+src/timmy_kb\cli\kg_builder.py:181:        return []
+src/timmy_kb\cli\kg_builder.py:182:    return []
+src/timmy_kb\cli\ingest.py:211:        return None, []
+src/timmy_kb\cli\ingest.py:238:        return None, []
+src/timmy_kb\cli\ingest.py:258:        return None, []
+src/timmy_kb\cli\retriever.py:150:        return []
+src/timmy_kb\cli\retriever.py:220:        return []
+src/timmy_kb\cli\retriever.py:224:        return []
+src/timmy_kb\cli\retriever.py:228:        return []
+src/timmy_kb\cli\retriever.py:229:    return None
+src/timmy_kb\cli\retriever.py:251:        return None
+src/timmy_kb\cli\retriever.py:269:        return None
+src/timmy_kb\cli\retriever.py:276:        return None
+src/timmy_kb\cli\retriever.py:295:        return None
+src/timmy_kb\cli\retriever.py:316:        return None
+src/timmy_kb\cli\retriever.py:341:        return None
+src/timmy_kb\cli\retriever.py:379:        return None
+src/timmy_kb\cli\retriever.py:540:            return []
+src/timmy_kb\cli\retriever.py:550:            return []
+src/timmy_kb\cli\retriever.py:561:            return []
+src/storage\tags_store.py:571:        return []
+src/storage\tags_store.py:781:        return None
+src/storage\decision_ledger.py:360:        return []
+src/storage\decision_ledger.py:477:        return None
+src/storage\decision_ledger.py:481:    return None
+src/pipeline\capabilities\vision.py:44:        return None
+src/ui\services\drive_runner.py:730:        return []
+src/pipeline\artifact_policy.py:165:        return []
+src/pipeline\artifact_policy.py:181:    return []
+src/ui\semantic_progress.py:54:        return {}
+src/nlp\nlp_keywords.py:275:        return []
+src/semantic\entities_review.py:72:        return []
+src/semantic\entities_frontmatter.py:76:        return []
+src/semantic\vocab_loader.py:85:        return None
+src/semantic\vocab_loader.py:99:        return None
+src/semantic\vocab_loader.py:141:        return []
+src/semantic\vocab_loader.py:247:        return None
+src/semantic\vocab_loader.py:311:    return {}
+src/semantic\vision_provision.py:155:        return None
+src/semantic\entities_extractor.py:82:        return []
+src/semantic\embedding_service.py:157:        return None, 0
+src/semantic\embedding_service.py:172:        return None, 0
+src/semantic\embedding_service.py:179:        return None, 0
+src/semantic\embedding_service.py:242:        return None, vectors_empty
+src/semantic\spacy_extractor.py:185:        return {}
+src/semantic\core.py:151:        return {}
+src/ui\pages\secrets_healthcheck.py:71:            return {}
+src/ui\pages\secrets_healthcheck.py:76:            return {}
+src/ui\pages\secrets_healthcheck.py:79:            return {}
+src/ui\pages\secrets_healthcheck.py:84:        return {}
+src/semantic\normalizer.py:40:        return []
+src/semantic\nlp_runner.py:100:            return None
+src/semantic\nlp_runner.py:110:            return None
+src/semantic\lexicon.py:63:        return []
+src/ui\pages\prototimmy_chat.py:405:        return None
+src/semantic\layout_enricher.py:159:        return []
+src/semantic\layout_enricher.py:221:        return []
+src/semantic\layout_enricher.py:259:            return None
+src/ui\pages\preview.py:82:    return None
+src/ui\pages\new_client.py:79:        return None
+src/ui\pages\new_client.py:87:        return None
+src/semantic\frontmatter_service.py:92:        return []
+src/semantic\frontmatter_service.py:98:        return []
+src/semantic\frontmatter_service.py:102:        return []
+src/semantic\frontmatter_service.py:185:        return None
+src/semantic\frontmatter_service.py:189:        return None
+src/semantic\frontmatter_service.py:192:        return None
+src/semantic\frontmatter_service.py:197:    return None
+src/semantic\frontmatter_service.py:204:        return None
+src/semantic\frontmatter_service.py:503:        return []
+src/semantic\frontmatter_service.py:545:        return []
+src/ui\pages\manage.py:98:        return None
+src/timmy_kb\cli\ledger_status.py:38:        return None
+src/timmy_kb\cli\ledger_status.py:105:        return {}
+src/timmy_kb\cli\ledger_status.py:109:        return {}
+src/timmy_kb\cli\ledger_status.py:112:    return {}
+src/timmy_kb\cli\ledger_status.py:117:        return None
+src/timmy_kb\cli\ledger_status.py:123:    return None
+src/semantic\config.py:157:        return {}
+src/ui\pages\configurazione.py:96:        return None
+src/ui\pages\configurazione.py:103:        return None
+src/ui\pages\configurazione.py:211:        return None
+src/semantic\book_readiness.py:46:        return []
+src/ui\config_store.py:141:        return None
+src/timmy_kb\cli\pre_onboarding.py:354:        return []
+src/timmy_kb\cli\pre_onboarding.py:359:        return []
+src/ui\gating.py:299:        return {}
+src/ui\gating.py:308:        return {}
+src/ui\components\mapping_editor.py:101:    return None
+src/security\throttle.py:68:    return None
+src/security\throttle.py:75:        return None
+src/security\throttle.py:78:        return None
+src/security\throttle.py:83:    return None
+src/ui\components\drive_tree.py:22:        return None
+src/ui\components\drive_tree.py:29:        return None
+src/ui\components\drive_tree.py:81:    return None
+src/ui\manage\_helpers.py:48:        return []
+src/ui\manage\_helpers.py:54:        return []
+src/ui\manage\_helpers.py:73:            return None
+src/ui\manage\_helpers.py:76:        return None
+src/ui\manage\_helpers.py:80:        return None
+src/ui\manage\_helpers.py:85:        return None
+src/ui\manage\_helpers.py:90:        return None
+src/ui\fine_tuning\tools_check_sections.py:230:        return {}
+src/ui\components\diff_view.py:33:        return None
+src/ui\components\diff_view.py:96:        return None
+src/ui\components\diff_view.py:102:        return None
+src/ui\manage\tags.py:90:        return None
+src/ui\manage\tags.py:111:        return None
+src/ui\manage\tags.py:124:        return None
+src/ui\clients_store.py:45:        return None
+src/ui\clients_store.py:132:        return None
+src/ui\clients_store.py:357:        return None
+src/ui\clients_store.py:361:    return None
+src/ui\manage\cleanup.py:21:    return None
+src/ui\manage\cleanup.py:52:            return []
+src/ui\manage\cleanup.py:55:        return []
+src/security\authorization.py:35:    return None
+src/security\authorization.py:46:        return None
+src/security\authorization.py:49:        return None
+src/ui\landing_slug.py:87:        return None
+src/ui\landing_slug.py:114:        return None
+src/ui\app_services\drive_cache.py:26:        return {}

@@ -113,6 +113,19 @@ def test_cli_returns_pipelineerror_exit_code(tmp_path: Path, monkeypatch: Any) -
     assert code == exit_code_for(PipelineError("ws boom"))
 
 
+def test_build_evidence_refs_always_includes_normalized_path(tmp_path: Path) -> None:
+    ctx = _make_ctx(tmp_path, "dummy")
+    layout = mod.WorkspaceLayout.from_context(ctx)
+    refs = mod._build_evidence_refs(
+        layout=layout,
+        requested={"preview": "enabled"},
+        effective={"preview": "enabled"},
+        outcome="allow",
+    )
+    normalized_ref = f"path:{layout.normalized_dir.relative_to(layout.repo_root_dir).as_posix()}"
+    assert normalized_ref in refs
+
+
 def test_cli_missing_vocab_db_returns_config_error(tmp_path: Path, monkeypatch: Any) -> None:
     _set_argv("dummy")
 
