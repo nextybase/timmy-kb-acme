@@ -15,6 +15,7 @@ Nota: non importa moduli UI/Streamlit; utilizzabile in ambienti headless.
 import hashlib
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional, cast
 
@@ -197,7 +198,7 @@ def materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_dir
     return _materialize_raw_structure(ctx, logger, repo_root_dir=repo_root_dir, slug=slug)
 
 
-def _load_last_hash(repo_root_dir: Path) -> Optional[Dict[str, Any]]:
+def _load_last_hash(repo_root_dir: Path, *, slug: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Legge il sentinel JSON se presente.
     Ritorna dict con almeno {"hash": str, "model": str, "ts": str} oppure None.
@@ -205,30 +206,27 @@ def _load_last_hash(repo_root_dir: Path) -> Optional[Dict[str, Any]]:
     path = _hash_sentinel(repo_root_dir)
     if not path.exists():
         return None
-    strict_mode = is_beta_strict()
     logger = get_structured_logger("pipeline.vision_runner")
+
+    def _invalid(reason: str) -> Dict[str, Any]:
+        logger.warning(
+            "vision.hash_sentinel_invalid",
+            extra={"slug": slug, "file_path": str(path), "reason": reason},
+        )
+        # Sentinel invalido => forza rerun deterministico (hash mismatch)
+        return {}
+
     try:
         raw = cast(str, read_text_safe(repo_root_dir, path, encoding="utf-8"))
         data = cast(Dict[str, Any], json.loads(raw))
         if not isinstance(data, dict):
-            raise ConfigError(
-                "vision_hash payload non è un oggetto JSON",
-                file_path=str(path),
-                component="vision_runner",
-            )
+            return _invalid("json_not_object")
+        digest = data.get("hash")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            return _invalid("invalid_hash_format")
         return data
     except Exception as exc:
-        if strict_mode:
-            raise ConfigError(
-                f"Sentinel {path} incompleto o invalido: non posso procedere in strict mode.",
-                file_path=str(path),
-                component="vision_runner",
-            ) from exc
-        logger.warning(
-            "vision_runner.hash_read_failed",
-            extra={"path": str(path), "error": str(exc)},
-        )
-        return None
+        return _invalid(f"{type(exc).__name__}: {exc}")
 
 
 def _save_hash(repo_root_dir: Path, *, digest: str, model: str) -> None:
@@ -269,7 +267,7 @@ def run_vision_with_gating(
     digest = _sha256_of_file(repo_root_dir, safe_pdf)
     resolved_config = resolve_vision_config(ctx, override_model=model)
     retention_days = resolve_vision_retention_days(ctx)
-    last = _load_last_hash(repo_root_dir)
+    last = _load_last_hash(repo_root_dir, slug=slug)
     last_digest = (last or {}).get("hash")
     last_model = (last or {}).get("model")
     strict_mode = is_beta_strict()

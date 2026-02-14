@@ -50,9 +50,7 @@ def _patch_success_primitives(monkeypatch: pytest.MonkeyPatch, *, persist_raises
     return saved
 
 
-def test_run_doc_entities_pipeline_hard_fails_on_spacy_load(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_doc_entities_pipeline_hard_fails_on_spacy_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo_root_dir, raw_dir, semantic_dir, db_path = _paths(tmp_path)
     _patch_success_primitives(monkeypatch)
     monkeypatch.setattr("semantic.entities_runner._load_spacy", lambda _model: (_ for _ in ()).throw(RuntimeError("x")))
@@ -67,9 +65,7 @@ def test_run_doc_entities_pipeline_hard_fails_on_spacy_load(
         )
 
 
-def test_run_doc_entities_pipeline_hard_fails_on_persist(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_doc_entities_pipeline_hard_fails_on_persist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo_root_dir, raw_dir, semantic_dir, db_path = _paths(tmp_path)
     _patch_success_primitives(monkeypatch, persist_raises=True)
 
@@ -83,9 +79,7 @@ def test_run_doc_entities_pipeline_hard_fails_on_persist(
         )
 
 
-def test_run_doc_entities_pipeline_ok_without_skipped(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_doc_entities_pipeline_ok_without_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo_root_dir, raw_dir, semantic_dir, db_path = _paths(tmp_path)
     saved = _patch_success_primitives(monkeypatch)
 
