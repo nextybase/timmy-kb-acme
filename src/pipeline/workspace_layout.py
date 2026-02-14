@@ -32,7 +32,11 @@ def _to_path(value: Any, default_path: Path) -> Path:
 
 @dataclass(frozen=True)
 class WorkspaceLayout:
-    """Raccoglie i path core del workspace slug-based."""
+    """Raccoglie i path core del workspace slug-based.
+
+    Il layout minimo (Phase A) richiede `semantic/`; il mapping semantico
+    e obbligatorio solo in Phase B+ tramite `require_phase_b_assets()`.
+    """
 
     slug: str
     repo_root_dir: Path
@@ -48,6 +52,10 @@ class WorkspaceLayout:
     vision_pdf: Path | None = None
     client_name: str | None = None
     env: str | None = None
+
+    def require_phase_b_assets(self) -> None:
+        """Enforce Phase B+ prerequisite assets (semantic mapping)."""
+        _ensure_file(self.mapping_path, self.slug, description="semantic/semantic_mapping.yaml")
 
     @classmethod
     def from_context(cls, context: ClientContext) -> "WorkspaceLayout":
@@ -246,13 +254,13 @@ def _validate_layout_assets(
     semantic_dir: Path,
     mapping_path: Path,
 ) -> None:
-    """Fail-fast se gli asset minimi del layout non esistono.
+    """Fail-fast se gli asset minimi del layout (Phase A) non esistono.
 
     In futuro la logica di validazione di config/version/mapping solleverà
     WorkspaceLayoutInconsistent tramite `_ensure_layout_consistency`.
     Questa validazione è ora sempre obbligatoria e non può essere disattivata.
     """
-    # semantic/semantic_mapping.yaml e un asset minimo richiesto del layout.
+    # Phase A contract: semantic_mapping.yaml is not required here.
     _ensure_directory(workspace_root, slug, description="workspace root")
     _ensure_file(config_path, slug, description="config/config.yaml")
     _ensure_directory(raw_dir, slug, description="raw directory")
@@ -261,7 +269,6 @@ def _validate_layout_assets(
     _ensure_file(book_dir / "README.md", slug, description="book/README.md")
     _ensure_file(book_dir / "SUMMARY.md", slug, description="book/SUMMARY.md")
     _ensure_directory(semantic_dir, slug, description="semantic directory")
-    _ensure_file(mapping_path, slug, description="semantic/semantic_mapping.yaml")
     _ensure_directory(logs_dir, slug, description="logs directory")
     _ensure_layout_consistency(
         slug=slug,
