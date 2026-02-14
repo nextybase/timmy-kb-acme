@@ -2,12 +2,18 @@
 import logging
 from pathlib import Path
 
+import pytest
+from _pytest.logging import LogCaptureFixture
+from _pytest.monkeypatch import MonkeyPatch
+
 from pipeline import content_utils as cu
 from pipeline.exceptions import PipelineError
 from semantic.config import SemanticConfig
 
 
-def test_write_markdown_logs_frontmatter_read_failure(monkeypatch, caplog, tmp_path: Path) -> None:
+def test_write_markdown_logs_frontmatter_read_failure(
+    monkeypatch: MonkeyPatch, caplog: LogCaptureFixture, tmp_path: Path
+) -> None:
     raw_root = tmp_path / "raw"
     target_root = tmp_path / "book"
     raw_root.mkdir()
@@ -39,3 +45,39 @@ def test_write_markdown_logs_frontmatter_read_failure(monkeypatch, caplog, tmp_p
     content = md_path.read_text(encoding="utf-8")
     assert "source_file" in content
     assert any("pipeline.content.frontmatter_read_failed" in record.message for record in caplog.records), caplog.text
+
+
+def test_build_chunk_records_fallback_on_expected_frontmatter_error(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    md_path = tmp_path / "doc.md"
+    md_path.write_text("# Titolo\n\ncontenuto", encoding="utf-8")
+
+    def _raise_value_error(*_: object, **__: object) -> tuple[dict[str, object], str]:
+        raise ValueError("frontmatter invalido")
+
+    monkeypatch.setattr(cu, "read_frontmatter", _raise_value_error)
+
+    records = cu.build_chunk_records_from_markdown_files(
+        "dummy",
+        [md_path],
+        perimeter_root=tmp_path,
+    )
+
+    assert len(records) == 1
+    assert records[0]["text"] == "# Titolo\n\ncontenuto"
+
+
+def test_build_chunk_records_raises_on_unexpected_frontmatter_error(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    md_path = tmp_path / "doc.md"
+    md_path.write_text("# Titolo\n\ncontenuto", encoding="utf-8")
+
+    def _raise_runtime_error(*_: object, **__: object) -> tuple[dict[str, object], str]:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cu, "read_frontmatter", _raise_runtime_error)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        cu.build_chunk_records_from_markdown_files(
+            "dummy",
+            [md_path],
+            perimeter_root=tmp_path,
+        )
