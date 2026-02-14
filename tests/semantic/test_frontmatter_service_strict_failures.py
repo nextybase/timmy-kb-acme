@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 import pytest
+
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.frontmatter_utils import read_frontmatter
 from semantic import frontmatter_service as front
@@ -31,9 +32,7 @@ def _prepare_workspace(tmp_path: Path) -> tuple[Path, Path]:
     return base, md_path
 
 
-def test_enrich_frontmatter_hard_fails_on_markdown_read_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_enrich_frontmatter_hard_fails_on_markdown_read_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base, _md_path = _prepare_workspace(tmp_path)
 
     def _boom_read(*_args: object, **_kwargs: object) -> tuple[dict[str, object], str]:

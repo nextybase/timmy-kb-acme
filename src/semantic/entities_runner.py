@@ -1,9 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # src/semantic/entities_runner.py
-"""Runner additivo per scrivere entità area-aware in doc_entities.
-
-Best effort: se SpaCy/mapping mancano, logga warning e non blocca il flusso.
-"""
+"""Runner per scrivere entita area-aware in doc_entities (strict/fail-fast)."""
 
 from __future__ import annotations
 
@@ -12,8 +9,7 @@ import os
 from pathlib import Path
 from typing import Any, Iterable, cast
 
-from pipeline.beta_flags import is_beta_strict
-from pipeline.exceptions import ConfigError
+from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, iter_safe_pdfs
 from semantic.config import load_semantic_config
@@ -57,32 +53,17 @@ def run_doc_entities_pipeline(
     Estrae entita' dai PDF e le salva nel DB (tabella doc_entities).
 
     Guardrail (CORE, low-entropy):
-    - Se non ci sono PDF da processare:
-      - in strict: FAIL esplicito (ConfigError)
-      - non-strict: SKIP esplicito (ritorna `skipped=True`)
-    - Distingue sempre:
-      - "0 entita' trovate" (processed_pdfs > 0, skipped=False)
-      - "non ho processato nulla" (processed_pdfs == 0, skipped=True)
-
-    Backend:
-    - `TAGS_NLP_BACKEND` e' solo una scelta di backend (default: "spacy").
-    - La severita' e' governata esclusivamente da `TIMMY_BETA_STRICT`.
+    - no fallback/non-strict;
+    - ogni errore runtime alza eccezione typed.
     """
     log = logger or LOG
     backend = os.environ.get("TAGS_NLP_BACKEND", "spacy").strip().lower()
-    strict_mode = is_beta_strict()
     if backend not in ("spacy",):
-        msg = f"entities_pipeline_backend_not_supported:{backend}"
-        if strict_mode:
-            raise ConfigError(msg)
-        log.warning(msg, extra={"backend": backend, "service_only": True})
-        return {
-            "entities_written": 0,
-            "processed_pdfs": 0,
-            "skipped": True,
-            "reason": "backend_not_supported",
-            "backend": backend,
-        }
+        raise ConfigError(
+            f"entities.backend.invalid for slug={slug}: backend={backend}",
+            slug=slug,
+            file_path=semantic_dir,
+        )
 
     workspace_root = repo_root_dir
     perimeter_root = repo_root_dir
@@ -95,64 +76,40 @@ def run_doc_entities_pipeline(
 
     pdf_paths = list(iter_safe_pdfs(raw_dir))
     if len(pdf_paths) == 0:
-        msg = "entities_pipeline_no_pdfs_in_raw_dir"
-        if strict_mode:
-            raise ConfigError(f"{msg}:{raw_dir}")
-        log.warning(msg, extra={"raw_dir": str(raw_dir), "service_only": True})
-        return {
-            "entities_written": 0,
-            "processed_pdfs": 0,
-            "skipped": True,
-            "reason": "no_pdfs",
-            "backend": backend,
-        }
+        raise ConfigError(
+            f"entities.input.no_pdfs for slug={slug}",
+            slug=slug,
+            file_path=raw_dir,
+        )
 
     try:
         cfg = load_semantic_config(workspace_root, slug=slug)
     except Exception as exc:  # pragma: no cover
-        if strict_mode:
-            raise ConfigError("Config semantica non caricabile.") from exc
-        log.warning("semantic.entities.config_failed", extra={"error": str(exc), "service_only": True})
-        return {
-            "entities_written": 0,
-            "processed_pdfs": 0,
-            "skipped": True,
-            "reason": "config_error",
-            "backend": backend,
-        }
+        raise ConfigError(
+            f"entities.config.load failed for slug={slug}",
+            slug=slug,
+            file_path=(workspace_root / "config" / "config.yaml"),
+        ) from exc
 
     try:
         mapping = cfg.mapping or {}
         lexicon_entries = build_lexicon(mapping)
         lexicon = build_lexicon_map(lexicon_entries)
         if not lexicon:
-            if strict_mode:
-                raise ConfigError("entities_pipeline_config_error")
-            log.info(
-                "semantic.entities.lexicon_empty",
-                extra={"entries": len(lexicon_entries)},
+            raise ConfigError(
+                f"entities.lexicon.empty for slug={slug}",
+                slug=slug,
+                file_path=(semantic_dir / "semantic_mapping.yaml"),
             )
-            return {
-                "entities_written": 0,
-                "processed_pdfs": 0,
-                "skipped": True,
-                "reason": "config_error",
-                "backend": backend,
-            }
 
         nlp = _load_spacy(cfg.spacy_model)
         matcher = make_phrase_matcher(nlp, lexicon)
     except Exception as exc:
-        if strict_mode:
-            raise ConfigError("SpaCy non disponibile.") from exc
-        log.warning("semantic.entities.spacy_unavailable", extra={"error": str(exc), "service_only": True})
-        return {
-            "entities_written": 0,
-            "processed_pdfs": 0,
-            "skipped": True,
-            "reason": "backend_unavailable",
-            "backend": backend,
-        }
+        raise PipelineError(
+            f"entities.spacy.load failed for slug={slug}",
+            slug=slug,
+            file_path=semantic_dir,
+        ) from exc
 
     hits_to_save: list[DocEntityHit] = []
     processed_pdfs = 0
@@ -162,13 +119,11 @@ def run_doc_entities_pipeline(
         try:
             text = _read_document_text(pdf_path)
         except Exception as exc:
-            if strict_mode:
-                raise ConfigError(
-                    "Lettura PDF fallita.",
-                    file_path=pdf_path,
-                ) from exc
-            log.warning("semantic.entities.pdf_read_failed", extra={"file": str(pdf_path), "error": str(exc)})
-            continue
+            raise PipelineError(
+                f"entities.pdf.read failed for slug={slug}",
+                slug=slug,
+                file_path=pdf_path,
+            ) from exc
         if not text:
             continue
         doc = nlp(text)
@@ -184,7 +139,6 @@ def run_doc_entities_pipeline(
         return {
             "entities_written": 0,
             "processed_pdfs": int(processed_pdfs),
-            "skipped": False,
             "reason": "processed",
             "backend": backend,
         }
@@ -203,19 +157,11 @@ def run_doc_entities_pipeline(
         save_doc_entities(db_path, records)
         hits_count = len(records)
     except Exception as exc:
-        if strict_mode:
-            raise ConfigError(
-                "Salvataggio doc_entities fallito.",
-                file_path=db_path,
-            ) from exc
-        log.warning("semantic.entities.save_failed", extra={"error": str(exc), "service_only": True})
-        return {
-            "entities_written": 0,
-            "processed_pdfs": int(processed_pdfs),
-            "skipped": False,
-            "reason": "save_failed",
-            "backend": backend,
-        }
+        raise PipelineError(
+            f"entities.persist failed for slug={slug}",
+            slug=slug,
+            file_path=db_path,
+        ) from exc
     log.info(
         "semantic.entities.saved",
         extra={
@@ -227,7 +173,6 @@ def run_doc_entities_pipeline(
     return {
         "entities_written": int(hits_count),
         "processed_pdfs": int(processed_pdfs),
-        "skipped": False,
         "reason": "processed",
         "backend": backend,
     }
