@@ -152,6 +152,7 @@ Ogni PR Beta deve garantire:
 
 - `pre-commit run --all-files`
 - `pytest`
+- contract-test di superficie API (es. `tests/contract/test_semantic_api_contract.py`)
 - grep invariants:
 
 ```bash
@@ -162,6 +163,11 @@ rg -n "mapping_all = \{\}" src/
 ```
 
 Zero match nel CORE.
+
+Nota scope:
+
+- i guardrail anti-entropia (`tests/architecture/test_entropy_guards.py`) scansionano il CORE in `src/semantic` + `src/pipeline`, non la cartella `tests/`.
+- pattern come `inspect.signature` sono vietati nei call-site runtime CORE, ma sono ammessi nei test contratto per verificare stabilit\u00e0 API.
 
 ---
 
