@@ -251,6 +251,61 @@ def _merge_evidence_refs(base: list[str], exc: BaseException) -> list[str]:
     return base
 
 
+def build_normative_failure_record(
+    *,
+    exc: BaseException,
+    code: int,
+    layout: WorkspaceLayout,
+    requested: dict[str, object],
+    effective: dict[str, object],
+    slug: str,
+    run_id: str,
+    decision_id: str,
+    decided_at: str,
+) -> decision_ledger.NormativeDecisionRecord:
+    """Costruisce il record normativo di failure senza side-effect (no I/O, no logging)."""
+    if isinstance(exc, (ConfigError, PipelineError)):
+        verdict, stop_code = _normative_verdict_for_error(exc)
+        rationale = _deny_rationale(exc)
+        evidence_refs = _merge_evidence_refs(
+            _build_evidence_refs(
+                layout=layout,
+                requested=requested,
+                effective=effective,
+                outcome=rationale,
+                exit_code=code,
+            ),
+            exc,
+        )
+    else:
+        verdict = decision_ledger.NORMATIVE_FAIL
+        stop_code = decision_ledger.STOP_CODE_UNEXPECTED_ERROR
+        rationale = "deny_unexpected_error"
+        evidence_refs = _build_evidence_refs(
+            layout=layout,
+            requested=requested,
+            effective=effective,
+            outcome=rationale,
+            exit_code=code,
+        )
+
+    return decision_ledger.NormativeDecisionRecord(
+        decision_id=decision_id,
+        run_id=run_id,
+        slug=slug,
+        gate_name="semantic_onboarding",
+        from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+        to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+        verdict=verdict,
+        subject="semantic_onboarding",
+        decided_at=decided_at,
+        actor="cli.semantic_onboarding",
+        evidence_refs=evidence_refs,
+        stop_code=stop_code,
+        reason_code=rationale,
+    )
+
+
 def _apply_cli_flags_to_context(ctx: SemanticContextProtocol, args: argparse.Namespace) -> None:
     """Trasferisce flag CLI puliti nel contesto senza side-effect nascosti."""
     ctx.skip_preview = bool(args.no_preview)
@@ -391,48 +446,21 @@ def main() -> int:
 
             def _record_failure(exc: Exception, code: int) -> None:
                 original_error = _summarize_error(exc)
-                if isinstance(exc, (ConfigError, PipelineError)):
-                    verdict, stop_code = _normative_verdict_for_error(exc)
-                    rationale = _deny_rationale(exc)
-                    evidence_refs = _merge_evidence_refs(
-                        _build_evidence_refs(
-                            layout=layout,
-                            requested=requested,
-                            effective=effective,
-                            outcome=rationale,
-                            exit_code=code,
-                        ),
-                        exc,
-                    )
-                else:
-                    verdict = decision_ledger.NORMATIVE_FAIL
-                    stop_code = decision_ledger.STOP_CODE_UNEXPECTED_ERROR
-                    rationale = "deny_unexpected_error"
-                    evidence_refs = _build_evidence_refs(
-                        layout=layout,
-                        requested=requested,
-                        effective=effective,
-                        outcome=rationale,
-                        exit_code=code,
-                    )
+                record = build_normative_failure_record(
+                    exc=exc,
+                    code=code,
+                    layout=layout,
+                    requested=requested,
+                    effective=effective,
+                    slug=slug,
+                    run_id=run_id,
+                    decision_id=uuid.uuid4().hex,
+                    decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                )
                 try:
                     decision_ledger.record_normative_decision(
                         ledger_conn,
-                        decision_ledger.NormativeDecisionRecord(
-                            decision_id=uuid.uuid4().hex,
-                            run_id=run_id,
-                            slug=slug,
-                            gate_name="semantic_onboarding",
-                            from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                            to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                            verdict=verdict,
-                            subject="semantic_onboarding",
-                            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                            actor="cli.semantic_onboarding",
-                            evidence_refs=evidence_refs,
-                            stop_code=stop_code,
-                            reason_code=rationale,
-                        ),
+                        record,
                     )
                 except Exception as ledger_exc:
                     ledger_error = _summarize_error(ledger_exc)

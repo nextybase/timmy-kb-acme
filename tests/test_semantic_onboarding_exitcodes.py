@@ -307,3 +307,57 @@ def test_main_raises_pipelineerror_when_failure_ledger_write_fails(tmp_path: Pat
     text = str(excinfo.value)
     assert "Ledger write failed for gate=semantic_onboarding" in text
     assert "original_error=" in text
+
+
+@pytest.mark.parametrize(
+    ("exc", "code", "expected_reason", "expected_stop", "expected_verdict"),
+    [
+        (
+            ConfigError("cfg boom", slug="dummy"),
+            exit_code_for(ConfigError("cfg boom", slug="dummy")),
+            "deny_config_error",
+            mod.decision_ledger.STOP_CODE_CONFIG_ERROR,
+            mod.decision_ledger.NORMATIVE_BLOCK,
+        ),
+        (
+            PipelineError("pipe boom", slug="dummy"),
+            exit_code_for(PipelineError("pipe boom", slug="dummy")),
+            "deny_pipeline_error",
+            mod.decision_ledger.STOP_CODE_PIPELINE_ERROR,
+            mod.decision_ledger.NORMATIVE_FAIL,
+        ),
+        (
+            RuntimeError("boom"),
+            99,
+            "deny_unexpected_error",
+            mod.decision_ledger.STOP_CODE_UNEXPECTED_ERROR,
+            mod.decision_ledger.NORMATIVE_FAIL,
+        ),
+    ],
+)
+def test_build_normative_failure_record_mapping(
+    tmp_path: Path,
+    exc: BaseException,
+    code: int,
+    expected_reason: str,
+    expected_stop: str,
+    expected_verdict: str,
+) -> None:
+    ctx = _make_ctx(tmp_path, "dummy")
+    layout = mod.WorkspaceLayout.from_workspace(ctx.base_dir, slug="dummy")
+    record = mod.build_normative_failure_record(
+        exc=exc,
+        code=code,
+        layout=layout,
+        requested={"preview": "enabled", "interactive": "disabled", "tag_kg": "auto"},
+        effective={"preview": "enabled", "interactive": "disabled", "tag_kg": "auto"},
+        slug="dummy",
+        run_id="run-1",
+        decision_id="dec-1",
+        decided_at="2026-02-14T00:00:00Z",
+    )
+
+    assert record.reason_code == expected_reason
+    assert record.stop_code == expected_stop
+    assert record.verdict == expected_verdict
+    assert f"exit_code:{int(code)}" in record.evidence_refs
