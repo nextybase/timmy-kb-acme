@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
+import sys
 from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,7 +41,7 @@ _FALLBACK_LOG = logging.getLogger(__name__)
 
 
 def _safe_log(logger: logging.Logger, level: str, event: str, *, extra: Mapping[str, Any] | None = None) -> None:
-    """Log best-effort ma mai silenzioso: se structured logger fallisce, degrada su stdlib logger."""
+    """Log best-effort non-throwing e mai silenzioso: ultimo fallback su stderr/os.write."""
     payload = dict(extra or {})
     try:
         log_fn = getattr(logger, level, None)
@@ -47,17 +49,28 @@ def _safe_log(logger: logging.Logger, level: str, event: str, *, extra: Mapping[
             log_fn(event, extra=payload)
             return
     except Exception as exc:
-        _FALLBACK_LOG.warning(
-            "structured_logger_failed",
-            extra={"event": event, "level": level, "error": repr(exc), "payload_keys": list(payload.keys())},
-            exc_info=True,
-        )
+        try:
+            _FALLBACK_LOG.warning(
+                "structured_logger_failed",
+                extra={"event": event, "level": level, "error": repr(exc), "payload_keys": list(payload.keys())},
+                exc_info=True,
+            )
+        except Exception:
+            try:
+                os.write(2, (f"[safe_log failed] {event}\n").encode("utf-8", "replace"))
+            except Exception:
+                return
     # fallback minimale: stdlib logger, stesso event
     try:
         getattr(_FALLBACK_LOG, level, _FALLBACK_LOG.info)(event, extra={"payload": payload})
     except Exception:
-        # ultimo fallback: niente altro sensato da fare senza rischiare loop
-        return
+        try:
+            print(f"[safe_log failed] {event}", file=sys.stderr, flush=True)
+        except Exception:
+            try:
+                os.write(2, (f"[safe_log failed] {event}\n").encode("utf-8", "replace"))
+            except Exception:
+                return
 
 
 class _ReadmeCtx(Protocol):

@@ -164,3 +164,38 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
         assert recs, f"evento {key} mancante"
         assert getattr(recs[0], "slug", None) == "dummy"
         assert str(p) in getattr(recs[0], "file_path", "")
+
+
+def test_safe_log_never_raises_and_uses_os_write_worst_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _BrokenLogger:
+        def info(self, *_a, **_k):
+            raise RuntimeError("structured boom")
+
+    class _BrokenFallback:
+        def warning(self, *_a, **_k):
+            raise RuntimeError("fallback warning boom")
+
+        def info(self, *_a, **_k):
+            raise RuntimeError("fallback info boom")
+
+    logger = _BrokenLogger()
+    monkeypatch.setattr(cu, "_FALLBACK_LOG", _BrokenFallback())
+
+    def _print_boom(*_a, **_k):
+        raise RuntimeError("stderr print boom")
+
+    monkeypatch.setattr("builtins.print", _print_boom)
+
+    captured: dict[str, object] = {}
+
+    def _fake_os_write(fd: int, payload: bytes) -> int:
+        captured["fd"] = fd
+        captured["payload"] = payload
+        return len(payload)
+
+    monkeypatch.setattr(cu.os, "write", _fake_os_write)
+
+    cu._safe_log(logger, "info", "pipeline.content.test_worst_case", extra={"k": "v"})
+
+    assert captured.get("fd") == 2
+    assert b"[safe_log failed] pipeline.content.test_worst_case" in bytes(captured.get("payload", b""))
