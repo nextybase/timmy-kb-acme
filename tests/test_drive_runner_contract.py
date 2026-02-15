@@ -126,6 +126,31 @@ def test_drive_client_root_exists(monkeypatch):
     assert not dr.drive_client_root_exists("acme")
 
 
+def test_drive_client_root_exists_bootstrap_recovery_when_config_missing(monkeypatch):
+    ctx = DummyCtx("acme")
+    ctx.env = {"DRIVE_ID": "drive-root"}
+
+    def fake_client_context(*_args, **_kwargs):
+        raise dr.ConfigError("Manca config/config.yaml in C:/tmp/config/config.yaml")
+
+    load_calls = []
+
+    def fake_load(*, slug, require_drive_env, bootstrap_config, logger):
+        load_calls.append((slug, require_drive_env, bootstrap_config, logger is not None))
+        return ctx
+
+    monkeypatch.setattr(dr, "get_client_context", fake_client_context)
+    monkeypatch.setattr(dr._PipelineClientContext, "load", fake_load)
+    monkeypatch.setattr(dr, "_require_drive_env", lambda context: None)
+    monkeypatch.setattr(dr, "get_drive_service", lambda context: "svc")
+    monkeypatch.setattr(dr, "_get_existing_client_folder_id", lambda *args, **kwargs: "exists-id")
+
+    monkeypatch.setenv("TIMMY_ALLOW_BOOTSTRAP", "0")
+    assert dr.drive_client_root_exists("acme")
+    assert load_calls == [("acme", True, True, True)]
+    assert dr.os.environ.get("TIMMY_ALLOW_BOOTSTRAP") == "0"
+
+
 def test_ensure_category_folders_creates(monkeypatch):
     entries = [{"name": "foo", "id": "foo-id"}]
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import io
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
@@ -12,8 +13,9 @@ import yaml
 
 from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.constants import GDRIVE_FOLDER_MIME as MIME_FOLDER
+from pipeline.context import ClientContext as _PipelineClientContext
 from pipeline.drive.download_steps import compute_created, discover_candidates, emit_progress, snapshot_existing
-from pipeline.exceptions import CapabilityUnavailableError, WorkspaceLayoutInvalid
+from pipeline.exceptions import CapabilityUnavailableError, ConfigError, WorkspaceLayoutInvalid
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.workspace_layout import WorkspaceLayout
 
@@ -522,8 +524,36 @@ def _drive_find_child_by_name(service: Any, parent_id: str, name: str) -> List[D
     return resp.get("files") or []
 
 
+def _load_context_for_drive_probe(slug: str, *, require_env: bool) -> ClientContext:
+    try:
+        return get_client_context(slug, require_drive_env=require_env)
+    except ConfigError as exc:
+        message = str(exc)
+        if "Manca config/config.yaml" not in message:
+            raise
+        prev_bootstrap = os.environ.get("TIMMY_ALLOW_BOOTSTRAP")
+        os.environ["TIMMY_ALLOW_BOOTSTRAP"] = "1"
+        try:
+            ctx = _PipelineClientContext.load(
+                slug=slug,
+                require_drive_env=require_env,
+                bootstrap_config=True,
+                logger=_get_logger(),
+            )
+        finally:
+            if prev_bootstrap is None:
+                os.environ.pop("TIMMY_ALLOW_BOOTSTRAP", None)
+            else:
+                os.environ["TIMMY_ALLOW_BOOTSTRAP"] = prev_bootstrap
+        _get_logger(ctx).info(
+            "ui.drive.context_bootstrap_recovered",
+            extra={"slug": slug, "reason": "missing_config"},
+        )
+        return ctx
+
+
 def drive_client_root_exists(slug: str, *, require_env: bool = True) -> bool:
-    ctx = get_client_context(slug, require_drive_env=require_env)
+    ctx = _load_context_for_drive_probe(slug, require_env=require_env)
     if require_env:
         _require_drive_env(ctx)
     service = get_drive_service(ctx)
