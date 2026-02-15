@@ -35,9 +35,13 @@ class _DummySt:
 class _DummyLogger:
     def __init__(self) -> None:
         self.exceptions: list[tuple[str, dict[str, Any]]] = []
+        self.warnings: list[tuple[str, dict[str, Any]]] = []
 
     def exception(self, message: str, *, extra: dict[str, Any]) -> None:
         self.exceptions.append((message, extra))
+
+    def warning(self, message: str, *, extra: dict[str, Any]) -> None:
+        self.warnings.append((message, extra))
 
 
 def _status_guard(*_: Any, **__: Any):
@@ -104,3 +108,33 @@ def test_execute_drive_download_fails_on_legacy_signature_without_require_env() 
     assert ok is False
     assert st.errors
     assert logger.exceptions
+
+
+def test_execute_drive_download_partial_failure_is_warning_and_success() -> None:
+    from pipeline.exceptions import PipelineError
+
+    st = _DummySt()
+    logger = _DummyLogger()
+    invalidated: list[str] = []
+
+    def _download(slug: str, *, overwrite: bool, require_env: bool, logger: Any = None) -> list[Path]:
+        _ = (slug, overwrite, require_env, logger)
+        raise PipelineError("Download completato con errori: 1 elementi falliti. Dettagli: broken.pdf: mime mismatch")
+
+    ok = execute_drive_download(
+        "acme",
+        [],
+        download_with_progress=_download,
+        download_simple=None,
+        invalidate_index=lambda s: invalidated.append(s),
+        logger=logger,
+        st=st,
+        status_guard=_status_guard,
+        overwrite_requested=False,
+    )
+
+    assert ok is True
+    assert invalidated == ["acme"]
+    assert st.warnings
+    assert "Download completato con avvisi" in st.warnings[-1]
+    assert not st.errors

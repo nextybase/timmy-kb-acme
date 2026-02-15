@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, ContextManager, Optional, Protocol, Sequence, cast
 
+from pipeline.exceptions import PipelineError
 from ui.manage._helpers import call_strict
 from ui.types import StreamlitLike
 
@@ -100,6 +101,36 @@ def execute_drive_download(
             return True
         except Exception:
             return True
+    except PipelineError as exc:
+        message = str(exc)
+        if "Download completato con errori" not in message:
+            try:
+                logger.exception(
+                    "ui.manage.drive.download_failed",
+                    extra={
+                        "slug": slug,
+                        "overwrite": overwrite_existing,
+                        "error": message,
+                    },
+                )
+            except Exception:
+                pass
+            st.error(f"Errore durante il download: {exc}")
+            return False
+        try:
+            logger.warning(
+                "ui.manage.drive.download_partial",
+                extra={"slug": slug, "overwrite": overwrite_existing, "error": message},
+            )
+        except Exception:
+            pass
+        try:
+            if invalidate_index is not None:
+                invalidate_index(slug)
+        except Exception:
+            pass
+        st.warning(f"Download completato con avvisi: {message}")
+        return True
     except Exception as exc:
         try:
             logger.exception(
