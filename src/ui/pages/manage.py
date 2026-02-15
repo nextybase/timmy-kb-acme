@@ -2,31 +2,32 @@
 # src/ui/pages/manage.py
 from __future__ import annotations
 
-import os
+import re
 from pathlib import Path
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable, cast
 
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.workspace_layout import WorkspaceLayout
-from storage.tags_store import import_tags_yaml_to_db
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_all as get_clients
 from ui.clients_store import get_state as get_client_state
 from ui.clients_store import set_state as set_client_state
+from ui.gating import compute_gates
 from ui.gating import reset_gating_cache as _reset_gating_cache
+from ui.gating import visible_page_specs
 from ui.manage import _helpers as manage_helpers
 from ui.manage import drive as drive_component
 from ui.manage import tags as tags_component
 from ui.pages.registry import PagePaths
 from ui.utils import set_slug
-from ui.utils.config import get_drive_env_config, get_tags_env_config
+from ui.utils.config import get_drive_env_config
 from ui.utils.core import safe_write_text
 from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  # noqa: F401
 from ui.utils.status import status_guard
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
-from ui.utils.workspace import count_markdown_safe, get_ui_workspace_layout
+from ui.utils.workspace import count_markdown_safe, count_pdfs_safe, get_ui_workspace_layout
 
 LOGGER = get_structured_logger("ui.manage")
 st = get_streamlit()
@@ -105,7 +106,9 @@ def _call_strict(fn: Callable[..., Any], **kwargs: Any) -> Any:
 
 def _render_missing_layout(slug: str) -> None:
     """Messaggio e pulsante per layout assente o non risolvibile."""
-    st.error("Impossibile risolvere il layout workspace: il runtime UI è sempre fail-fast e non crea layout impliciti.")
+    st.error(
+        "Impossibile risolvere il layout workspace: il runtime UI è sempre fail-fast " "e non crea layout impliciti."
+    )
     st.caption(
         "Usa /new per creare un nuovo cliente (bootstrap_client_workspace) oppure rigenera il dummy con "
         "tools/gen_dummy_kb.py prima di aprire la UI."
@@ -130,20 +133,20 @@ _download_with_progress = manage_helpers.safe_get(
 )
 _download_simple = manage_helpers.safe_get("ui.services.drive_runner:download_raw_from_drive", strict=True)
 
-# Arricchimento semantico (estrazione tag ? stub + YAML)
-_run_tags_update = manage_helpers.safe_get("ui.services.tags_adapter:run_tags_update", strict=True)
-# Tag KG Builder (Knowledge Graph dei tag)
-_run_tag_kg_builder = manage_helpers.safe_get("ui.services.tag_kg_builder:run_tag_kg_builder", strict=True)
+# Tag onboarding (estrazione/generazione tag semantici)
+_run_tag_onboarding = manage_helpers.safe_get("timmy_kb.cli.tag_onboarding:tag_onboarding_main", strict=True)
+# Conversione locale RAW -> normalized
+_run_raw_ingest = manage_helpers.safe_get("timmy_kb.cli.raw_ingest:run_raw_ingest", strict=True)
 
 
 # ---------------- Action handlers ----------------
-def _handle_tags_raw_save(
+def _save_tags_draft_csv(
     slug: str,
     content: str,
     csv_path: Path,
     semantic_dir: Path,
 ) -> bool:
-    result = tags_component.handle_tags_raw_save(
+    result = tags_component.save_tags_draft_csv(
         slug,
         content,
         csv_path,
@@ -155,77 +158,9 @@ def _handle_tags_raw_save(
     return bool(result)
 
 
-def _enable_tags_stub(
-    slug: str,
-    semantic_dir: Path,
-    yaml_path: Path,
-) -> bool:
-    result = tags_component.enable_tags_stub(
-        slug,
-        semantic_dir,
-        yaml_path,
-        st=st,
-        logger=LOGGER,
-        set_client_state=set_client_state,
-        reset_gating_cache=_reset_gating_cache,
-        read_fn=read_text_safe,
-        write_fn=safe_write_text,
-        import_yaml_fn=import_tags_yaml_to_db,
-    )
-    return bool(result)
-
-
-def _enable_tags_service(
-    slug: str,
-    semantic_dir: Path,
-    csv_path: Path,
-    yaml_path: Path,
-) -> bool:
-    result = tags_component.enable_tags_service(
-        slug,
-        semantic_dir,
-        csv_path,
-        yaml_path,
-        st=st,
-        logger=LOGGER,
-        set_client_state=set_client_state,
-        reset_gating_cache=_reset_gating_cache,
-    )
-    return bool(result)
-
-
-def _handle_tags_raw_enable(
-    slug: str,
-    semantic_dir: Path,
-    csv_path: Path,
-    yaml_path: Path,
-) -> bool:
-    tags_cfg = get_tags_env_config()
-    run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
-    result = tags_component.handle_tags_raw_enable(
-        slug,
-        semantic_dir,
-        csv_path,
-        yaml_path,
-        st=st,
-        logger=LOGGER,
-        tags_mode=tags_cfg.normalized,
-        run_tags_fn=run_tags_fn,
-        set_client_state=set_client_state,
-        reset_gating_cache=_reset_gating_cache,
-        read_fn=read_text_safe,
-        write_fn=safe_write_text,
-        import_yaml_fn=import_tags_yaml_to_db,
-    )
-    return bool(result)
-
-
-# -----------------------------------------------------------
-# Modal editor per semantic/tags_reviewed.yaml
-# -----------------------------------------------------------
-def _open_tags_editor_modal(slug: str, layout: WorkspaceLayout) -> None:
+def _open_tags_draft_modal(slug: str, layout: WorkspaceLayout) -> None:
     repo_root_dir = layout.repo_root_dir
-    tags_component.open_tags_editor_modal(
+    tags_component.open_tags_draft_modal(
         slug,
         repo_root_dir,
         st=st,
@@ -236,27 +171,6 @@ def _open_tags_editor_modal(slug: str, layout: WorkspaceLayout) -> None:
         path_resolver=ensure_within_and_resolve,
         read_fn=read_text_safe,
         write_fn=safe_write_text,
-        import_yaml_fn=import_tags_yaml_to_db,
-    )
-
-
-def _open_tags_raw_modal(slug: str, layout: WorkspaceLayout) -> None:
-    repo_root_dir = layout.repo_root_dir
-    tags_cfg = get_tags_env_config()
-    tags_component.open_tags_raw_modal(
-        slug,
-        repo_root_dir,
-        st=st,
-        logger=LOGGER,
-        column_button=_column_button,
-        tags_mode=tags_cfg.normalized,
-        run_tags_fn=cast(Optional[Callable[[str], Any]], _run_tags_update),
-        set_client_state=set_client_state,
-        reset_gating_cache=_reset_gating_cache,
-        path_resolver=ensure_within_and_resolve,
-        read_fn=read_text_safe,
-        write_fn=safe_write_text,
-        import_yaml_fn=import_tags_yaml_to_db,
     )
 
 
@@ -325,6 +239,141 @@ def _render_status_block(
     return
 
 
+def _render_drive_download_report_box() -> None:
+    report = st.session_state.get("__drive_download_last_report")
+    if not isinstance(report, dict):
+        return
+    status = str(report.get("status") or "").strip().lower()
+    if status not in {"ok", "partial", "error"}:
+        return
+
+    icon_map = {
+        "ok": "🟢",
+        "partial": "🟡",
+        "error": "🔴",
+    }
+    label_map = {
+        "ok": "completato",
+        "partial": "completato con avvisi",
+        "error": "fallito",
+    }
+    icon = icon_map.get(status, "⚪")
+    label = label_map.get(status, "stato non disponibile")
+    title = f"{icon} Report download da Drive: {label}"
+
+    def _sanitize_reason(raw: str) -> str:
+        text = raw.strip()
+        low = text.lower()
+        if "not downloadable" in low or "only files with binary content can be downloaded" in low:
+            return "File non scaricabile direttamente da Drive (probabile file Google Docs)."
+        if "mime" in low:
+            return "Formato file non supportato per questo download."
+        if "403" in low or "forbidden" in low:
+            return "Permessi insufficienti per scaricare il file."
+        if "404" in low or "not found" in low:
+            return "File non trovato su Drive."
+        if "429" in low or "rate limit" in low:
+            return "Limite richieste raggiunto: riprova tra poco."
+        if "500" in low or "503" in low:
+            return "Errore temporaneo del servizio Drive."
+        return "Errore durante il download del file."
+
+    def _extract_file_issues(message: str) -> list[tuple[str, str]]:
+        details = message
+        if "Dettagli:" in details:
+            details = details.split("Dettagli:", 1)[1]
+        chunks = [piece.strip() for piece in re.split(r";\s*", details) if piece.strip()]
+        issues: list[tuple[str, str]] = []
+        file_pattern = re.compile(
+            r"(?P<file>(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+)\s*:\s*(?P<reason>.+)"
+        )
+        for chunk in chunks:
+            match = file_pattern.search(chunk)
+            if not match:
+                continue
+            file_name = match.group("file").strip()
+            reason_raw = match.group("reason").strip()
+            issues.append((file_name, _sanitize_reason(reason_raw)))
+        return issues
+
+    with st.expander(title, expanded=False):
+        downloaded_count = report.get("downloaded_count")
+        overwrite = report.get("overwrite")
+        message = str(report.get("message") or "").strip()
+
+        if isinstance(downloaded_count, int):
+            st.write(f"File nuovi/aggiornati: **{downloaded_count}**")
+        if isinstance(overwrite, bool):
+            st.write(f"Sovrascrittura file esistenti: **{'Si' if overwrite else 'No'}**")
+        if message:
+            issues = _extract_file_issues(message)
+            if issues:
+                st.write("File con problemi:")
+                st.markdown("\n".join(f"- `{name}`: {reason}" for name, reason in issues))
+            else:
+                st.write(_sanitize_reason(message))
+
+
+def _render_tag_onboarding_report_box(slug: str, layout: WorkspaceLayout, client_state: str) -> None:
+    if client_state == "finito":
+        return
+
+    semantic_dir = layout.semantic_dir
+    tags_raw_csv = semantic_dir / "tags_raw.csv"
+    tags_db = semantic_dir / "tags.db"
+    has_tags_raw = tags_raw_csv.exists()
+
+    report = st.session_state.get("__tag_onboarding_last_report")
+    if not isinstance(report, dict):
+        if not has_tags_raw:
+            return
+        report = {
+            "status": "ok",
+            "details": "Report persistente: puoi tornare su Edit -> Valida in qualsiasi momento.",
+        }
+
+    status = str(report.get("status") or "").strip().lower()
+    if status not in {"ok", "error"}:
+        status = "ok" if has_tags_raw else "error"
+    icon = "🟢" if status == "ok" else "🔴"
+    label = "completato" if status == "ok" else "fallito"
+    title = f"{icon} Report creazione tag semantici: {label}"
+    with st.expander(title, expanded=(status == "error")):
+        c1, c2 = st.columns(2)
+        with c1:
+            if _column_button(st, "Edit", key=f"btn_edit_tags_raw_{slug}", type="secondary", width="stretch"):
+                _open_tags_draft_modal(slug, layout)
+        with c2:
+            st.write("")
+        live_outputs = [
+            tags_raw_csv,
+            tags_db,
+        ]
+        st.markdown("Output:")
+        for p in live_outputs:
+            st.markdown(f"- `{p.name}`: {'presente' if p.exists() else 'mancante'}")
+        details = str(report.get("details") or "").strip()
+        if details:
+            st.caption(details)
+
+
+def _is_page_visible(page_path: str) -> bool:
+    """True se la pagina e' disponibile nella navigazione corrente (gate inclusi)."""
+    try:
+        groups = visible_page_specs(compute_gates())
+    except Exception as exc:  # pragma: no cover - difesa runtime UI
+        LOGGER.warning(
+            "ui.manage.page_visibility_check_failed",
+            extra={"page_path": page_path, "error": str(exc)},
+        )
+        return False
+    for specs in groups.values():
+        for spec in specs:
+            if getattr(spec, "path", None) == page_path:
+                return True
+    return False
+
+
 if slug:
     # Da qui in poi: slug presente → viste operative
     layout = _resolve_layout(slug)
@@ -351,6 +400,7 @@ if slug:
     # --- Sezioni Gestisci cliente: download, arricchimento, README ---
     client_state = (get_client_state(slug) or "").strip().lower()
     emit_btn_type = "primary" if client_state == "nuovo" else "secondary"
+    readme_done_state = client_state in {"pronto", "arricchito", "finito"}
 
     repo_root_dir = layout.repo_root_dir
     normalized_dir = layout.normalized_dir
@@ -358,21 +408,14 @@ if slug:
 
     md_count = count_markdown_safe(normalized_dir)
     has_markdown = md_count > 0
-    tags_cfg = get_tags_env_config()
-    tags_mode = tags_cfg.normalized
-    run_tags_fn = cast(Optional[Callable[[str], Any]], _run_tags_update)
-    can_stub = tags_cfg.is_stub
-    can_run_service = run_tags_fn is not None
-    service_ok = can_stub or can_run_service
-    prerequisites_ok = has_markdown and service_ok
+    raw_pdf_count = count_pdfs_safe(layout.raw_dir, use_cache=True, cache_ttl_s=3.0)
+    has_raw_pdfs = raw_pdf_count > 0
+    service_ok = _run_raw_ingest is not None
+    prerequisites_ok = has_raw_pdfs and service_ok
     semantic_help = (
-        "Estrae keyword dai Markdown in normalized/, genera/aggiorna tags_raw.csv e lo stub (DB). "
-        "Poi puoi rivedere il CSV e abilitare lo YAML."
+        "Converte i PDF in raw/ in Markdown in normalized/."
         if prerequisites_ok
-        else (
-            "Disponibile solo quando normalized/ contiene Markdown e il servizio di estrazione è attivo "
-            "(puoi usare TAGS_MODE=stub per bypassare il servizio, ma servono comunque Markdown)."
-        )
+        else "Disponibile solo quando raw/ contiene PDF e la conversione raw_ingest è disponibile."
     )
 
     st.subheader("Azioni sul workspace")
@@ -380,13 +423,19 @@ if slug:
     drive_env = get_drive_env_config()
     download_disabled = _plan_raw_download is None or not drive_env.download_ready
     semantic_disabled = not prerequisites_ok
+    download_status = str(st.session_state.get("__drive_download_last_status") or "").strip().lower()
+    show_download_report_box = download_status in {"ok", "partial", "error"}
 
     col_emit, col_download, col_semantic = st.columns(3)
 
     with col_emit:
         # Contratto: fase C (manuale) della pipeline A/B/C descritta in system/ops/runbook_drive_provisioning.md.
         # Il bottone garantisce fail-fast e publish deterministico della struttura Drive, come previsto dal doc.
-        if emit_disabled:
+        if show_download_report_box:
+            _render_drive_download_report_box()
+        if readme_done_state:
+            emit_disabled = True
+        if emit_disabled and not readme_done_state:
             _warn_once(
                 "manage_readme_unavailable",
                 "ui.manage.readme.unavailable",
@@ -396,11 +445,12 @@ if slug:
                 "Provisioning della struttura Drive non disponibile: installa gli extra Drive "
                 "e configura le credenziali richieste."
             )
+        emit_label = "✅ Genera struttura Drive" if readme_done_state else "Genera struttura Drive"
         if _column_button(
             st,
-            "Genera struttura Drive",
+            emit_label,
             key="btn_emit_readmes",
-            type="primary",
+            type=emit_btn_type,
             width="stretch",
             disabled=emit_disabled,
         ):
@@ -429,6 +479,9 @@ if slug:
 
                     if _invalidate_drive_index is not None:
                         _invalidate_drive_index(slug)
+                    if client_state == "nuovo":
+                        set_client_state(slug, "pronto")
+                        _reset_gating_cache(slug)
                     st.toast("Struttura Drive generata e README pubblicati su Drive.")
                     _safe_rerun()
                 except Exception as e:  # pragma: no cover
@@ -542,43 +595,109 @@ if slug:
     with col_semantic:
         if _column_button(
             st,
-            "Arricchimento semantico",
-            key="btn_semantic_action",
+            "Converti PDF",
+            key="btn_convert_pdf_action",
             type="secondary",
             width="stretch",
             disabled=semantic_disabled,
             help=semantic_help,
         ):
-            if not has_markdown:
+            if not has_raw_pdfs:
                 st.error(
-                    f"Nessun Markdown rilevato in `{normalized_dir}`. "
-                    "Esegui raw_ingest o rigenera normalized/ prima di procedere."
+                    f"Nessun PDF rilevato in `{layout.raw_dir}`. "
+                    "Scarica o copia i PDF nelle sottocartelle di raw/ prima di procedere."
                 )
+            elif _run_raw_ingest is None:
+                st.error("Servizio di conversione non disponibile (raw_ingest).")
             else:
-                backend = os.getenv("TAGS_NLP_BACKEND", "spacy").strip().lower() or "spacy"
-                backend_label = "SpaCy" if backend == "spacy" else backend.capitalize()
-                if tags_mode == "stub":
-                    _open_tags_raw_modal(slug, layout=layout)
-                elif run_tags_fn is None:
-                    LOGGER.error(
-                        "ui.manage.tags.service_missing",
-                        extra={"slug": slug, "mode": tags_mode or "default"},
-                    )
-                    st.error("Servizio di estrazione tag non disponibile.")
-                else:
-                    try:
-                        st.info(f"Esecuzione NLP ({backend_label}/euristica) in corso, attendi...")
-                        run_tags_fn(slug)
-                        _open_tags_raw_modal(slug, layout=layout)
-                    except Exception as exc:  # pragma: no cover
-                        LOGGER.exception(
-                            "ui.manage.tags.run_failed",
-                            extra={"slug": slug, "error": str(exc)},
+                try:
+                    with status_guard(
+                        "Converto i PDF da raw/ a normalized...",
+                        expanded=True,
+                        error_label="Errore durante la conversione PDF",
+                    ):
+                        manage_helpers.call_strict(
+                            _run_raw_ingest,
+                            logger=LOGGER,
+                            slug=slug,
+                            source="local",
+                            local_path=str(layout.raw_dir),
+                            non_interactive=True,
                         )
-                        st.error(f"Estrazione tag non riuscita: {exc}")
+                    st.toast("Conversione completata: normalized/ aggiornato.")
+                    _safe_rerun()
+                except Exception as exc:  # pragma: no cover
+                    LOGGER.exception(
+                        "ui.manage.raw_ingest.run_failed",
+                        extra={"slug": slug, "error": str(exc)},
+                    )
+                    st.error(f"Conversione PDF non riuscita: {exc}")
+
+    kg_help = (
+        "Esegue tag_onboarding su `normalized/`: genera `semantic/tags_raw.csv` "
+        "e prepara la validazione verso `semantic/tags.db`."
+    )
+    kg_disabled = _run_tag_onboarding is None or client_state not in {"pronto", "arricchito"} or not has_markdown
+    if _run_tag_onboarding is None:
+        kg_help = "Tag onboarding non disponibile: servizio `timmy_kb.cli.tag_onboarding` mancante."
+    elif client_state not in {"pronto", "arricchito"}:
+        kg_help = "Disponibile dallo stato cliente 'pronto' in poi."
+    elif not has_markdown:
+        kg_help = "Disponibile dopo la conversione PDF (servono file Markdown in `normalized/`)."
+
+    if _column_button(
+        st,
+        "Crea Tag semantici",
+        key="btn_build_kg_action",
+        type="secondary",
+        width="stretch",
+        disabled=kg_disabled,
+        help=kg_help,
+    ):
+        try:
+            with status_guard(
+                "Genero tag semantici da `normalized/` (CSV + YAML + DB)...",
+                expanded=True,
+                error_label="Errore durante la creazione dei tag semantici",
+            ):
+                manage_helpers.call_strict(
+                    _run_tag_onboarding,
+                    logger=LOGGER,
+                    slug=slug,
+                    non_interactive=True,
+                    proceed_after_csv=True,
+                )
+            semantic_dir = layout.semantic_dir
+            expected_outputs = [
+                semantic_dir / "tags_raw.csv",
+                semantic_dir / "tags.db",
+            ]
+            output_rows = [f"`{p.name}`: {'presente' if p.exists() else 'mancante'}" for p in expected_outputs]
+            st.session_state["__tag_onboarding_last_report"] = {
+                "status": "ok",
+                "outputs": output_rows,
+                "details": "Bozza tag creata: usa Edit -> Valida per creare/aggiornare `tags.db`.",
+            }
+            st.toast("Bozza tag creata (`tags_raw.csv`). Usa Edit -> Valida per creare `tags.db`.")
+            _safe_rerun()
+        except Exception as exc:  # pragma: no cover
+            LOGGER.exception(
+                "ui.manage.tag_onboarding.run_failed",
+                extra={"slug": slug, "error": str(exc)},
+            )
+            st.session_state["__tag_onboarding_last_report"] = {
+                "status": "error",
+                "outputs": [],
+                "details": str(exc),
+            }
+            st.error(
+                "Creazione tag semantici non riuscita " f"(attesi: `semantic/tags_raw.csv`, `semantic/tags.db`): {exc}"
+            )
+
+    _render_tag_onboarding_report_box(slug, layout, client_state)
 
     # helper sections removed
-    if (get_client_state(slug) or "").strip().lower() == "arricchito":
+    if client_state in {"arricchito", "finito"} and _is_page_visible(PagePaths.SEMANTICS):
         # Sostituisce anchor HTML interno con API native di navigazione
         link_label = "📌 Prosegui con l'arricchimento semantico"
         st.page_link(PagePaths.SEMANTICS, label=link_label)

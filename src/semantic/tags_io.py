@@ -13,7 +13,7 @@ Cosa fa il modulo
 - `write_tags_review_stub_from_csv(semantic_dir, csv_path, logger, top_n=120) -> Path`
   Genera uno stub (persistito in SQLite) a partire da `tags_raw.csv`:
   deduplica e normalizza i suggerimenti (lowercase) fino a `top_n`.
-  Lettura consentita solo se il CSV è sotto `semantic_dir` (guardia `ensure_within`).
+  Lettura consentita solo se il CSV e sotto `semantic_dir` (guardia `ensure_within`).
 
 Sicurezza & I/O
 ---------------
@@ -26,8 +26,6 @@ from __future__ import annotations
 
 import csv
 import logging
-import sqlite3
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,14 +35,12 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
 from storage import tags_store
-from storage.tags_store import derive_db_path_from_yaml_path
-from storage.tags_store import save_tags_reviewed as save_tags_reviewed_db
+from storage.tags_store import save_tags_db
 
 __all__ = [
     "write_tagging_readme",
     "write_tags_review_stub_from_csv",
     "write_tags_review_from_terms_db",
-    "write_tags_reviewed_from_nlp_db",
 ]
 
 
@@ -75,13 +71,13 @@ def write_tags_review_stub_from_csv(
     logger: logging.Logger,
     top_n: int = 120,
 ) -> Path:
-    """Genera uno stub di revisione a partire da `tags_raw.csv` e lo salva in SQLite.
+    """Genera uno stub di revisione a partire da `tags_raw.csv` e lo salva in `tags.db`.
 
     Regole:
     - Richiede lo schema esteso con header `suggested_tags`; se manca viene sollevato ConfigError.
     - Usa tutti i suggerimenti (split su ',') in lowercase e deduplicati preservando l'ordine.
     - Si ferma quando ha raccolto `top_n` tag unici.
-    - Lettura CSV consentita solo se il file è sotto `semantic_dir`.
+    - Lettura CSV consentita solo se il file e sotto `semantic_dir`.
     """
     semantic_dir = Path(semantic_dir).resolve()
     csv_path = Path(csv_path)
@@ -132,11 +128,10 @@ def write_tags_review_stub_from_csv(
     except Exception as e:
         raise ConfigError("Errore durante la lettura del CSV.", file_path=str(csv_path)) from e
 
-    # Persistenza su SQLite (usiamo lo stesso dict logico del vecchio YAML)
+    # Persistenza diretta su SQLite (SSoT)
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    yaml_path = semantic_dir / "tags_reviewed.yaml"
-    ensure_within(semantic_dir, yaml_path)
-    db_path = derive_db_path_from_yaml_path(yaml_path)
+    db_path = semantic_dir / "tags.db"
+    ensure_within(semantic_dir, db_path)
 
     data = {
         "version": "2",
@@ -144,7 +139,7 @@ def write_tags_review_stub_from_csv(
         "keep_only_listed": True,
         "tags": [{"name": t, "action": "keep", "synonyms": [], "note": ""} for t in suggested],
     }
-    save_tags_reviewed_db(db_path, data)
+    save_tags_db(db_path, data)
     logger.info(
         "semantic.tags_review_stub.written",
         extra={"file_path": str(db_path), "suggested": len(suggested)},
@@ -154,14 +149,14 @@ def write_tags_review_stub_from_csv(
 
 def write_tags_review_from_terms_db(db_path: str | Path, keep_only_listed: bool = True) -> dict[str, Any]:
     """
-    Genera (e salva) `tags_reviewed` a partire dal DB NLP (`terms` + `term_aliases`).
+    Genera (e salva) i tag canonici a partire dal DB NLP (`terms` + `term_aliases`).
 
     Args:
         db_path: percorso del DB SQLite con le tabelle NLP.
         keep_only_listed: valore da impostare nel payload finale.
 
     Returns:
-        Il dizionario serializzato (version 2) persistito via `save_tags_reviewed`.
+        Il dizionario serializzato (version 2) persistito via `save_tags_db`.
     """
     resolved_db_path = Path(db_path).resolve()
 
@@ -191,106 +186,5 @@ def write_tags_review_from_terms_db(db_path: str | Path, keep_only_listed: bool 
         "tags": tags_payload,
     }
 
-    tags_store.save_tags_reviewed(str(resolved_db_path), data)
+    tags_store.save_tags_db(str(resolved_db_path), data)
     return data
-
-
-def write_tags_reviewed_from_nlp_db(
-    semantic_dir: Path,
-    db_path: Path,
-    logger: Any,
-    *,
-    limit: int = 200,
-    min_weight: float = 0.0,
-    keep_only_listed: bool = True,
-    version: str = "2",
-) -> Path:
-    """
-    Esporta `tags_reviewed.yaml` dai risultati NLP salvati in SQLite (terms / aliases / folder_terms).
-
-    Args:
-        semantic_dir: directory `semantic/` del cliente.
-        db_path: percorso del DB NLP (tipicamente `semantic/tags.db`).
-        logger: logger su cui emettere le informazioni (best-effort (non influenza artefatti/gate/ledger/exit code)).
-        limit: numero massimo di tag da includere (ordinati per peso globale).
-        min_weight: soglia minima sul peso aggregato per includere un termine.
-        keep_only_listed: flag da salvare nel payload finale.
-        version: versione del formato `tags_reviewed`.
-
-    Returns:
-        Percorso del file YAML scritto.
-    """
-    semantic_dir = Path(semantic_dir).resolve()
-    semantic_dir.mkdir(parents=True, exist_ok=True)
-    out_path = semantic_dir / "tags_reviewed.yaml"
-    tags_store.ensure_schema_v2(str(db_path))
-
-    tags_payload: list[dict[str, Any]] = []
-    keep_only_listed_val = bool(keep_only_listed)
-    reviewed_at_val: str | None = None
-
-    try:
-        with sqlite3.connect(str(db_path)) as con:
-            con.row_factory = sqlite3.Row
-            cur = con.cursor()
-            rows = cur.execute(
-                """
-                SELECT t.id AS term_id, t.canonical AS canonical, IFNULL(SUM(ft.weight), 0) AS total_weight
-                FROM terms t
-                LEFT JOIN folder_terms ft
-                    ON ft.term_id = t.id
-                    AND (ft.status IS NULL OR ft.status = 'keep')
-                GROUP BY t.id
-                HAVING total_weight >= ?
-                ORDER BY total_weight DESC, t.canonical COLLATE NOCASE
-                LIMIT ?
-                """,
-                (float(min_weight), int(limit)),
-            ).fetchall()
-
-            for row in rows:
-                term_id = int(row["term_id"])
-                canonical = str(row["canonical"]).strip()
-                if not canonical:
-                    continue
-                syn_rows = cur.execute(
-                    """
-                    SELECT alias FROM term_aliases
-                    WHERE term_id = ?
-                    ORDER BY alias COLLATE NOCASE
-                    """,
-                    (term_id,),
-                ).fetchall()
-                synonyms = [str(s["alias"]).strip() for s in syn_rows if str(s["alias"]).strip()]
-                tags_payload.append(
-                    {
-                        "name": canonical,
-                        "action": "keep",
-                        "synonyms": synonyms,
-                        "note": "",
-                    }
-                )
-    except Exception as exc:
-        raise ConfigError("Impossibile esportare i tag dal DB NLP.", file_path=str(db_path)) from exc
-
-    payload: dict[str, Any] = {
-        "version": version,
-        "reviewed_at": reviewed_at_val,
-        "keep_only_listed": keep_only_listed_val,
-        "tags": tags_payload,
-    }
-
-    ensure_within(semantic_dir, out_path)
-    yaml_text = tags_store.serialize_tags_payload(payload)
-    safe_write_text(out_path, yaml_text, encoding="utf-8", atomic=True)
-    try:
-        logger.info(
-            "semantic.tags_yaml.exported_from_nlp",
-            extra={"file_path": str(out_path), "tags": len(tags_payload)},
-        )
-    except Exception as log_exc:
-        try:
-            sys.stderr.write(f"semantic.tags_yaml.exported_from_nlp logging_failure: {log_exc!r}\n")
-        except OSError:
-            pass
-    return out_path

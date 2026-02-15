@@ -5,7 +5,7 @@ from __future__ import annotations
 Allineato al refactor Vision (Fase 1):
 - converte il payload VisionOutput (documents/artefatti - campo payload -/…)
 - NON usa né produce 'keywords'
-- i termini per il tagging restano in semantic/tags_reviewed.yaml (SSoT reviewed)
+- i termini per il tagging restano in semantic/tags.db (SSoT runtime)
 """
 
 from typing import Any, Dict, List

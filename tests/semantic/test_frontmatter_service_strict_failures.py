@@ -26,7 +26,7 @@ def _prepare_workspace(tmp_path: Path) -> tuple[Path, Path]:
     base = tmp_path / "output" / "timmy-kb-dummy"
     ensure_minimal_workspace_layout(base, client_name="dummy")
     mapping = base / "semantic" / "semantic_mapping.yaml"
-    mapping.write_text("semantic_tagger: {}\n", encoding="utf-8")
+    mapping.write_text("{}\n", encoding="utf-8")
     md_path = base / "book" / "a.md"
     md_path.write_text("---\ntitle:\n---\ncontenuto\n", encoding="utf-8")
     return base, md_path

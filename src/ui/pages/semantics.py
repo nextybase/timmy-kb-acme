@@ -26,7 +26,8 @@ from semantic.book_readiness import is_book_ready
 from semantic.convert_service import convert_markdown
 from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
 from ui.chrome import render_chrome_then_require
-from ui.clients_store import get_state, set_state
+from ui.clients_store import get_state
+from ui.clients_store import set_state as set_client_state
 from ui.components.semantic_wizard import render_semantic_wizard
 from ui.constants import SEMANTIC_ENTRY_STATES
 from ui.errors import to_user_message
@@ -75,28 +76,6 @@ def _display_user_error(exc: Exception) -> None:
         st.caption(caption or body)
 
 
-def _update_client_state(slug: str, target_state: str, logger: logging.Logger) -> None:
-    """Aggiorna lo stato cliente loggando eventuali fallimenti e resettando il gating."""
-    try:
-        set_state(slug, target_state)
-        log_gate_event(
-            logger,
-            "ui.semantics.state_promoted",
-            fields=_gate_fields(slug=slug, state=target_state, action="state_promoted"),
-        )
-    except Exception as exc:
-        _log_semantics_failure(
-            logger,
-            "ui.semantics.state_update_failed",
-            exc,
-            extra={"slug": slug, "target_state": target_state},
-        )
-    finally:
-        cache_key = (slug or "<none>").strip().lower()
-        _GATE_CACHE.pop(cache_key, None)
-        _reset_gating_cache(slug)
-
-
 def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[str, bool, Path | None]:
     """Verifica gating indipendente dal contesto Streamlit."""
     cache_key = (slug or "<none>").strip().lower()
@@ -106,7 +85,7 @@ def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[st
         if cached_state in ALLOWED_STATES:
             ready_now, normalized_dir_now = normalized_ready(slug)
             tags_now, _ = tagging_ready(slug)
-            if ready_now and tags_now:
+            if ready_now:
                 result = (cached_state, ready_now, normalized_dir_now or cached_dir)
                 _GATE_CACHE[cache_key] = (cached_state, ready_now, tags_now, normalized_dir_now or cached_dir)
                 return result
@@ -116,7 +95,7 @@ def _require_semantic_gating(slug: str, *, reuse_last: bool = False) -> tuple[st
         _GATE_CACHE.pop(cache_key, None)
     ready, normalized_dir = normalized_ready(slug)
     tags_ok, _ = tagging_ready(slug)
-    if state not in ALLOWED_STATES or not ready or not tags_ok:
+    if state not in ALLOWED_STATES or not ready:
         _raise_semantic_unavailable(slug, state, ready, normalized_dir)
     result = (state, ready, normalized_dir)
     _GATE_CACHE[cache_key] = (state, ready, tags_ok, normalized_dir)
@@ -177,7 +156,6 @@ def _run_convert(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             exc,
             extra={"slug": slug, "action_id": "convert", "status": "done"},
         )
-    _update_client_state(slug, "pronto", logger)
 
 
 def _get_canonical_vocab(
@@ -212,7 +190,7 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
                     reason="tagging_not_ready",
                 ),
             )
-            st.error("Arricchimento bloccato: genera prima semantic/tags.db e tags_reviewed.yaml.")
+            st.error("Arricchimento bloccato: genera prima semantic/tags.db.")
             st.caption("Esegui Estrai tag (tag_onboarding) per popolari i prerequisiti e riprova.")
             return
         raise
@@ -243,10 +221,9 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             exc,
             extra={"slug": slug},
         )
-        _update_client_state(slug, "pronto", logger)
         st.error("Arricchimento non eseguito: vocabolario canonico assente (`semantic/tags.db`).")
         st.caption("Apri **Gestisci cliente -> Estrai tag** e completa l'estrazione tag per rigenerare il DB.")
-        st.page_link(PagePaths.MANAGE, label="Vai a Gestisci cliente", icon=">")
+        st.page_link(PagePaths.MANAGE, label="Vai a Gestisci cliente", icon="➡️")
         return
     with status_guard(
         "Arricchisco il frontmatter...",
@@ -265,7 +242,6 @@ def _run_enrich(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             exc,
             extra={"slug": slug, "action_id": "enrich", "status": "done"},
         )
-    _update_client_state(slug, "arricchito", logger)
 
 
 def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
@@ -285,7 +261,7 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
                 ),
             )
             st.error("Generazione SUMMARY/README bloccata: prerequisiti normalized/tag mancanti.")
-            st.caption("Verifica la presenza di Markdown in normalized/ e semantic/tags.db + tags_reviewed.yaml.")
+            st.caption("Verifica la presenza di Markdown in normalized/ e semantic/tags.db.")
             return
         raise
     ctx, logger, layout = _make_ctx_and_logger(slug)
@@ -343,16 +319,16 @@ def _run_summary(slug: str, *, layout: WorkspaceLayout | None = None) -> None:
             exc,
             extra={"slug": slug, "action_id": "summary", "status": "done"},
         )
-    _update_client_state(slug, "finito", logger)
 
 
-def _go_preview() -> None:
+def _go_preview() -> bool:
     """
     Step 4: passa dalla pagina Semantica alla pagina Docker Preview.
 
     """
     try:
         st.switch_page(PagePaths.PREVIEW)
+        return True
     except Exception as exc:
         _log_semantics_failure(
             LOGGER,
@@ -360,7 +336,7 @@ def _go_preview() -> None:
             exc,
             extra={"target": str(PagePaths.PREVIEW)},
         )
-        return
+        return False
 
 
 _client_state: str | None = None
@@ -374,9 +350,9 @@ _GATING_LOG = get_structured_logger("ui.semantics.gating")
 _GATE_PHASE_ID = "semantic"
 _GATE_INTENT_ID = "ui.semantics"
 _PROGRESS = {
-    "pronto": "[1/3] Conversione completata. Procedi con arricchimento e README/SUMMARY.",
-    "arricchito": "[2/3] Conversione + arricchimento completati. Genera README/SUMMARY.",
-    "finito": "[3/3] Tutti gli step completati: pronta per la preview locale.",
+    "pronto": "[1/3] PDF convertiti in normalized. Completa le lavorazioni semantiche.",
+    "arricchito": "[2/3] Knowledge Graph creato. Puoi rifinire contenuti e chiudere il cliente.",
+    "finito": "[3/3] Stato chiuso manualmente dall'utente.",
 }
 
 
@@ -440,11 +416,7 @@ def _log_gating_block(
 def _raise_semantic_unavailable(
     slug: str | None, state: str, normalized_ready: bool, normalized_dir: Path | None
 ) -> None:
-    reason = (
-        "invalid_state"
-        if state not in ALLOWED_STATES
-        else ("normalized_missing" if not normalized_ready else "tagging_not_ready")
-    )
+    reason = "invalid_state" if state not in ALLOWED_STATES else "normalized_missing"
     _log_gating_block(slug, state, normalized_ready, normalized_dir, reason=reason)
     normalized_display = tail_path(normalized_dir) if normalized_dir else "n/d"
     raise ConfigError(
@@ -455,14 +427,17 @@ def _raise_semantic_unavailable(
     )
 
 
-def _handle_semantic_action(action: Callable[[str], None], slug: str) -> None:
+def _handle_semantic_action(action: Callable[[str], None], slug: str) -> bool:
     """Wrapper comune per gestire le eccezioni UI delle azioni semantiche."""
     try:
         action(slug)
+        return True
     except (ConfigError, ConversionError) as exc:
         _display_user_error(exc)
+        return False
     except Exception as exc:  # pragma: no cover
         _display_user_error(exc)
+        return False
 
 
 def main() -> None:
@@ -501,7 +476,9 @@ def main() -> None:
         normalized_ready(slug)
         st.toast("Stato normalized aggiornato.")
 
-    client_state_ok = (_client_state in SEMANTIC_ENTRY_STATES) and bool(_tagging_ready)
+    # Abilita i passi semantici quando il cliente e' in stato valido e normalized e' pronto.
+    # I prerequisiti specifici (es. tagging/vocab) vengono verificati dentro le singole azioni.
+    client_state_ok = (_client_state in SEMANTIC_ENTRY_STATES) and bool(_normalized_ready)
 
     actions = {
         "convert": lambda: _handle_semantic_action(lambda s: _run_convert(s, layout=layout), slug),
@@ -520,6 +497,30 @@ def main() -> None:
     progress_msg = _PROGRESS.get((_client_state or "").strip().lower())
     if progress_msg:
         st.caption(progress_msg)
+
+    if (_client_state or "").strip().lower() == "arricchito":
+        if _column_button(
+            st,
+            "Segna cliente come finito",
+            key="btn_semantics_set_finished",
+            type="primary",
+            width="stretch",
+        ):
+            try:
+                set_client_state(slug, "finito")
+                _reset_gating_cache(slug)
+                st.toast("Stato cliente aggiornato a 'finito'.")
+                rerun_fn = getattr(st, "rerun", None)
+                if callable(rerun_fn):
+                    rerun_fn()
+            except Exception as exc:  # pragma: no cover
+                _log_semantics_failure(
+                    LOGGER,
+                    "ui.semantics.client_state.finish_failed",
+                    exc,
+                    extra={"slug": slug},
+                )
+                st.error(f"Impossibile aggiornare lo stato a 'finito': {exc}")
 
 
 if __name__ == "__main__":  # pragma: no cover

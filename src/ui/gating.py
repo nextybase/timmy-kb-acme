@@ -398,9 +398,7 @@ def visible_page_specs(gates: GateState) -> dict[str, list[PageSpec]]:
         allowed = [spec for spec in specs if _satisfied(_requires(spec), gates)]
         if not normalized_ready_flag:
             allowed = [spec for spec in allowed if spec.path not in {PagePaths.SEMANTICS, PagePaths.PREVIEW}]
-        elif not tagging_ready_flag:
-            allowed = [spec for spec in allowed if spec.path != PagePaths.SEMANTICS]
-        elif not semantic_ready:
+        elif not tagging_ready_flag or not semantic_ready:
             allowed = [spec for spec in allowed if spec.path != PagePaths.PREVIEW]
         if allowed:
             groups[group] = allowed

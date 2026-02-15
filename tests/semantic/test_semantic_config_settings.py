@@ -39,10 +39,9 @@ semantic_defaults:
     _write_file(
         mapping_yaml,
         """
-semantic_tagger:
-  top_k: 9
-  stop_tags:
-    - bozza
+top_k: 9
+stop_tags:
+  - bozza
 """ + "\n",
     )
 
@@ -50,9 +49,9 @@ semantic_tagger:
     mapping_snapshot = mapping_yaml.read_text(encoding="utf-8")
 
     cfg = load_semantic_config(base_dir, slug=slug)
-    assert cfg.top_k == 9
+    assert cfg.top_k == 7
     assert cfg.score_min == 0.55
-    assert "semantic_tagger" in cfg.mapping
+    assert cfg.mapping.get("top_k") == 9
     # Il loader non deve modificare i file esistenti
     assert config_yaml.read_text(encoding="utf-8") == config_snapshot
     assert mapping_yaml.read_text(encoding="utf-8") == mapping_snapshot

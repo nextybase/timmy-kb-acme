@@ -138,7 +138,7 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
     logs_dir.mkdir(parents=True, exist_ok=True)
     (book / "README.md").write_text("# README\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
-    (semantic_dir / "semantic_mapping.yaml").write_text("semantic_tagger: {}\nareas: {}\n", encoding="utf-8")
+    (semantic_dir / "semantic_mapping.yaml").write_text("areas: {}\n", encoding="utf-8")
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
 
     root_pdf = raw / "x.pdf"

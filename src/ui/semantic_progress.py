@@ -119,3 +119,13 @@ def mark_semantic_step_done(slug: str, step_id: str) -> None:
     progress = _read_progress(slug, path)
     progress[step_id] = True
     _write_progress(slug, path, progress)
+
+
+def mark_semantic_step_pending(slug: str, step_id: str) -> None:
+    """Segna un passo semantico come non completato per lo slug dato."""
+    if step_id not in SEMANTIC_STEP_IDS:
+        raise ConfigError(f"Step non valido: {step_id!r}", slug=slug)
+    path = _progress_path(slug)
+    progress = _read_progress(slug, path)
+    progress[step_id] = False
+    _write_progress(slug, path, progress)

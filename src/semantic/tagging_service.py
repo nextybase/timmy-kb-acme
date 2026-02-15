@@ -16,7 +16,7 @@ from semantic.config import load_semantic_config as _load_semantic_config
 from semantic.normalizer import normalize_tags as _normalize_tags
 from semantic.tags_io import write_tagging_readme as _write_tagging_readme
 from semantic.types import SemanticContextProtocol as ClientContextType
-from storage.tags_store import DocEntityRecord, derive_db_path_from_yaml_path
+from storage.tags_store import DocEntityRecord
 from storage.tags_store import ensure_schema_v2 as _ensure_tags_schema_v2
 from storage.tags_store import get_conn as _get_tags_conn
 from storage.tags_store import save_doc_entities as _save_doc_entities
@@ -67,11 +67,10 @@ def _load_folder_terms(tags_db_path: Path, *, slug: str | None = None) -> Dict[s
 
     folder_terms: Dict[str, List[str]] = {}
     if not tags_db_path.exists():
-        raise ConfigError(
-            "tags.db mancante per arricchimento top-terms.",
-            slug=slug,
-            file_path=tags_db_path,
-        )
+        # Primo giro di tag_onboarding: il DB può non esistere ancora.
+        # In quel caso saltiamo solo l'arricchimento top-terms e proseguiamo
+        # con l'estrazione base da normalized/.
+        return folder_terms
 
     try:
         _ensure_tags_schema_v2(str(tags_db_path))
@@ -161,8 +160,7 @@ def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: 
         # Arricchimento con top-terms NLP (se disponibili in tags.db)
         tags_db_path: Path | None = None
         try:
-            tags_db_path = Path(derive_db_path_from_yaml_path(semantic_dir / "tags_reviewed.yaml"))
-            tags_db_path = ensure_within_and_resolve(semantic_dir, tags_db_path)
+            tags_db_path = ensure_within_and_resolve(semantic_dir, semantic_dir / "tags.db")
             folder_terms = _load_folder_terms(tags_db_path, slug=slug)
             if folder_terms:
                 candidates = _apply_folder_terms(candidates, folder_terms)

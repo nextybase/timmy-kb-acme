@@ -52,6 +52,46 @@ def resolve_overwrite_choice(conflicts: Sequence[str], user_requested: bool) -> 
     return bool(user_requested)
 
 
+def _set_download_outcome(st: StreamlitLike, *, status: str, message: str | None = None) -> None:
+    session_state = getattr(st, "session_state", None)
+    if session_state is None:
+        return
+    try:
+        session_state["__drive_download_last_status"] = status
+        if message:
+            session_state["__drive_download_last_message"] = message
+        else:
+            pop_fn = getattr(session_state, "pop", None)
+            if callable(pop_fn):
+                pop_fn("__drive_download_last_message", None)
+    except Exception:
+        return
+
+
+def _set_download_report(
+    st: StreamlitLike,
+    *,
+    status: str,
+    downloaded_count: int | None = None,
+    overwrite: bool | None = None,
+    message: str | None = None,
+) -> None:
+    session_state = getattr(st, "session_state", None)
+    if session_state is None:
+        return
+    report: dict[str, Any] = {"status": status}
+    if downloaded_count is not None:
+        report["downloaded_count"] = int(downloaded_count)
+    if overwrite is not None:
+        report["overwrite"] = bool(overwrite)
+    if message:
+        report["message"] = message
+    try:
+        session_state["__drive_download_last_report"] = report
+    except Exception:
+        return
+
+
 def execute_drive_download(
     slug: str,
     conflicts: Sequence[str],
@@ -69,6 +109,7 @@ def execute_drive_download(
         raise RuntimeError("Funzione di download non disponibile.")
 
     overwrite_existing = resolve_overwrite_choice(conflicts, overwrite_requested)
+    _set_download_outcome(st, status="pending")
     if conflicts and not overwrite_existing:
         st.warning(
             "Sono stati rilevati conflitti con file locali. Verranno scaricati solo i PDF mancanti "
@@ -98,8 +139,12 @@ def execute_drive_download(
             if invalidate_index is not None:
                 invalidate_index(slug)
             st.toast("Allineamento Drive->locale completato.")
+            _set_download_outcome(st, status="ok")
+            _set_download_report(st, status="ok", downloaded_count=count, overwrite=overwrite_existing)
             return True
         except Exception:
+            _set_download_outcome(st, status="ok")
+            _set_download_report(st, status="ok", downloaded_count=count, overwrite=overwrite_existing)
             return True
     except PipelineError as exc:
         message = str(exc)
@@ -116,6 +161,7 @@ def execute_drive_download(
             except Exception:
                 pass
             st.error(f"Errore durante il download: {exc}")
+            _set_download_outcome(st, status="error", message=message)
             return False
         # HiTL-by-design: non e' una degradazione "best effort".
         # Il download prosegue sugli elementi validi, ma l'utente deve vedere
@@ -134,6 +180,13 @@ def execute_drive_download(
         except Exception:
             pass
         st.warning(f"Download completato con avvisi: {message}")
+        _set_download_outcome(st, status="partial", message=message)
+        _set_download_report(
+            st,
+            status="partial",
+            overwrite=overwrite_existing,
+            message=message,
+        )
         return True
     except Exception as exc:
         try:
@@ -148,6 +201,8 @@ def execute_drive_download(
         except Exception:
             pass
         st.error(f"Errore durante il download: {exc}")
+        _set_download_outcome(st, status="error", message=str(exc))
+        _set_download_report(st, status="error", overwrite=overwrite_existing, message=str(exc))
         return False
 
 

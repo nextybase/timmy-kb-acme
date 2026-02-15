@@ -104,10 +104,10 @@ def _expected_specs_for_phase(
             specs.insert(
                 1,
                 _CoreArtifactSpec(
-                    "semantic/tags_reviewed.yaml",
-                    layout.semantic_dir / "tags_reviewed.yaml",
-                    extensions=(".yaml", ".yml"),
-                    mime_types=("text/yaml",),
+                    "semantic/tags.db",
+                    layout.semantic_dir / "tags.db",
+                    extensions=(".db",),
+                    mime_types=("application/x-sqlite3",),
                 ),
             )
         return specs

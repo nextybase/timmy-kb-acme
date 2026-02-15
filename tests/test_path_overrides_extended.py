@@ -38,7 +38,7 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     (base / "semantic").mkdir(parents=True, exist_ok=True)
-    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}\n", encoding="utf-8")
     (base / "logs").mkdir(parents=True, exist_ok=True)
 
 
@@ -52,8 +52,7 @@ def test_convert_markdown_ignores_ctx_overrides(tmp_path: Path, monkeypatch):
     book.mkdir(parents=True, exist_ok=True)
     (base / "normalized" / "dummy.md").write_text("# Dummy\n", encoding="utf-8")
     ctx = _Ctx(base, raw, book)
-
-    # 👇 RAW deve contenere almeno un PDF affinché il converter venga invocato
+    # RAW deve contenere almeno un PDF affinche il converter venga invocato
     (base / "raw" / "dummy.pdf").write_bytes(b"%PDF-1.4\n%dummy\n")
 
     # cast(Any, ...) per evitare reportArgumentType: accettiamo duck typing nei test

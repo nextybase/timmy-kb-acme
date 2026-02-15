@@ -27,9 +27,10 @@ from ui.semantic_progress import (
     STEP_SUMMARY,
     get_semantic_progress,
     mark_semantic_step_done,
+    mark_semantic_step_pending,
 )
 
-ActionFn = Callable[[], None]
+ActionFn = Callable[[], bool]
 
 
 def _maybe_divider() -> None:
@@ -76,12 +77,17 @@ def _render_step_row(
             disabled=not enabled,
         )
         if clicked and enabled and action is not None:
+            # Ogni nuovo tentativo riparte da "non fatto":
+            # evita stati "Fatto" persistenti quando l'azione fallisce.
+            mark_semantic_step_pending(slug, step_id)
+            progress[step_id] = False
             # Loader/Spinner durante l'azione
             with st.spinner(busy_text):
-                action()
-            # Stato completato (persistente)
-            mark_semantic_step_done(slug, step_id)
-            progress[step_id] = True
+                completed = bool(action())
+            # Stato completato (persistente) solo su esito positivo.
+            if completed:
+                mark_semantic_step_done(slug, step_id)
+                progress[step_id] = True
 
     # Colonna 3: stato (icona + testo)
     with col_status:

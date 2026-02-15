@@ -20,9 +20,9 @@ class Ctx:
     def __init__(self, base: Path, md: Path) -> None:
         self.base_dir = base
         self.book_dir = md
-        self.slug = "x"  # Optional[str] → ok anche se assegniamo una str
+        self.slug = "x"  # Optional[str] -> ok anche se assegniamo una str
         self.config_dir = base / "config"
-        self.repo_root_dir = base  # Optional[Path] → ok
+        self.repo_root_dir = base  # Optional[Path] -> ok
 
 
 def test_extractor_matches_punctuated_keywords(tmp_path: Path, monkeypatch) -> None:

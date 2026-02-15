@@ -40,7 +40,7 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
     (base / "semantic").mkdir(parents=True, exist_ok=True)
-    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}\n", encoding="utf-8")
     (base / "logs").mkdir(parents=True, exist_ok=True)
     qa_payload = {
         "schema_version": 1,
@@ -104,8 +104,7 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
     normalized.mkdir(parents=True, exist_ok=True)
     (normalized / "dummy-a.md").write_text("# Dummy A\ncontenuto\n", encoding="utf-8")
     (normalized / "dummy-b.md").write_text("# Dummy B\ncontenuto\n", encoding="utf-8")
-
-    # RAW deve contenere almeno un PDF affinché il converter venga invocato
+    # RAW deve contenere almeno un PDF affinche il converter venga invocato
     (raw / "dummy.pdf").write_bytes(b"%PDF-1.4\n%dummy\n")
 
     def _fake_convert(ctx, book_dir: Path | None = None) -> None:  # type: ignore[no-untyped-def]

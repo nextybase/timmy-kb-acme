@@ -75,7 +75,7 @@ def test_ingest_folder_reuses_single_embeddings_instance(monkeypatch, tmp_path: 
 
 
 def test_ingest_folder_short_circuit_on_empty(monkeypatch, tmp_path: Path):
-    # Cartella vuota → nessuna istanziazione
+    # Cartella vuota -> nessuna istanziazione
     monkeypatch.setattr(ing, "OpenAIEmbeddings", _SpyEmb)
     _SpyEmb.instances = 0
     base, ctx = _prepare_workspace(tmp_path, slug="p")

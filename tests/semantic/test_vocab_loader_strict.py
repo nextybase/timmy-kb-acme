@@ -66,3 +66,14 @@ def test_to_vocab_merge_loop_is_deterministic() -> None:
     assert set(vocab) == {"Alpha", "Beta"}
     assert set(vocab["Alpha"]["aliases"]) >= {"Beta", "b"}
     assert set(vocab["Beta"]["aliases"]) >= {"Alpha", "a"}
+
+
+def test_to_vocab_storage_payload_with_empty_tags_is_invalid() -> None:
+    data = {
+        "version": "2",
+        "reviewed_at": "2026-01-01T00:00:00",
+        "keep_only_listed": False,
+        "tags": [],
+    }
+    with pytest.raises(ConfigError, match="Canonical vocab shape invalid"):
+        vl._to_vocab(data)

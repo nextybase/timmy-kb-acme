@@ -7,12 +7,11 @@ Scopo
 Restituire un oggetto `SemanticConfig` che unisce:
 1) Valori di default hardcoded
 2) Override generali del cliente (config.yaml -> semantic_defaults)
-3) Parametri locali per il tagging (semantic_mapping.yaml -> semantic_tagger)
-4) Eventuali `overrides` passati a runtime (massima precedenza)
+3) Eventuali `overrides` passati a runtime (massima precedenza)
 
 Ordine di precedenza (alto -> basso)
 ------------------------------------
-overrides>semantic_mapping.yaml:semantic_tagger>config.yaml:semantic_defaults>defaults hardcoded
+overrides>config.yaml:semantic_defaults>defaults hardcoded
 
 N.B. Modulo "puro": nessun I/O interattivo, nessun sys.exit(), nessun logger richiesto.
 """
@@ -62,7 +61,7 @@ _DEFAULTS: dict[str, Any] = {
     "spacy_model": "it_core_news_sm",
 }
 
-# Chiavi accettate nella sezione semantic_tagger / semantic_defaults
+# Chiavi accettate nella sezione semantic_defaults e negli overrides runtime
 _ALLOWED_KEYS: set[str] = set(_DEFAULTS.keys())
 
 
@@ -283,22 +282,11 @@ def load_semantic_config(
     )
     acc = _merge(acc, defaults_from_cfg)
 
-    # 3) semantic_mapping.yaml -> semantic_tagger
-
-    if "semantic_tagger" not in mapping_all:
-        raise ConfigError("semantic_mapping.yaml manca della chiave semantic_tagger.", file_path=str(mapping_path))
-    semantic_tagger_raw = mapping_all.get("semantic_tagger")
-    if not isinstance(semantic_tagger_raw, dict):
-        raise ConfigError("semantic_tagger deve essere un mapping YAML.", file_path=str(mapping_path))
-    semantic_tagger = _normalize_tagger_section(semantic_tagger_raw)
-
-    acc = _merge(acc, semantic_tagger)
-
-    # 4) overrides runtime (precedenza massima)
+    # 3) overrides runtime (precedenza massima)
     if overrides:
         acc = _merge(acc, _normalize_tagger_section(overrides))
 
-    # 5) Validazione soft + coercizioni
+    # 4) Validazione soft + coercizioni
     cfg = SemanticConfig(
         lang=_coerce_str(acc.get("lang"), _DEFAULTS["lang"]),
         max_pages=_coerce_int(acc.get("max_pages"), _DEFAULTS["max_pages"]),

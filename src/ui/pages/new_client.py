@@ -251,9 +251,9 @@ def _log_drive_capability_missing(
 
 
 # Registry unificato (SSoT) via ui.clients_store
-def _upsert_client_registry(slug: str, client_name: str, *, target_state: Optional[str] = "pronto") -> None:
+def _upsert_client_registry(slug: str, client_name: str, *, target_state: Optional[str] = None) -> None:
     """
-    Allinea il registro, impostando lo stato desiderato (default: 'pronto').
+    Allinea il registro, impostando lo stato desiderato (default: preserva stato attuale).
     Se `target_state` è None, preserva lo stato attuale (o 'nuovo' se assente).
     """
     from ui.clients_store import get_state  # import locale per evitare cicli
@@ -669,7 +669,7 @@ if st.session_state.get(phase_state_key) == UI_PHASE_READY_TO_OPEN and (
         )
         st.warning("Drive non configurato: modalita local-only attiva.")
 
-    _upsert_client_registry(eff, display_name)
+    _upsert_client_registry(eff, display_name, target_state=None)
     st.session_state[phase_state_key] = UI_PHASE_PROVISIONED
     st.session_state["client_name"] = display_name
 

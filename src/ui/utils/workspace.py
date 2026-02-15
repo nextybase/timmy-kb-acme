@@ -12,10 +12,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger, tail_path
 from pipeline.path_utils import clear_iter_safe_pdfs_cache, iter_safe_paths, iter_safe_pdfs, validate_slug
 from pipeline.workspace_layout import WorkspaceLayout
-from semantic.tags_validator import load_yaml as _load_tags_yaml
-from semantic.tags_validator import validate_tags_reviewed as _validate_tags_reviewed
-from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
-from ui.utils.config import get_tags_env_config
+from storage.tags_store import load_tags_db as _load_tags_db
 from ui.utils.context_cache import get_client_context, invalidate_client_context
 
 _log = get_structured_logger("ui.workspace")
@@ -74,10 +71,10 @@ def get_ui_workspace_layout(slug: str, *, require_drive_env: bool = False) -> Wo
 
 def resolve_raw_dir(_slug: str) -> Path:
     """
-    Helper UI: non è più consentito ricavare manualmente il raw dir.
+    Helper UI: non e piu consentito ricavare manualmente il raw dir.
     """
     raise ConfigError(
-        "DEPRECATO: `resolve_raw_dir` è stato disabilitato. Risolvi il workspace via WorkspaceLayout "
+        "DEPRECATO: `resolve_raw_dir` e stato disabilitato. Risolvi il workspace via WorkspaceLayout "
         "e, se serve, chiama pipeline.workspace_bootstrap.bootstrap_client_workspace o "
         "bootstrap_dummy_workspace.",
     )
@@ -95,10 +92,10 @@ def clear_base_cache(*, slug: str | None = None) -> None:
 
 def workspace_root(_slug: str) -> Path:
     """
-    Helper UI: non è più consentito derivare manualmente la root.
+    Helper UI: non e piu consentito derivare manualmente la root.
     """
     raise ConfigError(
-        "DEPRECATO: `workspace_root` è stato disabilitato. Risolvi il workspace tramite WorkspaceLayout "
+        "DEPRECATO: `workspace_root` e stato disabilitato. Risolvi il workspace tramite WorkspaceLayout "
         "e lancia la logica di bootstrap (`pipeline.workspace_bootstrap.*`).",
     )
 
@@ -242,11 +239,8 @@ def tagging_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, O
     Predicate canonico per tagging_ready:
     - richiede normalized_ready
     - richiede semantic/tags.db presente
-    - richiede semantic/tags_reviewed.yaml presente e non vuoto
     Ritorna (ready, semantic_dir) per logging/gating.
     """
-    if get_tags_env_config().is_stub:
-        return False, None
     normalized_ok, normalized_dir = normalized_ready(slug, strict=strict)
     if not normalized_ok:
         return False, normalized_dir
@@ -275,10 +269,8 @@ def tagging_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, O
             extra={"slug": slug or "", "stage": "layout_contract", "strict": bool(strict)},
         )
         return False, semantic_dir
-    tags_yaml = semantic_dir / "tags_reviewed.yaml"
     try:
         db_ok = tags_db.exists()
-        yaml_ok = tags_yaml.exists() and tags_yaml.stat().st_size > 0
     except Exception as exc:
         if strict:
             raise
@@ -288,18 +280,16 @@ def tagging_ready(slug: Optional[str], *, strict: bool = False) -> tuple[bool, O
             extra={"slug": slug or "", "stage": "io", "strict": bool(strict)},
         )
         return False, semantic_dir
-    if not (db_ok and yaml_ok):
+    if not db_ok:
         return False, semantic_dir
     if not _tags_db_has_terms(tags_db, strict=strict, slug=slug):
-        return False, semantic_dir
-    if not _tags_yaml_has_terms(tags_yaml, strict=strict, slug=slug):
         return False, semantic_dir
     return True, semantic_dir
 
 
 def _tags_db_has_terms(db_path: Path, *, strict: bool = False, slug: Optional[str] = None) -> bool:
     try:
-        data = _load_tags_reviewed(str(db_path))
+        data = _load_tags_db(str(db_path))
     except Exception as exc:
         if strict:
             raise
@@ -320,24 +310,3 @@ def _tags_db_has_terms(db_path: Path, *, strict: bool = False, slug: Optional[st
         if name and action == "keep":
             return True
     return False
-
-
-def _tags_yaml_has_terms(yaml_path: Path, *, strict: bool = False, slug: Optional[str] = None) -> bool:
-    try:
-        data = _load_tags_yaml(yaml_path)
-    except Exception as exc:
-        if strict:
-            raise
-        _log_workspace_failure(
-            "ui.workspace.tags_yaml_read_failed",
-            exc,
-            extra={"slug": slug or "", "path": str(yaml_path)},
-        )
-        return False
-    result = _validate_tags_reviewed(data)
-    if result.get("errors"):
-        return False
-    tags = data.get("tags") if isinstance(data, dict) else None
-    if not isinstance(tags, list):
-        return False
-    return any(isinstance(item, dict) and str(item.get("name") or "").strip() for item in tags)

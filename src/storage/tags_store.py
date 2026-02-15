@@ -10,9 +10,8 @@ from pathlib import Path
 from typing import Any, Iterator
 
 __all__ = [
-    "load_tags_reviewed",
-    "save_tags_reviewed",
-    "derive_db_path_from_yaml_path",
+    "load_tags_db",
+    "save_tags_db",
     "ensure_schema_v2",
     "DocEntityRecord",
     "save_doc_entities",
@@ -87,23 +86,8 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")
 
 
-def derive_db_path_from_yaml_path(p: str | Path) -> str:
-    """Dato il path YAML (es.
-
-    `semantic/tags_reviewed.yaml`), ritorna il path DB
-    adiacente `tags.db`.
-    """
-    pp = Path(p)
-    if pp.parent.name != "semantic":
-        raise ConfigError(
-            "Percorso tags_reviewed non valido: il file deve stare sotto `<workspace>/semantic/`.",
-            file_path=str(pp),
-        )
-    return str(pp.parent / "tags.db")
-
-
-def load_tags_reviewed(db_path: str) -> dict[str, Any]:
-    """Carica il vocabolario rivisto da SQLite e ritorna la struttura SSoT."""
+def load_tags_db(db_path: str) -> dict[str, Any]:
+    """Carica i tag canonicali da SQLite e ritorna la struttura SSoT."""
     dbp = Path(db_path)
     if not dbp.parent.exists():
         dbp.parent.mkdir(parents=True, exist_ok=True)
@@ -149,8 +133,8 @@ def load_tags_reviewed(db_path: str) -> dict[str, Any]:
         }
 
 
-def save_tags_reviewed(db_path: str, data: dict[str, Any]) -> None:
-    """Persiste in SQLite (upsert) lo stesso dict precedentemente scritto in YAML."""
+def save_tags_db(db_path: str, data: dict[str, Any]) -> None:
+    """Persiste in SQLite (upsert) il payload canonico dei tag."""
     dbp = Path(db_path)
     dbp.parent.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(dbp)) as conn:

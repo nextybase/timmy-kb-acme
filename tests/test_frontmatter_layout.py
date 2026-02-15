@@ -108,7 +108,7 @@ def test_enrich_frontmatter_sets_layout_section(tmp_path: Path) -> None:
 
     semantic_dir = base_dir / "semantic"
     semantic_dir.mkdir(parents=True)
-    (semantic_dir / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (semantic_dir / "semantic_mapping.yaml").write_text("{}\n", encoding="utf-8")
     layout = semantic_dir / "layout_proposal.yaml"
     layout.write_text("areas:\n  - key: strategy\n    ambito: ops\n", encoding="utf-8")
 

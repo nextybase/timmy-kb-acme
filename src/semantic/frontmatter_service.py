@@ -28,7 +28,6 @@ from semantic.embedding_service import list_content_markdown
 from semantic.entities_frontmatter import enrich_frontmatter_with_entities
 from semantic.layout_enricher import merge_non_distruttivo, suggest_layout
 from semantic.types import ClientContextProtocol
-from storage.tags_store import derive_db_path_from_yaml_path as _derive_tags_db_path
 from storage.tags_store import get_conn as _get_tags_conn
 
 __all__ = [
@@ -286,7 +285,7 @@ def enrich_frontmatter(
 
     start_ts = time.perf_counter()
     if not vocab and not allow_empty_vocab:
-        tags_db = Path(_derive_tags_db_path(Path("semantic") / "tags_reviewed.yaml"))
+        tags_db = Path("semantic") / "tags.db"
         raise ConfigError(
             "Vocabolario canonico assente: impossibile arricchire i front-matter senza tags canonici.",
             slug=slug,
@@ -319,7 +318,7 @@ def enrich_frontmatter(
     relations_all: list[Any] = relations_raw if isinstance(relations_raw, list) else []
 
     if not vocab:
-        tags_db = Path(_derive_tags_db_path(repo_root_dir / "semantic" / "tags_reviewed.yaml"))
+        tags_db = repo_root_dir / "semantic" / "tags.db"
         logger.info(
             "semantic.frontmatter.skip_tags",
             extra={"slug": slug, "reason": "empty_vocab_allowed", "file_path": str(tags_db)},
@@ -373,7 +372,7 @@ def enrich_frontmatter(
                 if rel_hints:
                     new_meta["relation_hints"] = rel_hints
             # Arricchimento additivo da doc_entities (se presenti e approvate)
-            tags_db = Path(_derive_tags_db_path(repo_root_dir / "semantic" / "tags_reviewed.yaml"))
+            tags_db = repo_root_dir / "semantic" / "tags.db"
             try:
                 if tags_db.exists():
                     with _get_tags_conn(str(tags_db)) as conn:

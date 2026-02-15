@@ -50,8 +50,8 @@ from pipeline.artifact_policy import enforce_core_artifacts
 from pipeline.beta_flags import is_beta_strict
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.context import ClientContext
-from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PathTraversalError, PipelineError, exit_code_for
-from pipeline.logging_utils import get_structured_logger, tail_path
+from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, exit_code_for
+from pipeline.logging_utils import get_structured_logger
 from pipeline.metrics import start_metrics_server_once
 from pipeline.normalized_index import validate_index as validate_normalized_index
 from pipeline.observability_config import get_observability_settings
@@ -67,13 +67,16 @@ from pipeline.tracing import start_root_trace
 from pipeline.types import TaggingPayload
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic import nlp_runner
-from semantic.tags_validator import validate_tags_reviewed as validate_tags_payload
-from semantic.tags_validator import write_validation_report as write_validation_report_payload
 from semantic.types import ClientContextProtocol
 from storage import decision_ledger
-from storage.tags_store import clear_doc_terms, derive_db_path_from_yaml_path, ensure_schema_v2, get_conn, has_doc_terms
-from storage.tags_store import load_tags_reviewed as load_tags_reviewed_db
-from storage.tags_store import upsert_document, upsert_folder
+from storage.tags_store import (
+    clear_doc_terms,
+    ensure_schema_v2,
+    get_conn,
+    has_doc_terms,
+    upsert_document,
+    upsert_folder,
+)
 
 from .tag_onboarding_context import ContextResources, prepare_context
 from .tag_onboarding_semantic import emit_csv_phase, emit_stub_phase
@@ -554,106 +557,6 @@ def run_nlp_to_db(
     return enriched_stats
 
 
-def validate_tags_reviewed(slug: str, run_id: Optional[str] = None) -> int:
-    """Valida `semantic/tags_reviewed.yaml` sfruttando il contesto cliente."""
-
-    context = ClientContext.load(
-        slug=slug,
-        require_drive_env=False,
-        run_id=run_id,
-        stage="validate",
-        bootstrap_config=False,
-    )
-    layout = _require_layout(context)
-    repo_root_dir = layout.repo_root_dir
-    semantic_candidate = layout.semantic_dir
-    try:
-        semantic_dir = ensure_within_and_resolve(repo_root_dir, semantic_candidate)
-    except PathTraversalError:
-        logs_dir = ensure_within_and_resolve(repo_root_dir, repo_root_dir / "logs")
-        logs_dir.mkdir(parents=True, exist_ok=True)
-        log_file = ensure_within_and_resolve(logs_dir, logs_dir / "tag_onboarding_validate.log")
-        logger = get_structured_logger(
-            "tag_onboarding.validate",
-            log_file=log_file,
-            context=context,
-            run_id=run_id,
-            **_obs_kwargs(),
-        )
-        logger.error(
-            "cli.tag_onboarding.semantic_outside_base",
-            extra={"semantic_dir": str(semantic_candidate)},
-        )
-        return 1
-
-    yaml_candidate = semantic_dir / "tags_reviewed.yaml"
-    yaml_path = ensure_within_and_resolve(semantic_dir, yaml_candidate)
-    report_candidate = semantic_dir / "tags_review_validation.json"
-    report_path = ensure_within_and_resolve(semantic_dir, report_candidate)
-
-    db_candidate = Path(derive_db_path_from_yaml_path(yaml_path))
-    db_path = ensure_within_and_resolve(repo_root_dir, db_candidate)
-
-    logs_dir = ensure_within_and_resolve(repo_root_dir, repo_root_dir / "logs")
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    log_file = ensure_within_and_resolve(logs_dir, logs_dir / "tag_onboarding_validate.log")
-
-    logger = get_structured_logger(
-        "tag_onboarding.validate",
-        log_file=log_file,
-        context=context,
-        run_id=run_id,
-        **_obs_kwargs(),
-    )
-
-    if not db_path.exists():
-
-        logger.error(
-            "cli.tag_onboarding.db_missing",
-            extra={"file_path": str(db_path), "file_path_tail": tail_path(db_path)},
-        )
-
-        return 1
-
-    try:
-
-        data = load_tags_reviewed_db(str(db_path))
-
-        result = validate_tags_payload(data)
-
-        write_validation_report_payload(report_path, result, logger)
-        logger.info(
-            "cli.tag_onboarding.report_written",
-            extra={"file_path": str(report_path)},
-        )
-
-    except ConfigError as e:
-
-        logger.error("cli.tag_onboarding.validation_error", extra={"error": str(e)})
-
-        return 1
-
-    errs = len(result.get("errors", []))
-
-    warns = len(result.get("warnings", []))
-
-    if errs:
-
-        logger.error("cli.tag_onboarding.validation_failed", extra={"errors": errs, "warnings": warns})
-
-        return 1
-
-    if warns:
-
-        logger.warning("cli.tag_onboarding.validation_warn", extra={"warnings": warns})
-
-        return 2
-
-    logger.info("cli.tag_onboarding.validation_ok", extra={"tags_count": result.get("count", 0)})
-
-    return 0
-
-
 def _should_proceed(*, non_interactive: bool, proceed_after_csv: bool, logger: logging.Logger) -> bool:
     """Checkpoint HiTL: decide se proseguire con la generazione degli stub."""
 
@@ -936,11 +839,6 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Abilita la modalita dummy end-to-end (consente la generazione degli stub).",
     )
-    p.add_argument(
-        "--validate-only",
-        action="store_true",
-        help="Esegue solo la validazione di tags_reviewed.yaml",
-    )
 
     # Scansione NORMALIZED -> DB (opzionale)
 
@@ -1057,9 +955,6 @@ def main(args: argparse.Namespace) -> int | None:
         env=env,
         trace_kind="onboarding",
     ):
-        if args.validate_only:
-            return validate_tags_reviewed(slug, run_id=run_id)
-
         if getattr(args, "scan_normalized", False):
             ctx = ClientContext.load(
                 slug=slug,

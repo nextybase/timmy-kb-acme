@@ -24,7 +24,7 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "logs").mkdir(parents=True, exist_ok=True)
     (base / "normalized").mkdir(parents=True, exist_ok=True)
     (base / "semantic").mkdir(parents=True, exist_ok=True)
-    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}\n", encoding="utf-8")
     (base / "book").mkdir(parents=True, exist_ok=True)
     (base / "book" / "README.md").write_text("# KB\n", encoding="utf-8")
     (base / "book" / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")
@@ -56,7 +56,7 @@ def test_enrich_frontmatter_ignores_book_dir_override(tmp_path: Path):
 def test_enrich_frontmatter_does_not_touch_book_dir_outside_base(tmp_path: Path):
     base = tmp_path / "kb"
     raw = base / "raw"
-    # book_dir fratello della sandbox → deve fallire per path-safety
+    # book_dir fratello della sandbox fuori base deve fallire per path-safety
     md_outside = tmp_path / "custom_book"
     base.mkdir()
     raw.mkdir()

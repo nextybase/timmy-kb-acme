@@ -42,13 +42,13 @@ def test_search_scoring_and_tie_break_deterministic(monkeypatch, kb_sqlite_path:
     # Tre candidati: due con score identico (=1.0), uno peggiore (=0.0)
     cands = [
         _cand("A", [1.0, 0.0]),  # idx 0, score 1.0
-        _cand("B", [1.0, 0.0]),  # idx 1, score 1.0  (tie con A → A prima di B)
+        _cand("B", [1.0, 0.0]),  # idx 1, score 1.0  (tie con A -> A prima di B)
         _cand("C", [0.0, 1.0]),  # idx 2, score 0.0
     ]
 
     monkeypatch.setattr(r, "fetch_candidates", lambda *a, **k: cands)
 
-    # k >= n → ordina tutto; atteso: A, B, C
+    # k >= n -> ordina tutto; atteso: A, B, C
     params_all = QueryParams(
         db_path=kb_sqlite_path,
         slug=DUMMY_SLUG,
@@ -60,7 +60,7 @@ def test_search_scoring_and_tie_break_deterministic(monkeypatch, kb_sqlite_path:
     out_all = search(params_all, embeddings)
     assert [x["content"] for x in out_all] == ["A", "B", "C"]
 
-    # k < n (branch nlargest) → atteso: A, B
+    # k < n (branch nlargest) -> atteso: A, B
     params_top2 = QueryParams(
         db_path=kb_sqlite_path,
         slug=DUMMY_SLUG,
@@ -99,7 +99,7 @@ def test_search_accepts_nested_numpy_embedding(monkeypatch, kb_sqlite_path: Path
 def test_search_handles_missing_embeddings_field(monkeypatch, kb_sqlite_path: Path) -> None:
     embeddings = EmbedOne([1.0, 0.0])
     cands = [
-        {"content": "no-emb", "meta": {}},  # embedding mancante → trattato come []
+        {"content": "no-emb", "meta": {}},  # embedding mancante -> trattato come []
         _cand("ok", [1.0, 0.0]),
     ]
 

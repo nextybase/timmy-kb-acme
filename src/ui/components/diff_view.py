@@ -7,7 +7,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths, validate_slug
+from pipeline.path_utils import (
+    clear_iter_safe_pdfs_cache,
+    ensure_within,
+    ensure_within_and_resolve,
+    iter_safe_paths,
+    validate_slug,
+)
 
 try:
     import streamlit as st
@@ -161,6 +167,60 @@ def _group_keys_by_category(keys: Iterable[str]) -> Dict[str, List[Tuple[str, st
     return groups
 
 
+def _group_local_structure(local_entries: Dict[str, Dict[str, Any]]) -> Dict[str, List[Tuple[str, str]]]:
+    """Raggruppa l'intera struttura locale sotto raw/ per categoria."""
+    groups: Dict[str, List[Tuple[str, str]]] = {}
+    for key, _meta in local_entries.items():
+        if key == "raw" or not key.startswith("raw/"):
+            continue
+        category, relative = _split_category_and_rel(key)
+        if category == "(root)":
+            continue
+        groups.setdefault(category, [])
+        if relative == "":
+            continue
+        groups[category].append((key, relative))
+    return groups
+
+
+def _clear_raw_subfolders_content(slug: str) -> tuple[int, int]:
+    """Svuota i contenuti di raw/* mantenendo intatte le cartelle categoria."""
+    safe_slug = str(validate_slug(slug))
+    workspace = ensure_within_and_resolve(OUTPUT_ROOT, OUTPUT_ROOT / f"timmy-kb-{safe_slug}")
+    raw_dir = ensure_within_and_resolve(workspace, workspace / "raw")
+    if not raw_dir.exists() or not raw_dir.is_dir():
+        return 0, 0
+
+    removed = 0
+    errors = 0
+    for category in sorted(raw_dir.iterdir(), key=lambda p: p.name.lower()):
+        try:
+            safe_category = ensure_within_and_resolve(raw_dir, category)
+        except Exception:
+            errors += 1
+            continue
+        if not safe_category.is_dir():
+            continue
+
+        descendants = list(iter_safe_paths(safe_category, include_dirs=True, include_files=True))
+        # Elimina file prima e directory più profonde dopo, preservando la cartella categoria.
+        descendants.sort(key=lambda p: len(p.parts), reverse=True)
+        for target in descendants:
+            try:
+                ensure_within(raw_dir, target)
+                if target.is_file():
+                    target.unlink()
+                    removed += 1
+                elif target.is_dir():
+                    target.rmdir()
+            except Exception:
+                errors += 1
+                continue
+
+    clear_iter_safe_pdfs_cache(root=raw_dir)
+    return removed, errors
+
+
 def _rows_from_pairs(
     pairs: List[Tuple[str, str]],
     meta_map: Dict[str, Dict[str, Any]],
@@ -275,7 +335,13 @@ def build_diff_dataset(
     )
 
 
-def render_file_actions(dataset: DiffDataset, st_module: Any, *, columns: Optional[tuple[Any, Any]] = None) -> None:
+def render_file_actions(
+    dataset: DiffDataset,
+    st_module: Any,
+    *,
+    slug: str,
+    columns: Optional[tuple[Any, Any]] = None,
+) -> None:
     """Rende le sezioni "Solo su Drive" e "Solo su locale" su due colonne (degradazione: singola)."""
     col_drive, col_local = columns or (st_module, st_module)
 
@@ -308,13 +374,32 @@ def render_file_actions(dataset: DiffDataset, st_module: Any, *, columns: Option
             st_module.caption("Nessun elemento solo su Drive.")
 
     with _expander(col_local)("Solo su locale", expanded=False):
-        if dataset.only_local:
-            grouped_pairs = _group_keys_by_category(dataset.only_local)
+        # Mostra la struttura locale reale sotto raw/, non solo gli elementi diff.
+        grouped_pairs = _group_local_structure(dataset.local_entries)
+        if grouped_pairs:
             for category in sorted(grouped_pairs):
                 with st_module.expander(f"{category} ({len(grouped_pairs[category])})", expanded=False):
                     st_module.table(_rows_from_pairs(grouped_pairs[category], dataset.local_entries))
         else:
             st_module.caption("Nessun elemento solo locale.")
+
+        st.caption("Operazione locale: svuota i file nelle sottocartelle di raw mantenendo le cartelle.")
+        if st_module.button(
+            "Svuota contenuti sottocartelle raw",
+            key=f"btn_clear_raw_subfolders_{slug}",
+            type="secondary",
+            use_container_width=True,
+        ):
+            removed, errors = _clear_raw_subfolders_content(slug)
+            if errors:
+                st_module.warning(
+                    f"Pulizia completata con avvisi: rimossi {removed} file, errori su {errors} elementi."
+                )
+            else:
+                st_module.success(f"Pulizia completata: rimossi {removed} file, cartelle preservate.")
+            rerun_fn = getattr(st_module, "rerun", None)
+            if callable(rerun_fn):
+                rerun_fn()
 
 
 def render_diff_table(dataset: DiffDataset, st_module: Any, *, column: Optional[Any] = None) -> None:
@@ -392,7 +477,7 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
     except Exception:
         col_drive = col_local = col_diff = st
 
-    render_file_actions(dataset, st, columns=(col_drive, col_local))
+    render_file_actions(dataset, st, slug=slug, columns=(col_drive, col_local))
     render_diff_table(dataset, st, column=col_diff)
 
     divider_fn = getattr(st, "divider", None)

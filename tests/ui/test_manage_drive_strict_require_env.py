@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+from collections import UserDict
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
@@ -21,6 +22,8 @@ class _DummySt:
         self.warnings: list[str] = []
         self.toasts: list[str] = []
         self.errors: list[str] = []
+        # Streamlit usa un proxy mapping (non dict puro).
+        self.session_state: UserDict[str, Any] = UserDict()
 
     def warning(self, msg: str) -> None:
         self.warnings.append(msg)
@@ -83,6 +86,8 @@ def test_execute_drive_download_passes_require_env_true() -> None:
     assert received["overwrite"] is False
     assert received["require_env"] is True
     assert received["logger"] is None
+    assert st.session_state.get("__drive_download_last_status") == "ok"
+    assert "__drive_download_last_message" not in st.session_state
 
 
 def test_execute_drive_download_fails_on_legacy_signature_without_require_env() -> None:
@@ -108,6 +113,7 @@ def test_execute_drive_download_fails_on_legacy_signature_without_require_env() 
     assert ok is False
     assert st.errors
     assert logger.exceptions
+    assert st.session_state.get("__drive_download_last_status") == "error"
 
 
 def test_execute_drive_download_partial_failure_is_warning_and_success() -> None:
@@ -137,4 +143,6 @@ def test_execute_drive_download_partial_failure_is_warning_and_success() -> None
     assert invalidated == ["acme"]
     assert st.warnings
     assert "Download completato con avvisi" in st.warnings[-1]
+    assert st.session_state.get("__drive_download_last_status") == "partial"
+    assert "Download completato con errori" in (st.session_state.get("__drive_download_last_message") or "")
     assert not st.errors

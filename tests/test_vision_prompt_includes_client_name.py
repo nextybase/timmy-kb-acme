@@ -69,7 +69,7 @@ def test_prompt_contains_client_name(monkeypatch, tmp_ws: Path):
     ctx = DummyCtx(repo_root_dir=tmp_ws, settings=settings, client_name="Dummy S.p.A.")
     seen = {"user_messages": None}
 
-    # Finto assistant: payload conforme al contratto (≥3 aree + system_folders + metadata_policy)
+    # Finto assistant: payload conforme al contratto (>=3 aree + system_folders + metadata_policy)
     def _fake_call(client, *, assistant_id, model, user_messages, **kwargs):
         seen["user_messages"] = user_messages
         return {

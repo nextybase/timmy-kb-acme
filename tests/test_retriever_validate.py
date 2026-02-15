@@ -50,7 +50,7 @@ def _params(
     k: int = 1,
     candidate_limit: int = r.MIN_CANDIDATE_LIMIT,
 ):
-    """Costruttore tipizzato per evitare dict Any→str|int|None che confondono Pylance."""
+    """Costruttore tipizzato per evitare dict Any->str|int|None che confondono Pylance."""
     return QueryParams(
         db_path=db_path,
         slug=slug,

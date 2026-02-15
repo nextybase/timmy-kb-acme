@@ -34,7 +34,7 @@ def test_convert_structured_markdown_handles_symlink_category(tmp_path: Path) ->
     book.mkdir(parents=True, exist_ok=True)
     normalized.mkdir(parents=True, exist_ok=True)
     logs.mkdir(parents=True, exist_ok=True)
-    (semantic_dir / "semantic_mapping.yaml").write_text("semantic_tagger: {}\nareas: {}\n", encoding="utf-8")
+    (semantic_dir / "semantic_mapping.yaml").write_text("areas: {}\n", encoding="utf-8")
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
     (book / "README.md").write_text("# Test\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# Summary\n", encoding="utf-8")

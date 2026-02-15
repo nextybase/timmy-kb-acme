@@ -4,7 +4,7 @@ Govern semantic workflows (enrichment/frontmatter) while preserving the SSoT and
 
 # Rules (overrides)
 - Use the public `semantic.api` facade; avoid imports or invocations of `_private` helpers.
-- Treat `semantic/tags.db` as the runtime SSoT; reserve `tags_reviewed.yaml` for manual authoring or migration checkpoints.
+- Treat `semantic/tags.db` as the semantic SSoT for runtime and authoring flows.
 - Generate README/SUMMARY through repository utilities with idempotent fallbacks that avoid destructive overwrites.
 - Ensure no import-time side effects; prefer pure functions wherever feasible.
 

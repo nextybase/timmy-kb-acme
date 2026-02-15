@@ -24,7 +24,7 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "config").mkdir(parents=True, exist_ok=True)
     (base / "config" / "config.yaml").write_text("meta:\n  client_name: dummy\n", encoding="utf-8")
     (base / "semantic").mkdir(parents=True, exist_ok=True)
-    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}\n", encoding="utf-8")
     (base / "raw").mkdir(parents=True, exist_ok=True)
     (base / "logs").mkdir(parents=True, exist_ok=True)
     (base / "book").mkdir(parents=True, exist_ok=True)
@@ -41,8 +41,7 @@ def test_only_unsafe_markdown_raise_explicit_message(tmp_path: Path, monkeypatch
     _write_minimal_layout(base)
     ctx.normalized_dir.mkdir(parents=True, exist_ok=True)
     ctx.book_dir.mkdir(parents=True, exist_ok=True)
-
-    # Legacy markdown già presente nel book
+    # Legacy markdown gia presente nel book
     (ctx.book_dir / "legacy.md").write_text("# Legacy\n", encoding="utf-8")
 
     # Crea Markdown finti

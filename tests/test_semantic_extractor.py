@@ -35,7 +35,7 @@ def _prepare_layout(base: Path, book_dir: Path, *, strict: bool) -> None:
     ensure_minimal_workspace_layout(base, client_name="test")
     if not strict:
         return
-    (base / "semantic" / "semantic_mapping.yaml").write_text("semantic_tagger: {}\n", encoding="utf-8")
+    (base / "semantic" / "semantic_mapping.yaml").write_text("{}\n", encoding="utf-8")
     (book_dir / "README.md").write_text("README", encoding="utf-8")
     (book_dir / "SUMMARY.md").write_text("SUMMARY", encoding="utf-8")
 

@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Protocol, Sequence,
 
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger, phase_scope
-from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.types import ChunkRecord
 from pipeline.workspace_layout import WorkspaceLayout
 from semantic import embedding_service, tagging_service
@@ -17,7 +16,6 @@ from semantic.convert_service import convert_markdown
 from semantic.embedding_service import list_content_markdown
 from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
-from semantic.tags_io import write_tags_reviewed_from_nlp_db as _write_tags_yaml_from_db
 from semantic.types import EmbeddingsClient
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
 from storage.kb_store import KbStore
@@ -71,7 +69,6 @@ __all__ = [
     "index_markdown_to_db",
     "copy_local_pdfs_to_raw",
     "list_content_markdown",
-    "export_tags_yaml_from_db",
 ]
 
 
@@ -133,68 +130,6 @@ def _extract_candidates(raw_dir: Path, cfg: object) -> Dict[str, Dict[str, objec
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
     """Costruisce `tags_raw.csv` dal workspace corrente applicando arricchimento NLP (DB + Spacy)."""
     return tagging_service.build_tags_csv(context, logger, slug=slug)
-
-
-def export_tags_yaml_from_db(
-    semantic_dir: Path,
-    db_path: Path,
-    logger: logging.Logger,
-    *,
-    context: ClientContextType | None = None,
-    workspace_base: Path | None = None,
-    slug: str | None = None,
-    limit: int = 200,
-    min_weight: float = 0.0,
-    keep_only_listed: bool = True,
-    version: str = "2",
-) -> Path:
-    """Facade sicuro per esportare tags_reviewed.yaml dal DB NLP (UI-only).
-    Richiede `context` o `workspace_base` canonico per risolvere il layout."""
-    if context is not None:
-        _require_repo_root_dir(context, slug=slug or "")
-        layout = WorkspaceLayout.from_context(cast(Any, context))
-    elif workspace_base is not None:
-        if slug is None:
-            raise ConfigError(
-                "Slug richiesto per esportare tags_reviewed.yaml dal workspace base.",
-                file_path=str(semantic_dir),
-            )
-        layout = WorkspaceLayout.from_workspace(Path(workspace_base).resolve(), slug=slug)
-    else:
-        raise ConfigError(
-            "workspace_base o context richiesti per esportare tags_reviewed.yaml.",
-            file_path=str(semantic_dir),
-        )
-
-    repo_root_dir = layout.repo_root_dir
-    perimeter_root = repo_root_dir
-    semantic_dir_path = ensure_within_and_resolve(perimeter_root, Path(semantic_dir))
-    if semantic_dir_path != layout.semantic_dir:
-        raise ConfigError(
-            "semantic_dir non coerente con il workspace canonico.",
-            file_path=str(semantic_dir_path),
-        )
-    expected_db_path = ensure_within_and_resolve(semantic_dir_path, semantic_dir_path / "tags.db")
-    actual_db_path = ensure_within_and_resolve(perimeter_root, Path(db_path))
-    if actual_db_path != expected_db_path:
-        raise ConfigError(
-            "Percorso DB non coerente con la directory semantic specificata.",
-            file_path=str(actual_db_path),
-        )
-    result = _write_tags_yaml_from_db(
-        semantic_dir_path,
-        expected_db_path,
-        logger,
-        limit=limit,
-        min_weight=min_weight,
-        keep_only_listed=keep_only_listed,
-        version=version,
-    )
-    logger.info(
-        "semantic.tags_reviewed.exported",
-        extra={"slug": slug, "file_path": str(result), "db_path": str(expected_db_path)},
-    )
-    return cast(Path, result)
 
 
 def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:

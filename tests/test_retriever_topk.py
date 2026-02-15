@@ -82,5 +82,5 @@ def test_topk_k_ge_n_behaves_like_full_sort(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(retr, "fetch_candidates", _mk_stub_candidates(contents, scores))
     params = QueryParams(tmp_path / "kb.sqlite", "p", "s", "q", k=10, candidate_limit=retr.MIN_CANDIDATE_LIMIT)
     out = retr.search(params, FakeEmb())
-    # ordinamento completo: c (0.9), a (0.8), b (0.8). a prima di b per stabilità
+    # ordinamento completo: c (0.9), a (0.8), b (0.8). a prima di b per stabilita
     assert [r["content"] for r in out] == ["c", "a", "b"]

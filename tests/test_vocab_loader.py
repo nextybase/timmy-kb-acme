@@ -9,7 +9,7 @@ import pytest
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from semantic.vocab_loader import load_reviewed_vocab
-from storage.tags_store import save_tags_reviewed
+from storage.tags_store import save_tags_db
 
 
 def _mk_workspace(tmp_path: Path) -> Path:
@@ -32,7 +32,7 @@ def test_load_vocab_missing_db_logs(tmp_path: Path, caplog: pytest.LogCaptureFix
 def test_load_vocab_valid_db_logs(tmp_path: Path, caplog: pytest.LogCaptureFixture):
     base = _mk_workspace(tmp_path)
     db_path = base / "semantic" / "tags.db"
-    save_tags_reviewed(
+    save_tags_db(
         str(db_path),
         {
             "version": "2",

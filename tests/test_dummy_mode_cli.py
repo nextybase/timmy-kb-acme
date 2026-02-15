@@ -16,7 +16,7 @@ from pipeline.exceptions import ConfigError
 
 
 def _repo_root() -> Path:
-    # tests/ è in repo root
+    # tests/ e in repo root
     return Path(__file__).resolve().parents[1]
 
 
@@ -63,7 +63,7 @@ def test_dummy_capability_forbidden_is_blocked_and_recorded(tmp_path: Path, monk
     monkeypatch.setenv("DRIVE_ID", "DUMMY_DRIVE_ID")
 
     # Bootstrap dummy workspace: crea output/<workspace-name> + config/book/logs dirs
-    # (non è runtime: è tooling/test)
+    # (non e runtime: e tooling/test)
     from pipeline.workspace_bootstrap import bootstrap_dummy_workspace
 
     layout = bootstrap_dummy_workspace(slug)
@@ -181,7 +181,7 @@ def test_strict_mode_blocks_dummy_path_even_when_capability_enabled(
     monkeypatch.setattr(mod, "prepare_context", lambda **_kwargs: fake_resources, raising=True)
     monkeypatch.setattr(mod, "_require_layout", lambda _ctx: fake_layout, raising=True)
     monkeypatch.setattr(mod, "_require_normalized_index", lambda *_a, **_k: None, raising=True)
-    monkeypatch.setattr(mod, "emit_csv_phase", lambda *_a, **_k: semantic / "tags_reviewed.csv", raising=True)
+    monkeypatch.setattr(mod, "emit_csv_phase", lambda *_a, **_k: semantic / "tags_raw.csv", raising=True)
     monkeypatch.setattr(mod, "enforce_core_artifacts", lambda *_a, **_k: None, raising=True)
     monkeypatch.setattr(mod, "_should_proceed", lambda **_kwargs: True, raising=True)
     monkeypatch.setattr(mod, "emit_stub_phase", _stub_phase, raising=True)

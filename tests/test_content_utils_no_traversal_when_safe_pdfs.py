@@ -43,7 +43,7 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
     raw.mkdir(parents=True, exist_ok=True)
     book.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
-    (semantic_dir / "semantic_mapping.yaml").write_text("semantic_tagger: {}\nareas: {}\n", encoding="utf-8")
+    (semantic_dir / "semantic_mapping.yaml").write_text("areas: {}\n", encoding="utf-8")
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
     (book / "README.md").write_text("# README\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
@@ -61,16 +61,14 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
     (cat2 / "doc2.pdf").write_text("pdf2", encoding="utf-8")
     (sub / "deep.pdf").write_text("pdf3", encoding="utf-8")
     root_pdf.write_text("pdf0", encoding="utf-8")
-
-    # Lista safe_pdfs (già validati/risolti)
+    # Lista safe_pdfs (gia validati/risolti)
     safe_pdfs = [
         root_pdf.resolve(),
         (cat1 / "doc1.pdf").resolve(),
         (cat2 / "doc2.pdf").resolve(),
         (sub / "deep.pdf").resolve(),
     ]
-
-    # Orfano pre-esistente che dovrà essere pulito dal cleanup idempotente
+    # Orfano pre-esistente che dovra essere pulito dal cleanup idempotente
     orphan = book / "orphan.md"
     orphan.write_text("# Old\n", encoding="utf-8")
 

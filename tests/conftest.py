@@ -472,7 +472,7 @@ def allow_workspace_override(monkeypatch: pytest.MonkeyPatch) -> None:
 def build_vocab_db(base: Path, tags: Iterable[dict[str, Any]]) -> Path:
     """
     Crea semantic/tags.db nel workspace popolando tag/tag_synonyms (old schema).
-    Questo permette a `load_tags_reviewed` di ritornare i canonical attesi.
+    Questo permette a `load_tags_db` di ritornare i canonical attesi.
     """
     from storage.tags_store import ensure_schema_v2
 

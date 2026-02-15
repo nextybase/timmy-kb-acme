@@ -44,7 +44,7 @@ def test_import_cli_does_not_require_streamlit(monkeypatch: pytest.MonkeyPatch):
 
 def test_cli_success_returns_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
     """
-    Caso OK: provision_from_vision restituisce i path degli YAML → exit code 0.
+    Caso OK: provision_from_vision restituisce i path degli YAML -> exit code 0.
     """
     monkeypatch.chdir(tmp_path)
     pdf = _make_pdf(tmp_path)
@@ -76,7 +76,7 @@ def test_cli_success_returns_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 def test_cli_halt_returns_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
     """
-    Caso HALT: l'assistente segnala Vision insufficiente → exit code 2.
+    Caso HALT: l'assistente segnala Vision insufficiente -> exit code 2.
     """
     monkeypatch.chdir(tmp_path)
     pdf = _make_pdf(tmp_path)
@@ -107,7 +107,7 @@ def test_cli_halt_returns_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c
 
 def test_cli_config_error_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
     """
-    Caso errore di configurazione (es. assistant_id mancante) → exit code 1.
+    Caso errore di configurazione (es. assistant_id mancante) -> exit code 1.
     """
     monkeypatch.chdir(tmp_path)
     pdf = _make_pdf(tmp_path)
@@ -139,7 +139,7 @@ def test_cli_config_error_returns_one(tmp_path: Path, monkeypatch: pytest.Monkey
 
 def test_cli_missing_pdf_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
     """
-    PDF non esistente → exit code 1 (il CLI fa il controllo prima di chiamare provision).
+    PDF non esistente -> exit code 1 (il CLI fa il controllo prima di chiamare provision).
     """
     monkeypatch.chdir(tmp_path)
     missing = local_workspace_dir(tmp_path / "output", "dummy-srl") / "missing.pdf"

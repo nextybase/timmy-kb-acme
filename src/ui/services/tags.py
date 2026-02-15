@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from ..components.yaml_editors import edit_semantic_mapping as _edit_semantic_mapping
-from ..components.yaml_editors import edit_tags_reviewed as _edit_tags_reviewed
 
 try:
     import streamlit as st
@@ -18,7 +17,5 @@ def render_tags_editor(slug: str) -> None:
     if st is None:
         return
 
-    st.caption("Editor YAML semantici (tags, mapping).")
-    _edit_tags_reviewed(slug)
-    st.divider()
+    st.caption("Editor YAML semantico (mapping).")
     _edit_semantic_mapping(slug)

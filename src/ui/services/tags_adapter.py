@@ -66,7 +66,7 @@ def _rel(repo_root: Path, p: Path) -> str:
 
 
 def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
-    """Genera/aggiorna tags_reviewed in-process mostrando l'avanzamento nella UI."""
+    """Genera/aggiorna i tag semantici in DB mostrando l'avanzamento nella UI."""
     st = _require_streamlit()
     svc_logger = logger or get_structured_logger("ui.services.tags_adapter")
     conn: Any | None = None
@@ -99,9 +99,8 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
             write_tagging_readme(semantic_dir, svc_logger)
             write_tags_review_stub_from_csv(semantic_dir, csv_path, svc_logger)
 
-        # Niente scrittura automatica dello YAML: l'utente pubblica esplicitamente dalla UI.
         clear_yaml_cache()
-        st.success("Estrai Tags completato (SpaCy/euristica). Usa 'Pubblica tag revisionati' per generare lo YAML.")
+        st.success("Estrai Tags completato (SpaCy/euristica). `semantic/tags.db` aggiornato.")
         backend = os.getenv("TAGS_NLP_BACKEND", "spacy").strip().lower() or "spacy"
         entities_written = getattr(ctx, "last_entities_written", None)
 
@@ -123,16 +122,15 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
                     "tags_raw_csv": _rel(repo_root, Path(csv_path)),
                     "stub_db": _rel(repo_root, stub_db) if stub_db.exists() else None,
                     "tagging_readme": _rel(repo_root, readme) if readme.exists() else None,
-                    "tags_reviewed_yaml": _rel(repo_root, semantic_dir / "tags_reviewed.yaml"),
                 },
-                "note": "yaml_not_written_automatically",
+                "note": "db_ssot_updated",
             },
         )
         svc_logger.info(
             "ui.tags_adapter.completed",
             extra={
                 "slug": slug,
-                "yaml": str(semantic_dir / "tags_reviewed.yaml"),
+                "tags_db": str(semantic_dir / "tags.db"),
                 "source": backend,
                 "entities_written": entities_written,
             },

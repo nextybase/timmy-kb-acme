@@ -33,7 +33,7 @@ def test_readme_and_summary_respect_mapping(tmp_path: Path) -> None:
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
-    mapping_yaml = "semantic_tagger: {}\n" "areas:\n" "  - key: area-uno\n" "    descrizione: Descrizione Area Uno\n"
+    mapping_yaml = "areas:\n" "  - key: area-uno\n" "    descrizione: Descrizione Area Uno\n"
     (semantic_dir / "semantic_mapping.yaml").write_text(mapping_yaml, encoding="utf-8")
     (book / "README.md").write_text("# README\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
@@ -73,7 +73,7 @@ def test_readme_omits_entity_table_without_mapping(tmp_path: Path) -> None:
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     (config_dir / "config.yaml").write_text("{}", encoding="utf-8")
-    mapping_yaml = "semantic_tagger: {}\n" "areas:\n" "  - key: area-uno\n" "    descrizione: Descrizione Area Uno\n"
+    mapping_yaml = "areas:\n" "  - key: area-uno\n" "    descrizione: Descrizione Area Uno\n"
     (semantic_dir / "semantic_mapping.yaml").write_text(mapping_yaml, encoding="utf-8")
     (book / "README.md").write_text("# README\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
@@ -82,4 +82,4 @@ def test_readme_omits_entity_table_without_mapping(tmp_path: Path) -> None:
     readme_path = cu.generate_readme_markdown(ctx)
     content = readme_path.read_text(encoding="utf-8")
 
-    assert "## Entità rilevanti per il tuo dominio" not in content
+    assert "## Entita rilevanti per il tuo dominio" not in content

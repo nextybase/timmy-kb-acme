@@ -51,7 +51,7 @@ def test_with_config_or_budget_auto(kb_sqlite_path: Path) -> None:
 
 
 def test_choose_limit_for_budget_zero_budget_returns_default() -> None:
-    # Caso sentinella: 0 ms => usa il default del sistema, non parte della monotonicità
+    # Caso sentinella: 0 ms => usa il default del sistema, non parte della monotonicita
     assert choose_limit_for_budget(0) == 4000
 
 
@@ -105,7 +105,7 @@ def _typed_params(db_path: Path, **over: Any) -> QueryParams:
 
 
 def test_with_config_or_budget_explicit_param_wins(kb_sqlite_path: Path) -> None:
-    # esplicito diverso dal default → deve prevalere su auto/config
+    # esplicito diverso dal default -> deve prevalere su auto/config
     p = _typed_params(db_path=kb_sqlite_path, candidate_limit=1234)
     cfg = {
         "retriever": {
@@ -118,7 +118,7 @@ def test_with_config_or_budget_explicit_param_wins(kb_sqlite_path: Path) -> None
 
 
 def test_with_config_or_budget_config_value(kb_sqlite_path: Path) -> None:
-    # default → prende il valore da config (anche se stringa)
+    # default -> prende il valore da config (anche se stringa)
     p = _typed_params(db_path=kb_sqlite_path)
     cfg = {"retriever": {"throttle": {"candidate_limit": "6000"}}}
     out = with_config_or_budget(p, cfg)

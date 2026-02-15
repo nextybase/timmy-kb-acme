@@ -286,7 +286,7 @@ def test_invalid_model_output_raises(monkeypatch, tmp_workspace: Path):
 
 
 def test_slug_mismatch_raises(monkeypatch, tmp_workspace: Path):
-    # Payload con slug diverso → deve alzare ConfigError (qualsiasi messaggio)
+    # Payload con slug diverso -> deve alzare ConfigError (qualsiasi messaggio)
     mismatched = {
         "version": "1.0-beta",
         "source": "vision",

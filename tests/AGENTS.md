@@ -1,5 +1,5 @@
 # Purpose
-Testing guidance emphasizing the unit → middle/contract → smoke E2E pyramid on dummy datasets.
+Testing guidance emphasizing the unit -> middle/contract -> smoke E2E pyramid on dummy datasets.
 
 
 # Rules (overrides)

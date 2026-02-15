@@ -12,7 +12,7 @@ from pipeline.beta_flags import is_beta_strict
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 
-__all__ = ["load_reviewed_vocab", "load_tags_reviewed_db"]
+__all__ = ["load_reviewed_vocab", "load_tags_db_vocab"]
 
 LOGGER = get_structured_logger("semantic.vocab_loader")
 _FALLBACK_LOG = get_structured_logger("semantic.vocab_loader.fallback")
@@ -35,13 +35,13 @@ def _safe_structured_warning(event: str, *, extra: Mapping[str, Any]) -> None:
         _FALLBACK_LOG.warning(event, extra={"payload": dict(extra)})
 
 
-def _load_tags_reviewed_or_raise() -> Any:
+def _load_tags_db_or_raise() -> Any:
     try:  # pragma: no cover - dipende dall'ambiente
-        from storage.tags_store import load_tags_reviewed as _load_tags_reviewed
+        from storage.tags_store import load_tags_db as _load_tags_db
     except Exception as exc:  # pragma: no cover
         _safe_structured_warning("semantic.vocab.loader_missing", extra={"error": str(exc)})
         raise ConfigError("tags.db missing or unreadable") from exc
-    return _load_tags_reviewed
+    return _load_tags_db
 
 
 def _normalize_vocab_result(canon_map: Mapping[str, Iterable[str]]) -> Dict[str, Dict[str, list[str]]]:
@@ -257,7 +257,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
     Normalizza data in: { canonical: { "aliases": [str,...] } } mantenendo l'ordine di inserimento.
 
     Formati accettati:
-    - già normalizzato: Dict[str, Dict[str, Iterable[str]]]
+    - gia normalizzato: Dict[str, Dict[str, Iterable[str]]]
     - mapping semplice: Dict[str, Iterable[str]]  (canonical -> aliases)
     - formato storage: {"tags": [{"name": str, "action": str, "synonyms": [str,...]}, ...]}
     - lista di dict:   [{"canonical": str, "alias": str}, ...]
@@ -272,7 +272,7 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
     def _tooling_shape_guard(shape: str) -> None:
         """
         Tooling shapes (simple_mapping, sequence_rows) sono ammessi solo
-        fuori dalla modalità strict (Envelope runtime).
+        fuori dalla modalita strict (Envelope runtime).
         """
         if is_beta_strict():
             raise ConfigError(f"Canonical vocab tooling shape not allowed in strict mode: {shape}")
@@ -287,15 +287,18 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
             LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "normalized_mapping"})
             return normalized
 
+        has_storage_key = hasattr(data, "keys") and "tags" in cast(Mapping[str, Any], data).keys()
         items = cast(Any, data).get("tags") if hasattr(data, "get") else None
-        parsed_storage = (
-            _parse_storage_tags_rows(items)
-            if isinstance(items, Sequence) and not isinstance(items, (str, bytes))
-            else None
-        )
-        if parsed_storage:
-            LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "storage_tags"})
-            return parsed_storage
+        if has_storage_key:
+            if not isinstance(items, Sequence) or isinstance(items, (str, bytes)):
+                _raise_invalid()
+            parsed_storage = _parse_storage_tags_rows(items)
+            if parsed_storage:
+                LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "storage_tags"})
+                return parsed_storage
+            # Se il payload dichiara shape storage (`tags`) ma non contiene righe utili,
+            # la shape e' invalida: non tentare fallback su mapping "semplice".
+            _raise_invalid()
 
         simple = _parse_simple_vocab_mapping(cast(Mapping[str, Iterable[Any]], data))
         if simple:
@@ -315,14 +318,14 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
     return {}
 
 
-def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
+def load_tags_db_vocab(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
     """
     Wrapper patchabile che carica i 'canonici' da tags.db e li adatta alla shape attesa.
 
-    Se il loader non è disponibile o il DB è illeggibile → ConfigError (fail-fast).
+    Se il loader non e disponibile o il DB e illeggibile -> ConfigError (fail-fast).
     """
     try:
-        loader = _load_tags_reviewed_or_raise()
+        loader = _load_tags_db_or_raise()
         raw = loader(str(db_path))  # accetta str/Path
     except Exception as exc:  # errori SQLite (query/cursor)
         _safe_structured_warning(
@@ -334,6 +337,8 @@ def load_tags_reviewed_db(db_path: Path) -> Dict[str, Dict[str, list[str]]]:
         return _to_vocab(raw)
     except ConfigError as exc:
         raise ConfigError(str(exc), file_path=str(db_path)) from exc
+    except Exception as exc:
+        raise ConfigError("Canonical vocab shape invalid", file_path=str(db_path)) from exc
 
 
 def _semantic_dir(repo_root_dir: Path) -> Path:
@@ -386,7 +391,7 @@ def load_reviewed_vocab(
         )
         raise ConfigError("tags.db missing or unreadable", file_path=str(db_path))
 
-    vocab = load_tags_reviewed_db(db_path)
+    vocab = load_tags_db_vocab(db_path)
     if not vocab:
         _log_vocab_event(
             logger,

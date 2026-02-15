@@ -33,12 +33,12 @@ class _ServiceStub(types.SimpleNamespace):
 def test_list_drive_files_parent_id_required():
     service = _ServiceStub()
     with pytest.raises(ConfigError):
-        # parent_id mancante → ConfigError
+        # parent_id mancante -> ConfigError
         list_drive_files(service, parent_id="")
 
 
 def test_get_file_metadata_file_id_required():
     service = _ServiceStub()
     with pytest.raises(ConfigError):
-        # file_id mancante → ConfigError
+        # file_id mancante -> ConfigError
         get_file_metadata(service, file_id="")
