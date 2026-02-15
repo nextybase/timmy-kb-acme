@@ -166,7 +166,10 @@ def _workspace_root(repo_root: Path, safe_slug: str) -> Path:
             component="pipeline.capabilities.new_client",
         ) from exc
     try:
-        root = Path(str(raw)).expanduser().resolve()
+        raw_value = str(raw)
+        if "<slug>" in raw_value:
+            raw_value = raw_value.replace("<slug>", safe_slug)
+        root = Path(raw_value).expanduser().resolve()
     except Exception as exc:
         raise ConfigError(f"{WORKSPACE_ROOT_ENV} non valido: {raw}", slug=safe_slug) from exc
     if root.name != expected:

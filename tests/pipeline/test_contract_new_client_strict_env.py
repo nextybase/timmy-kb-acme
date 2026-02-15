@@ -115,6 +115,49 @@ def test_new_client_requires_workspace_root_env_even_non_strict(
         )
 
 
+def test_new_client_accepts_workspace_root_slug_macro(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    slug = "gamma"
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    monkeypatch.setenv("TIMMY_ALLOW_BOOTSTRAP", "1")
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(tmp_path / "output" / "timmy-kb-<slug>"))
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(
+        "pipeline.capabilities.new_client.run_system_self_check", lambda _p: SimpleNamespace(ok=True, items=[])
+    )
+
+    def _fake_run_control_plane_tool(
+        *, tool_module: str, slug: str, action: str, args: list[str] | None = None
+    ) -> dict[str, Any]:
+        return {
+            "payload": {
+                "action": action,
+                "status": "ok",
+                "returncode": 0,
+                "errors": [],
+                "warnings": [],
+                "artifacts": [],
+            }
+        }
+
+    result = create_new_client_workspace(
+        slug=slug,
+        client_name="Gamma",
+        pdf_bytes=b"%PDF-1.4\n%fake\n",
+        repo_root=repo_root,
+        vision_model="dummy",
+        enable_drive=False,
+        ui_allow_local_only=True,
+        ensure_drive_minimal=None,
+        run_control_plane_tool=_fake_run_control_plane_tool,
+        progress=None,
+    )
+
+    assert Path(result["workspace_root_dir"]).name == f"timmy-kb-{slug}"
+
+
 def test_scoped_workspace_env_restores_bootstrap_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     workspace_root = tmp_path / "timmy-kb-restore"
     workspace_root.mkdir(parents=True, exist_ok=True)
