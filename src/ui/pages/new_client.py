@@ -73,6 +73,15 @@ LOGGER = get_structured_logger("ui.new_client")
 _LAYOUT_CACHE: dict[str, WorkspaceLayout] = {}
 
 
+def _safe_rerun() -> None:
+    rerun_fn = getattr(st, "rerun", None)
+    if callable(rerun_fn):
+        try:
+            rerun_fn()
+        except Exception as exc:  # pragma: no cover - best effort UI-only
+            LOGGER.warning("ui.new_client.safe_rerun_failed", extra={"error": repr(exc)})
+
+
 def _layout_for_slug(slug: str) -> WorkspaceLayout | None:
     key = (slug or "").strip().lower()
     if not key:
@@ -185,7 +194,7 @@ def _ensure_drive_overwrite_confirmation(slug: str) -> None:
         with col_overwrite:
             if st.button("Sovrascrivi", key=f"drive_overwrite_ok_{slug}", type="primary"):
                 st.session_state[key] = True
-                st.experimental_rerun()
+                _safe_rerun()
         with col_cancel:
             if st.button("Annulla", key=f"drive_overwrite_cancel_{slug}", type="secondary"):
                 st.session_state[key] = False
