@@ -117,6 +117,10 @@ def execute_drive_download(
                 pass
             st.error(f"Errore durante il download: {exc}")
             return False
+        # HiTL-by-design: non e' una degradazione "best effort".
+        # Il download prosegue sugli elementi validi, ma l'utente deve vedere
+        # in modo esplicito i file non conformi/corrotti (mime, integrita', ecc.)
+        # per decidere la correzione a monte su Drive.
         try:
             logger.warning(
                 "ui.manage.drive.download_partial",
