@@ -32,12 +32,11 @@ def test_index_logs_skip_empty_file(tmp_path: Path, caplog: pytest.LogCaptureFix
     base = local_workspace_dir(tmp_path / "output", "dummy")
     _ensure_minimal_workspace(base)
     book = base / "book"
-    db_path = base / "kb.sqlite"
     book.mkdir(parents=True, exist_ok=True)
 
-    # Un file vuoto e uno non vuoto
-    (book / "empty.md").write_text("   \n\t", encoding="utf-8")
-    (book / "ok.md").write_text("# Title\nBody", encoding="utf-8")
+    # Un file con solo frontmatter (body vuoto) e uno non vuoto
+    (book / "empty.md").write_text("---\ntitle: Empty\n---\n", encoding="utf-8")
+    (book / "ok.md").write_text("---\ntitle: OK\n---\n# Title\nBody", encoding="utf-8")
 
     # Context minimo
     ctx = type("C", (), dict(base_dir=base, book_dir=book, repo_root_dir=base, slug="dummy"))()
@@ -45,9 +44,7 @@ def test_index_logs_skip_empty_file(tmp_path: Path, caplog: pytest.LogCaptureFix
 
     caplog.set_level(logging.INFO, logger="tests.index.skip_empty")
 
-    inserted = sapi.index_markdown_to_db(
-        ctx, logger, slug="dummy", scope="book", embeddings_client=_Emb(), db_path=db_path
-    )
+    inserted = sapi.index_markdown_to_db(ctx, logger, slug="dummy", scope="book", embeddings_client=_Emb())
     # Potrebbe essere >=1 a seconda della logica di chunking; basta che indicizzi il file non-vuoto
     assert inserted >= 1
 

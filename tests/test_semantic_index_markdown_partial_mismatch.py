@@ -15,13 +15,14 @@ class FakeEmbClient:
 
 
 def test_index_markdown_partial_on_mismatch_inserts_and_logs(tmp_path, caplog, monkeypatch):
+    monkeypatch.setenv("TEST_MODE", "1")
     base = tmp_path
     ensure_minimal_workspace_layout(base, client_name="dummy")
     book = base / "book"
 
     # due file di contenuto (README/SUMMARY non considerati)
-    (book / "content_1.md").write_text("# A\ntext", encoding="utf-8")
-    (book / "content_2.md").write_text("# B\ntext", encoding="utf-8")
+    (book / "content_1.md").write_text("---\ntitle: A\n---\n# A\ntext", encoding="utf-8")
+    (book / "content_2.md").write_text("---\ntitle: B\n---\n# B\ntext", encoding="utf-8")
 
     # context minimo
     ctx = TestClientCtx(

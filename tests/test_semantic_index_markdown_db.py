@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Iterable, cast
 
 import numpy as np
+import pytest
 
 import semantic.embedding_service as emb_service
 from pipeline.exceptions import ConfigError
@@ -43,6 +44,11 @@ CLIENT_SLUG = "dummy"
 LOCAL_WORKSPACE_NAME = local_workspace_name(CLIENT_SLUG)
 
 
+@pytest.fixture(autouse=True)
+def _enable_test_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEST_MODE", "1")
+
+
 def _dummy_workspace_root(tmp_path: Path) -> Path:
     base_parent = tmp_path / "output"
     base = local_workspace_dir(base_parent, CLIENT_SLUG)
@@ -56,8 +62,8 @@ def test_index_markdown_to_db_inserts_rows(tmp_path):
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "A.md").write_text("# A\ncontenuto uno", encoding="utf-8")
-    (book / "B.md").write_text("# B\ncontenuto due", encoding="utf-8")
+    (book / "A.md").write_text("---\ntitle: A\n---\n# A\ncontenuto uno", encoding="utf-8")
+    (book / "B.md").write_text("---\ntitle: B\n---\n# B\ncontenuto due", encoding="utf-8")
 
     dbp = semantic_dir / "db.sqlite"
     inserted = index_markdown_to_db(
@@ -81,8 +87,8 @@ def test_index_markdown_to_db_numpy_array(tmp_path):
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
-    (book / "B.md").write_text("# B\ndue", encoding="utf-8")
+    (book / "A.md").write_text("---\ntitle: A\n---\n# A\nuno", encoding="utf-8")
+    (book / "B.md").write_text("---\ntitle: B\n---\n# B\ndue", encoding="utf-8")
 
     class NpEmb:
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
@@ -108,7 +114,7 @@ def test_index_markdown_to_db_generator_and_empty_vectors(tmp_path, caplog):
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
+    (book / "A.md").write_text("---\ntitle: A\n---\n# A\nuno", encoding="utf-8")
 
     # Generatore coerente
     class GenEmb:
@@ -167,8 +173,8 @@ def test_index_markdown_to_db_list_of_numpy_arrays(tmp_path):
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
-    (book / "B.md").write_text("# B\ndue", encoding="utf-8")
+    (book / "A.md").write_text("---\ntitle: A\n---\n# A\nuno", encoding="utf-8")
+    (book / "B.md").write_text("---\ntitle: B\n---\n# B\ndue", encoding="utf-8")
 
     class ListNpEmb:
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
@@ -197,8 +203,8 @@ def test_index_markdown_to_db_mismatch_lengths_inserts_partial(tmp_path, caplog)
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
-    (book / "B.md").write_text("# B\ndue", encoding="utf-8")
+    (book / "A.md").write_text("---\ntitle: A\n---\n# A\nuno", encoding="utf-8")
+    (book / "B.md").write_text("---\ntitle: B\n---\n# B\ndue", encoding="utf-8")
 
     class ShortEmb:
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
@@ -236,7 +242,7 @@ def test_index_markdown_to_db_phase_failed_on_insert_error(tmp_path, caplog, mon
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
+    (book / "A.md").write_text("---\ntitle: A\n---\n# A\nuno", encoding="utf-8")
 
     class OkEmb:
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
@@ -274,7 +280,7 @@ def test_index_excludes_readme_and_summary(tmp_path):
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
     # Contenuto reale
-    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
+    (book / "A.md").write_text("---\ntitle: A\n---\n# A\nuno", encoding="utf-8")
     # File da escludere
     (book / "README.md").write_text("# R\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# S\n", encoding="utf-8")
@@ -302,8 +308,8 @@ def test_index_filters_empty_embeddings_per_item(tmp_path, caplog):
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
-    (book / "B.md").write_text("# B\ndue", encoding="utf-8")
+    (book / "A.md").write_text("---\ntitle: A\n---\n# A\nuno", encoding="utf-8")
+    (book / "B.md").write_text("---\ntitle: B\n---\n# B\ndue", encoding="utf-8")
 
     class PartEmptyEmb:
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
@@ -381,7 +387,10 @@ def test_lineage_persisted_in_markdown_index(tmp_path):
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "Lineage.md").write_text("# Lineage\nContenuto lineage", encoding="utf-8")
+    (book / "Lineage.md").write_text(
+        "---\ntitle: Lineage\n---\n# Lineage\nContenuto lineage",
+        encoding="utf-8",
+    )
 
     class Emb:
         def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]

@@ -21,7 +21,8 @@ class _DummyEmbeddings:
         return [[1.0, 0.0, 0.5] for _ in texts]
 
 
-def test_insert_chunks_idempotency_and_index_aggregate(tmp_path: Path):
+def test_insert_chunks_idempotency_and_index_aggregate(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("TEST_MODE", "1")
     base = tmp_path / "kb_out"
     ensure_minimal_workspace_layout(base)
     semantic_dir = base / "semantic"
@@ -59,8 +60,8 @@ def test_insert_chunks_idempotency_and_index_aggregate(tmp_path: Path):
     raw = base / "raw"
     book.mkdir(parents=True, exist_ok=True)
     raw.mkdir(parents=True, exist_ok=True)
-    (book / "a.md").write_text("# A\n\n", encoding="utf-8")
-    (book / "b.md").write_text("# B\n\n", encoding="utf-8")
+    (book / "a.md").write_text("---\ntitle: A\n---\n# A\n\n", encoding="utf-8")
+    (book / "b.md").write_text("---\ntitle: B\n---\n# B\n\n", encoding="utf-8")
     # README/SUMMARY ignorati
     (book / "README.md").write_text("# R\n", encoding="utf-8")
     (book / "SUMMARY.md").write_text("# S\n", encoding="utf-8")

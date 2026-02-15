@@ -40,6 +40,7 @@ class _EmbClient:
 
 
 def test_indexer_initializes_schema_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEST_MODE", "1")
     base = tmp_path / "kb"
     ensure_minimal_workspace_layout(base)
     book = base / "book"
@@ -47,8 +48,8 @@ def test_indexer_initializes_schema_once(tmp_path: Path, monkeypatch: pytest.Mon
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
     # Due file di contenuto (no README/SUMMARY)
-    (book / "a.md").write_text("# A\nBody\n", encoding="utf-8")
-    (book / "b.md").write_text("# B\nBody\n", encoding="utf-8")
+    (book / "a.md").write_text("---\ntitle: A\n---\n# A\nBody\n", encoding="utf-8")
+    (book / "b.md").write_text("---\ntitle: B\n---\n# B\nBody\n", encoding="utf-8")
 
     ctx = _Ctx(base)
     logger = _NoopLogger()
@@ -76,6 +77,7 @@ def test_indexer_initializes_schema_once(tmp_path: Path, monkeypatch: pytest.Mon
 
 
 def test_indexer_reduces_overhead_with_single_init(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEST_MODE", "1")
     base = tmp_path / "kb"
     ensure_minimal_workspace_layout(base)
     book = base / "book"
@@ -83,7 +85,7 @@ def test_indexer_reduces_overhead_with_single_init(tmp_path: Path, monkeypatch: 
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
     for i in range(3):
-        (book / f"f{i}.md").write_text(f"# F{i}\nBody\n", encoding="utf-8")
+        (book / f"f{i}.md").write_text(f"---\ntitle: F{i}\n---\n# F{i}\nBody\n", encoding="utf-8")
 
     ctx = _Ctx(base)
     logger = _NoopLogger()

@@ -99,7 +99,7 @@ def test_indexer_chunking_heading(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "doc.md").write_text("# Intro\nCiao\n# Details\nContenuti", encoding="utf-8")
+    (book / "doc.md").write_text("---\ntitle: Doc\n---\n# Intro\nCiao\n# Details\nContenuti", encoding="utf-8")
 
     ctx = _Ctx(base)
     logger = _NoopLogger()
@@ -138,8 +138,8 @@ def test_indexer_skipped_paths_only_missing_files_logged(
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "doc.md").write_text("# Section\nContenuto", encoding="utf-8")
-    (book / "empty.md").write_text("", encoding="utf-8")
+    (book / "doc.md").write_text("---\ntitle: Doc\n---\n# Section\nContenuto", encoding="utf-8")
+    (book / "empty.md").write_text("---\ntitle: Empty\n---\n", encoding="utf-8")
 
     ctx = _Ctx(base)
     logger = _RecordingLogger()

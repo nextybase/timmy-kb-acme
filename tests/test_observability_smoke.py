@@ -51,13 +51,14 @@ def _write_minimal_layout(base: Path) -> None:
 
 
 def test_observability_indexing_success(monkeypatch, tmp_path, caplog):
+    monkeypatch.setenv("TEST_MODE", "1")
     # Setup workspace minimo con 2 file MD
     base = local_workspace_dir(tmp_path / "output", "dummy")
     _write_minimal_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
-    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
-    (book / "B.md").write_text("# B\ndue", encoding="utf-8")
+    (book / "A.md").write_text("---\ntitle: A\n---\n# A\nuno", encoding="utf-8")
+    (book / "B.md").write_text("---\ntitle: B\n---\n# B\ndue", encoding="utf-8")
     ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=base / "raw", book_dir=book, slug="dummy")
     logger = _logger("test.obs.index")
     db_path = base / "semantic" / "kb.sqlite"
@@ -145,11 +146,12 @@ def test_observability_build_book_success(monkeypatch, tmp_path, caplog):
 
 
 def test_observability_indexing_failure_emits_error(monkeypatch, tmp_path, caplog):
+    monkeypatch.setenv("TEST_MODE", "1")
     base = local_workspace_dir(tmp_path / "output", "dummy")
     _write_minimal_layout(base)
     book = base / "book"
     book.mkdir(parents=True, exist_ok=True)
-    (book / "A.md").write_text("# A\nuno", encoding="utf-8")
+    (book / "A.md").write_text("---\ntitle: A\n---\n# A\nuno", encoding="utf-8")
     ctx = _Ctx(base_dir=base, repo_root_dir=base, raw_dir=base / "raw", book_dir=book, slug="dummy")
     logger = _logger("test.obs.index.fail")
     db_path = base / "semantic" / "kb.sqlite"

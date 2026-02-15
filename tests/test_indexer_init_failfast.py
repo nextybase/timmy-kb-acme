@@ -56,7 +56,7 @@ def test_indexer_init_db_failfast_raises_configerror(tmp_path: Path, monkeypatch
     book.mkdir(parents=True, exist_ok=True)
     semantic_dir = base / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)
-    (book / "a.md").write_text("# A\nBody\n", encoding="utf-8")
+    (book / "a.md").write_text("---\ntitle: A\n---\n# A\nBody\n", encoding="utf-8")
 
     ctx = _Ctx(base)
     (book / "README.md").write_text("# Dummy\n", encoding="utf-8")
