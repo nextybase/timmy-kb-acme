@@ -7,14 +7,8 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 from semantic import vocab_loader as vl
+from tests._helpers.noop_logger import NoopLogger
 from tests._helpers.workspace_paths import local_workspace_dir
-
-
-class _NoopLogger:
-    def debug(self, *a, **k): ...
-    def info(self, *a, **k): ...
-    def warning(self, *a, **k): ...
-    def error(self, *a, **k): ...
 
 
 def test_to_vocab_invalid_shape_raises() -> None:
@@ -33,7 +27,7 @@ def test_load_reviewed_vocab_missing_db_raises(tmp_path: Path) -> None:
     (base / "semantic").mkdir(parents=True, exist_ok=True)
 
     with pytest.raises(ConfigError, match="tags.db missing or unreadable"):
-        vl.load_reviewed_vocab(base, _NoopLogger(), slug="dummy")
+        vl.load_reviewed_vocab(base, NoopLogger(), slug="dummy")
 
 
 def test_to_vocab_case_conflict_merges_aliases() -> None:

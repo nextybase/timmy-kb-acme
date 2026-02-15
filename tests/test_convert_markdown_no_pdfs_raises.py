@@ -6,6 +6,7 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 from semantic import convert_service
+from tests._helpers.noop_logger import NoopLogger
 
 
 class _Ctx:
@@ -17,28 +18,10 @@ class _Ctx:
         self.slug = slug
 
 
-class _NoopLogger:
-    def info(self, *a, **k):  # noqa: D401
-        """No-op."""
-        pass
-
-    def warning(self, *a, **k):  # noqa: D401
-        """No-op."""
-        pass
-
-    def debug(self, *a, **k):  # noqa: D401
-        """No-op."""
-        pass
-
-    def error(self, *a, **k):  # noqa: D401
-        """No-op."""
-        pass
-
-
 def test_convert_markdown_without_pdfs_raises_configerror(tmp_path: Path):
     base = tmp_path / "kb"
     ctx = _Ctx(base)
-    logger = _NoopLogger()
+    logger = NoopLogger()
 
     # Layout minimo richiesto dal WorkspaceLayout (bootstrap-like)
     (base / "config").mkdir(parents=True, exist_ok=True)
@@ -65,7 +48,7 @@ def test_convert_markdown_without_pdfs_raises_configerror(tmp_path: Path):
 def test_convert_markdown_without_pdfs_returns_existing_book_md(tmp_path: Path):
     base = tmp_path / "kb"
     ctx = _Ctx(base)
-    logger = _NoopLogger()
+    logger = NoopLogger()
 
     # Layout minimo richiesto dal WorkspaceLayout (bootstrap-like)
     (base / "config").mkdir(parents=True, exist_ok=True)

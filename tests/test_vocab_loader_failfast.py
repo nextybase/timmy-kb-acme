@@ -8,14 +8,8 @@ import pytest
 
 import semantic.vocab_loader as vl
 from pipeline.exceptions import ConfigError
+from tests._helpers.noop_logger import NoopLogger
 from tests._helpers.workspace_paths import local_workspace_dir
-
-
-class _NoopLogger:
-    def debug(self, *a, **k): ...
-    def info(self, *a, **k): ...
-    def warning(self, *a, **k): ...
-    def error(self, *a, **k): ...
 
 
 def test_reviewed_vocab_json_is_ignored_when_db_missing(tmp_path: Path):
@@ -26,7 +20,7 @@ def test_reviewed_vocab_json_is_ignored_when_db_missing(tmp_path: Path):
     reviewed_path.write_text('{"canon": {"aliases": ["alias"]}}', encoding="utf-8")
 
     with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
-        _ = vl.load_reviewed_vocab(base, _NoopLogger(), slug="dummy")
+        _ = vl.load_reviewed_vocab(base, NoopLogger(), slug="dummy")
 
     err = ei.value
     assert getattr(err, "file_path", None) == str(sem / "tags.db")
@@ -43,4 +37,23 @@ def test_path_guard_is_enforced(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr("pipeline.path_utils.ensure_within_and_resolve", _unsafe, raising=True)
 
     with pytest.raises(ConfigError):
-        _ = vl.load_reviewed_vocab(base, _NoopLogger(), slug="dummy")
+        _ = vl.load_reviewed_vocab(base, NoopLogger(), slug="dummy")
+
+
+def _mk_semantic_db_placeholder(tmp_path: Path) -> Path:
+    base = local_workspace_dir(tmp_path / "output", "dummy")
+    sem = base / "semantic"
+    sem.mkdir(parents=True, exist_ok=True)
+    db = sem / "tags.db"
+    db.write_bytes(b"sqlite placeholder")
+    return base
+
+
+def test_load_reviewed_vocab_unreadable_db(tmp_path: Path) -> None:
+    base = _mk_semantic_db_placeholder(tmp_path)
+
+    with pytest.raises(ConfigError, match="tags.db missing or unreadable") as ei:
+        _ = vl.load_reviewed_vocab(base, NoopLogger(), slug="dummy")
+
+    err = ei.value
+    assert getattr(err, "file_path", None) == str(base / "semantic" / "tags.db")

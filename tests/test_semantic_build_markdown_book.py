@@ -7,6 +7,7 @@ import pytest
 
 from pipeline.exceptions import ConversionError
 from semantic import api as sapi
+from tests._helpers.noop_logger import NoopLogger
 
 
 class _Ctx:
@@ -58,7 +59,7 @@ def test_build_markdown_book_no_success_if_enrich_fails(tmp_path, caplog, monkey
 
     caplog.clear()
     with pytest.raises(ConversionError):
-        sapi.build_markdown_book(ctx, logger=_NoopLogger(), slug="obs")
+        sapi.build_markdown_book(ctx, logger=NoopLogger(), slug="obs")
 
     # Nessuna evidenza di "success" della fase build_markdown_book nei log
     success_records = [
@@ -67,20 +68,6 @@ def test_build_markdown_book_no_success_if_enrich_fails(tmp_path, caplog, monkey
         if "build_markdown_book" in (getattr(r, "message", "") or "") and "success" in r.message.lower()
     ]
     assert not success_records
-
-
-class _NoopLogger:
-    def info(self, *a, **k):
-        pass
-
-    def warning(self, *a, **k):
-        pass
-
-    def debug(self, *a, **k):
-        pass
-
-    def error(self, *a, **k):
-        pass
 
 
 def test_build_markdown_book_logs_enriched_count(tmp_path, caplog, monkeypatch):

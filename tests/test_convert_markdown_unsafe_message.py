@@ -8,6 +8,7 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 from semantic import convert_service
+from tests._helpers.noop_logger import NoopLogger
 
 
 class _Ctx:
@@ -32,17 +33,10 @@ def _write_minimal_layout(base: Path) -> None:
     (base / "normalized").mkdir(parents=True, exist_ok=True)
 
 
-class _NoopLogger:
-    def info(self, *a, **k): ...
-    def warning(self, *a, **k): ...
-    def debug(self, *a, **k): ...
-    def error(self, *a, **k): ...
-
-
 def test_only_unsafe_markdown_raise_explicit_message(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     base = tmp_path / "kb"
     ctx = _Ctx(base)
-    logger = _NoopLogger()
+    logger = NoopLogger()
 
     _write_minimal_layout(base)
     ctx.normalized_dir.mkdir(parents=True, exist_ok=True)
@@ -88,7 +82,7 @@ def test_only_unsafe_markdown_raise_explicit_message(tmp_path: Path, monkeypatch
 def test_mixed_unsafe_and_valid_markdown_processes_valid_ones(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     base = tmp_path / "kb"
     ctx = _Ctx(base)
-    logger = _NoopLogger()
+    logger = NoopLogger()
 
     _write_minimal_layout(base)
     ctx.normalized_dir.mkdir(parents=True, exist_ok=True)

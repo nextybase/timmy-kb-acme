@@ -9,6 +9,7 @@ from pipeline.exceptions import ConfigError
 from semantic import convert_service
 from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig
+from tests._helpers.noop_logger import NoopLogger
 from tests.utils.symlink import make_symlink
 
 
@@ -19,20 +20,6 @@ class _Ctx:
         self.raw_dir = base / "raw"
         self.book_dir = base / "book"
         self.slug = slug
-
-
-class _NoopLogger:
-    def info(self, *a, **k):
-        pass
-
-    def warning(self, *a, **k):
-        pass
-
-    def debug(self, *a, **k):
-        pass
-
-    def error(self, *a, **k):
-        pass
 
 
 def _write_minimal_layout(base: Path) -> None:
@@ -71,7 +58,7 @@ def test_convert_markdown_treats_only_symlinks_as_no_pdfs(tmp_path: Path):
     base = tmp_path / "kb"
     _write_minimal_layout(base)
     ctx = _Ctx(base)
-    logger = _NoopLogger()
+    logger = NoopLogger()
 
     normalized = base / "normalized"
     book = ctx.book_dir
@@ -95,7 +82,7 @@ def test_convert_markdown_raises_when_only_readme_summary_with_pdfs(tmp_path: Pa
     base = tmp_path / "kb"
     _write_minimal_layout(base)
     ctx = _Ctx(base)
-    logger = _NoopLogger()
+    logger = NoopLogger()
 
     # BOOK con soli README/SUMMARY
     ctx.book_dir.mkdir(parents=True, exist_ok=True)

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from semantic.convert_service import convert_markdown
+from tests._helpers.noop_logger import NoopLogger
 
 
 class _Ctx:
@@ -14,24 +15,6 @@ class _Ctx:
         self.slug = slug
 
 
-class _NoopLogger:
-    def info(self, *a, **k):  # noqa: D401
-        """No-op."""
-        pass
-
-    def warning(self, *a, **k):  # noqa: D401
-        """No-op."""
-        pass
-
-    def debug(self, *a, **k):  # noqa: D401
-        """No-op."""
-        pass
-
-    def error(self, *a, **k):  # noqa: D401
-        """No-op."""
-        pass
-
-
 def _touch(md_path: Path) -> None:
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text("# Dummy\n", encoding="utf-8")
@@ -40,7 +23,7 @@ def _touch(md_path: Path) -> None:
 def test_convert_markdown_rerun_processes_new_pdfs(monkeypatch, tmp_path: Path):
     base = tmp_path / "kb"
     ctx = _Ctx(base, slug="dummy")
-    logger = _NoopLogger()
+    logger = NoopLogger()
 
     # Layout minimo richiesto dal WorkspaceLayout (bootstrap-like)
     (base / "config").mkdir(parents=True, exist_ok=True)
