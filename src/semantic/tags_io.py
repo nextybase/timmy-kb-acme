@@ -35,7 +35,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.path_utils import ensure_within
 from storage import tags_store
-from storage.tags_store import save_tags_db
+from storage.tags_store import ensure_schema_v2, save_tags_db
 
 __all__ = [
     "write_tagging_readme",
@@ -139,6 +139,7 @@ def write_tags_review_stub_from_csv(
         "keep_only_listed": True,
         "tags": [{"name": t, "action": "keep", "synonyms": [], "note": ""} for t in suggested],
     }
+    ensure_schema_v2(str(db_path))
     save_tags_db(db_path, data)
     logger.info(
         "semantic.tags_review_stub.written",
@@ -186,5 +187,6 @@ def write_tags_review_from_terms_db(db_path: str | Path, keep_only_listed: bool 
         "tags": tags_payload,
     }
 
+    ensure_schema_v2(str(resolved_db_path))
     tags_store.save_tags_db(str(resolved_db_path), data)
     return data

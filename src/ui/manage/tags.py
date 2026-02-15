@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional
 
@@ -303,6 +302,20 @@ def open_tags_draft_modal(
         )
 
         def _render_tags_preview(csv_text: str) -> None:
+            def _parse_suggested_tags(raw_value: str) -> list[str]:
+                ordered: list[str] = []
+                seen: set[str] = set()
+                for token in (raw_value or "").split(","):
+                    tag = token.strip().lower()
+                    if not tag:
+                        continue
+                    tag_key = tag.casefold()
+                    if tag_key in seen:
+                        continue
+                    seen.add(tag_key)
+                    ordered.append(tag)
+                return ordered
+
             try:
                 stream = io.StringIO(csv_text)
                 rows = list(csv.DictReader(stream))
@@ -316,14 +329,7 @@ def open_tags_draft_modal(
             for idx, row in enumerate(rows[:max_rows]):
                 rel_path = (row.get("relative_path") or "").strip()
                 tags_raw = row.get("suggested_tags") or ""
-                try:
-                    parsed = json.loads(tags_raw)
-                    if isinstance(parsed, list):
-                        tags_list = [str(t).strip() for t in parsed if str(t).strip()]
-                    else:
-                        tags_list = []
-                except Exception:
-                    tags_list = [t.strip() for t in tags_raw.split(",") if t.strip()]
+                tags_list = _parse_suggested_tags(str(tags_raw))
                 label = rel_path or f"riga {idx + 2}"
                 st.markdown(f"- **{label}**")
                 if tags_list:

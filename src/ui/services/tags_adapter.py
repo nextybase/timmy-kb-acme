@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, Optional
 from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
-from pipeline.yaml_utils import clear_yaml_cache
 from semantic.api import build_tags_csv
 from semantic.tags_io import write_tagging_readme, write_tags_review_stub_from_csv
 from storage import decision_ledger
@@ -99,7 +98,6 @@ def run_tags_update(slug: str, logger: Optional[logging.Logger] = None) -> None:
             write_tagging_readme(semantic_dir, svc_logger)
             write_tags_review_stub_from_csv(semantic_dir, csv_path, svc_logger)
 
-        clear_yaml_cache()
         st.success("Estrai Tags completato (SpaCy/euristica). `semantic/tags.db` aggiornato.")
         backend = os.getenv("TAGS_NLP_BACKEND", "spacy").strip().lower() or "spacy"
         entities_written = getattr(ctx, "last_entities_written", None)

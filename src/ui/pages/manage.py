@@ -656,7 +656,7 @@ if slug:
     ):
         try:
             with status_guard(
-                "Genero tag semantici da `normalized/` (CSV + YAML + DB)...",
+                "Genero tag semantici da `normalized/` (CSV + DB)...",
                 expanded=True,
                 error_label="Errore durante la creazione dei tag semantici",
             ):

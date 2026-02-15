@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional, cast
 
+from pipeline.drive_utils import delete_drive_file as _delete_drive_file
 from pipeline.exceptions import CapabilityUnavailableError
 from pipeline.logging_utils import get_structured_logger
 from ui.services.drive_runner import MIME_FOLDER, get_drive_service, list_drive_files
@@ -92,6 +93,58 @@ def _render_entry_line(label: str, meta: Dict[str, Any], depth: int = 0, suffix:
     indent = " " * (depth * 2)
     line = f"{indent}{icon} {label}{details}"
     st.text(line)
+
+
+def _clear_tree_cache_best_effort() -> None:
+    try:
+        from ui.app_services.drive_cache import _clear_drive_tree_cache
+
+        _clear_drive_tree_cache()
+    except Exception:  # pragma: no cover
+        return
+
+
+def _render_drive_file_row(
+    *,
+    service: Any,
+    slug: str,
+    sub_name: str,
+    entry: Dict[str, Any],
+) -> None:
+    if st is None:  # pragma: no cover
+        return
+    file_name = str(entry.get("name") or "")
+    file_id = str(entry.get("id") or "")
+    file_meta = _as_meta(entry)
+    size_label = _human_size(file_meta.get("size"))
+    caption = f"`{file_name}`" + (f" ({size_label})" if size_label else "")
+
+    c_name, c_delete = st.columns([0.9, 0.1])
+    with c_name:
+        st.markdown(caption)
+    with c_delete:
+        key = f"drive_del_{slug}_{sub_name}_{file_id or file_name}"
+        if st.button("🗑️", key=key, help=f"Elimina {file_name} da Drive", type="secondary"):
+            if not file_id:
+                st.error(f"Impossibile eliminare `{file_name}`: id file Drive non disponibile.")
+                return
+            try:
+                _delete_drive_file(service, file_id, redact_logs=False)
+                _LOGGER.info(
+                    "drive_tree.file_deleted",
+                    extra={"slug": slug, "folder": sub_name, "file": file_name, "file_id": file_id},
+                )
+                st.toast(f"Eliminato da Drive: {file_name}")
+                _clear_tree_cache_best_effort()
+                rerun_fn = getattr(st, "rerun", None)
+                if callable(rerun_fn):
+                    rerun_fn()
+            except Exception as exc:
+                _LOGGER.warning(
+                    "drive_tree.file_delete_failed",
+                    extra={"slug": slug, "folder": sub_name, "file": file_name, "error": str(exc)},
+                )
+                st.error(f"Eliminazione non riuscita per `{file_name}`: {exc}")
 
 
 def _summarise_entries(entries: Iterable[Dict[str, Any]]) -> str:
@@ -184,26 +237,37 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
                 index[sub_rel] = sub_meta
                 if sub_meta["type"] != "dir":
                     continue
-                # FLATTEN: nessun expander annidato per le sottocartelle di raw
                 sub_items = _list_children(service, sub["id"])
-                _render_entry_line(
-                    f"{slug}/raw/{sub_name}",
-                    sub_meta,
-                    depth=0,
-                    suffix=_summarise_entries(sub_items),
-                )
+                sub_files: List[Dict[str, Any]] = []
+                sub_dirs: List[Dict[str, Any]] = []
                 for item in sub_items:
                     item_name = item.get("name") or ""
                     item_rel = f"raw/{sub_name}/{item_name}"
                     item_meta = _as_meta(item)
                     index[item_rel] = item_meta
-                    if item_meta["type"] != "dir":
-                        continue
-                    grand_items = _list_children(service, item["id"])
-                    _render_entry_line(
-                        f"{slug}/{item_rel}",
-                        item_meta,
-                        depth=1,
-                        suffix=_summarise_entries(grand_items),
-                    )
+                    if item_meta["type"] == "dir":
+                        sub_dirs.append(item)
+                    else:
+                        sub_files.append(item)
+
+                with st.expander(f"{sub_name}/ ({len(sub_files)} file)", expanded=False):
+                    if not sub_items:
+                        st.caption("Cartella vuota.")
+                    for item in sub_files:
+                        _render_drive_file_row(
+                            service=service,
+                            slug=slug,
+                            sub_name=sub_name,
+                            entry=item,
+                        )
+                    if sub_dirs:
+                        st.caption("Sottocartelle presenti:")
+                        for dir_item in sub_dirs:
+                            dir_name = dir_item.get("name") or ""
+                            _render_entry_line(
+                                f"{slug}/raw/{sub_name}/{dir_name}",
+                                _as_meta(dir_item),
+                                depth=0,
+                                suffix="(cartella)",
+                            )
     return index
