@@ -207,6 +207,8 @@ def test_download_drive_pdfs_to_local_aggregates_failures(tmp_path: Path, monkey
         )
 
     assert "Download completato con errori" in str(exc.value)
+    assert "broken.pdf" in str(exc.value)
+    assert "boom" in str(exc.value)
     assert any(event == "download.fail" for event, _extra in logger.warnings), "Manca il warning di failure."
 
 

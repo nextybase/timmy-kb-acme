@@ -272,7 +272,7 @@ def download_drive_pdfs_to_local(
     )
 
     downloaded = 0
-    errors: List[Tuple[str, str]] = []
+    errors: List[Tuple[str, str, str]] = []
 
     for cand in candidates:
         dest_path = cand.destination
@@ -313,15 +313,19 @@ def download_drive_pdfs_to_local(
             refresh_iter_safe_pdfs_cache_for_path(dest_path, prewarm=not is_beta_strict())
         except Exception as e:
             fid = redact_secrets(file_id) if redact_logs else file_id
-            errors.append((fid, str(e)))
+            errors.append((fid, str(dest_path), str(e)))
             logger.warning(
                 "download.fail",
                 extra={"file_id": fid, "error": str(e), "file_path": str(dest_path)},
             )
 
     if errors:
-        # Non interrompiamo il flusso, ma segnaliamo in maniera aggregata
-        msg = f"Download completato con errori: {len(errors)} elementi falliti."
+        # Manteniamo fail-fast aggregato ma rendiamo il messaggio diagnostico.
+        preview_items = [f"{tail_path(Path(path))}: {reason}" for _fid, path, reason in errors[:3]]
+        if len(errors) > 3:
+            preview_items.append(f"... +{len(errors) - 3} altri")
+        details = "; ".join(preview_items)
+        msg = f"Download completato con errori: {len(errors)} elementi falliti. Dettagli: {details}"
         raise PipelineError(msg, slug=getattr(context, "slug", None))
 
     logger.info("drive.download.end", extra={"downloaded": downloaded})
