@@ -18,7 +18,7 @@ from semantic.embedding_service import list_content_markdown
 from semantic.frontmatter_service import enrich_frontmatter, write_summary_and_readme
 from semantic.tags_extractor import copy_local_pdfs_to_raw as _copy_local_pdfs_to_raw
 from semantic.tags_io import write_tags_reviewed_from_nlp_db as _write_tags_yaml_from_db
-from semantic.types import EmbeddingsClient as _EmbeddingsClient
+from semantic.types import EmbeddingsClient
 from semantic.vocab_loader import load_reviewed_vocab as _load_reviewed_vocab
 from storage.kb_store import KbStore
 
@@ -509,7 +509,7 @@ def index_markdown_to_db(
     *,
     slug: str,
     scope: str = "book",
-    embeddings_client: _EmbeddingsClient,
+    embeddings_client: EmbeddingsClient,
     db_path: Path | None = None,
     chunk_records: Sequence[ChunkRecord] | None = None,
 ) -> int:

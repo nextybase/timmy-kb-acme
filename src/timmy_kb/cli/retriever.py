@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import time
 from contextlib import nullcontext
-from dataclasses import MISSING, replace
+from dataclasses import MISSING, dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, TypedDict
 
@@ -104,6 +104,17 @@ class RetrieverConfig(TypedDict, total=False):
     acquire_timeout_ms: int
 
 
+@dataclass(frozen=True)
+class _SearchRuntimeState:
+    deadline: float | None
+    throttle_cfg: ThrottleSettings | None
+    throttle_key: str
+    response_id: str | None
+    embedding_model: str | None
+    explain_base_dir: Path | None
+    common_extra: Mapping[str, Any]
+
+
 # --------------------------- SSoT per il default limite ---------------------------
 
 
@@ -176,54 +187,54 @@ def _resolve_embedding_model(embeddings_client: EmbeddingsClient, embedding_mode
 def _log_query_started(
     params: QueryParams,
     embeddings_client: EmbeddingsClient,
-    throttle_cfg: ThrottleSettings | None,
-    throttle_key: str,
-    response_id: str | None,
-    embedding_model: str | None,
+    runtime: _SearchRuntimeState,
 ) -> None:
     _safe_info(
         "retriever.query.started",
         extra={
             "slug": params.slug,
             "scope": params.scope,
-            "response_id": response_id,
+            "response_id": runtime.response_id,
             "k": int(params.k),
             "candidate_limit": int(params.candidate_limit),
-            "latency_budget_ms": int(throttle_cfg.latency_budget_ms) if throttle_cfg else None,
-            "throttle_key": throttle_key,
+            "latency_budget_ms": int(runtime.throttle_cfg.latency_budget_ms) if runtime.throttle_cfg else None,
+            "throttle_key": runtime.throttle_key,
             "query_len": len(params.query or ""),
-            "embedding_model": _resolve_embedding_model(embeddings_client, embedding_model),
+            "embedding_model": _resolve_embedding_model(embeddings_client, runtime.embedding_model),
         },
     )
 
 
-def _preflight_soft_fails(
+def _preflight_deadline_soft_fail(
     params: QueryParams,
     *,
-    deadline: float | None,
-    common_extra: Mapping[str, Any],
-    response_id: str | None,
-    check_deadline: bool = True,
-    check_input: bool = True,
+    runtime: _SearchRuntimeState,
 ) -> list[SearchResult] | None:
-    if check_deadline and throttle_mod._deadline_exceeded(deadline):
+    if throttle_mod._deadline_exceeded(runtime.deadline):
         _safe_warning(
             "retriever.throttle.deadline",
             extra={
                 "slug": params.slug,
                 "scope": params.scope,
                 "stage": "preflight",
-                "response_id": response_id,
+                "response_id": runtime.response_id,
             },
         )
         return []
+    return None
 
-    if check_input and params.k == 0:
-        _safe_info("retriever.query.skipped", extra={**common_extra, "reason": "k_is_zero"})
+
+def _preflight_input_soft_fail(
+    params: QueryParams,
+    *,
+    runtime: _SearchRuntimeState,
+) -> list[SearchResult] | None:
+    if params.k == 0:
+        _safe_info("retriever.query.skipped", extra={**runtime.common_extra, "reason": "k_is_zero"})
         return []
 
-    if check_input and not params.query.strip():
-        _safe_warning("retriever.query.invalid", extra={**common_extra, "reason": "empty_query"})
+    if not params.query.strip():
+        _safe_warning("retriever.query.invalid", extra={**runtime.common_extra, "reason": "empty_query"})
         return []
     return None
 
@@ -232,19 +243,16 @@ def _embed_query_or_soft_fail(
     params: QueryParams,
     embeddings_client: EmbeddingsClient,
     *,
-    deadline: float | None,
-    common_extra: Mapping[str, Any],
-    response_id: str | None,
-    embedding_model: str | None,
+    runtime: _SearchRuntimeState,
 ) -> tuple[list[float], float] | None:
-    if throttle_mod._deadline_exceeded(deadline):
+    if throttle_mod._deadline_exceeded(runtime.deadline):
         _safe_warning(
             "retriever.latency_budget.hit",
             extra={
                 "slug": params.slug,
                 "scope": params.scope,
                 "stage": "embedding",
-                "response_id": response_id,
+                "response_id": runtime.response_id,
             },
         )
         return None
@@ -253,14 +261,14 @@ def _embed_query_or_soft_fail(
         query_vector, t_emb_ms = embeddings_mod._materialize_query_vector(
             params,
             embeddings_client,
-            embedding_model=embedding_model,
+            embedding_model=runtime.embedding_model,
         )
     except RetrieverError as exc:
         _apply_error_context(exc, code=ERR_EMBEDDING_FAILED, slug=params.slug, scope=params.scope)
         _safe_warning(
             "retriever.query.embed_failed",
             extra={
-                **common_extra,
+                **runtime.common_extra,
                 "code": ERR_EMBEDDING_FAILED,
                 "error": repr(getattr(exc, "__cause__", None) or exc),
             },
@@ -270,7 +278,7 @@ def _embed_query_or_soft_fail(
     if query_vector is None:
         _safe_warning(
             "retriever.query.invalid",
-            extra={**common_extra, "reason": "empty_embedding", "code": ERR_EMBEDDING_INVALID},
+            extra={**runtime.common_extra, "reason": "empty_embedding", "code": ERR_EMBEDDING_INVALID},
         )
         return None
 
@@ -279,17 +287,22 @@ def _embed_query_or_soft_fail(
         extra={
             "slug": params.slug,
             "scope": params.scope,
-            "response_id": response_id,
+            "response_id": runtime.response_id,
             "ms": float(t_emb_ms),
             "embedding_dims": len(query_vector),
-            "embedding_model": _resolve_embedding_model(embeddings_client, embedding_model),
+            "embedding_model": _resolve_embedding_model(embeddings_client, runtime.embedding_model),
         },
     )
 
-    if throttle_mod._deadline_exceeded(deadline):
+    if throttle_mod._deadline_exceeded(runtime.deadline):
         _safe_warning(
             "retriever.latency_budget.hit",
-            extra={"slug": params.slug, "scope": params.scope, "stage": "embedding", "response_id": response_id},
+            extra={
+                "slug": params.slug,
+                "scope": params.scope,
+                "stage": "embedding",
+                "response_id": runtime.response_id,
+            },
         )
         return None
     return query_vector, t_emb_ms
@@ -298,43 +311,41 @@ def _embed_query_or_soft_fail(
 def _fetch_candidates_or_soft_fail(
     params: QueryParams,
     *,
-    deadline: float | None,
-    common_extra: Mapping[str, Any],
-    response_id: str | None,
+    runtime: _SearchRuntimeState,
 ) -> tuple[list[dict[str, Any]], float] | None:
-    if throttle_mod._deadline_exceeded(deadline):
+    if throttle_mod._deadline_exceeded(runtime.deadline):
         _safe_warning(
             "retriever.latency_budget.hit",
             extra={
                 "slug": params.slug,
                 "scope": params.scope,
                 "stage": "fetch_candidates",
-                "response_id": response_id,
+                "response_id": runtime.response_id,
             },
         )
         return None
 
     candidates, t_fetch_ms = _load_candidates(params)
-    fetch_budget_hit = throttle_mod._deadline_exceeded(deadline)
+    fetch_budget_hit = throttle_mod._deadline_exceeded(runtime.deadline)
 
     _safe_info(
         "retriever.candidates.fetched",
         extra={
-            **common_extra,
+            **runtime.common_extra,
             "candidates_loaded": int(len(candidates)),
             "ms": float(t_fetch_ms),
             "budget_hit": bool(fetch_budget_hit),
         },
     )
 
-    if throttle_mod._deadline_exceeded(deadline):
+    if throttle_mod._deadline_exceeded(runtime.deadline):
         _safe_warning(
             "retriever.latency_budget.hit",
             extra={
                 "slug": params.slug,
                 "scope": params.scope,
                 "stage": "fetch_candidates",
-                "response_id": response_id,
+                "response_id": runtime.response_id,
             },
         )
         return None
@@ -346,8 +357,7 @@ def _rank_or_soft_fail(
     candidates: list[dict[str, Any]],
     params: QueryParams,
     *,
-    deadline: float | None,
-    response_id: str | None,
+    runtime: _SearchRuntimeState,
 ) -> tuple[list[SearchResult], dict[str, Any]] | None:
     (
         scored_items,
@@ -360,7 +370,7 @@ def _rank_or_soft_fail(
         query_vector,
         candidates,
         params.k,
-        deadline=deadline,
+        deadline=runtime.deadline,
         abort_if_deadline=True,
     )
 
@@ -372,7 +382,7 @@ def _rank_or_soft_fail(
                 "slug": params.slug,
                 "scope": params.scope,
                 "stage": "ranking",
-                "response_id": response_id,
+                "response_id": runtime.response_id,
             },
         )
         return None
@@ -458,6 +468,103 @@ def _emit_post_metrics_and_manifest(
         )
 
 
+def _build_search_runtime_state(
+    *,
+    params: QueryParams,
+    throttle: Optional[ThrottleSettings],
+    throttle_key: Optional[str],
+    response_id: str | None,
+    embedding_model: str | None,
+    explain_base_dir: Path | None,
+) -> _SearchRuntimeState:
+    throttle_cfg = throttle_mod._normalize_throttle_settings(throttle)
+    deadline = throttle_mod._deadline_from_settings(throttle_cfg)
+    throttle_key_eff = throttle_key or params.slug or "retriever"
+    common_extra: Mapping[str, Any] = {
+        "slug": params.slug,
+        "scope": params.scope,
+        "candidate_limit": int(params.candidate_limit),
+        "response_id": response_id,
+    }
+    return _SearchRuntimeState(
+        deadline=deadline,
+        throttle_cfg=throttle_cfg,
+        throttle_key=throttle_key_eff,
+        response_id=response_id,
+        embedding_model=embedding_model,
+        explain_base_dir=explain_base_dir,
+        common_extra=common_extra,
+    )
+
+
+def _run_authorization_hooks(
+    params: QueryParams,
+    *,
+    authorizer: Callable[[QueryParams], None] | None,
+    throttle_check: Callable[[QueryParams], None] | None,
+) -> None:
+    if authorizer is not None:
+        authorizer(params)
+    if throttle_check is not None:
+        throttle_check(params)
+
+
+def _execute_search_pipeline(
+    params: QueryParams,
+    embeddings_client: EmbeddingsClient,
+    *,
+    runtime: _SearchRuntimeState,
+) -> list[SearchResult]:
+    t_total_start = time.perf_counter()
+
+    embed_result = _embed_query_or_soft_fail(
+        params,
+        embeddings_client,
+        runtime=runtime,
+    )
+    if embed_result is None:
+        return []
+    query_vector, t_emb_ms = embed_result
+
+    fetch_result = _fetch_candidates_or_soft_fail(
+        params,
+        runtime=runtime,
+    )
+    if fetch_result is None:
+        return []
+    candidates, t_fetch_ms = fetch_result
+
+    rank_result = _rank_or_soft_fail(
+        query_vector,
+        candidates,
+        params,
+        runtime=runtime,
+    )
+    if rank_result is None:
+        return []
+    scored_items, rank_meta = rank_result
+
+    total_ms = (time.perf_counter() - t_total_start) * 1000.0
+    _emit_post_metrics_and_manifest(
+        params,
+        scored_items,
+        response_id=runtime.response_id,
+        embeddings_client=embeddings_client,
+        embedding_model=runtime.embedding_model,
+        explain_base_dir=runtime.explain_base_dir,
+        throttle_cfg=runtime.throttle_cfg,
+        candidates_count=int(rank_meta["candidates_count"]),
+        evaluated_count=int(rank_meta["evaluated_count"]),
+        coerce_stats=rank_meta["coerce_stats"],
+        t_emb_ms=float(t_emb_ms),
+        t_fetch_ms=float(t_fetch_ms),
+        t_score_sort_ms=float(rank_meta["t_score_sort_ms"]),
+        total_ms=float(total_ms),
+        budget_hit=bool(rank_meta["budget_hit"]),
+    )
+    return scored_items
+
+
 def search(
     params: QueryParams,
     embeddings_client: EmbeddingsClient,
@@ -471,114 +578,48 @@ def search(
     explain_base_dir: Path | None = None,
 ) -> list[SearchResult]:
     """Esegue una ricerca vettoriale sui chunk del workspace indicato."""
-    throttle_cfg = throttle_mod._normalize_throttle_settings(throttle)
-    deadline = throttle_mod._deadline_from_settings(throttle_cfg)
-    throttle_key_eff = throttle_key or params.slug or "retriever"
+    runtime = _build_search_runtime_state(
+        params=params,
+        throttle=throttle,
+        throttle_key=throttle_key,
+        response_id=response_id,
+        embedding_model=embedding_model,
+        explain_base_dir=explain_base_dir,
+    )
     try:
         validation_mod._validate_params_logged(params)
     except RetrieverError as exc:
         _apply_error_context(exc, code="retriever_invalid_params", slug=params.slug, scope=params.scope)
         raise
 
-    common_extra = {
-        "slug": params.slug,
-        "scope": params.scope,
-        "candidate_limit": int(params.candidate_limit),
-        "response_id": response_id,
-    }
-    preflight_result = _preflight_soft_fails(
-        params,
-        deadline=deadline,
-        common_extra=common_extra,
-        response_id=response_id,
-        check_deadline=True,
-        check_input=False,
-    )
+    preflight_result = _preflight_deadline_soft_fail(params, runtime=runtime)
     if preflight_result is not None:
         return preflight_result
 
-    throttle_ctx = _throttle_guard(throttle_key_eff, throttle_cfg, deadline=deadline) if throttle_cfg else nullcontext()
+    throttle_ctx = (
+        _throttle_guard(runtime.throttle_key, runtime.throttle_cfg, deadline=runtime.deadline)
+        if runtime.throttle_cfg
+        else nullcontext()
+    )
 
     _log_query_started(
         params,
         embeddings_client,
-        throttle_cfg,
-        throttle_key_eff,
-        response_id,
-        embedding_model,
+        runtime,
     )
 
     with throttle_ctx:
-        if authorizer is not None:
-            authorizer(params)
-        if throttle_check is not None:
-            throttle_check(params)
+        _run_authorization_hooks(params, authorizer=authorizer, throttle_check=throttle_check)
 
-        preflight_result = _preflight_soft_fails(
-            params,
-            deadline=deadline,
-            common_extra=common_extra,
-            response_id=response_id,
-            check_deadline=False,
-            check_input=True,
-        )
+        preflight_result = _preflight_input_soft_fail(params, runtime=runtime)
         if preflight_result is not None:
             return preflight_result
 
-        t_total_start = time.perf_counter()
-
-        embed_result = _embed_query_or_soft_fail(
+        return _execute_search_pipeline(
             params,
             embeddings_client,
-            deadline=deadline,
-            common_extra=common_extra,
-            response_id=response_id,
-            embedding_model=embedding_model,
+            runtime=runtime,
         )
-        if embed_result is None:
-            return []
-        query_vector, t_emb_ms = embed_result
-
-        fetch_result = _fetch_candidates_or_soft_fail(
-            params,
-            deadline=deadline,
-            common_extra=common_extra,
-            response_id=response_id,
-        )
-        if fetch_result is None:
-            return []
-        candidates, t_fetch_ms = fetch_result
-
-        rank_result = _rank_or_soft_fail(
-            query_vector,
-            candidates,
-            params,
-            deadline=deadline,
-            response_id=response_id,
-        )
-        if rank_result is None:
-            return []
-        scored_items, rank_meta = rank_result
-
-        total_ms = (time.perf_counter() - t_total_start) * 1000.0
-        _emit_post_metrics_and_manifest(
-            params,
-            scored_items,
-            response_id=response_id,
-            embeddings_client=embeddings_client,
-            embedding_model=embedding_model,
-            explain_base_dir=explain_base_dir,
-            throttle_cfg=throttle_cfg,
-            candidates_count=int(rank_meta["candidates_count"]),
-            evaluated_count=int(rank_meta["evaluated_count"]),
-            coerce_stats=rank_meta["coerce_stats"],
-            t_emb_ms=float(t_emb_ms),
-            t_fetch_ms=float(t_fetch_ms),
-            t_score_sort_ms=float(rank_meta["t_score_sort_ms"]),
-            total_ms=float(total_ms),
-            budget_hit=bool(rank_meta["budget_hit"]),
-        )
-        return scored_items
 
 
 def with_config_candidate_limit(

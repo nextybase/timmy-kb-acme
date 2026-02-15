@@ -490,6 +490,140 @@ def _record_failure_and_log(
         ) from ledger_exc
 
 
+def _run_preconditions_and_qa_gate(
+    *,
+    ledger_conn: Any,
+    layout: WorkspaceLayout,
+    slug: str,
+    run_id: str,
+    logger: logging.Logger,
+) -> int | None:
+    _require_normalize_raw_gate(ledger_conn, slug=slug, layout=layout)
+    try:
+        _run_qa_gate_and_record(
+            ledger_conn,
+            layout=layout,
+            slug=slug,
+            run_id=run_id,
+        )
+    except QaGateViolation as qa_exc:
+        logger.error(
+            "cli.semantic_onboarding.qa_gate_failed",
+            extra={"slug": slug, "error": _summarize_error(qa_exc)},
+        )
+        return int(exit_code_for(qa_exc))
+    return None
+
+
+def _run_pipeline_and_optional_drive_sync(
+    *,
+    ctx: SemanticContextProtocol,
+    layout: WorkspaceLayout,
+    logger: logging.Logger,
+    slug: str,
+) -> tuple[list[Path], WorkspaceLayout]:
+    _repo_root_dir, _mds, touched = run_semantic_pipeline(ctx, logger, slug=slug)
+
+    enforce_core_artifacts("semantic_onboarding", layout=layout)
+
+    cfg = get_client_config(ctx) or {}
+    drive_raw_id = get_drive_id(cfg, "raw_folder_id")
+    if not drive_raw_id:
+        return touched, layout
+
+    # Re-load layout (tollera evoluzioni del context durante pipeline)
+    refreshed_layout = WorkspaceLayout.from_context(ctx)
+    mapping_path = ensure_within_and_resolve(
+        refreshed_layout.semantic_dir,
+        refreshed_layout.semantic_dir / "semantic_mapping.yaml",
+    )
+    categories = raw_categories_from_semantic_mapping(
+        semantic_dir=refreshed_layout.semantic_dir,
+        mapping_path=Path(mapping_path),
+    )
+    if not categories:
+        raise ConfigError("semantic_mapping.yaml non contiene aree valide: impossibile creare raw su Drive")
+    create_drive_structure_from_names(
+        ctx=ctx,
+        folder_names=categories,
+        parent_folder_id=drive_raw_id,
+        log=logger,
+    )
+    return touched, refreshed_layout
+
+
+def _record_tag_kg_outcome(
+    *,
+    ledger_conn: Any,
+    layout: WorkspaceLayout,
+    logger: logging.Logger,
+    slug: str,
+    run_id: str,
+    requested: dict[str, object],
+    effective: dict[str, object],
+    tag_kg_effective: str | None,
+) -> None:
+    if tag_kg_effective != "built":
+        return
+
+    semantic_dir = layout.semantic_dir
+    kg_json = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.json")
+    kg_md = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.md")
+    if kg_json.exists() and kg_md.exists():
+        decision_ledger.record_normative_decision(
+            ledger_conn,
+            decision_ledger.NormativeDecisionRecord(
+                decision_id=uuid.uuid4().hex,
+                run_id=run_id,
+                slug=slug,
+                gate_name="semantic_onboarding",
+                from_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+                to_state=decision_ledger.STATE_VISUALIZATION_REFRESH,
+                verdict=decision_ledger.NORMATIVE_PASS,
+                subject="tag_kg_builder",
+                decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                actor="cli.semantic_onboarding",
+                evidence_refs=_build_evidence_refs(
+                    layout=layout,
+                    requested=requested,
+                    effective=effective,
+                    outcome="ok",
+                    tag_kg_effective=tag_kg_effective,
+                ),
+                reason_code="ok",
+            ),
+        )
+        return
+
+    logger.error("cli.tag_kg_builder.outputs_missing", extra={"slug": slug})
+    decision_ledger.record_normative_decision(
+        ledger_conn,
+        decision_ledger.NormativeDecisionRecord(
+            decision_id=uuid.uuid4().hex,
+            run_id=run_id,
+            slug=slug,
+            gate_name="semantic_onboarding",
+            from_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+            to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
+            verdict=decision_ledger.NORMATIVE_BLOCK,
+            subject="tag_kg_builder",
+            decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            actor="cli.semantic_onboarding",
+            evidence_refs=[
+                _path_ref(kg_json, layout),
+                _path_ref(kg_md, layout),
+                "tag_kg:missing_outputs",
+            ],
+            stop_code=decision_ledger.STOP_CODE_PIPELINE_ERROR,
+            reason_code="deny_kg_outputs_missing",
+        ),
+    )
+    raise ConfigError(
+        "Tag KG builder ha prodotto output incompleti (kg.tags.json/kg.tags.md mancanti).",
+        slug=slug,
+    )
+
+
 def _run_semantic_flow(
     *,
     ctx: SemanticContextProtocol,
@@ -506,105 +640,34 @@ def _run_semantic_flow(
     try:
         tag_kg_effective: str | None = None
 
-        _require_normalize_raw_gate(ledger_conn, slug=slug, layout=layout)
+        qa_gate_exit_code = _run_preconditions_and_qa_gate(
+            ledger_conn=ledger_conn,
+            layout=layout,
+            slug=slug,
+            run_id=run_id,
+            logger=logger,
+        )
+        if qa_gate_exit_code is not None:
+            return qa_gate_exit_code, touched, layout
 
-        try:
-            _run_qa_gate_and_record(
-                ledger_conn,
-                layout=layout,
-                slug=slug,
-                run_id=run_id,
-            )
-        except QaGateViolation as qa_exc:
-            logger.error(
-                "cli.semantic_onboarding.qa_gate_failed",
-                extra={"slug": slug, "error": _summarize_error(qa_exc)},
-            )
-            return int(exit_code_for(qa_exc)), touched, layout
-
-        _repo_root_dir, _mds, touched = run_semantic_pipeline(ctx, logger, slug=slug)
-
-        enforce_core_artifacts("semantic_onboarding", layout=layout)
-
-        cfg = get_client_config(ctx) or {}
-        drive_raw_id = get_drive_id(cfg, "raw_folder_id")
-        if drive_raw_id:
-            # Re-load layout (tollera evoluzioni del context durante pipeline)
-            layout = WorkspaceLayout.from_context(ctx)
-            mapping_path = ensure_within_and_resolve(
-                layout.semantic_dir,
-                layout.semantic_dir / "semantic_mapping.yaml",
-            )
-            categories = raw_categories_from_semantic_mapping(
-                semantic_dir=layout.semantic_dir,
-                mapping_path=Path(mapping_path),
-            )
-            if not categories:
-                raise ConfigError("semantic_mapping.yaml non contiene aree valide: impossibile creare raw su Drive")
-            create_drive_structure_from_names(
-                ctx=ctx,
-                folder_names=categories,
-                parent_folder_id=drive_raw_id,
-                log=logger,
-            )
+        touched, layout = _run_pipeline_and_optional_drive_sync(
+            ctx=ctx,
+            layout=layout,
+            logger=logger,
+            slug=slug,
+        )
 
         tag_kg_effective = _run_tag_kg_builder(ctx, layout, logger)
-        if tag_kg_effective == "built":
-            semantic_dir = layout.semantic_dir
-            kg_json = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.json")
-            kg_md = ensure_within_and_resolve(semantic_dir, semantic_dir / "kg.tags.md")
-            if kg_json.exists() and kg_md.exists():
-                decision_ledger.record_normative_decision(
-                    ledger_conn,
-                    decision_ledger.NormativeDecisionRecord(
-                        decision_id=uuid.uuid4().hex,
-                        run_id=run_id,
-                        slug=slug,
-                        gate_name="semantic_onboarding",
-                        from_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                        to_state=decision_ledger.STATE_VISUALIZATION_REFRESH,
-                        verdict=decision_ledger.NORMATIVE_PASS,
-                        subject="tag_kg_builder",
-                        decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        actor="cli.semantic_onboarding",
-                        evidence_refs=_build_evidence_refs(
-                            layout=layout,
-                            requested=requested,
-                            effective=effective,
-                            outcome="ok",
-                            tag_kg_effective=tag_kg_effective,
-                        ),
-                        reason_code="ok",
-                    ),
-                )
-            else:
-                logger.error("cli.tag_kg_builder.outputs_missing", extra={"slug": slug})
-                decision_ledger.record_normative_decision(
-                    ledger_conn,
-                    decision_ledger.NormativeDecisionRecord(
-                        decision_id=uuid.uuid4().hex,
-                        run_id=run_id,
-                        slug=slug,
-                        gate_name="semantic_onboarding",
-                        from_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                        to_state=decision_ledger.STATE_FRONTMATTER_ENRICH,
-                        verdict=decision_ledger.NORMATIVE_BLOCK,
-                        subject="tag_kg_builder",
-                        decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        actor="cli.semantic_onboarding",
-                        evidence_refs=[
-                            _path_ref(kg_json, layout),
-                            _path_ref(kg_md, layout),
-                            "tag_kg:missing_outputs",
-                        ],
-                        stop_code=decision_ledger.STOP_CODE_PIPELINE_ERROR,
-                        reason_code="deny_kg_outputs_missing",
-                    ),
-                )
-                raise ConfigError(
-                    "Tag KG builder ha prodotto output incompleti (kg.tags.json/kg.tags.md mancanti).",
-                    slug=slug,
-                )
+        _record_tag_kg_outcome(
+            ledger_conn=ledger_conn,
+            layout=layout,
+            logger=logger,
+            slug=slug,
+            run_id=run_id,
+            requested=requested,
+            effective=effective,
+            tag_kg_effective=tag_kg_effective,
+        )
 
         # PASS del gate semantic_onboarding SOLO a valle anche del KG (built o skipped)
         _record_normative_pass(
