@@ -53,6 +53,37 @@ def test_raw_cache_lazy_loading(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) 
     importlib.reload(path_utils)
 
 
+def test_raw_cache_strict_bypasses_lazy_loading(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    calls = 0
+
+    module = importlib.reload(path_utils)
+    original_loader = module._load_raw_cache_defaults
+
+    def counting_loader() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return {}
+
+    def patched(loader: Any | None = None) -> None:
+        return original_loader(loader=loader or counting_loader)
+
+    monkeypatch.setattr(module, "_load_raw_cache_defaults", patched)
+
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    (raw_dir / "a.pdf").write_bytes(b"%PDF-1.4\nA\n")
+    (raw_dir / "b.pdf").write_bytes(b"%PDF-1.4\nB\n")
+    (raw_dir / "ignore.txt").write_text("x", encoding="utf-8")
+
+    pdfs = list(module.iter_safe_pdfs(raw_dir, use_cache=True))
+
+    assert calls == 0
+    assert [p.name for p in pdfs] == ["a.pdf", "b.pdf"]
+
+    importlib.reload(path_utils)
+
+
 def test_raw_cache_defaults_remain_until_first_guard(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
     module = importlib.reload(path_utils)
