@@ -76,21 +76,36 @@ def _run_tool_with_repo_env(
     action: str,
     args: list[str] | None = None,
 ) -> dict[str, Any]:
-    prev_repo = os.environ.get("REPO_ROOT_DIR")
-    prev_workspace = os.environ.get("WORKSPACE_ROOT_DIR")
-    os.environ["REPO_ROOT_DIR"] = str(repo_root)
-    os.environ["WORKSPACE_ROOT_DIR"] = str(workspace_root)
+    env_overrides = {
+        "REPO_ROOT_DIR": str(repo_root),
+        "WORKSPACE_ROOT_DIR": str(workspace_root),
+    }
     try:
-        return run_control_plane_tool(tool_module=tool_module, slug=slug, action=action, args=args)
-    finally:
-        if prev_repo is None:
-            os.environ.pop("REPO_ROOT_DIR", None)
-        else:
-            os.environ["REPO_ROOT_DIR"] = prev_repo
-        if prev_workspace is None:
-            os.environ.pop("WORKSPACE_ROOT_DIR", None)
-        else:
-            os.environ["WORKSPACE_ROOT_DIR"] = prev_workspace
+        # New path: pass env override per-invocazione (evita race su os.environ con Streamlit rerun).
+        return run_control_plane_tool(
+            tool_module=tool_module,
+            slug=slug,
+            action=action,
+            args=args,
+            env_overrides=env_overrides,
+        )
+    except TypeError:
+        # Backward-compat per test double/callback legacy senza parametro env_overrides.
+        prev_repo = os.environ.get("REPO_ROOT_DIR")
+        prev_workspace = os.environ.get("WORKSPACE_ROOT_DIR")
+        os.environ["REPO_ROOT_DIR"] = str(repo_root)
+        os.environ["WORKSPACE_ROOT_DIR"] = str(workspace_root)
+        try:
+            return run_control_plane_tool(tool_module=tool_module, slug=slug, action=action, args=args)
+        finally:
+            if prev_repo is None:
+                os.environ.pop("REPO_ROOT_DIR", None)
+            else:
+                os.environ["REPO_ROOT_DIR"] = prev_repo
+            if prev_workspace is None:
+                os.environ.pop("WORKSPACE_ROOT_DIR", None)
+            else:
+                os.environ["WORKSPACE_ROOT_DIR"] = prev_workspace
 
 
 def _vision_pdf_path(layout: WorkspaceLayout) -> Path:

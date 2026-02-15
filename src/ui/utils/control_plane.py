@@ -11,7 +11,7 @@ import sys
 import uuid
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 import streamlit as st
 
@@ -68,6 +68,33 @@ def _run_command(command: list[str], *, env: dict[str, str]) -> subprocess.Compl
         text=True,
         env=env,
     )
+
+
+def _parse_payload_stdout(output: str) -> tuple[dict[str, Any] | None, str | None]:
+    """Estrae il payload JSON dall'output del tool.
+
+    Alcuni tool possono emettere log su stdout prima/dopo il JSON finale.
+    Strategia:
+    - prova da ultima riga verso l'alto (line-oriented JSON payload),
+    - fallback al parse dell'intero output.
+    """
+    if not output:
+        return None, None
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    for line in reversed(lines):
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed, None
+    try:
+        parsed_full = json.loads(output)
+    except json.JSONDecodeError as exc:
+        return None, str(exc)
+    if isinstance(parsed_full, dict):
+        return parsed_full, None
+    return None, "Payload JSON non oggetto."
 
 
 def _open_layout(slug: str) -> WorkspaceLayout:
@@ -143,6 +170,7 @@ def run_control_plane_tool(
     action: str,
     args: Iterable[str] | None = None,
     non_strict_step: str | None = None,
+    env_overrides: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     command = [sys.executable, "-m", tool_module]
     if slug:
@@ -150,6 +178,9 @@ def run_control_plane_tool(
     if args:
         command += list(args)
     env = dict(os.environ)
+    if env_overrides:
+        for key, value in env_overrides.items():
+            env[str(key)] = str(value)
 
     try:
         if non_strict_step:
@@ -173,17 +204,18 @@ def run_control_plane_tool(
     output = completed.stdout.strip()
     payload: dict[str, Any]
     if output:
-        try:
-            payload = json.loads(output.splitlines()[-1])
-        except json.JSONDecodeError as exc:
+        parsed_payload, parse_error = _parse_payload_stdout(output)
+        if parsed_payload is None:
             payload = {
                 "status": "error",
-                "errors": [f"JSON invalido dal tool: {exc}", output],
+                "errors": [f"JSON invalido dal tool: {parse_error or 'parse_failed'}", output],
                 "warnings": [],
                 "artifacts": [],
                 "returncode": completed.returncode,
                 "timmy_beta_strict": env.get("TIMMY_BETA_STRICT", "0"),
             }
+        else:
+            payload = parsed_payload
     else:
         payload = {
             "status": "error",
