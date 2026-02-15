@@ -39,12 +39,13 @@ def _prepare_workspace(base: Path, *, slug: str) -> SimpleNamespace:
     return SimpleNamespace(repo_root_dir=base, slug=slug)
 
 
+@pytest.mark.negative
 def test_embedding_error_is_logged_and_hard_fail(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     base = local_workspace_dir(tmp_path / "output", "dummy")
     book = base / "book"
     db_path = base / "kb.sqlite"
     book.mkdir(parents=True, exist_ok=True)
-    (book / "a.md").write_text("# A\nBody", encoding="utf-8")
+    (book / "a.md").write_text("---\ntitle: A\n---\n# A\nBody", encoding="utf-8")
     _prepare_workspace(base, slug="dummy")
 
     import os

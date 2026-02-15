@@ -10,6 +10,7 @@ from pipeline.exceptions import ConfigError
 from pipeline.settings import Settings
 
 
+@pytest.mark.negative
 def test_get_from_settings_strict_rejects_non_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeSettings:
         def get(self, path: str, default: object | None = None) -> object | None:
@@ -21,6 +22,7 @@ def test_get_from_settings_strict_rejects_non_mapping(monkeypatch: pytest.Monkey
     assert excinfo.value.code == "config.shape.invalid"
 
 
+@pytest.mark.negative
 def test_resolve_prototimmy_config_raises_when_model_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # Config reale (SSoT) ma senza ai.prototimmy.model -> deve esplodere.
     repo_root = tmp_path / "repo-root"
@@ -50,6 +52,7 @@ def test_assistant_registry_optional_env_missing_returns_none(monkeypatch: pytes
     assert _optional_env("MISSING_ENV") is None
 
 
+@pytest.mark.negative
 def test_assistant_registry_optional_env_empty_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EMPTY_ENV", "  ")
     with pytest.raises(ConfigError) as excinfo:
@@ -57,6 +60,7 @@ def test_assistant_registry_optional_env_empty_raises(monkeypatch: pytest.Monkey
     assert excinfo.value.code == "assistant.env.empty"
 
 
+@pytest.mark.negative
 def test_assistant_registry_optional_env_read_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BROKEN_ENV", "ok")
 

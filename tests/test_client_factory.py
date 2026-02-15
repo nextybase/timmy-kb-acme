@@ -13,6 +13,7 @@ from pipeline.capabilities import openai as openai_capability
 from pipeline.exceptions import ConfigError
 
 
+@pytest.mark.negative
 def test_make_openai_client_requires_modern_sdk(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")  # pragma: allowlist secret
     settings_stub = types.SimpleNamespace(
@@ -67,6 +68,7 @@ def test_make_openai_client_success(monkeypatch):
     assert captured_kwargs["http2"] is True
 
 
+@pytest.mark.negative
 def test_make_openai_client_fails_if_settings_not_loadable(monkeypatch):
     # Beta 1.0 STRICT: se Settings.load fallisce, il runtime deve fermarsi.
     monkeypatch.setenv("OPENAI_API_KEY", "secret")  # pragma: allowlist secret
@@ -89,6 +91,7 @@ def test_make_openai_client_fails_if_settings_not_loadable(monkeypatch):
     assert "strict" in msg or "beta" in msg
 
 
+@pytest.mark.negative
 def test_load_settings_strict_requires_workspace_root(monkeypatch):
     monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
     monkeypatch.delenv("WORKSPACE_ROOT_DIR", raising=False)
