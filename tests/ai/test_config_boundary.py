@@ -210,7 +210,7 @@ def test_legacy_root_vision_rejected(caplog):
     assert any(rec.message == "ai.vision_config.legacy_root_vision" for rec in caplog.records)
 
 
-def test_optional_env_missing_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_vision_optional_env_missing_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("VISION_MISSING_ENV", raising=False)
 
     def _missing(name: str) -> str:
@@ -220,14 +220,14 @@ def test_optional_env_missing_returns_none(monkeypatch: pytest.MonkeyPatch) -> N
     assert config._optional_env("VISION_MISSING_ENV") is None
 
 
-def test_optional_env_empty_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_vision_optional_env_empty_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VISION_EMPTY_ENV", "  ")
     with pytest.raises(ConfigError) as excinfo:
         config._optional_env("VISION_EMPTY_ENV")
     assert excinfo.value.code == "assistant.env.empty"
 
 
-def test_optional_env_read_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_vision_optional_env_read_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VISION_BROKEN_ENV", "ok")
 
     def _raise_runtime(name: str) -> str:

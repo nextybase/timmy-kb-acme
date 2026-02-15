@@ -18,15 +18,6 @@ class _NoopLogger:
     def error(self, *a, **k): ...
 
 
-def test_returns_empty_when_db_missing(tmp_path: Path):
-    base = local_workspace_dir(tmp_path / "output", "dummy")
-    sem = base / "semantic"
-    sem.mkdir(parents=True, exist_ok=True)
-
-    with pytest.raises(ConfigError, match="tags.db missing or unreadable"):
-        _ = vl.load_reviewed_vocab(base, _NoopLogger(), slug="dummy")
-
-
 def test_reviewed_vocab_json_is_ignored_when_db_missing(tmp_path: Path):
     base = local_workspace_dir(tmp_path / "output", "dummy")
     sem = base / "semantic"

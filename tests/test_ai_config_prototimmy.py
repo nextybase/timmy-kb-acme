@@ -40,7 +40,7 @@ def test_resolve_prototimmy_config_raises_when_model_missing(monkeypatch: pytest
     monkeypatch.delenv("PROTOTIMMY_ID", raising=False)
 
 
-def test_optional_env_missing_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assistant_registry_optional_env_missing_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MISSING_ENV", raising=False)
 
     def _raise_key_error(name: str) -> str:
@@ -50,14 +50,14 @@ def test_optional_env_missing_returns_none(monkeypatch: pytest.MonkeyPatch) -> N
     assert _optional_env("MISSING_ENV") is None
 
 
-def test_optional_env_empty_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assistant_registry_optional_env_empty_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EMPTY_ENV", "  ")
     with pytest.raises(ConfigError) as excinfo:
         _optional_env("EMPTY_ENV")
     assert excinfo.value.code == "assistant.env.empty"
 
 
-def test_optional_env_read_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assistant_registry_optional_env_read_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BROKEN_ENV", "ok")
 
     def _raise_runtime_error(name: str) -> str:

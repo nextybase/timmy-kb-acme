@@ -410,6 +410,54 @@ def test_prepare_payload_strict_blocks_use_kb(tmp_path: Path, monkeypatch: pytes
     assert excinfo.value.code == "vision.strict.retrieval_forbidden"
 
 
+def test_prepare_payload_sets_instructions_by_use_kb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    slug = "dummy-instructions"
+    pdf = tmp_path / "vision.pdf"
+    _write_dummy_pdf(pdf)
+    ctx = _Ctx(tmp_path)
+
+    monkeypatch.setattr(vp, "is_beta_strict", lambda: False, raising=False)
+    monkeypatch.setattr(vp, "make_openai_client", lambda: object(), raising=False)
+
+    cfg_true = AssistantConfig(
+        model="gpt-4o-mini",
+        assistant_id="asst",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=True,
+        strict_output=True,
+    )
+    prepared_true = vp._prepare_payload(
+        ctx,
+        slug,
+        pdf,
+        prepared_prompt="prompt",
+        config=cfg_true,
+        logger=logging.getLogger("test"),
+        retention_days=0,
+    )
+    assert prepared_true.use_kb is True
+    assert "File Search" in prepared_true.run_instructions
+
+    cfg_false = AssistantConfig(
+        model="gpt-4o-mini",
+        assistant_id="asst",
+        assistant_env="OBNEXT_ASSISTANT_ID",
+        use_kb=False,
+        strict_output=True,
+    )
+    prepared_false = vp._prepare_payload(
+        ctx,
+        slug,
+        pdf,
+        prepared_prompt="prompt",
+        config=cfg_false,
+        logger=logging.getLogger("test"),
+        retention_days=0,
+    )
+    assert prepared_false.use_kb is False
+    assert "IGNORARE File Search" in prepared_false.run_instructions
+
+
 def test_prepare_payload_from_yaml_strict_blocks_use_kb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     slug = "strict-use-kb-yaml"
     ctx = _Ctx(tmp_path)
@@ -544,7 +592,7 @@ def test_call_responses_json_errors_on_exception(monkeypatch: pytest.MonkeyPatch
         )
 
 
-def test_optional_env_reader_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_vision_provision_optional_env_reader_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise_runtime(name: str) -> str:
         raise RuntimeError("boom")
 

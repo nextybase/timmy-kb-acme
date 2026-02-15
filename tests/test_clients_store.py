@@ -123,14 +123,14 @@ def test_set_state_rejects_invalid_slug(store):
     assert [e.slug for e in entries] == ["delta"]
 
 
-def test_optional_env_empty_raises(store, monkeypatch):
+def test_clients_store_optional_env_empty_raises(store, monkeypatch):
     monkeypatch.setenv("CLIENTS_DB_DIR", "  ")
     with pytest.raises(ConfigError) as excinfo:
         store._optional_env("CLIENTS_DB_DIR")
     assert excinfo.value.code == "assistant.env.empty"
 
 
-def test_optional_env_reader_error_raises(store, monkeypatch):
+def test_clients_store_optional_env_reader_error_raises(store, monkeypatch):
     def _raise_runtime(name: str) -> str:
         raise RuntimeError("boom")
 
