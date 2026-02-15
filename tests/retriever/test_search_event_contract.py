@@ -41,6 +41,11 @@ def _causal_events(messages: list[str]) -> list[str]:
     return [msg for msg in messages if msg in allowed]
 
 
+def _assert_single_causal_event(messages: list[str], expected: str) -> None:
+    causal = _causal_events(messages)
+    assert causal == [expected]
+
+
 def _assert_relative_order(messages: list[str], expected: list[str]) -> None:
     cursor = 0
     for event in expected:
@@ -141,7 +146,7 @@ def test_search_event_contract_deadline_preflight_soft_fail(
     assert out == []
     messages = _messages(caplog)
     assert "retriever.throttle.deadline" in messages
-    assert len(_causal_events(messages)) == 1
+    _assert_single_causal_event(messages, "retriever.throttle.deadline")
 
 
 def test_search_event_contract_embed_failed_soft_fail(
@@ -164,7 +169,7 @@ def test_search_event_contract_embed_failed_soft_fail(
     assert out == []
     messages = _messages(caplog)
     assert "retriever.query.embed_failed" in messages
-    assert len(_causal_events(messages)) == 1
+    _assert_single_causal_event(messages, "retriever.query.embed_failed")
 
 
 @pytest.mark.parametrize(
@@ -194,7 +199,7 @@ def test_search_event_contract_input_soft_fail_branches(
     assert out == []
     messages = _messages(caplog)
     assert expected_event in messages
-    assert len(_causal_events(messages)) == 1
+    _assert_single_causal_event(messages, expected_event)
 
 
 def test_search_event_contract_empty_embedding_soft_fail(
@@ -213,7 +218,7 @@ def test_search_event_contract_empty_embedding_soft_fail(
     assert out == []
     messages = _messages(caplog)
     assert "retriever.query.invalid" in messages
-    assert len(_causal_events(messages)) == 1
+    _assert_single_causal_event(messages, "retriever.query.invalid")
 
 
 @pytest.mark.parametrize(
@@ -265,7 +270,8 @@ def test_search_event_contract_budget_soft_fail_branches(
     messages = _messages(caplog)
     for expected in expected_events:
         assert expected in messages
-    assert len(_causal_events(messages)) == 1
+    for expected in expected_events:
+        _assert_single_causal_event(messages, expected)
 
 
 def test_search_event_contract_ranking_budget_hit_soft_fail(
@@ -296,4 +302,4 @@ def test_search_event_contract_ranking_budget_hit_soft_fail(
     assert out == []
     messages = _messages(caplog)
     assert "retriever.latency_budget.hit" in messages
-    assert len(_causal_events(messages)) == 1
+    _assert_single_causal_event(messages, "retriever.latency_budget.hit")
