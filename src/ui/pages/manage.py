@@ -2,6 +2,8 @@
 # src/ui/pages/manage.py
 from __future__ import annotations
 
+import csv
+import io
 import re
 from pathlib import Path
 from typing import Any, Callable, cast
@@ -9,6 +11,7 @@ from typing import Any, Callable, cast
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.workspace_layout import WorkspaceLayout
+from storage.tags_store import load_tags_db
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_all as get_clients
 from ui.clients_store import get_state as get_client_state
@@ -27,7 +30,7 @@ from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  
 from ui.utils.status import status_guard
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
-from ui.utils.workspace import count_markdown_safe, count_pdfs_safe, get_ui_workspace_layout, tagging_ready
+from ui.utils.workspace import count_markdown_safe, count_pdfs_safe, get_ui_workspace_layout
 
 LOGGER = get_structured_logger("ui.manage")
 st = get_streamlit()
@@ -323,7 +326,52 @@ def _render_tag_onboarding_report_box(slug: str, layout: WorkspaceLayout, client
     tags_db = semantic_dir / "tags.db"
     has_tags_raw = tags_raw_csv.exists()
     has_tags_db_file = tags_db.exists()
-    tags_validated, _ = tagging_ready(slug)
+
+    def _csv_tag_set() -> set[str]:
+        if not has_tags_raw:
+            return set()
+        try:
+            raw_text = read_text_safe(semantic_dir, tags_raw_csv, encoding="utf-8") or ""
+            reader = csv.reader(io.StringIO(raw_text))
+            header = next(reader, None)
+            if not header or "suggested_tags" not in header:
+                return set()
+            idx = header.index("suggested_tags")
+            found: set[str] = set()
+            for row in reader:
+                if idx >= len(row):
+                    continue
+                for token in (row[idx] or "").split(","):
+                    tag = token.strip().lower()
+                    if tag:
+                        found.add(tag)
+            return found
+        except Exception:
+            return set()
+
+    def _db_tag_set() -> set[str]:
+        if not has_tags_db_file:
+            return set()
+        try:
+            payload = load_tags_db(str(tags_db))
+            tags = payload.get("tags") if isinstance(payload, dict) else None
+            if not isinstance(tags, list):
+                return set()
+            found: set[str] = set()
+            for item in tags:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name") or "").strip().lower()
+                if name:
+                    found.add(name)
+            return found
+        except Exception:
+            return set()
+
+    csv_tags = _csv_tag_set()
+    db_tags = _db_tag_set()
+    db_ready = bool(csv_tags) and csv_tags.issubset(db_tags)
+    db_status = "pronto" if db_ready else "vuoto"
 
     report = st.session_state.get("__tag_onboarding_last_report")
     if not isinstance(report, dict):
@@ -331,7 +379,6 @@ def _render_tag_onboarding_report_box(slug: str, layout: WorkspaceLayout, client
             return
         report = {
             "status": "ok",
-            "details": "Report persistente: puoi tornare su Edit -> Valida in qualsiasi momento.",
         }
 
     status = str(report.get("status") or "").strip().lower()
@@ -349,11 +396,7 @@ def _render_tag_onboarding_report_box(slug: str, layout: WorkspaceLayout, client
             st.write("")
         st.markdown("Output:")
         st.markdown(f"- `tags_raw.csv`: {'presente' if has_tags_raw else 'mancante'}")
-        st.markdown(f"- `tags.db` (tecnico): {'presente' if has_tags_db_file else 'mancante'}")
-        st.markdown("- Vocabolario validato (`Edit -> Valida`): " f"{'si' if tags_validated else 'no'}")
-        details = str(report.get("details") or "").strip()
-        if details:
-            st.caption(details)
+        st.markdown(f"- `tags.db`: {db_status}")
 
 
 def _is_page_visible(page_path: str) -> bool:
