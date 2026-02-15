@@ -159,7 +159,7 @@ def test_iter_safe_pdfs_cache_invariant_set(tmp_path: Path) -> None:
     assert no_cache == with_cache
 
 
-def test_iter_safe_pdfs_strict_cache_hit_ignores_clock_time(
+def test_iter_safe_pdfs_strict_bypasses_cache_entirely(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -171,12 +171,26 @@ def test_iter_safe_pdfs_strict_cache_hit_ignores_clock_time(
     pdf_one = raw_dir / "doc1.pdf"
     safe_write_bytes(pdf_one, b"%PDF-1.4\n", atomic=True)
 
+    pdf_two = raw_dir / "doc2.pdf"
+    safe_write_bytes(pdf_two, b"%PDF-1.4\n", atomic=True)
+
     first = list(iter_safe_pdfs(raw_dir, use_cache=True))
-    assert pdf_one.resolve() in {item.resolve() for item in first}
+    expected = [pdf_one.resolve(), pdf_two.resolve()]
+    assert [item.resolve() for item in first] == expected
 
-    def _boom() -> float:
-        raise AssertionError("time.time should not be used for cache invalidation in strict runtime")
+    class _CacheGuard:
+        def get(self, *_a: object, **_k: object) -> object:
+            raise AssertionError("cache.get should not be used in strict runtime")
 
-    monkeypatch.setattr(path_utils.time, "time", _boom)
+        def __setitem__(self, *_a: object, **_k: object) -> None:
+            raise AssertionError("cache writes should not be used in strict runtime")
+
+        def pop(self, *_a: object, **_k: object) -> object:
+            raise AssertionError("cache pop should not be used in strict runtime")
+
+        def clear(self) -> None:
+            raise AssertionError("cache clear should not be used in strict runtime")
+
+    monkeypatch.setattr(path_utils, "_SAFE_PDF_CACHE", _CacheGuard())
     second = list(iter_safe_pdfs(raw_dir, use_cache=True))
-    assert pdf_one.resolve() in {item.resolve() for item in second}
+    assert [item.resolve() for item in second] == expected

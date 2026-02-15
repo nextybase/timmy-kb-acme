@@ -461,6 +461,17 @@ def iter_safe_pdfs(
     strict: bool = False,
 ) -> Iterator[Path]:
     """Convenience wrapper che restituisce solo file PDF in modo path-safe."""
+    if is_beta_strict():
+        yield from iter_safe_paths(
+            root,
+            include_dirs=False,
+            include_files=True,
+            suffixes=(".pdf",),
+            on_skip=on_skip,
+            strict=strict,
+        )
+        return
+
     if not use_cache:
         yield from iter_safe_paths(
             root,
@@ -491,8 +502,6 @@ def iter_safe_pdfs(
     current_mtime = _dir_mtime(resolved_root)
     cached = _SAFE_PDF_CACHE.get(resolved_root)
     effective_ttl = cache_ttl_s if cache_ttl_s is not None else _SAFE_PDF_CACHE_DEFAULT_TTL
-    if is_beta_strict():
-        effective_ttl = 0.0
     if cached and abs(cached.mtime - current_mtime) <= 1e-6:
         if effective_ttl and effective_ttl > 0:
             if (time.time() - cached.timestamp) > effective_ttl:
