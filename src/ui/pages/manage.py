@@ -27,7 +27,7 @@ from ui.utils.route_state import clear_tab, get_slug_from_qp, get_tab, set_tab  
 from ui.utils.status import status_guard
 from ui.utils.stubs import get_streamlit
 from ui.utils.ui_controls import column_button as _column_button
-from ui.utils.workspace import count_markdown_safe, count_pdfs_safe, get_ui_workspace_layout
+from ui.utils.workspace import count_markdown_safe, count_pdfs_safe, get_ui_workspace_layout, tagging_ready
 
 LOGGER = get_structured_logger("ui.manage")
 st = get_streamlit()
@@ -322,6 +322,8 @@ def _render_tag_onboarding_report_box(slug: str, layout: WorkspaceLayout, client
     tags_raw_csv = semantic_dir / "tags_raw.csv"
     tags_db = semantic_dir / "tags.db"
     has_tags_raw = tags_raw_csv.exists()
+    has_tags_db_file = tags_db.exists()
+    tags_validated, _ = tagging_ready(slug)
 
     report = st.session_state.get("__tag_onboarding_last_report")
     if not isinstance(report, dict):
@@ -345,13 +347,10 @@ def _render_tag_onboarding_report_box(slug: str, layout: WorkspaceLayout, client
                 _open_tags_draft_modal(slug, layout)
         with c2:
             st.write("")
-        live_outputs = [
-            tags_raw_csv,
-            tags_db,
-        ]
         st.markdown("Output:")
-        for p in live_outputs:
-            st.markdown(f"- `{p.name}`: {'presente' if p.exists() else 'mancante'}")
+        st.markdown(f"- `tags_raw.csv`: {'presente' if has_tags_raw else 'mancante'}")
+        st.markdown(f"- `tags.db` (tecnico): {'presente' if has_tags_db_file else 'mancante'}")
+        st.markdown("- Vocabolario validato (`Edit -> Valida`): " f"{'si' if tags_validated else 'no'}")
         details = str(report.get("details") or "").strip()
         if details:
             st.caption(details)
@@ -670,13 +669,12 @@ if slug:
             semantic_dir = layout.semantic_dir
             expected_outputs = [
                 semantic_dir / "tags_raw.csv",
-                semantic_dir / "tags.db",
             ]
             output_rows = [f"`{p.name}`: {'presente' if p.exists() else 'mancante'}" for p in expected_outputs]
             st.session_state["__tag_onboarding_last_report"] = {
                 "status": "ok",
                 "outputs": output_rows,
-                "details": "Bozza tag creata: usa Edit -> Valida per creare/aggiornare `tags.db`.",
+                "details": "Bozza tag creata: usa Edit -> Valida per confermare i tag e validare il vocabolario.",
             }
             st.toast("Bozza tag creata (`tags_raw.csv`). Usa Edit -> Valida per creare `tags.db`.")
             _safe_rerun()
