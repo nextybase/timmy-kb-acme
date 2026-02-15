@@ -2,7 +2,7 @@
 PY ?= python3
 PIP := $(PY) -m pip
 
-.PHONY: env-check install pre-commit lint type type-pyright test test-fast test-arch test-full test-vscode fmt fmt-check ci qa-safe ci-safe bench
+.PHONY: env-check install pre-commit lint type type-pyright test test-fast test-arch test-negative test-full test-vscode fmt fmt-check ci qa-safe ci-safe bench
 
 env-check:
 	@if [ -n "$$ALLOW_GLOBAL" ]; then \
@@ -56,6 +56,9 @@ test-fast: env-check
 
 test-arch: env-check
 	@$(PY) tools/test_runner.py arch
+
+test-negative: env-check
+	@$(PY) tools/test_runner.py negative
 
 test-full: env-check
 	@$(PY) tools/test_runner.py full

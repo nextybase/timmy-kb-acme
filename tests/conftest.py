@@ -52,6 +52,57 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     # Special-case list kept intentionally small: prefer path-based and prefix-based marking
     # to reduce entropy and avoid stale rules.
     arch_files = {"test_imports.py"}
+    negative_files = {
+        "tests/ai/test_assistant_registry.py",
+        "tests/ai/test_config_boundary.py",
+        "tests/ai/test_config_resolution.py",
+        "tests/pipeline/test_contract_new_client_strict_env.py",
+        "tests/pipeline/test_context_repo_root_dir.py",
+        "tests/pipeline/test_context_required_paths.py",
+        "tests/pipeline/test_content_utils_paths.py",
+        "tests/pipeline/test_drive_download_steps_strict.py",
+        "tests/pipeline/test_observability_config.py",
+        "tests/pipeline/test_path_utils_strict.py",
+        "tests/pipeline/test_paths.py",
+        "tests/pipeline/test_runtime_guard.py",
+        "tests/pipeline/test_workspace_bootstrap_api.py",
+        "tests/pipeline/test_workspace_exceptions.py",
+        "tests/pipeline/test_workspace_layout_from_context_contract.py",
+        "tests/pipeline/test_workspace_layout_policy.py",
+        "tests/pipeline/test_vision_runner_phase_b_gate.py",
+        "tests/semantic/test_embedding_service_strict_failures.py",
+        "tests/semantic/test_entities_runner_core_guardrail.py",
+        "tests/semantic/test_entities_runner_strict_failures.py",
+        "tests/semantic/test_frontmatter_service_strict_failures.py",
+        "tests/semantic/test_require_reviewed_vocab.py",
+        "tests/semantic/test_vocab_loader_strict.py",
+        "tests/test_chunk_record_builder.py",
+        "tests/test_cli_env_missing.py",
+        "tests/test_client_context_bootstrap_mode.py",
+        "tests/test_clients_store.py",
+        "tests/test_content_utils_frontmatter.py",
+        "tests/test_convert_markdown_no_pdfs_raises.py",
+        "tests/test_convert_markdown_unsafe_message.py",
+        "tests/test_db_safety.py",
+        "tests/test_dummy_mode_cli.py",
+        "tests/test_kb_db_path_safety.py",
+        "tests/test_path_safety_reads.py",
+        "tests/test_pdf_iteration_symlink.py",
+        "tests/test_pre_onboarding_strict.py",
+        "tests/test_semantic_convert_failfast.py",
+        "tests/test_semantic_convert_no_files.py",
+        "tests/test_semantic_embedding_service_strict.py",
+        "tests/test_semantic_headless_enrichment_without_vocab.py",
+        "tests/test_semantic_mapping_loader.py",
+        "tests/test_semantic_strict_failures.py",
+        "tests/test_semantic_vision_path_safety.py",
+        "tests/test_tags_store_schema_v2_failfast.py",
+        "tests/test_ui_drive_services_guards.py",
+        "tests/test_vocab_loader_failfast.py",
+        "tests/tools/test_vision_parser_headers.py",
+        "tests/tools/test_vision_parser_strict.py",
+        "tests/ui/test_manage_drive_strict_require_env.py",
+    }
     for item in items:
         nodeid = getattr(item, "nodeid", "") or ""
         nodeid_norm = nodeid.replace("\\", "/")
@@ -89,6 +140,10 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
         if nodeid_norm.startswith("tests/e2e/"):
             item.add_marker(pytest.mark.e2e)
+
+        file_nodeid = nodeid_norm.split("::", 1)[0]
+        if file_nodeid in negative_files:
+            item.add_marker(pytest.mark.negative)
 
 
 @pytest.fixture(autouse=True)

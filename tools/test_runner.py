@@ -10,6 +10,7 @@ from pathlib import Path
 BINARIES = {
     "fast": 'unit and not slow',
     "arch": "arch or contract",
+    "negative": "negative and not drive and not e2e and not slow",
     "full": None,
 }
 LINUX_BINARY = "linux"
@@ -93,7 +94,7 @@ def _build_linux_command(repo_root: Path) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Cross-platform test runner for FAST/ARCH/FULL binaries."
+        description="Cross-platform test runner for FAST/ARCH/NEGATIVE/FULL binaries."
     )
     parser.add_argument(
         "--list",
@@ -104,7 +105,7 @@ def main() -> int:
         "binary",
         nargs="?",
         choices=tuple(BINARIES.keys()) + (LINUX_BINARY,),
-        help="Test binary to run: fast, arch, full, or linux.",
+        help="Test binary to run: fast, arch, negative, full, or linux.",
     )
     parser.add_argument(
         "pytest_args",

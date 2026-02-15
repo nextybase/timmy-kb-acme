@@ -1,4 +1,4 @@
-# Testing Strategy -- FAST / ARCH / FULL
+# Testing Strategy -- FAST / ARCH / NEGATIVE / FULL
 
 Questa pagina è **normativa**. Definisce lo scopo e l'uso dei tre binari di test per garantire **determinismo**, **bassa entropia** e **cicli di feedback coerenti** con la Beta.
 
@@ -18,6 +18,7 @@ La fonte di verità è lo script cross-platform:
 ```bash
 python tools/test_runner.py fast
 python tools/test_runner.py arch
+python tools/test_runner.py negative
 python tools/test_runner.py full
 python tools/test_runner.py linux
 ```
@@ -27,6 +28,7 @@ Il Makefile è solo un alias comodo:
 ```bash
 make test-fast
 make test-arch
+make test-negative
 make test-full
 ```
 
@@ -103,6 +105,25 @@ python tools/test_runner.py full
 
 ---
 
+## NEGATIVE (config/guardrail strict)
+
+**Scopo**: ciclo mirato sui test che verificano condizioni vietate o incomplete:
+
+- configurazioni mancanti/non valide;
+- path fuori perimetro;
+- contratti strict ("no fallback", "no shim", "no legacy path").
+
+Comando:
+
+```bash
+python tools/test_runner.py negative
+```
+
+**Regola**: `negative` affianca `arch` ma non lo sostituisce.
+`arch` resta il gate strutturale; `negative` e' il loop operativo per fail-fast/config contracts.
+
+---
+
 ## Linux (Docker)
 
 **Scopo**: validare localmente il comportamento target Linux prima del push, includendo pre-commit + suite pytest completa in container.
@@ -133,6 +154,7 @@ Marker principali:
 - `slow`: test lenti o costosi (mai in FAST).
 - `arch`: invarianti architetturali (import, encoding, confini).
 - `contract`: contratti UI/gating/shape dove normato.
+- `negative`: test negativi di configurazione/guardrail strict.
 - `pipeline`: integrazione pipeline core.
 - `semantic`: comportamento modulo semantic.
 - `ui`: superficie Streamlit/UI.
@@ -175,6 +197,7 @@ pytest -q --durations=20 --durations-min=1.0
 
 - Durante lo sviluppo: `python tools/test_runner.py fast`
 - A fine task o change importante: `python tools/test_runner.py arch`
+- Per modifiche strict/fail-fast/config: `python tools/test_runner.py negative`
 - Prima del push: `python tools/test_runner.py full`
 
 **Suggerimento**: se stai lavorando su un'area specifica (es. retriever), usa anche selezione diretta:
@@ -241,6 +264,23 @@ Queste regole sono normative e riflettono quanto abbiamo già applicato:
 3. **Coerenza marker/naming**: se un test è `contract + pipeline`, dichiaralo esplicitamente (marker), non affidarti al nome.
 4. **Riduci special-case in conftest**: preferisci path/prefix.
 5. **Ogni fix anti-drift deve avere un test guardia** (es.: clamp preview candidate\_limit).
+
+### Aggiornamento recente: deduplica negativi e armonizzazione strict
+
+Queste regole derivano dai commit test-only `af907357` e `d3289f81` e sono ora parte del contratto di manutenzione:
+
+1. **Niente duplicati "same failure mode, same layer"**: se due test coprono la stessa violazione nello stesso punto della pipeline, mantenerne uno solo.
+2. **Preferire test strict di confine al posto di integrazioni ridondanti**: quando il fail-fast e' gia garantito a livello boundary, evitare una seconda variante integration che non aggiunge segnale.
+3. **Test negativi solo su rischi ancora possibili**: rimuovere i test che verificano fallback/shim/degrade non piu esistenti nel runtime Beta strict.
+4. **Helper condivisi obbligatori quando c'e ripetizione meccanica**: usare utility comuni (es. logger no-op) invece di classi duplicate in piu file.
+5. **Un negativo, una causa, un'asserzione chiara**: evitare test negativi "multipurpose" con piu cause nel medesimo scenario.
+6. **Allineare i fixture al contratto corrente**: se il runtime richiede frontmatter valido o perimeter esplicito, i test positivi devono costruire input conformi.
+
+#### Candidati immediati alla cancellazione
+
+- Test che verificano fallback raw dopo errore frontmatter in percorsi ora hard-fail.
+- Test che verificano "skip-and-continue" su IO/parse nei percorsi CORE ora fail-fast.
+- Duplicati strict/integration che asseriscono lo stesso errore tipizzato senza aggiungere contesto di layer.
 
 ---
 
