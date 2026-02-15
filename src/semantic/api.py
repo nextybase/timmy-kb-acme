@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Protocol, Sequence, TypeAlias, TypeVar, cast
 
-from pipeline.exceptions import ConfigError
+from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.types import ChunkRecord
@@ -250,8 +250,11 @@ def _cleanup_frontmatter_cache(logger: logging.Logger, context: ClientContextTyp
             operation="import",
             exc=exc,
         )
-        # Non interrompere il return della pipeline; log-only.
-        pass
+        raise ConfigError(
+            "Frontmatter cache cleanup bootstrap failed.",
+            slug=slug,
+            component="semantic.frontmatter_cache.import",
+        ) from exc
 
     if callable(log_frontmatter_cache_stats):
         try:
@@ -285,6 +288,12 @@ def _cleanup_frontmatter_cache(logger: logging.Logger, context: ClientContextTyp
                 operation="clear",
                 exc=exc,
             )
+            raise PipelineError(
+                "Frontmatter cache cleanup failed.",
+                slug=slug,
+                component="semantic.frontmatter_cache.clear",
+                run_id=getattr(context, "run_id", None),
+            ) from exc
     if callable(log_frontmatter_cache_stats):
         try:
             log_frontmatter_cache_stats(

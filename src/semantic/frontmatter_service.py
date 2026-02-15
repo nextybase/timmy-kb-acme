@@ -83,7 +83,7 @@ def _read_layout_top_levels(layout_path: Path) -> list[str]:
         import yaml
     except ModuleNotFoundError as exc:
         raise ConfigError(
-            "Dipendenza opzionale mancante: impossibile importare 'yaml'.", file_path=layout_path
+            "Dipendenza richiesta mancante: impossibile importare 'yaml'.", file_path=layout_path
         ) from exc
     except Exception as exc:
         raise ConfigError(f"Import modulo yaml fallito: {exc!r}", file_path=layout_path) from exc
@@ -197,11 +197,13 @@ def _layout_section_from_md(md: Path, book_dir: Path, layout_keys: list[str]) ->
     return None
 
 
-def _dump_layout_yaml(data: Dict[str, Any]) -> str | None:
+def _dump_layout_yaml(data: Dict[str, Any]) -> str:
     try:
         import yaml
-    except Exception:
-        return None
+    except ModuleNotFoundError as exc:
+        raise ConfigError("Dipendenza richiesta mancante: impossibile importare 'yaml'.") from exc
+    except Exception as exc:
+        raise ConfigError(f"Import modulo yaml fallito: {exc!r}") from exc
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
 
@@ -261,9 +263,6 @@ def _persist_layout_proposal(layout: WorkspaceLayout, logger: logging.Logger, *,
             return
         merged = merge_non_distruttivo(base_yaml, proposal)
         layout_yaml = _dump_layout_yaml(merged)
-
-    if not layout_yaml:
-        return
 
     semantic_dir = repo_root_dir / "semantic"
     semantic_dir.mkdir(parents=True, exist_ok=True)

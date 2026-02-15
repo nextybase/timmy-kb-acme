@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+import builtins
 import logging
 from pathlib import Path
 
+import pytest
+
+from pipeline.exceptions import ConfigError
 from pipeline.frontmatter_utils import read_frontmatter
 from semantic import frontmatter_service as front
 
@@ -133,3 +137,17 @@ def test_write_layout_summary_creates_file(tmp_path: Path) -> None:
     assert summary.exists()
     content = summary.read_text(encoding="utf-8")
     assert "- **strategy**" in content
+
+
+def test_dump_layout_yaml_fails_when_yaml_dependency_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_import = builtins.__import__
+
+    def _failing_import(name, globals=None, locals=None, fromlist=(), level=0):  # type: ignore[no-untyped-def]
+        if name == "yaml":
+            raise ModuleNotFoundError("yaml missing")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _failing_import)
+
+    with pytest.raises(ConfigError, match="Dipendenza richiesta mancante"):
+        front._dump_layout_yaml({"entities": []})

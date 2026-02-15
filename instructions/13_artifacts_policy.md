@@ -76,6 +76,7 @@ Service artifacts are allowed to follow best-effort or fallback behavior only un
 - they do not alter or replace core artifacts;
 - they are explicit (structured log) and marked as "SERVICE_ONLY";
 - they do not introduce implicit dependencies for subsequent steps.
+- "best-effort" applies to the artifact outcome, not to missing required infrastructure dependencies (for example PyYAML), which remain fail-fast.
 
 ### 3bis) Controlled exception: instance-global UI state stores
 Workspace remains the only perimeter for Envelope/Pipeline/Ledger artifacts.
@@ -233,7 +234,7 @@ Note: `visionstatement.yaml` exists only in the workspace (`output/timmy-kb-<slu
 | `src/semantic/convert_service.py:_write_markdown_for_normalized`<br>`src/pipeline/content_utils.py:convert_files_to_structured_markdown` | `output/timmy-kb-<slug>/book/<rel>.md` | Book Markdown | Preview/KB | CORE | normalized/*.md | No |
 | `src/semantic/frontmatter_service.py:write_readme`<br>`src/pipeline/content_utils.py:generate_readme_markdown` | `output/timmy-kb-<slug>/book/README.md` | Markdown | Preview/KB | CORE | mapping + content (+ optional `layout_proposal.yaml`) | No |
 | `src/semantic/frontmatter_service.py:write_summary`<br>`src/pipeline/content_utils.py:generate_summary_markdown` | `output/timmy-kb-<slug>/book/SUMMARY.md` | Markdown | Preview/KB | CORE | book/*.md | No |
-| `src/semantic/frontmatter_service.py:_maybe_write_layout_proposal` | `output/timmy-kb-<slug>/semantic/layout_proposal.yaml` | Proposal YAML | Diagnostics/UX | SERVICE | Vision text | Yes (best-effort, log only) |
+| `src/semantic/frontmatter_service.py:_persist_layout_proposal` | `output/timmy-kb-<slug>/semantic/layout_proposal.yaml` | Proposal YAML | Diagnostics/UX | SERVICE | Vision text, PyYAML (required dependency) | Yes (best-effort on proposal generation/persist path; no fallback on missing required dependency) |
 | `src/semantic/frontmatter_service.py:_write_layout_summary` | `output/timmy-kb-<slug>/book/layout_summary.md` | Markdown | UX/preview | SERVICE | `semantic/layout_proposal.yaml` | Yes (skip if layout missing) |
 
 ### A.6 DB, ledger, preview

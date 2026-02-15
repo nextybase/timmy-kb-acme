@@ -60,6 +60,11 @@ Non-strict paths are permitted **only** when:
 
 Any heuristic, fallback, partial execution, or tolerance-based recovery is forbidden in the runtime core unless explicitly authorized by a capability gate.
 
+**I-3ter -- Frontmatter cache isolation invariant**
+Frontmatter cache cleanup is a run-to-run isolation invariant.
+Cleanup MUST succeed at the end of semantic pipeline execution; import/cleanup failures MUST hard-fail the run (no log-only continuation).
+This invariant explicitly prevents cross-run contamination within the same process execution.
+
 **I-4 -- Binding Ledger**
 Decision Records (ledger) are binding.
 Any failure to write or validate a Decision Record MUST block state advancement.
@@ -72,6 +77,11 @@ If the required NLP backend is `spacy`:
 **I-6 -- Input-derived structure only**
 Proposed structures MUST derive strictly from input evidence.
 Placeholders, auto-branches, or inferred nodes MUST NOT be introduced.
+
+**I-6bis -- Required infrastructure dependencies**
+Infrastructure dependencies required by runtime code (for example PyYAML when YAML serialization/parsing is part of the runtime path) are not optional.
+Example: PyYAML is required when layout proposal YAML read/write participates in the semantic pipeline runtime path.
+Missing required dependencies MUST hard-fail with typed errors.
 
 **I-7 -- Pure Vision output**
 Vision output MUST be **pure JSON**.
@@ -194,6 +204,10 @@ Vision output MUST comply with the `VisionOutput` schema in strict execution.
 
 **4.3 -- Layout proposals**
 Layout proposals MUST NOT contain placeholders.
+`layout_proposal.yaml` remains a SERVICE artifact: its generation may be best-effort at artifact level, but required dependencies used by runtime code are still strict/fail-fast.
+If the artifact is absent, behavior must remain conditional and deterministic with respect to workspace state (no silent semantic downgrade of CORE artifacts).
+Best-effort here means "artifact absence is allowed", never partial/heuristic content or tolerant recovery in CORE runtime paths.
+See also: SERVICE_ONLY semantics in the Artifacts Policy (`instructions/13_artifacts_policy.md`).
 
 **4.4 -- Structural merge**
 Structural merge conflicts MUST cause hard-fail.

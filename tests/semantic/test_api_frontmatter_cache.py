@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from semantic import api
 
@@ -23,7 +24,7 @@ def _prepare_workspace(base: Path, slug: str) -> Path:
     return workspace
 
 
-def test_clear_frontmatter_cache_failure_logs_service_event(
+def test_clear_frontmatter_cache_failure_is_fatal_and_logs_service_event(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -60,17 +61,17 @@ def test_clear_frontmatter_cache_failure_logs_service_event(
     caplog.set_level(logging.WARNING)
     caplog.clear()
 
-    result = api._run_build_workflow(
-        context,
-        logger,
-        slug=slug,
-        convert_fn=_stub_convert,
-        vocab_fn=_stub_vocab,
-        enrich_fn=_stub_enrich,
-        summary_fn=_stub_summary,
-    )
+    with pytest.raises(PipelineError, match="Frontmatter cache cleanup failed."):
+        api._run_build_workflow(
+            context,
+            logger,
+            slug=slug,
+            convert_fn=_stub_convert,
+            vocab_fn=_stub_vocab,
+            enrich_fn=_stub_enrich,
+            summary_fn=_stub_summary,
+        )
 
-    assert result[0] == workspace
     service_records = [
         record for record in caplog.records if record.message == "semantic.frontmatter_cache.clear_failed"
     ]
@@ -82,3 +83,47 @@ def test_clear_frontmatter_cache_failure_logs_service_event(
     assert record.service_only is True
     assert record.error_type == "RuntimeError"
     assert record.error == "cache cleanup failed"
+
+
+def test_frontmatter_cache_import_failure_is_fatal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    slug = "dummy-slug"
+    workspace = _prepare_workspace(tmp_path, slug)
+    context = SimpleNamespace(repo_root_dir=workspace, slug=slug, run_id="run-1234")
+    logger = get_structured_logger("tests.semantic.api.cache")
+
+    def _stub_convert(context_arg, logger_arg, *, slug: str):
+        return [workspace / "raw" / "doc.md"]
+
+    def _stub_vocab(repo_root_dir, logger_arg, *, slug: str):
+        return {}
+
+    def _stub_enrich(context_arg, logger_arg, vocab, *, slug: str):
+        return [workspace / "semantic" / "enriched.md"]
+
+    def _stub_summary(context_arg, logger_arg, *, slug: str):
+        return None
+
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _failing_import(name, globals=None, locals=None, fromlist=(), level=0):  # type: ignore[no-untyped-def]
+        if name == "pipeline.content_utils":
+            raise ImportError("boom import")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _failing_import)
+
+    with pytest.raises(ConfigError, match="Frontmatter cache cleanup bootstrap failed."):
+        api._run_build_workflow(
+            context,
+            logger,
+            slug=slug,
+            convert_fn=_stub_convert,
+            vocab_fn=_stub_vocab,
+            enrich_fn=_stub_enrich,
+            summary_fn=_stub_summary,
+        )
