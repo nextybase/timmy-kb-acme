@@ -101,3 +101,25 @@ def test_compute_workspace_root_dir_resolves_slug_macro(tmp_path: Path) -> None:
     logger = logging.getLogger("test.workspace_root_env")
     root = ClientContext._compute_workspace_root_dir("acme", env_vars, logger)
     assert root == workspace_root
+
+
+def test_compute_repo_root_dir_logs_workspace_override_when_explicitly_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    monkeypatch.setenv("TIMMY_ALLOW_WORKSPACE_OVERRIDE", "1")
+    env_vars = {
+        REPO_ROOT_ENV: None,
+        WORKSPACE_ROOT_ENV: None,
+    }
+    override_root = tmp_path / "workspace"
+    override_root.mkdir(parents=True, exist_ok=True)
+
+    caplog.set_level(logging.WARNING)
+    logger = logging.getLogger("test.workspace_override")
+    root = ClientContext._compute_repo_root_dir("acme", env_vars, logger, repo_root_override=override_root)
+
+    assert root == override_root.resolve()
+    assert any("context.workspace_override.enabled" in rec.message for rec in caplog.records)

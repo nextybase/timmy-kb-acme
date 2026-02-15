@@ -235,7 +235,7 @@ def run_semantic_headless(
 
 
 def main() -> int:
-    ensure_strict_runtime(context="cli.semantic_headless")
+    ensure_strict_runtime(context="cli.semantic_headless", require_workspace_root=True)
     args = _parse_args()
     result = run_semantic_headless(
         slug=args.slug,

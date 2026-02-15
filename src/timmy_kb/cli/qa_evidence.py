@@ -28,7 +28,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    ensure_strict_runtime(context="cli.qa_evidence")
+    ensure_strict_runtime(context="cli.qa_evidence", require_workspace_root=True)
     repo_root = str(get_repo_root())
     args = _parse_args()
     slug = args.slug

@@ -352,13 +352,14 @@ class ClientContext:
 
         if repo_root_override:
             # Strict override guard
-            if strict_mode and os.getenv("TIMMY_ALLOW_WORKSPACE_OVERRIDE", "").strip().lower() not in {
+            allow_workspace_override = os.getenv("TIMMY_ALLOW_WORKSPACE_OVERRIDE", "").strip().lower() in {
                 "1",
                 "true",
                 "yes",
                 "y",
                 "on",
-            }:
+            }
+            if strict_mode and not allow_workspace_override:
                 raise ConfigError(
                     "Workspace override not allowed in strict runtime. "
                     "Use WORKSPACE_ROOT_DIR or explicitly enable TIMMY_ALLOW_WORKSPACE_OVERRIDE=1 "
@@ -372,6 +373,11 @@ class ClientContext:
             except Exception as e:
                 raise ConfigError(f"repo_root_dir non valido: {repo_root_override}", slug=slug) from e
             cls._reject_workspace_sentinels(root, slug)
+            if strict_mode and allow_workspace_override:
+                logger.warning(
+                    "context.workspace_override.enabled",
+                    extra={"slug": slug, "repo_root_dir": str(root), "source": "TIMMY_ALLOW_WORKSPACE_OVERRIDE"},
+                )
             logger.info(
                 "context.repo_root_dir_override",
                 extra={"slug": slug, "repo_root_dir": str(root)},

@@ -118,7 +118,7 @@ def kg_build_main(
 
 
 def main(args: argparse.Namespace) -> None:
-    ensure_strict_runtime(context="cli.kg_build")
+    ensure_strict_runtime(context="cli.kg_build", require_workspace_root=True)
     run_id = args.run_id or uuid.uuid4().hex
     early_logger = get_structured_logger("kg_build", run_id=run_id)
 

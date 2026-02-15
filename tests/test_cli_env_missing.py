@@ -48,3 +48,36 @@ def test_tag_onboarding_cli_missing_env_returns_configerror_code(tmp_path: Path)
     assert proc.returncode == exit_code_for(ConfigError("x"))
     # Assicurati che non ci siano tracebacks grezzi (messaggio conciso)
     assert "Traceback" not in (proc.stdout + proc.stderr)
+
+
+def test_tag_onboarding_cli_missing_workspace_root_fails_fast(tmp_path: Path) -> None:
+    slug = "dummy"
+    client_dir = local_workspace_dir(tmp_path, slug)
+    client_dir.mkdir(parents=True, exist_ok=True)
+
+    env = dict(os.environ)
+    env.pop("WORKSPACE_ROOT_DIR", None)
+    env.pop("REPO_ROOT_DIR", None)
+    env["TIMMY_BETA_STRICT"] = "1"
+
+    repo_root = Path(__file__).resolve().parents[1]
+    src_path = str(repo_root / "src")
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = src_path if not existing_pythonpath else f"{src_path}{os.pathsep}{existing_pythonpath}"
+    proc = subprocess.run(
+        [
+            PY,
+            "-m",
+            "timmy_kb.cli.tag_onboarding",
+            "--slug",
+            slug,
+            "--non-interactive",
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert proc.returncode == exit_code_for(ConfigError("x"))
+    assert "Traceback" not in (proc.stdout + proc.stderr)

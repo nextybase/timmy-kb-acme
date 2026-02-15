@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
+from pipeline.runtime_guard import ensure_strict_runtime
 from pipeline.workspace_layout import WorkspaceLayout
 from storage import decision_ledger
 
@@ -225,6 +226,7 @@ def run(*, slug: str, json_output: bool) -> int:
 
 
 def main() -> int:
+    ensure_strict_runtime(context="cli.ledger_status", require_workspace_root=True)
     args = _parse_args()
     return run(slug=args.slug, json_output=bool(args.json))
 

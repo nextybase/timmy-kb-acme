@@ -842,7 +842,7 @@ def main(args: argparse.Namespace) -> None:
     resolved_slug = slug
 
     # Bootstrap solo dopo parse+slug valido (no side-effects su --help)
-    ensure_strict_runtime(context="cli.pre_onboarding")
+    ensure_strict_runtime(context="cli.pre_onboarding", require_workspace_root=True)
     start_metrics_server_once()
     early_logger = get_structured_logger("pre_onboarding", run_id=run_id)
 

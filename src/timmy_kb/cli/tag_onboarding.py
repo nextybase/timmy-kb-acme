@@ -941,7 +941,7 @@ def main(args: argparse.Namespace) -> int | None:
         logger=bootstrap_logger,
     )
 
-    ensure_strict_runtime(context="cli.tag_onboarding")
+    ensure_strict_runtime(context="cli.tag_onboarding", require_workspace_root=True)
     start_metrics_server_once()
     early_logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
     early_logger.info("cli.tag_onboarding.bootstrap_ready", extra={"slug": slug})

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 
+from pipeline.runtime_guard import ensure_strict_runtime
 from timmy_kb.cli import ledger_status
 
 
@@ -20,6 +21,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run_ledger_status(args: argparse.Namespace) -> int:
+    ensure_strict_runtime(context="cli.__main__.ledger_status", require_workspace_root=True)
     return int(ledger_status.run(slug=args.slug, json_output=bool(args.json)))
 
 

@@ -733,7 +733,7 @@ def main() -> int:
     # ENTRYPOINT STRICT (no bootstrap): la CLI risolve la repo root per il perimetro,
     # ma NON crea/rigenera config/struttura. Prerequisito: workspace già configurato.
     # (dopo argparse, così --help resta quiet)
-    ensure_strict_runtime(context="cli.semantic_onboarding")
+    ensure_strict_runtime(context="cli.semantic_onboarding", require_workspace_root=True)
     get_repo_root()
 
     run_id = uuid.uuid4().hex
