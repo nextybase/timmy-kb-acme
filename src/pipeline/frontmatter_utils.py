@@ -16,13 +16,16 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Mapping, Tuple
 
-try:
-    import yaml
-except Exception:  # pragma: no cover
-    yaml = None  # type: ignore
-
 from .exceptions import ConfigError
 from .path_utils import ensure_within_and_resolve, read_text_safe
+
+try:
+    import yaml
+except ModuleNotFoundError as exc:  # pragma: no cover - dipendenza runtime obbligatoria
+    raise ConfigError(
+        "Dipendenza richiesta mancante: impossibile importare 'yaml'.",
+        file_path="yaml",
+    ) from exc
 
 LOG = logging.getLogger(__name__)
 
@@ -39,8 +42,6 @@ def parse_frontmatter(md_text: str) -> Tuple[Dict[str, Any], str]:
             raise ConfigError("Frontmatter non valida")
         header = m.group(1)
         body = md_text[m.end() :]
-        if yaml is None:
-            raise ConfigError("yaml non disponibile")
         data = yaml.safe_load(header)
         if data is None:
             raise ConfigError("Frontmatter vuota")
@@ -55,8 +56,6 @@ def parse_frontmatter(md_text: str) -> Tuple[Dict[str, Any], str]:
 
 def dump_frontmatter(meta: Mapping[str, Any]) -> str:
     try:
-        if yaml is None:
-            raise RuntimeError("yaml unavailable")
         return "---\n" + yaml.safe_dump(dict(meta), sort_keys=False, allow_unicode=True).strip() + "\n---\n"
     except Exception as exc:
         raise ConfigError("Errore dump frontmatter.") from exc

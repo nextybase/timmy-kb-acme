@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 import semantic.embedding_service as es
+from pipeline.exceptions import ConfigError
 
 
 def test_collect_markdown_inputs_raises_on_unicode_decode_error(
@@ -18,7 +19,7 @@ def test_collect_markdown_inputs_raises_on_unicode_decode_error(
 
     monkeypatch.setattr(es, "_read_fm", _raise_unicode, raising=True)
 
-    with pytest.raises(UnicodeDecodeError):
+    with pytest.raises(ConfigError, match="Markdown read/parsing failed"):
         es._collect_markdown_inputs(
             tmp_path,
             [md_path],

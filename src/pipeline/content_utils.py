@@ -18,7 +18,7 @@ from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
 from pipeline.frontmatter_utils import read_frontmatter
 from pipeline.logging_utils import get_structured_logger
-from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths, read_text_safe
+from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths
 from pipeline.tracing import start_decision_span
 from pipeline.types import ChunkRecord
 from pipeline.workspace_layout import WorkspaceLayout
@@ -881,12 +881,7 @@ def build_chunk_records_from_markdown_files(
     base_path = Path(perimeter_root) if perimeter_root is not None else None
     resolved_base = base_path.resolve() if base_path is not None else None
     if resolved_base is None:
-        _safe_log(
-            get_structured_logger("pipeline.content_utils"),
-            "warning",
-            "pipeline.content.chunk_records.no_perimeter",
-            extra={"slug": slug, "service_only": True, "paths": len(md_paths)},
-        )
+        raise ConfigError("perimeter_root is required for chunk record building.", slug=slug)
 
     for raw_path in md_paths:
         path = raw_path if isinstance(raw_path, Path) else Path(raw_path)
@@ -895,8 +890,8 @@ def build_chunk_records_from_markdown_files(
             try:
                 safe_path = ensure_within_and_resolve(resolved_base, path)
             except PathTraversalError as exc:
-                raise PipelineError(
-                    "Markdown path fuori perimetro.",
+                raise ConfigError(
+                    "Markdown path outside perimeter_root.",
                     slug=slug,
                     file_path=str(path),
                 ) from exc
@@ -904,30 +899,18 @@ def build_chunk_records_from_markdown_files(
         try:
             file_meta, body = read_frontmatter(safe_path.parent, safe_path, encoding="utf-8", use_cache=True)
             text = (body or "").lstrip("\ufeff")
-        except UnicodeError:
-            raise
-        except (OSError, ValueError) as exc:
-            # fallback non silenzioso: segnaliamo e ripieghiamo sulla lettura raw
+        except Exception as exc:
             _safe_log(
                 get_structured_logger("pipeline.content_utils"),
-                "warning",
-                "pipeline.content.frontmatter_fallback",
+                "error",
+                "pipeline.content.frontmatter_read_failed",
                 extra={"slug": slug, "path": str(safe_path), "error": str(exc)},
             )
-            file_meta = {}
-            text = read_text_safe(safe_path.parent, safe_path, encoding="utf-8")
-        except PipelineError as exc:
-            # In strict mode il fallback e' ammesso solo per errori frontmatter attesi.
-            if "frontmatter" not in str(exc).lower():
-                raise
-            _safe_log(
-                get_structured_logger("pipeline.content_utils"),
-                "warning",
-                "pipeline.content.frontmatter_fallback",
-                extra={"slug": slug, "path": str(safe_path), "error": str(exc)},
-            )
-            file_meta = {}
-            text = read_text_safe(safe_path.parent, safe_path, encoding="utf-8")
+            raise PipelineError(
+                "Frontmatter read/parsing failed during chunk record building.",
+                slug=slug,
+                file_path=str(safe_path),
+            ) from exc
 
         source_path = _format_source_path(safe_path, resolved_base)
 

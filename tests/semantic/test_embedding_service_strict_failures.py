@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 import semantic.api as sapi
-from pipeline.exceptions import ConfigError
+from pipeline.exceptions import ConfigError, PipelineError
 from tests.support.contexts import TestClientCtx
 from tests.utils.workspace import ensure_minimal_workspace_layout
 
@@ -25,7 +25,7 @@ def test_index_markdown_to_db_hard_fails_on_embedding_error(tmp_path: Path, monk
     base = tmp_path / "output" / "timmy-kb-dummy"
     ensure_minimal_workspace_layout(base, client_name="dummy")
     book_dir = base / "book"
-    (book_dir / "a.md").write_text("# A\ncontenuto", encoding="utf-8")
+    (book_dir / "a.md").write_text("---\ntitle: A\n---\n# A\ncontenuto", encoding="utf-8")
     db_path = base / "semantic" / "kb.sqlite"
     monkeypatch.setenv("TEST_MODE", "1")
 
@@ -51,7 +51,7 @@ def test_index_markdown_to_db_returns_inserted_gt_zero_on_valid_embeddings(
     base = tmp_path / "output" / "timmy-kb-dummy"
     ensure_minimal_workspace_layout(base, client_name="dummy")
     book_dir = base / "book"
-    (book_dir / "a.md").write_text("# A\ncontenuto", encoding="utf-8")
+    (book_dir / "a.md").write_text("---\ntitle: A\n---\n# A\ncontenuto", encoding="utf-8")
     db_path = base / "semantic" / "kb.sqlite"
     monkeypatch.setenv("TEST_MODE", "1")
 
@@ -69,3 +69,29 @@ def test_index_markdown_to_db_returns_inserted_gt_zero_on_valid_embeddings(
         db_path=db_path,
     )
     assert inserted > 0
+
+
+def test_index_markdown_to_db_hard_fails_when_chunk_building_fails_on_frontmatter_parse(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = tmp_path / "output" / "timmy-kb-dummy"
+    ensure_minimal_workspace_layout(base, client_name="dummy")
+    book_dir = base / "book"
+    (book_dir / "a.md").write_text("---\ntitle: [\n---\n# A\nfrontmatter corrotto", encoding="utf-8")
+    db_path = base / "semantic" / "kb.sqlite"
+    monkeypatch.setenv("TEST_MODE", "1")
+
+    class _OkEmb:
+        def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
+            _ = model
+            return [[0.1, 0.2, 0.3] for _ in texts]
+
+    with pytest.raises(PipelineError, match="Frontmatter read/parsing failed"):
+        sapi.index_markdown_to_db(
+            _ctx(base),
+            logging.getLogger("test.embedding.chunk_fail"),
+            slug="dummy",
+            scope="book",
+            embeddings_client=_OkEmb(),
+            db_path=db_path,
+        )

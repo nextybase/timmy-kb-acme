@@ -42,7 +42,6 @@ class _CollectedMarkdown:
     contents: List[str]
     rel_paths: List[str]
     frontmatters: List[Dict[str, object]]
-    skipped_io: int
     skipped_empty: int
     total_files: int
 
@@ -65,21 +64,21 @@ def _collect_markdown_inputs(
     contents: List[str] = []
     rel_paths: List[str] = []
     frontmatters: List[Dict[str, object]] = []
-    skipped_io = 0
     skipped_empty = 0
 
     for candidate in files:
         try:
             meta, body = _read_fm(book_dir, candidate, encoding="utf-8", use_cache=True)
-        except UnicodeError:
-            raise
         except Exception as exc:  # noqa: BLE001 - vogliamo loggare tutti i casi
-            logger.warning(
+            logger.error(
                 "semantic.index.read_failed",
                 extra={"slug": slug, "file_path": str(candidate), "error": str(exc)},
             )
-            skipped_io += 1
-            continue
+            raise ConfigError(
+                "Markdown read/parsing failed during embedding input collection.",
+                slug=slug,
+                file_path=str(candidate),
+            ) from exc
 
         payload = (body or "").lstrip("\ufeff").strip()
         if not payload and meta:
@@ -100,7 +99,6 @@ def _collect_markdown_inputs(
         contents=contents,
         rel_paths=rel_paths,
         frontmatters=frontmatters,
-        skipped_io=skipped_io,
         skipped_empty=skipped_empty,
         total_files=len(files),
     )
@@ -141,7 +139,6 @@ def _collect_chunk_records(
         contents=contents,
         rel_paths=rel_paths,
         frontmatters=frontmatters,
-        skipped_io=0,
         skipped_empty=skipped_empty,
         total_files=len(chunk_records),
     )
@@ -471,7 +468,7 @@ def index_markdown_to_db(
                 "slug": slug,
                 "files": total_files,
                 "usable": len(collected.contents),
-                "skipped_io": collected.skipped_io,
+                "skipped_io": 0,
                 "skipped_no_text": collected.skipped_empty,
             },
         )
@@ -520,7 +517,7 @@ def index_markdown_to_db(
                 "slug": slug,
                 "files": total_files,
                 "usable": len(collected.contents),
-                "skipped_io": collected.skipped_io,
+                "skipped_io": 0,
                 "skipped_no_text": collected.skipped_empty,
             },
         )
@@ -531,7 +528,7 @@ def index_markdown_to_db(
             _log_index_skips(
                 logger,
                 slug,
-                skipped_io=collected.skipped_io,
+                skipped_io=0,
                 skipped_empty=collected.skipped_empty,
                 vectors_empty=0,
             )
@@ -575,7 +572,7 @@ def index_markdown_to_db(
         _log_index_skips(
             logger,
             slug,
-            skipped_io=collected.skipped_io,
+            skipped_io=0,
             skipped_empty=collected.skipped_empty,
             vectors_empty=embeddings_result.vectors_empty,
         )
