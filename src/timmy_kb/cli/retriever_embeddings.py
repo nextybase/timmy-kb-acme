@@ -271,6 +271,17 @@ def _load_candidates(params: QueryParams) -> tuple[list[dict[str, Any]], float]:
     return candidates, (time.time() - t0) * 1000.0
 
 
+def _budget_hit(deadline: float | None, *, stage: str, slug: str, scope: str) -> bool:
+    if not throttle_mod._deadline_exceeded(deadline):
+        return False
+    _safe_log(
+        "retriever.latency_budget.hit",
+        level="warning",
+        extra={"slug": slug, "scope": scope, "stage": stage},
+    )
+    return True
+
+
 def retrieve_candidates(params: QueryParams) -> list[dict[str, Any]]:
     """Recupera i candidati grezzi per calibrare il `candidate_limit`."""
     validation_mod._validate_params_logged(params)
@@ -373,12 +384,7 @@ def search(
 
         t_total_start = time.time()
 
-        if throttle_mod._deadline_exceeded(deadline):
-            _safe_log(
-                "retriever.latency_budget.hit",
-                level="warning",
-                extra={"slug": params.slug, "scope": params.scope, "stage": "embedding"},
-            )
+        if _budget_hit(deadline, stage="pre_embedding", slug=params.slug, scope=params.scope):
             return []
 
         try:
@@ -423,20 +429,10 @@ def search(
             },
         )
 
-        if throttle_mod._deadline_exceeded(deadline):
-            _safe_log(
-                "retriever.latency_budget.hit",
-                level="warning",
-                extra={"slug": params.slug, "scope": params.scope, "stage": "embedding"},
-            )
+        if _budget_hit(deadline, stage="post_embedding", slug=params.slug, scope=params.scope):
             return []
 
-        if throttle_mod._deadline_exceeded(deadline):
-            _safe_log(
-                "retriever.latency_budget.hit",
-                level="warning",
-                extra={"slug": params.slug, "scope": params.scope, "stage": "fetch_candidates"},
-            )
+        if _budget_hit(deadline, stage="pre_fetch_candidates", slug=params.slug, scope=params.scope):
             return []
 
         candidates, t_fetch_ms = _load_candidates(params)
@@ -456,12 +452,7 @@ def search(
             },
         )
 
-        if throttle_mod._deadline_exceeded(deadline):
-            _safe_log(
-                "retriever.latency_budget.hit",
-                level="warning",
-                extra={"slug": params.slug, "scope": params.scope, "stage": "fetch_candidates"},
-            )
+        if _budget_hit(deadline, stage="post_fetch_candidates", slug=params.slug, scope=params.scope):
             return []
 
         (

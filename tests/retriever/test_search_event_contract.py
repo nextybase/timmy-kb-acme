@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from pipeline.exceptions import RetrieverError
-from timmy_kb.cli import retriever
+from timmy_kb.cli import retriever, retriever_embeddings
 
 
 class _DummyEmbeddingsClient:
@@ -272,6 +272,41 @@ def test_search_event_contract_budget_soft_fail_branches(
         assert expected in messages
     for expected in expected_events:
         _assert_single_causal_event(messages, expected)
+
+
+def test_budget_hit_emits_single_causal_event_for_post_embedding(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    params = _params(tmp_path)
+    idx = {"i": 0}
+
+    def _deadline(_deadline: float | None) -> bool:
+        i = idx["i"]
+        idx["i"] = i + 1
+        return [False, False, True][i] if i < 3 else True
+
+    class _EmbeddingsClient:
+        model = "test-embed-model"
+
+        @staticmethod
+        def embed_texts(*_a: Any, **_k: Any) -> list[list[float]]:
+            return [[0.1, 0.2]]
+
+    monkeypatch.setattr(retriever_embeddings, "_throttle_guard", lambda *_a, **_k: nullcontext())
+    monkeypatch.setattr(retriever_embeddings.throttle_mod, "_deadline_exceeded", _deadline)
+
+    caplog.set_level(logging.INFO, logger=retriever_embeddings.LOGGER.name)
+    out = retriever_embeddings.search(params, _EmbeddingsClient(), response_id="r-post-embedding-budget")
+
+    assert out == []
+    messages = _messages(caplog)
+    _assert_single_causal_event(messages, "retriever.latency_budget.hit")
+
+    budget_hits = [rec for rec in caplog.records if rec.getMessage() == "retriever.latency_budget.hit"]
+    assert len(budget_hits) == 1
+    assert getattr(budget_hits[0], "stage", None) == "post_embedding"
 
 
 def test_search_event_contract_ranking_budget_hit_soft_fail(
