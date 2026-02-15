@@ -30,6 +30,17 @@ def _messages(caplog: pytest.LogCaptureFixture) -> list[str]:
     return [rec.getMessage() for rec in caplog.records]
 
 
+def _causal_events(messages: list[str]) -> list[str]:
+    allowed = {
+        "retriever.throttle.deadline",
+        "retriever.query.skipped",
+        "retriever.query.invalid",
+        "retriever.query.embed_failed",
+        "retriever.latency_budget.hit",
+    }
+    return [msg for msg in messages if msg in allowed]
+
+
 def _assert_relative_order(messages: list[str], expected: list[str]) -> None:
     cursor = 0
     for event in expected:
@@ -128,7 +139,9 @@ def test_search_event_contract_deadline_preflight_soft_fail(
     )
 
     assert out == []
-    assert "retriever.throttle.deadline" in _messages(caplog)
+    messages = _messages(caplog)
+    assert "retriever.throttle.deadline" in messages
+    assert len(_causal_events(messages)) == 1
 
 
 def test_search_event_contract_embed_failed_soft_fail(
@@ -149,7 +162,9 @@ def test_search_event_contract_embed_failed_soft_fail(
     out = retriever.search(params, client, response_id="r-embed-fail")
 
     assert out == []
-    assert "retriever.query.embed_failed" in _messages(caplog)
+    messages = _messages(caplog)
+    assert "retriever.query.embed_failed" in messages
+    assert len(_causal_events(messages)) == 1
 
 
 @pytest.mark.parametrize(
@@ -177,7 +192,9 @@ def test_search_event_contract_input_soft_fail_branches(
     out = retriever.search(params, client, response_id="r-input-soft-fail")
 
     assert out == []
-    assert expected_event in _messages(caplog)
+    messages = _messages(caplog)
+    assert expected_event in messages
+    assert len(_causal_events(messages)) == 1
 
 
 def test_search_event_contract_empty_embedding_soft_fail(
@@ -194,7 +211,9 @@ def test_search_event_contract_empty_embedding_soft_fail(
     out = retriever.search(params, client, response_id="r-empty-embedding")
 
     assert out == []
-    assert "retriever.query.invalid" in _messages(caplog)
+    messages = _messages(caplog)
+    assert "retriever.query.invalid" in messages
+    assert len(_causal_events(messages)) == 1
 
 
 @pytest.mark.parametrize(
@@ -202,7 +221,7 @@ def test_search_event_contract_empty_embedding_soft_fail(
     [
         ([False, False, True], ["retriever.latency_budget.hit"]),
         ([False, False, False, True], ["retriever.latency_budget.hit"]),
-        ([False, False, False, False, True], ["retriever.latency_budget.hit", "retriever.query.result"]),
+        ([False, False, False, False, True], ["retriever.latency_budget.hit"]),
     ],
 )
 def test_search_event_contract_budget_soft_fail_branches(
@@ -246,6 +265,7 @@ def test_search_event_contract_budget_soft_fail_branches(
     messages = _messages(caplog)
     for expected in expected_events:
         assert expected in messages
+    assert len(_causal_events(messages)) == 1
 
 
 def test_search_event_contract_ranking_budget_hit_soft_fail(
@@ -274,4 +294,6 @@ def test_search_event_contract_ranking_budget_hit_soft_fail(
     out = retriever.search(params, client, response_id="r-rank-budget-hit")
 
     assert out == []
-    assert "retriever.latency_budget.hit" in _messages(caplog)
+    messages = _messages(caplog)
+    assert "retriever.latency_budget.hit" in messages
+    assert len(_causal_events(messages)) == 1
