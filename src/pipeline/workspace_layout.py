@@ -30,6 +30,21 @@ def _to_path(value: Any, default_path: Path) -> Path:
     return default_path
 
 
+def _resolve_workspace_core_paths(repo_root: Path) -> tuple[Path, Path, Path, Path, Path, Path, Path, Path]:
+    raw_dir = ensure_within_and_resolve(repo_root, repo_root / "raw")
+    normalized_dir = ensure_within_and_resolve(repo_root, repo_root / "normalized")
+    semantic_dir = ensure_within_and_resolve(repo_root, repo_root / "semantic")
+    book_dir = ensure_within_and_resolve(repo_root, repo_root / "book")
+    logs_dir = ensure_within_and_resolve(repo_root, repo_root / LOGS_DIR_NAME)
+
+    config_candidate = repo_root / "config" / "config.yaml"
+    ensure_within(repo_root, config_candidate)
+    config_path = ensure_within_and_resolve(repo_root, config_candidate)
+    mapping_path = ensure_within_and_resolve(repo_root, semantic_dir / "semantic_mapping.yaml")
+    config_dir = config_path.parent
+    return raw_dir, normalized_dir, semantic_dir, book_dir, logs_dir, config_path, mapping_path, config_dir
+
+
 @dataclass(frozen=True)
 class WorkspaceLayout:
     """Raccoglie i path core del workspace slug-based.
@@ -70,23 +85,9 @@ class WorkspaceLayout:
 
         root = Path(context.repo_root_dir).resolve()
 
-        raw_dir = root / "raw"
-        normalized_dir = root / "normalized"
-        book_dir = root / "book"
-        semantic_dir = root / "semantic"
-        logs_dir = root / LOGS_DIR_NAME
-        config_path = root / "config" / "config.yaml"
-        mapping_path = semantic_dir / "semantic_mapping.yaml"
-        config_dir = config_path.parent
-
-        raw_dir = ensure_within_and_resolve(root, raw_dir)
-        normalized_dir = ensure_within_and_resolve(root, normalized_dir)
-        semantic_dir = ensure_within_and_resolve(root, semantic_dir)
-        book_dir = ensure_within_and_resolve(root, book_dir)
-        logs_dir = ensure_within_and_resolve(root, logs_dir)
-        ensure_within(root, config_path)
-        config_path = ensure_within_and_resolve(root, config_path)
-        mapping_path = ensure_within_and_resolve(root, mapping_path)
+        raw_dir, normalized_dir, semantic_dir, book_dir, logs_dir, config_path, mapping_path, config_dir = (
+            _resolve_workspace_core_paths(root)
+        )
 
         _validate_layout_assets(
             slug=context.slug,
@@ -159,23 +160,9 @@ class WorkspaceLayout:
             raise WorkspaceNotFound("Workspace esplicito non esiste", file_path=workspace)
         repo_root = workspace.resolve()
 
-        raw_dir = repo_root / "raw"
-        normalized_dir = repo_root / "normalized"
-        book_dir = repo_root / "book"
-        semantic_dir = repo_root / "semantic"
-        logs_dir = repo_root / LOGS_DIR_NAME
-        config_path = repo_root / "config" / "config.yaml"
-        mapping_path = semantic_dir / "semantic_mapping.yaml"
-
-        raw_dir = ensure_within_and_resolve(repo_root, raw_dir)
-        normalized_dir = ensure_within_and_resolve(repo_root, normalized_dir)
-        semantic_dir = ensure_within_and_resolve(repo_root, semantic_dir)
-        book_dir = ensure_within_and_resolve(repo_root, book_dir)
-        logs_dir = ensure_within_and_resolve(repo_root, logs_dir)
-        ensure_within(repo_root, config_path)
-        config_path = ensure_within_and_resolve(repo_root, config_path)
-        mapping_path = ensure_within_and_resolve(repo_root, mapping_path)
-        config_dir = config_path.parent
+        raw_dir, normalized_dir, semantic_dir, book_dir, logs_dir, config_path, mapping_path, config_dir = (
+            _resolve_workspace_core_paths(repo_root)
+        )
 
         _validate_layout_assets(
             slug=slug,

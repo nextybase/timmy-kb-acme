@@ -43,6 +43,7 @@ import importlib
 import logging
 import os
 import uuid
+from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, cast
 
@@ -85,6 +86,13 @@ _DUMMY_TRUTHY = {"1", "true", "yes", "on"}
 REASON_DUMMY_BLOCKED_BY_STRICT = "dummy_blocked_by_strict"
 
 
+class _TagMode(str, Enum):
+    STANDARD = "standard"
+    DUMMY = "dummy"
+    STRICT = "strict"
+    FORBIDDEN = "forbidden"
+
+
 def _prompt(msg: str) -> str:
     """Raccoglie input testuale da CLI (abilitato **solo** negli orchestratori)."""
 
@@ -120,10 +128,9 @@ def _is_dummy_allowed() -> bool:
 def _build_evidence_refs(
     layout: WorkspaceLayout,
     *,
-    dummy_mode: bool,
-    requested_mode: str,
+    requested_mode: _TagMode,
     strict_mode: bool,
-    effective_mode: str,
+    effective_mode: _TagMode,
 ) -> list[str]:
     slug_value = layout.slug
     if not slug_value:
@@ -133,10 +140,10 @@ def _build_evidence_refs(
         _path_ref(layout.config_path, layout),
         _path_ref(layout.normalized_dir, layout),
         _path_ref(layout.semantic_dir, layout),
-        f"dummy_mode:{str(bool(dummy_mode)).lower()}",
-        f"requested_mode:{requested_mode}",
+        f"dummy_mode:{str(requested_mode is _TagMode.DUMMY).lower()}",
+        f"requested_mode:{requested_mode.value}",
         f"strict_mode:{str(bool(strict_mode)).lower()}",
-        f"effective_mode:{effective_mode}",
+        f"effective_mode:{effective_mode.value}",
         "force_dummy:false",
         "gate_scope:intra_state",
         "state_transition:false",
@@ -208,18 +215,29 @@ def _record_gate_decision(conn: Any, record: decision_ledger.NormativeDecisionRe
     decision_ledger.record_normative_decision(conn, record)
 
 
-def _resolve_modes(*, dummy_mode: bool, strict_mode: bool) -> tuple[str, str, str]:
-    requested_mode = "dummy" if dummy_mode else "standard"
-    if dummy_mode and strict_mode:
-        effective_mode = "strict"
+def _requested_mode_from_dummy(dummy_mode: bool) -> _TagMode:
+    return _TagMode.DUMMY if bool(dummy_mode) else _TagMode.STANDARD
+
+
+def _resolve_modes_from_requested_mode(*, requested_mode: _TagMode, strict_mode: bool) -> tuple[_TagMode, str]:
+    if requested_mode is _TagMode.DUMMY and strict_mode:
+        effective_mode = _TagMode.STRICT
         rationale = REASON_DUMMY_BLOCKED_BY_STRICT
-    elif dummy_mode:
-        effective_mode = "dummy"
+    elif requested_mode is _TagMode.DUMMY:
+        effective_mode = _TagMode.DUMMY
         rationale = "dummy_allowed"
     else:
-        effective_mode = "standard"
+        effective_mode = _TagMode.STANDARD
         rationale = "checkpoint_proceeded_no_stub"
-    return requested_mode, effective_mode, rationale
+    return effective_mode, rationale
+
+
+def _resolve_modes(*, dummy_mode: bool, strict_mode: bool) -> tuple[str, str, str]:
+    requested_mode = _requested_mode_from_dummy(dummy_mode)
+    effective_mode, rationale = _resolve_modes_from_requested_mode(
+        requested_mode=requested_mode, strict_mode=strict_mode
+    )
+    return requested_mode.value, effective_mode.value, rationale
 
 
 def _require_normalized_index(layout: WorkspaceLayout, *, normalized_dir: Path) -> None:
@@ -633,17 +651,15 @@ def tag_onboarding_main(
         slug=slug,
         started_at=_utc_now_iso(),
     )
-    dummy_mode = bool(dummy_mode)
+    requested_mode = _requested_mode_from_dummy(dummy_mode)
     strict_mode_resolved = is_beta_strict()
-    requested_mode = "dummy" if dummy_mode else "standard"
     decision_recorded = False
-    if dummy_mode and not strict_mode_resolved and not _is_dummy_allowed():
+    if requested_mode is _TagMode.DUMMY and not strict_mode_resolved and not _is_dummy_allowed():
         evidence_refs = _build_evidence_refs(
             layout,
-            dummy_mode=True,
-            requested_mode="dummy",
+            requested_mode=_TagMode.DUMMY,
             strict_mode=False,
-            effective_mode="forbidden",
+            effective_mode=_TagMode.FORBIDDEN,
         )
         _record_gate_decision(
             ledger_conn,
@@ -662,13 +678,12 @@ def tag_onboarding_main(
             slug=slug,
         )
 
-    requested_mode, effective_mode, effective_rationale = _resolve_modes(
-        dummy_mode=dummy_mode,
+    effective_mode, effective_rationale = _resolve_modes_from_requested_mode(
+        requested_mode=requested_mode,
         strict_mode=strict_mode_resolved,
     )
     evidence_refs = _build_evidence_refs(
         layout,
-        dummy_mode=dummy_mode,
         requested_mode=requested_mode,
         strict_mode=strict_mode_resolved,
         effective_mode=effective_mode,
@@ -717,7 +732,7 @@ def tag_onboarding_main(
             )
             return
 
-        if effective_mode != "dummy":
+        if effective_mode is not _TagMode.DUMMY:
             _record_gate_decision(
                 ledger_conn,
                 _build_gate_decision_record(

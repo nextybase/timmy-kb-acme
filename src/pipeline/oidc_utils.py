@@ -73,14 +73,27 @@ def fetch_github_id_token(
         f"{req_url}{sep}audience={encoded}",
         headers={"Authorization": f"Bearer {req_token}"},
     )
-    try:
-        with getattr(urllib.request, "urlopen")(request, timeout=10) as resp:  # noqa: S310 - chiamata HTTPS controllata
-            payload = json.loads(resp.read().decode("utf-8") or "{}")
-    except Exception as exc:  # pragma: no cover - rete non disponibile in locale
-        log.warning(
-            "oidc.github.token.error",
-            extra={"err": str(exc).splitlines()[:1]},
-        )
+    payload: dict[str, Any] | None = None
+    for attempt in (1, 2):
+        try:
+            with getattr(urllib.request, "urlopen")(
+                request, timeout=10
+            ) as resp:  # noqa: S310 - chiamata HTTPS controllata
+                payload = json.loads(resp.read().decode("utf-8") or "{}")
+            break
+        except Exception as exc:  # pragma: no cover - rete non disponibile in locale
+            log.warning(
+                "oidc.github.token.error",
+                extra={
+                    "attempt": attempt,
+                    "retrying": attempt == 1,
+                    "err": str(exc).splitlines()[:1],
+                },
+            )
+            if attempt == 2:
+                return None
+
+    if payload is None:
         return None
 
     token_raw = payload.get("value") or payload.get("id_token")
