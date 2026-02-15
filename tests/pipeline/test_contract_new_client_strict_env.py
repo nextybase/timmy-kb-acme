@@ -251,6 +251,48 @@ def test_run_vision_provision_reloads_context_after_tool_call(monkeypatch: pytes
     assert result["semantic_mapping_path"] == str(ws_root / "semantic" / "semantic_mapping.yaml")
 
 
+def test_run_vision_provision_does_not_pass_repo_override_to_tool(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    slug = "acme"
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir(parents=True, exist_ok=True)
+    ws_root = tmp_path / f"timmy-kb-{slug}"
+    for name in ("raw", "normalized", "logs", "semantic", "book", "config"):
+        (ws_root / name).mkdir(parents=True, exist_ok=True)
+    (ws_root / "book" / "README.md").write_text("# README\n", encoding="utf-8")
+    (ws_root / "book" / "SUMMARY.md").write_text("# SUMMARY\n", encoding="utf-8")
+    (ws_root / "config" / "config.yaml").write_text("meta:\n  client_name: ACME\n", encoding="utf-8")
+    (ws_root / "semantic" / "semantic_mapping.yaml").write_text("areas:\n  - key: Area One\n", encoding="utf-8")
+
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    monkeypatch.setenv("WORKSPACE_ROOT_DIR", str(ws_root))
+
+    class _FakeClientContext:
+        @staticmethod
+        def load(**_kwargs: Any) -> Any:
+            return SimpleNamespace(slug=slug, repo_root_dir=ws_root)
+
+    captured_args: list[str] = []
+
+    def _fake_run_tool(**kwargs: Any) -> dict[str, Any]:
+        captured_args.extend(list(kwargs.get("args") or []))
+        return {"payload": {"status": "ok", "errors": []}}
+
+    monkeypatch.setattr("pipeline.capabilities.new_client.ClientContext", _FakeClientContext)
+    monkeypatch.setattr("pipeline.capabilities.new_client._run_tool_with_repo_env", _fake_run_tool)
+
+    run_vision_provision_for_client(
+        slug=slug,
+        repo_root=repo_root,
+        vision_model="dummy",
+        run_control_plane_tool=lambda **_kwargs: {"payload": {"status": "ok"}},
+        progress=None,
+    )
+
+    assert "--repo-root" not in captured_args
+
+
 def test_vision_pdf_path_uses_layout_canonical_path(tmp_path: Path) -> None:
     workspace = tmp_path / "timmy-kb-acme"
     config_dir = workspace / "config"

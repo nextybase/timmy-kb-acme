@@ -325,7 +325,7 @@ def run_vision_provision_for_client(
         tool_module="tools.tuning_vision_provision",
         slug=safe_slug,
         action="vision_provision",
-        args=["--repo-root", str(layout.repo_root_dir), "--model", vision_model],
+        args=["--model", vision_model],
     )["payload"]
     if vision_payload.get("status") != "ok":
         errors = "; ".join(map(str, vision_payload.get("errors", [])))
