@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 import re
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable, Literal, Mapping, Protocol, TypeAlias, cast
 from urllib.parse import quote
 
+from pipeline.beta_flags import is_beta_strict
 from pipeline.exceptions import ConfigError, PathTraversalError, PipelineError
 from pipeline.file_utils import safe_write_text  # scritture atomiche
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
@@ -40,8 +40,9 @@ _FALLBACK_LOG = logging.getLogger(__name__)
 
 
 def _safe_log(logger: logging.Logger, level: str, event: str, *, extra: Mapping[str, Any] | None = None) -> None:
-    """Log best-effort non-throwing su canale strutturato, senza fallback su stderr."""
+    """Log su canale strutturato; in strict fallisce esplicitamente se il logging non e' disponibile."""
     payload = dict(extra or {})
+    strict_mode = is_beta_strict()
     try:
         log_fn = getattr(logger, level, None)
         if callable(log_fn):
@@ -55,18 +56,24 @@ def _safe_log(logger: logging.Logger, level: str, event: str, *, extra: Mapping[
                 exc_info=True,
             )
         except Exception:
-            try:
-                os.write(2, (f"[safe_log failed] {event}\n").encode("utf-8", "replace"))
-            except Exception:
-                return
+            if strict_mode:
+                raise PipelineError(
+                    "Logging strutturato non disponibile in strict runtime.",
+                    code="logging.channel.failed",
+                    component="pipeline.content_utils",
+                ) from exc
+            return
     # fallback minimale: stdlib logger, stesso event
     try:
         getattr(_FALLBACK_LOG, level, _FALLBACK_LOG.info)(event, extra={"payload": payload})
     except Exception:
-        try:
-            os.write(2, (f"[safe_log failed] {event}\n").encode("utf-8", "replace"))
-        except Exception:
-            return
+        if strict_mode:
+            raise PipelineError(
+                "Fallback logger non disponibile in strict runtime.",
+                code="logging.channel.failed",
+                component="pipeline.content_utils",
+            )
+        return
 
 
 class _ReadmeCtx(Protocol):

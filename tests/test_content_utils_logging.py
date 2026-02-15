@@ -8,7 +8,7 @@ import pytest
 
 import pipeline.content_utils as cu
 from pipeline.content_utils import _filter_safe_pdfs, convert_files_to_structured_markdown
-from pipeline.exceptions import PathTraversalError
+from pipeline.exceptions import PathTraversalError, PipelineError
 
 
 def test_filter_safe_pdfs_logs_symlink_event(tmp_path: Path, caplog, monkeypatch):
@@ -184,7 +184,7 @@ def test_convert_files_to_structured_markdown_logs_events_with_slug(tmp_path: Pa
         assert str(p) in getattr(recs[0], "file_path", "")
 
 
-def test_safe_log_never_raises_and_uses_os_write_worst_case(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_safe_log_non_strict_never_raises_in_worst_case(monkeypatch: pytest.MonkeyPatch) -> None:
     class _BrokenLogger:
         def info(self, *_a, **_k):
             raise RuntimeError("structured boom")
@@ -198,22 +198,29 @@ def test_safe_log_never_raises_and_uses_os_write_worst_case(monkeypatch: pytest.
 
     logger = _BrokenLogger()
     monkeypatch.setattr(cu, "_FALLBACK_LOG", _BrokenFallback())
-
-    def _print_boom(*_a, **_k):
-        raise RuntimeError("stderr print boom")
-
-    monkeypatch.setattr("builtins.print", _print_boom)
-
-    captured: dict[str, object] = {}
-
-    def _fake_os_write(fd: int, payload: bytes) -> int:
-        captured["fd"] = fd
-        captured["payload"] = payload
-        return len(payload)
-
-    monkeypatch.setattr(cu.os, "write", _fake_os_write)
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
 
     cu._safe_log(logger, "info", "pipeline.content.test_worst_case", extra={"k": "v"})
 
-    assert captured.get("fd") == 2
-    assert b"[safe_log failed] pipeline.content.test_worst_case" in bytes(captured.get("payload", b""))
+
+def test_safe_log_strict_raises_explicit_failure(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    class _BrokenLogger:
+        def info(self, *_a, **_k):
+            raise RuntimeError("structured boom")
+
+    class _BrokenFallback:
+        def warning(self, *_a, **_k):
+            raise RuntimeError("fallback warning boom")
+
+        def info(self, *_a, **_k):
+            raise RuntimeError("fallback info boom")
+
+    logger = _BrokenLogger()
+    monkeypatch.setattr(cu, "_FALLBACK_LOG", _BrokenFallback())
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+
+    with pytest.raises(PipelineError, match="strict runtime"):
+        cu._safe_log(logger, "info", "pipeline.content.test_worst_case", extra={"k": "v"})
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
