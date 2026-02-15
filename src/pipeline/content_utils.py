@@ -90,12 +90,16 @@ class FrontmatterCache:
         self.max_size = max_size
         self.enabled = enabled
         self._store: OrderedDict[tuple[Path, int, int], tuple[dict[str, Any], str]] = OrderedDict()
+        self._hits = 0
+        self._misses = 0
 
     def clear(self, path: Path | None = None) -> None:
         if not self.enabled:
             return
         if path is None:
             self._store.clear()
+            self._hits = 0
+            self._misses = 0
             return
         for key in list(self._store.keys()):
             if key[0] == path:
@@ -106,7 +110,9 @@ class FrontmatterCache:
             return None
         value = self._store.pop(key, None)
         if value is None:
+            self._misses += 1
             return None
+        self._hits += 1
         # riposiziona in coda per LRU
         self._store[key] = value
         return value
@@ -119,7 +125,17 @@ class FrontmatterCache:
         self._evict()
 
     def stats(self) -> dict[str, Any]:
-        return {"entries": len(self._store), "max": self.max_size, "enabled": self.enabled}
+        total_gets = self._hits + self._misses
+        hit_rate = float(self._hits) / float(total_gets) if total_gets > 0 else 0.0
+        return {
+            "entries": len(self._store),
+            "max": self.max_size,
+            "enabled": self.enabled,
+            "hits": self._hits,
+            "misses": self._misses,
+            "total_gets": total_gets,
+            "hit_rate": hit_rate,
+        }
 
     def _evict(self) -> None:
         while len(self._store) > self.max_size:
@@ -142,6 +158,10 @@ def log_frontmatter_cache_stats(
         "entries": stats.get("entries"),
         "max": stats.get("max"),
         "enabled": stats.get("enabled"),
+        "hits": stats.get("hits"),
+        "misses": stats.get("misses"),
+        "total_gets": stats.get("total_gets"),
+        "hit_rate": stats.get("hit_rate"),
     }
     if slug:
         extra["slug"] = slug
@@ -374,6 +394,63 @@ def _extract_pdf_excerpt(
     return excerpt
 
 
+def _build_markdown_body_for_pdf(*, rel_pdf: Path, excerpt: str, chunks: list[str]) -> str:
+    body_parts: list[str] = []
+    if excerpt:
+        body_parts.append(excerpt)
+    for idx, chunk in enumerate(chunks):
+        body_parts.append(f"### Chunk {idx + 1}\n{chunk}")
+    body_parts.append(f"*Documento sincronizzato da `{rel_pdf.as_posix()}`.*")
+    return "\n\n".join(body_parts).rstrip() + "\n"
+
+
+def _load_existing_markdown_state(
+    *,
+    md_path: Path,
+    target_root: Path,
+    body: str,
+    tags_sorted: list[str],
+    logger: logging.Logger,
+    slug: str | None,
+) -> tuple[str | None, dict[str, Any], bool]:
+    existing_created_at: str | None = None
+    existing_meta: dict[str, Any] = {}
+    should_skip_write = False
+
+    if not md_path.exists():
+        return existing_created_at, existing_meta, should_skip_write
+
+    try:
+        try:
+            stat = md_path.stat()
+            cache_key = (md_path, stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            cache_key = None
+
+        cached_entry: tuple[dict[str, Any], str] | None = _FRONTMATTER_CACHE.get(cache_key) if cache_key else None
+        if cached_entry:
+            existing_meta, body_prev = cached_entry
+        else:
+            existing_meta, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
+            if cache_key:
+                _FRONTMATTER_CACHE.set(cache_key, (existing_meta, body_prev))
+
+        existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
+        if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
+            should_skip_write = True
+    except (OSError, PipelineError) as exc:
+        _safe_log(
+            logger,
+            "warning",
+            "pipeline.content.frontmatter_read_failed",
+            extra={"slug": slug, "path": str(md_path), "error": str(exc)},
+        )
+        existing_created_at = None
+        existing_meta = {}
+
+    return existing_created_at, existing_meta, should_skip_write
+
+
 def _write_markdown_for_pdf(
     pdf_path: Path,
     raw_root: Path,
@@ -399,45 +476,17 @@ def _write_markdown_for_pdf(
     chunks = _chunk_pdf_text(text, chunk_chars=900, max_chunks=4)
     chunk_summaries = _build_chunk_summaries(chunks)
 
-    body_parts: list[str] = []
-    if excerpt:
-        body_parts.append(excerpt)
-    for idx, chunk in enumerate(chunks):
-        body_parts.append(f"### Chunk {idx + 1}\n{chunk}")
-    body_parts.append(f"*Documento sincronizzato da `{rel_pdf.as_posix()}`.*")
-    body = "\n\n".join(body_parts).rstrip() + "\n"
-
-    existing_created_at: str | None = None
-    existing_meta: dict[str, Any] = {}
-
-    if md_path.exists():
-        try:
-            try:
-                stat = md_path.stat()
-                cache_key = (md_path, stat.st_mtime_ns, stat.st_size)
-            except OSError:
-                cache_key = None
-
-            cached_entry: tuple[dict[str, Any], str] | None = _FRONTMATTER_CACHE.get(cache_key) if cache_key else None
-            if cached_entry:
-                existing_meta, body_prev = cached_entry
-            else:
-                existing_meta, body_prev = read_frontmatter(target_root, md_path, use_cache=False)
-                if cache_key:
-                    _FRONTMATTER_CACHE.set(cache_key, (existing_meta, body_prev))
-
-            existing_created_at = str(existing_meta.get("created_at") or "").strip() or None
-            if body_prev.strip() == body.strip() and existing_meta.get("tags_raw") == tags_sorted:
-                return md_path
-        except (OSError, PipelineError) as exc:
-            _safe_log(
-                logger,
-                "warning",
-                "pipeline.content.frontmatter_read_failed",
-                extra={"slug": slug, "path": str(md_path), "error": str(exc)},
-            )
-            existing_created_at = None
-            existing_meta = {}
+    body = _build_markdown_body_for_pdf(rel_pdf=rel_pdf, excerpt=excerpt, chunks=chunks)
+    existing_created_at, existing_meta, should_skip_write = _load_existing_markdown_state(
+        md_path=md_path,
+        target_root=target_root,
+        body=body,
+        tags_sorted=tags_sorted,
+        logger=logger,
+        slug=slug,
+    )
+    if should_skip_write:
+        return md_path
 
     meta: dict[str, Any] = {
         "title": _titleize(pdf_path.stem),

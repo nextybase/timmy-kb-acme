@@ -130,3 +130,17 @@ def test_build_chunk_records_raises_on_non_frontmatter_pipeline_error(monkeypatc
             [md_path],
             perimeter_root=tmp_path,
         )
+
+
+def test_frontmatter_cache_stats_include_hit_metrics(tmp_path: Path) -> None:
+    cache = cu.FrontmatterCache(max_size=2)
+    key = (tmp_path / "doc.md", 1, 1)
+    cache.set(key, ({"title": "Doc"}, "body"))
+    _ = cache.get(key)
+    _ = cache.get((tmp_path / "missing.md", 1, 1))
+
+    stats = cache.stats()
+    assert stats["hits"] == 1
+    assert stats["misses"] == 1
+    assert stats["total_gets"] == 2
+    assert stats["hit_rate"] == pytest.approx(0.5)

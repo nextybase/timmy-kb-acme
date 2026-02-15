@@ -40,6 +40,18 @@ def test_topk_k_zero(monkeypatch, tmp_path: Path):
     assert out == []
 
 
+def test_load_candidates_reuses_list_instance(monkeypatch, tmp_path: Path) -> None:
+    sample = [{"content": "a", "meta": {}, "embedding": [1.0, 0.0]}]
+
+    def _fetch(slug: str, scope: str, limit: int, db_path: Path | None):
+        return sample
+
+    monkeypatch.setattr(retr, "fetch_candidates", _fetch)
+    params = QueryParams(tmp_path / "kb.sqlite", "p", "s", "q", k=1, candidate_limit=retr.MIN_CANDIDATE_LIMIT)
+    candidates, _elapsed = retr._load_candidates(params)  # noqa: SLF001
+    assert candidates is sample
+
+
 def test_topk_small_k_with_ties_stable(monkeypatch, tmp_path: Path):
     # punteggi: due top con pari score, l'ordine deve rispettare l'ordine di arrivo (a poi b)
     contents = ["a", "b", "c", "d"]

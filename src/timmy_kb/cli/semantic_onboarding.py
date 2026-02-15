@@ -119,6 +119,25 @@ def _build_evidence_refs(
     return refs
 
 
+def _record_normative_decision_or_raise(
+    *,
+    ledger_conn: Any,
+    record: decision_ledger.NormativeDecisionRecord,
+    slug: str,
+    run_id: str,
+    stage: str,
+) -> None:
+    try:
+        decision_ledger.record_normative_decision(ledger_conn, record)
+    except Exception as ledger_exc:
+        raise PipelineError(
+            f"Ledger write failed for gate={record.gate_name}",
+            slug=slug,
+            run_id=run_id,
+            hint=f"{stage}:{_summarize_error(ledger_exc)}",
+        ) from ledger_exc
+
+
 def _record_normative_pass(
     *,
     ledger_conn: Any,
@@ -129,9 +148,12 @@ def _record_normative_pass(
     effective: dict[str, object],
     tag_kg_effective: str | None,
 ) -> None:
-    decision_ledger.record_normative_decision(
-        ledger_conn,
-        decision_ledger.NormativeDecisionRecord(
+    _record_normative_decision_or_raise(
+        ledger_conn=ledger_conn,
+        slug=slug,
+        run_id=run_id,
+        stage="record_pass",
+        record=decision_ledger.NormativeDecisionRecord(
             decision_id=uuid.uuid4().hex,
             run_id=run_id,
             slug=slug,
@@ -223,32 +245,27 @@ def _run_qa_gate_and_record(conn: Any, *, layout: WorkspaceLayout, slug: str, ru
         result = require_qa_gate_pass(logs_dir, slug=slug)
     except QaGateViolation as exc:
         evidence_refs = _qa_evidence_refs(layout, qa_path, status="failed")
-        try:
-            decision_ledger.record_normative_decision(
-                conn,
-                decision_ledger.NormativeDecisionRecord(
-                    decision_id=uuid.uuid4().hex,
-                    run_id=run_id,
-                    slug=slug,
-                    gate_name="qa_gate",
-                    from_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                    to_state=decision_ledger.STATE_SEMANTIC_INGEST,
-                    verdict=decision_ledger.NORMATIVE_BLOCK,
-                    subject="qa_gate",
-                    decided_at=decided_at,
-                    actor="cli.semantic_onboarding",
-                    evidence_refs=[*evidence_refs, *(exc.evidence_refs or [])],
-                    stop_code=decision_ledger.STOP_CODE_QA_GATE_FAILED,
-                    reason_code="deny_qa_gate_failed",
-                ),
-            )
-        except Exception as ledger_exc:
-            raise PipelineError(
-                "Ledger write failed for gate=qa_gate",
-                slug=slug,
+        _record_normative_decision_or_raise(
+            ledger_conn=conn,
+            slug=slug,
+            run_id=run_id,
+            stage="qa_gate_block",
+            record=decision_ledger.NormativeDecisionRecord(
+                decision_id=uuid.uuid4().hex,
                 run_id=run_id,
-                hint=_summarize_error(ledger_exc),
-            ) from ledger_exc
+                slug=slug,
+                gate_name="qa_gate",
+                from_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                to_state=decision_ledger.STATE_SEMANTIC_INGEST,
+                verdict=decision_ledger.NORMATIVE_BLOCK,
+                subject="qa_gate",
+                decided_at=decided_at,
+                actor="cli.semantic_onboarding",
+                evidence_refs=[*evidence_refs, *(exc.evidence_refs or [])],
+                stop_code=decision_ledger.STOP_CODE_QA_GATE_FAILED,
+                reason_code="deny_qa_gate_failed",
+            ),
+        )
         raise
 
     checks_json = json.dumps(result.checks_executed, sort_keys=True, separators=(",", ":"))
@@ -257,9 +274,12 @@ def _run_qa_gate_and_record(conn: Any, *, layout: WorkspaceLayout, slug: str, ru
         "qa_status:pass",
         f"checks_executed:{checks_json}",
     ]
-    decision_ledger.record_normative_decision(
-        conn,
-        decision_ledger.NormativeDecisionRecord(
+    _record_normative_decision_or_raise(
+        ledger_conn=conn,
+        slug=slug,
+        run_id=run_id,
+        stage="qa_gate_pass",
+        record=decision_ledger.NormativeDecisionRecord(
             decision_id=uuid.uuid4().hex,
             run_id=run_id,
             slug=slug,
@@ -441,11 +461,14 @@ def _record_failure_and_log(
         decided_at=_dt.datetime.now(tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
     try:
-        decision_ledger.record_normative_decision(
-            ledger_conn,
-            record,
+        _record_normative_decision_or_raise(
+            ledger_conn=ledger_conn,
+            record=record,
+            slug=slug,
+            run_id=run_id,
+            stage="semantic_onboarding_failure",
         )
-    except Exception as ledger_exc:
+    except PipelineError as ledger_exc:
         ledger_error = _summarize_error(ledger_exc)
         logger.error(
             "cli.semantic_onboarding.ledger_write_failed",

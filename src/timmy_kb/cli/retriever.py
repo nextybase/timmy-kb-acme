@@ -129,14 +129,13 @@ def _default_candidate_limit() -> int:
 def _load_candidates(params: QueryParams) -> tuple[list[dict[str, Any]], float]:
     """Carica tutti i candidati e restituisce (lista, ms)."""
     t0 = time.perf_counter()
-    candidates = list(
-        fetch_candidates(
-            params.slug,
-            params.scope,
-            limit=params.candidate_limit,
-            db_path=params.db_path,
-        )
+    fetched = fetch_candidates(
+        params.slug,
+        params.scope,
+        limit=params.candidate_limit,
+        db_path=params.db_path,
     )
+    candidates = fetched if isinstance(fetched, list) else list(fetched)
     return candidates, (time.perf_counter() - t0) * 1000.0
 
 
