@@ -280,18 +280,17 @@ def test_budget_hit_emits_single_causal_event_for_post_embedding(
     tmp_path: Path,
 ) -> None:
     params = _params(tmp_path)
-    idx = {"i": 0}
+    state = {"embedding_completed": False}
 
     def _deadline(_deadline: float | None) -> bool:
-        i = idx["i"]
-        idx["i"] = i + 1
-        return [False, False, True][i] if i < 3 else True
+        return bool(state["embedding_completed"])
 
     class _EmbeddingsClient:
         model = "test-embed-model"
 
         @staticmethod
         def embed_texts(*_a: Any, **_k: Any) -> list[list[float]]:
+            state["embedding_completed"] = True
             return [[0.1, 0.2]]
 
     monkeypatch.setattr(retriever_embeddings, "_throttle_guard", lambda *_a, **_k: nullcontext())
