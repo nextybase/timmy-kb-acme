@@ -5,13 +5,15 @@ from __future__ import annotations
 import csv
 import io
 import re
+import sqlite3
 from pathlib import Path
 from typing import Any, Callable, cast
+from urllib.parse import quote
 
+from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 from pipeline.workspace_layout import WorkspaceLayout
-from storage.tags_store import load_tags_db
 from ui.chrome import render_chrome_then_require
 from ui.clients_store import get_all as get_clients
 from ui.clients_store import get_state as get_client_state
@@ -325,16 +327,32 @@ def _render_tag_onboarding_report_box(slug: str, layout: WorkspaceLayout, client
     tags_raw_csv = semantic_dir / "tags_raw.csv"
     tags_db = semantic_dir / "tags.db"
     has_tags_raw = tags_raw_csv.exists()
-    has_tags_db_file = tags_db.exists()
+    db_valid_schema = False
+    db_empty = False
+
+    def _log_report_source_failed(*, source: str, path: Path, error: Exception | None, reason_code: str) -> None:
+        LOGGER.warning(
+            "ui.manage.tag_onboarding.report_source_failed",
+            extra={
+                "source": source,
+                "slug": slug,
+                "path": str(path),
+                "error_type": type(error).__name__ if error is not None else "None",
+                "error_msg": str(error) if error is not None else "",
+                "reason_code": reason_code,
+            },
+        )
 
     def _csv_tag_set() -> set[str]:
         if not has_tags_raw:
+            _log_report_source_failed(source="csv", path=tags_raw_csv, error=None, reason_code="csv_missing")
             return set()
         try:
             raw_text = read_text_safe(semantic_dir, tags_raw_csv, encoding="utf-8") or ""
             reader = csv.reader(io.StringIO(raw_text))
             header = next(reader, None)
             if not header or "suggested_tags" not in header:
+                _log_report_source_failed(source="csv", path=tags_raw_csv, error=None, reason_code="csv_invalid_header")
                 return set()
             idx = header.index("suggested_tags")
             found: set[str] = set()
@@ -342,36 +360,89 @@ def _render_tag_onboarding_report_box(slug: str, layout: WorkspaceLayout, client
                 if idx >= len(row):
                     continue
                 for token in (row[idx] or "").split(","):
-                    tag = token.strip().lower()
+                    tag = token.strip().casefold()
                     if tag:
                         found.add(tag)
             return found
-        except Exception:
+        except (FileNotFoundError, OSError, UnicodeError, csv.Error, ConfigError, ValueError) as exc:
+            _log_report_source_failed(source="csv", path=tags_raw_csv, error=exc, reason_code="csv_read_error")
             return set()
 
     def _db_tag_set() -> set[str]:
-        if not has_tags_db_file:
+        nonlocal db_valid_schema, db_empty
+        if not tags_db.exists():
+            _log_report_source_failed(source="db", path=tags_db, error=None, reason_code="db_missing")
             return set()
-        try:
-            payload = load_tags_db(str(tags_db))
-            tags = payload.get("tags") if isinstance(payload, dict) else None
-            if not isinstance(tags, list):
-                return set()
-            found: set[str] = set()
-            for item in tags:
-                if not isinstance(item, dict):
+
+        def _validate_tags_db_v2_readonly(conn: sqlite3.Connection) -> None:
+            tables = {
+                str(row["name"])
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('meta','tags')"
+                ).fetchall()
+            }
+            if "meta" not in tables or "tags" not in tables:
+                raise ConfigError("tags.db invalid schema v2", file_path=str(tags_db))
+            row = conn.execute("SELECT version FROM meta WHERE id=1").fetchone()
+            if row is None or str(row["version"]) != "2":
+                raise ConfigError("tags.db invalid schema v2", file_path=str(tags_db))
+            tag_columns: set[str] = set()
+            for col in conn.execute("PRAGMA table_info(tags)").fetchall():
+                if col["name"] is None:
                     continue
-                name = str(item.get("name") or "").strip().lower()
+                tag_columns.add(str(col["name"]))
+            if "name" not in tag_columns:
+                raise ConfigError("tags.db invalid schema v2", file_path=str(tags_db))
+
+        db_uri = f"file:{quote(tags_db.resolve().as_posix())}?mode=ro"
+        conn: sqlite3.Connection | None = None
+        try:
+            conn = sqlite3.connect(db_uri, uri=True)
+            conn.row_factory = sqlite3.Row
+        except sqlite3.Error as exc:
+            _log_report_source_failed(source="db", path=tags_db, error=exc, reason_code="db_readonly_open_failed")
+            return set()
+
+        try:
+            try:
+                _validate_tags_db_v2_readonly(conn)
+                db_valid_schema = True
+            except ConfigError as exc:
+                _log_report_source_failed(source="db", path=tags_db, error=exc, reason_code="db_invalid_schema")
+                return set()
+            except sqlite3.Error as exc:
+                _log_report_source_failed(source="db", path=tags_db, error=exc, reason_code="db_query_failed")
+                return set()
+
+            rows = conn.execute("SELECT name FROM tags ORDER BY name").fetchall()
+            found: set[str] = set()
+            for row in rows:
+                name = str(row["name"] or "").strip().casefold()
                 if name:
                     found.add(name)
+            db_empty = len(found) == 0
             return found
-        except Exception:
+        except sqlite3.Error as exc:
+            _log_report_source_failed(source="db", path=tags_db, error=exc, reason_code="db_query_failed")
             return set()
+        finally:
+            if conn is not None:
+                conn.close()
 
     csv_tags = _csv_tag_set()
     db_tags = _db_tag_set()
     db_ready = bool(csv_tags) and csv_tags.issubset(db_tags)
     db_status = "pronto" if db_ready else "vuoto"
+    LOGGER.info(
+        "ui.manage.tag_onboarding.report_computed",
+        extra={
+            "slug": slug,
+            "db_status": db_status,
+            "csv_count": len(csv_tags),
+            "db_count": len(db_tags),
+            "db_empty": db_valid_schema and db_empty,
+        },
+    )
 
     report = st.session_state.get("__tag_onboarding_last_report")
     if not isinstance(report, dict):
