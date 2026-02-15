@@ -103,6 +103,41 @@ def _vision_pdf_path(layout: WorkspaceLayout) -> Path:
     return ensure_within_and_resolve(layout.repo_root_dir, candidate)
 
 
+def _load_workspace_context(
+    *,
+    slug: str,
+    workspace_root: Path,
+    bootstrap_config: bool,
+) -> ClientContext:
+    with _scoped_workspace_env(workspace_root=workspace_root):
+        return ClientContext.load(
+            slug=slug,
+            require_drive_env=False,
+            bootstrap_config=bootstrap_config,
+            logger=LOGGER,
+        )
+
+
+def _reload_runtime_context_with_bootstrap_recovery(*, slug: str, workspace_root: Path) -> ClientContext:
+    """Ricarica il contesto runtime; se manca config, tenta bootstrap una sola volta.
+
+    Recovery confinato al flusso onboarding: evita regressioni quando il workspace
+    esiste ma `config/config.yaml` viene perso tra step UI.
+    """
+    try:
+        return _load_workspace_context(slug=slug, workspace_root=workspace_root, bootstrap_config=False)
+    except ConfigError as exc:
+        message = str(exc)
+        if "Manca config/config.yaml" not in message:
+            raise
+        LOGGER.warning(
+            "new_client.runtime_config_missing_recovered",
+            extra={"slug": slug, "workspace_root_dir": str(workspace_root)},
+        )
+        _load_workspace_context(slug=slug, workspace_root=workspace_root, bootstrap_config=True)
+        return _load_workspace_context(slug=slug, workspace_root=workspace_root, bootstrap_config=False)
+
+
 def _workspace_root(repo_root: Path, safe_slug: str) -> Path:
     _ = repo_root
     expected = f"timmy-kb-{safe_slug}"
@@ -159,13 +194,7 @@ def create_new_client_workspace(
     workspace_root = _workspace_root(repo_root_path, safe_slug)
 
     # TIMMY_ALLOW_BOOTSTRAP deve essere esplicito nei flussi di onboarding/tooling.
-    with _scoped_workspace_env(workspace_root=workspace_root):
-        ctx = ClientContext.load(
-            slug=safe_slug,
-            require_drive_env=False,
-            bootstrap_config=True,
-            logger=LOGGER,
-        )
+    ctx = _load_workspace_context(slug=safe_slug, workspace_root=workspace_root, bootstrap_config=True)
     layout = bootstrap_client_workspace(ctx)
     _notify_progress(progress, 30, "Workspace creato")
 
@@ -183,13 +212,7 @@ def create_new_client_workspace(
         "meta": {"client_name": resolved_name},
     }
     update_config_with_drive_ids(ctx, updates, logger=LOGGER)
-    with _scoped_workspace_env(workspace_root=layout.repo_root_dir):
-        ctx = ClientContext.load(
-            slug=safe_slug,
-            require_drive_env=False,
-            bootstrap_config=False,
-            logger=LOGGER,
-        )
+    ctx = _reload_runtime_context_with_bootstrap_recovery(slug=safe_slug, workspace_root=layout.repo_root_dir)
     layout = WorkspaceLayout.from_context(ctx)
     vision_pdf = _vision_pdf_path(layout)
     _notify_progress(progress, 40, "VisionStatement.pdf salvato e config aggiornato")
@@ -237,13 +260,7 @@ def create_new_client_workspace(
                 "Errore durante il provisioning Drive",
                 slug=safe_slug,
             ) from exc
-        with _scoped_workspace_env(workspace_root=layout.repo_root_dir):
-            ctx = ClientContext.load(
-                slug=safe_slug,
-                require_drive_env=False,
-                bootstrap_config=False,
-                logger=LOGGER,
-            )
+        ctx = _reload_runtime_context_with_bootstrap_recovery(slug=safe_slug, workspace_root=layout.repo_root_dir)
         layout = WorkspaceLayout.from_context(ctx)
 
     vision_yaml_path = vision_yaml_workspace_path(layout.repo_root_dir, pdf_path=vision_pdf)

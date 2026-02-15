@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from pipeline.capabilities.new_client import (
+    _reload_runtime_context_with_bootstrap_recovery,
     _scoped_workspace_env,
     _vision_pdf_path,
     create_new_client_workspace,
@@ -235,3 +236,34 @@ def test_vision_pdf_path_fails_when_layout_has_no_vision_pdf(tmp_path: Path) -> 
 
     with pytest.raises(ConfigError, match="missing vision_pdf path"):
         _vision_pdf_path(layout)
+
+
+def test_runtime_context_reload_recovers_missing_config_once(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    slug = "acme"
+    workspace_root = tmp_path / f"timmy-kb-{slug}"
+    workspace_root.mkdir(parents=True, exist_ok=True)
+
+    calls: list[bool] = []
+
+    class _FakeClientContext:
+        @staticmethod
+        def load(**kwargs: Any) -> Any:
+            bootstrap = bool(kwargs.get("bootstrap_config"))
+            calls.append(bootstrap)
+            if bootstrap:
+                return SimpleNamespace(slug=slug, repo_root_dir=workspace_root)
+            if calls.count(False) == 1:
+                raise ConfigError(
+                    f"Manca config/config.yaml in {workspace_root / 'config' / 'config.yaml'}. "
+                    "Workspace non inizializzato o incompleto.",
+                    slug=slug,
+                    file_path=str(workspace_root / "config" / "config.yaml"),
+                )
+            return SimpleNamespace(slug=slug, repo_root_dir=workspace_root)
+
+    monkeypatch.setattr("pipeline.capabilities.new_client.ClientContext", _FakeClientContext)
+
+    ctx = _reload_runtime_context_with_bootstrap_recovery(slug=slug, workspace_root=workspace_root)
+
+    assert ctx.repo_root_dir == workspace_root
+    assert calls == [False, True, False]
