@@ -57,6 +57,7 @@ from typing import (
     cast,
 )
 
+from .beta_flags import is_beta_strict
 from .exceptions import ConfigError, InvalidSlug, PathTraversalError
 from .logging_utils import get_structured_logger
 
@@ -490,6 +491,8 @@ def iter_safe_pdfs(
     current_mtime = _dir_mtime(resolved_root)
     cached = _SAFE_PDF_CACHE.get(resolved_root)
     effective_ttl = cache_ttl_s if cache_ttl_s is not None else _SAFE_PDF_CACHE_DEFAULT_TTL
+    if is_beta_strict():
+        effective_ttl = 0.0
     if cached and abs(cached.mtime - current_mtime) <= 1e-6:
         if effective_ttl and effective_ttl > 0:
             if (time.time() - cached.timestamp) > effective_ttl:

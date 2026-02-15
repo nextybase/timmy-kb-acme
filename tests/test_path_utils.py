@@ -157,3 +157,26 @@ def test_iter_safe_pdfs_cache_invariant_set(tmp_path: Path) -> None:
     with_cache = {p.resolve() for p in iter_safe_pdfs(raw_dir, use_cache=True)}
 
     assert no_cache == with_cache
+
+
+def test_iter_safe_pdfs_strict_cache_hit_ignores_clock_time(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "1")
+    workspace = tmp_path / "client"
+    raw_dir = workspace / "raw"
+    raw_dir.mkdir(parents=True)
+
+    pdf_one = raw_dir / "doc1.pdf"
+    safe_write_bytes(pdf_one, b"%PDF-1.4\n", atomic=True)
+
+    first = list(iter_safe_pdfs(raw_dir, use_cache=True))
+    assert pdf_one.resolve() in {item.resolve() for item in first}
+
+    def _boom() -> float:
+        raise AssertionError("time.time should not be used for cache invalidation in strict runtime")
+
+    monkeypatch.setattr(path_utils.time, "time", _boom)
+    second = list(iter_safe_pdfs(raw_dir, use_cache=True))
+    assert pdf_one.resolve() in {item.resolve() for item in second}
