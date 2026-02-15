@@ -144,3 +144,50 @@ def test_frontmatter_cache_stats_include_hit_metrics(tmp_path: Path) -> None:
     assert stats["misses"] == 1
     assert stats["total_gets"] == 2
     assert stats["hit_rate"] == pytest.approx(0.5)
+
+
+def test_write_markdown_repeated_io_failures_do_not_break_flow(
+    monkeypatch: MonkeyPatch, caplog: LogCaptureFixture, tmp_path: Path
+) -> None:
+    raw_root = tmp_path / "raw"
+    target_root = tmp_path / "book"
+    raw_root.mkdir()
+    target_root.mkdir()
+
+    pdf_path = raw_root / "doc.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%")
+    md_path = target_root / "doc.md"
+    md_path.write_text("broken frontmatter", encoding="utf-8")
+
+    def _raise_io(*_: object, **__: object) -> tuple[dict[str, str], str]:
+        raise OSError("io failure")
+
+    monkeypatch.setattr(cu, "read_frontmatter", _raise_io)
+    monkeypatch.setattr(cu, "_extract_pdf_text", lambda *args, **kwargs: "contenuto pdf")
+
+    caplog.set_level(logging.WARNING)
+    cu.clear_frontmatter_cache()
+
+    first = cu._write_markdown_for_pdf(  # noqa: SLF001
+        pdf_path,
+        raw_root,
+        target_root,
+        candidates={},
+        cfg=SemanticConfig(),
+        slug="dummy",
+    )
+    cu.clear_frontmatter_cache()
+    second = cu._write_markdown_for_pdf(  # noqa: SLF001
+        pdf_path,
+        raw_root,
+        target_root,
+        candidates={},
+        cfg=SemanticConfig(),
+        slug="dummy",
+    )
+
+    assert first == md_path
+    assert second == md_path
+    assert md_path.exists()
+    failed_events = [rec for rec in caplog.records if rec.message == "pipeline.content.frontmatter_read_failed"]
+    assert len(failed_events) >= 2

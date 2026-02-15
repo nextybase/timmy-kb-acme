@@ -150,3 +150,128 @@ def test_search_event_contract_embed_failed_soft_fail(
 
     assert out == []
     assert "retriever.query.embed_failed" in _messages(caplog)
+
+
+@pytest.mark.parametrize(
+    ("query", "k", "expected_event"),
+    [
+        ("hello", 0, "retriever.query.skipped"),
+        ("   ", 3, "retriever.query.invalid"),
+    ],
+)
+def test_search_event_contract_input_soft_fail_branches(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    query: str,
+    k: int,
+    expected_event: str,
+) -> None:
+    params = _params(tmp_path, query=query, k=k)
+    client = _DummyEmbeddingsClient()
+
+    monkeypatch.setattr(retriever, "_throttle_guard", lambda *_a, **_k: nullcontext())
+    monkeypatch.setattr(retriever.throttle_mod, "_deadline_exceeded", lambda _d: False)
+
+    caplog.set_level(logging.INFO, logger=retriever.LOGGER.name)
+    out = retriever.search(params, client, response_id="r-input-soft-fail")
+
+    assert out == []
+    assert expected_event in _messages(caplog)
+
+
+def test_search_event_contract_empty_embedding_soft_fail(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    params = _params(tmp_path)
+    client = _DummyEmbeddingsClient()
+
+    monkeypatch.setattr(retriever, "_throttle_guard", lambda *_a, **_k: nullcontext())
+    monkeypatch.setattr(retriever.throttle_mod, "_deadline_exceeded", lambda _d: False)
+    monkeypatch.setattr(retriever.embeddings_mod, "_materialize_query_vector", lambda *_a, **_k: (None, 1.0))
+
+    caplog.set_level(logging.WARNING, logger=retriever.LOGGER.name)
+    out = retriever.search(params, client, response_id="r-empty-embedding")
+
+    assert out == []
+    assert "retriever.query.invalid" in _messages(caplog)
+
+
+@pytest.mark.parametrize(
+    ("deadline_flags", "expected_events"),
+    [
+        ([False, False, True], ["retriever.latency_budget.hit"]),
+        ([False, False, False, True], ["retriever.latency_budget.hit"]),
+        ([False, False, False, False, True], ["retriever.latency_budget.hit", "retriever.query.result"]),
+    ],
+)
+def test_search_event_contract_budget_soft_fail_branches(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    deadline_flags: list[bool],
+    expected_events: list[str],
+) -> None:
+    params = _params(tmp_path)
+    client = _DummyEmbeddingsClient()
+    idx = {"i": 0}
+
+    def _deadline(_deadline: float | None) -> bool:
+        i = idx["i"]
+        idx["i"] = i + 1
+        if i < len(deadline_flags):
+            return deadline_flags[i]
+        return deadline_flags[-1]
+
+    monkeypatch.setattr(retriever, "_throttle_guard", lambda *_a, **_k: nullcontext())
+    monkeypatch.setattr(retriever.throttle_mod, "_deadline_exceeded", _deadline)
+    monkeypatch.setattr(retriever.embeddings_mod, "_materialize_query_vector", lambda *_a, **_k: ([0.1, 0.2], 1.23))
+    monkeypatch.setattr(
+        retriever,
+        "fetch_candidates",
+        lambda *_a, **_k: [
+            {"content": "c1", "meta": {"lineage": {"source_id": "s1", "chunks": []}}, "embedding": [0.1]}
+        ],
+    )
+
+    caplog.set_level(logging.INFO, logger=retriever.LOGGER.name)
+    out = retriever.search(
+        params,
+        client,
+        response_id="r-budget-soft-fail",
+        throttle=retriever.ThrottleSettings(latency_budget_ms=50, parallelism=1, sleep_ms_between_calls=0),
+    )
+
+    assert out == []
+    messages = _messages(caplog)
+    for expected in expected_events:
+        assert expected in messages
+
+
+def test_search_event_contract_ranking_budget_hit_soft_fail(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    params = _params(tmp_path)
+    client = _DummyEmbeddingsClient()
+
+    monkeypatch.setattr(retriever, "_throttle_guard", lambda *_a, **_k: nullcontext())
+    monkeypatch.setattr(retriever.throttle_mod, "_deadline_exceeded", lambda _d: False)
+    monkeypatch.setattr(retriever.embeddings_mod, "_materialize_query_vector", lambda *_a, **_k: ([0.1, 0.2], 1.23))
+    monkeypatch.setattr(
+        retriever,
+        "fetch_candidates",
+        lambda *_a, **_k: [
+            {"content": "c1", "meta": {"lineage": {"source_id": "s1", "chunks": []}}, "embedding": [0.1]}
+        ],
+    )
+    monkeypatch.setattr(
+        retriever,
+        "_rank_candidates",
+        lambda *_a, **_k: ([], 1, {"short": 0, "normalized": 0, "skipped": 0}, 1.5, 1, True),
+    )
+
+    caplog.set_level(logging.WARNING, logger=retriever.LOGGER.name)
+    out = retriever.search(params, client, response_id="r-rank-budget-hit")
+
+    assert out == []
+    assert "retriever.latency_budget.hit" in _messages(caplog)

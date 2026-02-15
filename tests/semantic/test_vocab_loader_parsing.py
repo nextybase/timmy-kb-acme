@@ -345,3 +345,21 @@ def test_to_vocab_casefold_dedup_property(rows: list[tuple[str, str]]) -> None:
         aliases = payload["aliases"]
         lowered = [value.casefold() for value in aliases]
         assert len(lowered) == len(set(lowered))
+
+
+@given(
+    st.dictionaries(
+        keys=st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=10),
+        values=st.lists(
+            st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=10),
+            min_size=1,
+            max_size=10,
+        ),
+        min_size=1,
+        max_size=30,
+    )
+)
+def test_to_vocab_mapping_shape_is_deterministic(data: dict[str, list[str]]) -> None:
+    out1 = vl._to_vocab(data)
+    out2 = vl._to_vocab(data)
+    assert _normalize_for_comparison(out1) == _normalize_for_comparison(out2)

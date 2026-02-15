@@ -14,6 +14,7 @@ from semantic.api import index_markdown_to_db
 from storage.kb_db import fetch_candidates
 from tests._helpers.workspace_paths import local_workspace_dir, local_workspace_name
 from tests.utils.workspace import ensure_minimal_workspace_layout
+from timmy_kb.cli import retriever as retriever_api
 
 
 class _DummyEmbeddings:
@@ -418,3 +419,51 @@ def test_lineage_persisted_in_markdown_index(tmp_path):
     assert set(chunk_info.keys()) == {"chunk_index", "chunk_id", "embedding_id"}
     assert chunk_info["chunk_id"]
     assert chunk_info["embedding_id"]
+
+
+def test_index_and_retriever_contract_roundtrip(tmp_path: Path) -> None:
+    base = _dummy_workspace_root(tmp_path)
+    book = base / "book"
+    book.mkdir(parents=True, exist_ok=True)
+    semantic_dir = base / "semantic"
+    semantic_dir.mkdir(parents=True, exist_ok=True)
+    (book / "Contract.md").write_text(
+        "---\ntitle: Contratto\nsource_category: test\n---\nContenuto contrattuale",
+        encoding="utf-8",
+    )
+
+    class IndexEmb:
+        def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
+            return [[0.7, 0.3] for _ in texts]
+
+    class QueryEmb:
+        def embed_texts(self, texts, *, model=None):  # type: ignore[no-untyped-def]
+            return [[0.7, 0.3] for _ in texts]
+
+    dbp = semantic_dir / "db_contract.sqlite"
+    inserted = index_markdown_to_db(
+        cast(Any, _ctx(base)),
+        logging.getLogger("test"),
+        slug="dummy",
+        scope="book",
+        embeddings_client=IndexEmb(),
+        db_path=dbp,
+    )
+    assert inserted == 1
+
+    params = retriever_api.QueryParams(
+        db_path=dbp,
+        slug="dummy",
+        scope="book",
+        query="contratto",
+        k=1,
+        candidate_limit=retriever_api.MIN_CANDIDATE_LIMIT,
+    )
+    results = retriever_api.search(params, QueryEmb())
+
+    assert len(results) == 1
+    top = results[0]
+    assert top["content"] == "Contenuto contrattuale"
+    assert top["meta"]["title"] == "Contratto"
+    assert top["meta"]["source_category"] == "test"
+    assert "lineage" in top["meta"]
