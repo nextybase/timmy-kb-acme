@@ -312,6 +312,28 @@ def _dump_frontmatter(meta: dict[str, Any]) -> str:
     return cast(str, _shared_dump_frontmatter(meta_dict))
 
 
+def _safe_write_markdown(
+    path: Path,
+    content: str,
+    *,
+    logger: logging.Logger,
+    slug: str | None,
+    source: str,
+) -> None:
+    """Wrapper locale write+log per uniformare le scritture markdown atomiche."""
+    safe_write_text(path, content, encoding="utf-8", atomic=True)
+    _safe_log(
+        logger,
+        "debug",
+        "pipeline.content.write_ok",
+        extra={
+            "slug": slug,
+            "path": str(path),
+            "source": source,
+        },
+    )
+
+
 def _normalize_excerpt(text: str) -> str:
     cleaned = re.sub(r"\s+", " ", text or "")
     return cleaned.strip()
@@ -509,7 +531,13 @@ def _write_markdown_for_pdf(
     elif existing_meta.get("content_chunks"):
         meta["content_chunks"] = existing_meta["content_chunks"]
 
-    safe_write_text(md_path, _dump_frontmatter(meta) + body, encoding="utf-8", atomic=True)
+    _safe_write_markdown(
+        md_path,
+        _dump_frontmatter(meta) + body,
+        logger=logger,
+        slug=slug,
+        source="pdf",
+    )
 
     # Aggiorna la cache locale del frontmatter con il nuovo contenuto scritto (best-effort ma osservabile)
     try:
@@ -799,7 +827,13 @@ def generate_readme_markdown(ctx: _ReadmeCtx, book_dir: Path | None = None) -> P
         )
 
     content = "\n\n".join(sections).strip() or "Contenuti generati/curati automaticamente."
-    safe_write_text(readme, f"# {title}\n\n{content}\n", encoding="utf-8", atomic=True)
+    _safe_write_markdown(
+        readme,
+        f"# {title}\n\n{content}\n",
+        logger=logger,
+        slug=getattr(ctx, "slug", None),
+        source="readme",
+    )
     return readme
 
 
@@ -837,7 +871,13 @@ def generate_summary_markdown(ctx: _ReadmeCtx, book_dir: Path | None = None) -> 
         indent = "    " * len(parts)
         lines.append(f"{indent}- [{_titleize(Path(file_name).stem)}]({quote(rel.as_posix())})")
 
-    safe_write_text(summary, "\n".join(lines).rstrip() + "\n", encoding="utf-8", atomic=True)
+    _safe_write_markdown(
+        summary,
+        "\n".join(lines).rstrip() + "\n",
+        logger=get_structured_logger("pipeline.content_utils"),
+        slug=getattr(ctx, "slug", None),
+        source="summary",
+    )
     return summary
 
 

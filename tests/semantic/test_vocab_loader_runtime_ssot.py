@@ -73,4 +73,3 @@ def test_runtime_ssot_load_reviewed_vocab_does_not_read_yaml(
     logger = logging.getLogger("test.runtime.ssot")
     vocab = loader(base, logger, slug="dummy")
     assert vocab["analytics"]["aliases"] == ["alias"]
-
