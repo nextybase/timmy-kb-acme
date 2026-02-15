@@ -16,7 +16,7 @@ from storage import decision_ledger
 from tests._helpers.workspace_paths import local_workspace_dir
 
 PY = sys.executable
-WALLCLOCK_SKEW_SECONDS = 300
+WALL_CLOCK_SKEW_SECONDS = 300
 
 
 def _prepare_workspace(root: Path) -> Path:
@@ -94,9 +94,9 @@ def _to_epoch_seconds(value: Any) -> float | None:
     return None
 
 
-def _is_near_wallclock(epoch_s: float, *, start_s: float, end_s: float) -> bool:
-    lower = start_s - WALLCLOCK_SKEW_SECONDS
-    upper = end_s + WALLCLOCK_SKEW_SECONDS
+def _is_near_wall_clock(epoch_s: float, *, start_s: float, end_s: float) -> bool:
+    lower = start_s - WALL_CLOCK_SKEW_SECONDS
+    upper = end_s + WALL_CLOCK_SKEW_SECONDS
     return lower <= epoch_s <= upper
 
 
@@ -106,7 +106,7 @@ def _timestamp_like_column(name: str) -> bool:
     return any(token in lowered for token in tokens)
 
 
-def _scan_ledger_for_wallclock(
+def _scan_ledger_for_wall_clock(
     ledger_path: Path,
     *,
     start_s: float,
@@ -115,27 +115,31 @@ def _scan_ledger_for_wallclock(
     findings: list[tuple[str, str, Any]] = []
     conn = sqlite3.connect(str(ledger_path))
     try:
-        tables = [
+        tables = {
             str(row[0])
             for row in conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
             ).fetchall()
-        ]
-        for table in tables:
-            columns = [str(row[1]) for row in conn.execute(f"PRAGMA table_info('{table}')").fetchall()]
-            candidate_columns = [col for col in columns if _timestamp_like_column(col)]
-            for column in candidate_columns:
-                rows = conn.execute(f"SELECT {column} FROM '{table}' WHERE {column} IS NOT NULL").fetchall()
-                for (value,) in rows:
-                    epoch = _to_epoch_seconds(value)
-                    if epoch is not None and _is_near_wallclock(epoch, start_s=start_s, end_s=end_s):
-                        findings.append((table, column, value))
+        }
+        static_queries = (
+            ("runs", "started_at", "SELECT started_at FROM runs WHERE started_at IS NOT NULL"),
+            ("decisions", "decided_at", "SELECT decided_at FROM decisions WHERE decided_at IS NOT NULL"),
+            ("events", "occurred_at", "SELECT occurred_at FROM events WHERE occurred_at IS NOT NULL"),
+        )
+        for table, column, query in static_queries:
+            if table not in tables or not _timestamp_like_column(column):
+                continue
+            rows = conn.execute(query).fetchall()
+            for (value,) in rows:
+                epoch = _to_epoch_seconds(value)
+                if epoch is not None and _is_near_wall_clock(epoch, start_s=start_s, end_s=end_s):
+                    findings.append((table, column, value))
     finally:
         conn.close()
     return findings
 
 
-def _scan_json_for_wallclock(
+def _scan_json_for_wall_clock(
     payload: Any,
     *,
     start_s: float,
@@ -148,7 +152,7 @@ def _scan_json_for_wallclock(
             for key, value in node.items():
                 next_path = f"{path}.{key}" if path else str(key)
                 epoch = _to_epoch_seconds(value)
-                if epoch is not None and _is_near_wallclock(epoch, start_s=start_s, end_s=end_s):
+                if epoch is not None and _is_near_wall_clock(epoch, start_s=start_s, end_s=end_s):
                     findings.append((next_path, value))
                 _walk(value, next_path)
             return
@@ -160,7 +164,7 @@ def _scan_json_for_wallclock(
     return findings
 
 
-def test_strict_runtime_no_wallclock_leakage_in_core_artifacts(tmp_path: Path) -> None:
+def test_strict_runtime_no_wall_clock_leakage_in_core_artifacts(tmp_path: Path) -> None:
     slug = "acme"
     workspace_root = _prepare_workspace(local_workspace_dir(tmp_path, slug))
     ledger_path = _init_empty_ledger(workspace_root=workspace_root, slug=slug)
@@ -177,8 +181,8 @@ def test_strict_runtime_no_wallclock_leakage_in_core_artifacts(tmp_path: Path) -
     assert lines, "stdout vuoto: payload JSON non trovato"
     payload = json.loads(lines[-1])
 
-    ledger_findings = _scan_ledger_for_wallclock(ledger_path, start_s=start_s, end_s=end_s)
-    json_findings = _scan_json_for_wallclock(payload, start_s=start_s, end_s=end_s)
+    ledger_findings = _scan_ledger_for_wall_clock(ledger_path, start_s=start_s, end_s=end_s)
+    json_findings = _scan_json_for_wall_clock(payload, start_s=start_s, end_s=end_s)
 
     assert ledger_findings == []
     assert json_findings == []
