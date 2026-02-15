@@ -242,7 +242,7 @@ def _cleanup_frontmatter_cache(logger: logging.Logger, context: ClientContextTyp
     log_frontmatter_cache_stats = None
     try:
         from pipeline.content_utils import clear_frontmatter_cache, log_frontmatter_cache_stats
-    except Exception as exc:
+    except (ImportError, ModuleNotFoundError) as exc:
         _log_frontmatter_cache_failure(
             logger,
             slug=slug,
@@ -254,6 +254,19 @@ def _cleanup_frontmatter_cache(logger: logging.Logger, context: ClientContextTyp
             "Frontmatter cache cleanup bootstrap failed.",
             slug=slug,
             component="semantic.frontmatter_cache.import",
+        ) from exc
+    except Exception as exc:
+        _log_frontmatter_cache_failure(
+            logger,
+            slug=slug,
+            context=context,
+            operation="import_unexpected",
+            exc=exc,
+        )
+        raise ConfigError(
+            "Frontmatter cache cleanup bootstrap failed.",
+            slug=slug,
+            component="semantic.frontmatter_cache.import_unexpected",
         ) from exc
 
     if callable(log_frontmatter_cache_stats):
@@ -280,7 +293,7 @@ def _cleanup_frontmatter_cache(logger: logging.Logger, context: ClientContextTyp
     if callable(clear_frontmatter_cache):
         try:
             clear_frontmatter_cache()
-        except Exception as exc:
+        except (OSError, PipelineError) as exc:
             _log_frontmatter_cache_failure(
                 logger,
                 slug=slug,
@@ -292,6 +305,20 @@ def _cleanup_frontmatter_cache(logger: logging.Logger, context: ClientContextTyp
                 "Frontmatter cache cleanup failed.",
                 slug=slug,
                 component="semantic.frontmatter_cache.clear",
+                run_id=getattr(context, "run_id", None),
+            ) from exc
+        except Exception as exc:
+            _log_frontmatter_cache_failure(
+                logger,
+                slug=slug,
+                context=context,
+                operation="clear",
+                exc=exc,
+            )
+            raise PipelineError(
+                "Frontmatter cache cleanup failed.",
+                slug=slug,
+                component="semantic.frontmatter_cache.clear_unexpected",
                 run_id=getattr(context, "run_id", None),
             ) from exc
     if callable(log_frontmatter_cache_stats):
@@ -368,7 +395,7 @@ def _run_build_workflow(
                 "semantic.book.frontmatter",
                 extra={"slug": slug, "enriched": len(touched)},
             )
-        except Exception as exc:
+        except (ValueError, TypeError, AttributeError) as exc:
             logger.warning(
                 "semantic.book.frontmatter",
                 extra={"slug": slug, "enriched": None, "error": str(exc)},
@@ -460,7 +487,7 @@ def build_markdown_book(context: ClientContextType, logger: logging.Logger, *, s
         try:
             # Artifacts = numero di MD di contenuto (coerente con convert_markdown)
             m.set_artifacts(len(mds))
-        except Exception as exc:
+        except (ValueError, TypeError, AttributeError) as exc:
             logger.warning("semantic.book.artifacts_missing", extra={"slug": slug, "error": str(exc)})
             m.set_artifacts(None)
     ms = int((time.perf_counter() - start_ts) * 1000)

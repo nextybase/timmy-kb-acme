@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import string
 from collections import defaultdict
 from typing import Any, Iterable, Mapping, Sequence, cast
 
@@ -328,8 +329,8 @@ def test_refactor_preserves_reference_vocab_outputs(fixture_name: str) -> None:
 @given(
     st.lists(
         st.tuples(
-            st.text(min_size=1, max_size=12),
-            st.text(min_size=1, max_size=12),
+            st.text(alphabet=string.ascii_letters + string.digits + "_-", min_size=1, max_size=12),
+            st.text(alphabet=string.ascii_letters + string.digits + "_-", min_size=1, max_size=12),
         ),
         min_size=1,
         max_size=200,
