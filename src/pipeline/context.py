@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -482,16 +481,10 @@ class ClientContext:
         """Carica e valida il file YAML di configurazione del cliente."""
         try:
             settings = Settings.load(repo_root, config_path=config_path, logger=logger, slug=slug)
-            try:
-                logger.info(
-                    "context.config.loaded",
-                    extra={"slug": slug, "file_path": str(config_path)},
-                )
-            except Exception as log_exc:
-                try:
-                    sys.stderr.write(f"context.config.loaded logging_failure: {log_exc!r}\n")
-                except OSError:
-                    pass
+            logger.info(
+                "context.config.loaded",
+                extra={"slug": slug, "file_path": str(config_path)},
+            )
             return settings
         except ConfigError:
             raise

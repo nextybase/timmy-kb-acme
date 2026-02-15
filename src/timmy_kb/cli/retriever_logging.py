@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-import sys
 from typing import Any, Mapping
 
 from pipeline.logging_utils import get_structured_logger
@@ -38,9 +37,12 @@ def _safe_log(level: str, event: str, *, extra: Mapping[str, Any] | None = None)
             extra={"event": event, "level": level, "stage": "fallback", "error": repr(exc)},
         )
 
-    # 3) Ultima linea di difesa: stderr
+    # 3) Ultima linea di difesa: canale fallback strutturato.
     try:
-        sys.stderr.write(f"[timmy_kb.retriever.log_failed] level={level} event={event} extra={payload!r}\n")
+        _FALLBACK_LOG.error(
+            "retriever.log_dropped",
+            extra={"event": event, "level": level, "payload": payload},
+        )
     except Exception:  # pragma: no cover - fallback finale
         return
 

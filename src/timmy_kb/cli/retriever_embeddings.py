@@ -21,7 +21,6 @@ Design:
 
 from __future__ import annotations
 
-import sys
 import time
 from collections.abc import Sequence
 from contextlib import nullcontext
@@ -39,6 +38,7 @@ from timmy_kb.cli import retriever_throttle as throttle_mod
 from timmy_kb.cli import retriever_validation as validation_mod
 
 LOGGER = get_structured_logger("timmy_kb.retriever")
+_FALLBACK_LOG = get_structured_logger("timmy_kb.retriever.fallback")
 
 QueryParams = validation_mod.QueryParams
 SearchResult = validation_mod.SearchResult
@@ -64,10 +64,7 @@ _LogLevel = Literal["debug", "info", "warning", "error"]
 
 
 def _emit_log_fallback(event: str, exc: Exception, *, level: _LogLevel, extra: Mapping[str, Any] | None = None) -> None:
-    """Fallback deterministico (best-effort) se il logging strutturato fallisce.
-
-    Non deve mai rompere il retriever. Evita silent-degradation: almeno stderr.
-    """
+    """Fallback deterministico (best-effort) su canale strutturato secondario."""
     payload: dict[str, Any] = {"event": event, "level": level, "log_error": repr(exc)}
     if extra:
         try:
@@ -75,9 +72,11 @@ def _emit_log_fallback(event: str, exc: Exception, *, level: _LogLevel, extra: M
         except Exception as extra_exc:
             payload["extra_error"] = repr(extra_exc)
 
-    line = f"timmy_kb.retriever logging_failure {payload}\n"
     try:
-        sys.stderr.write(line)
+        _FALLBACK_LOG.warning(
+            "retriever.log_failed",
+            extra={"event": event, "level": level, "payload": payload},
+        )
     except Exception:
         return
 

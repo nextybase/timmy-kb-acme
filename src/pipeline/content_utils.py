@@ -6,7 +6,6 @@ import hashlib
 import logging
 import os
 import re
-import sys
 from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,7 +40,7 @@ _FALLBACK_LOG = logging.getLogger(__name__)
 
 
 def _safe_log(logger: logging.Logger, level: str, event: str, *, extra: Mapping[str, Any] | None = None) -> None:
-    """Log best-effort non-throwing e mai silenzioso: ultimo fallback su stderr/os.write."""
+    """Log best-effort non-throwing su canale strutturato, senza fallback su stderr."""
     payload = dict(extra or {})
     try:
         log_fn = getattr(logger, level, None)
@@ -65,12 +64,9 @@ def _safe_log(logger: logging.Logger, level: str, event: str, *, extra: Mapping[
         getattr(_FALLBACK_LOG, level, _FALLBACK_LOG.info)(event, extra={"payload": payload})
     except Exception:
         try:
-            print(f"[safe_log failed] {event}", file=sys.stderr, flush=True)
+            os.write(2, (f"[safe_log failed] {event}\n").encode("utf-8", "replace"))
         except Exception:
-            try:
-                os.write(2, (f"[safe_log failed] {event}\n").encode("utf-8", "replace"))
-            except Exception:
-                return
+            return
 
 
 class _ReadmeCtx(Protocol):
