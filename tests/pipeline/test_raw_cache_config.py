@@ -22,6 +22,7 @@ def test_raw_cache_defaults_from_config(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_raw_cache_lazy_loading(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
     calls = 0
 
     module = importlib.reload(path_utils)
@@ -53,6 +54,7 @@ def test_raw_cache_lazy_loading(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) 
 
 
 def test_raw_cache_defaults_remain_until_first_guard(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
     module = importlib.reload(path_utils)
     sentinel_ttl = 42.0
     sentinel_capacity = 2
@@ -90,6 +92,7 @@ def test_raw_cache_guard_invoked_in_public_apis(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Any,
 ) -> None:
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
     module = importlib.reload(path_utils)
     call_count = 0
 
