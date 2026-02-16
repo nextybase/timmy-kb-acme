@@ -21,10 +21,10 @@ from pipeline.path_utils import ensure_within_and_resolve, iter_safe_paths
 from pipeline.tracing import start_decision_span
 from pipeline.types import ChunkRecord
 from pipeline.workspace_layout import WorkspaceLayout
-from semantic.auto_tagger import extract_semantic_candidates
 from semantic.config import SemanticConfig, load_semantic_config
 from semantic.context_paths import resolve_context_paths
 from semantic.types import ClientContextProtocol as _ClientCtx  # SSoT dei contratti
+from timmy_kb.cli.semantic_facade import extract_semantic_candidates
 
 __all__ = [
     "validate_markdown_dir",

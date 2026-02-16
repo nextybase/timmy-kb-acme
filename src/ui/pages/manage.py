@@ -6,8 +6,9 @@ import csv
 import io
 import re
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, Callable, Optional, cast
 from urllib.parse import quote
 
 from pipeline.exceptions import ConfigError
@@ -465,9 +466,76 @@ def _render_tag_onboarding_report_box(slug: str, layout: WorkspaceLayout, client
                 _open_tags_draft_modal(slug, layout)
         with c2:
             st.write("")
-        st.markdown("Output:")
-        st.markdown(f"- `tags_raw.csv`: {'presente' if has_tags_raw else 'mancante'}")
-        st.markdown(f"- `tags.db`: {db_status}")
+        vm = build_tag_onboarding_view_model(layout, slug=slug)
+        render_tag_onboarding_view(vm)
+        st.markdown(f"- Stato DB semantico (subset): {db_status}")
+
+
+@dataclass(slots=True)
+class TagOnboardingViewModel:
+    slug: str
+    raw_tags_count: int
+    reviewed_tags_count: int
+    has_db: bool
+    warning: Optional[str] = None
+
+
+def build_tag_onboarding_view_model(
+    layout: WorkspaceLayout,
+    *,
+    slug: str,
+) -> TagOnboardingViewModel:
+    """
+    Costruisce il ViewModel per il report Tag Onboarding.
+    Nessuna logica di rendering Streamlit qui.
+    """
+    semantic_dir = layout.semantic_dir
+    raw_tags = semantic_dir / "tags_raw.csv"
+    reviewed_tags = semantic_dir / "tags_reviewed.yaml"
+    db_file = semantic_dir / "tags.db"
+
+    warning: Optional[str] = None
+    raw_count = 0
+    if raw_tags.exists():
+        try:
+            raw_text = read_text_safe(semantic_dir, raw_tags, encoding="utf-8") or ""
+            reader = csv.reader(io.StringIO(raw_text))
+            _header = next(reader, None)
+            raw_count = sum(1 for _ in reader)
+        except (FileNotFoundError, OSError, UnicodeError, csv.Error, ConfigError, ValueError) as exc:
+            warning = f"Impossibile leggere tags_raw.csv: {exc}"
+            raw_count = 0
+
+    reviewed_count = 0
+    if reviewed_tags.exists():
+        try:
+            text = read_text_safe(semantic_dir, reviewed_tags, encoding="utf-8") or ""
+            reviewed_count = sum(1 for line in text.splitlines() if line.lstrip().startswith("- "))
+        except (FileNotFoundError, OSError, UnicodeError, ConfigError, ValueError) as exc:
+            warning = (warning + " | " if warning else "") + f"Impossibile leggere tags_reviewed.yaml: {exc}"
+            reviewed_count = 0
+
+    return TagOnboardingViewModel(
+        slug=slug,
+        raw_tags_count=max(raw_count, 0),
+        reviewed_tags_count=max(reviewed_count, 0),
+        has_db=db_file.exists(),
+        warning=warning,
+    )
+
+
+def render_tag_onboarding_view(vm: TagOnboardingViewModel) -> None:
+    """Rendering puro Streamlit."""
+    st.markdown("Output:")
+    st.write(f"**Slug:** `{vm.slug}`")
+    st.write(f"Tag grezzi: {vm.raw_tags_count}")
+    st.write(f"Tag revisionati: {vm.reviewed_tags_count}")
+    if not vm.has_db:
+        st.warning("Database semantico non presente.")
+    else:
+        st.write("Database semantico: presente.")
+    if vm.warning:
+        st.caption(vm.warning)
 
 
 def _is_page_visible(page_path: str) -> bool:

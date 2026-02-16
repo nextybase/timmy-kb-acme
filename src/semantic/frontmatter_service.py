@@ -136,7 +136,18 @@ def _append_layout_note_to_readme(
         return
     try:
         content = read_text_safe(book_dir, readme_path, encoding="utf-8")
-    except Exception:
+    except (OSError, UnicodeError, ValueError) as exc:
+        logger.warning(
+            "semantic.frontmatter.readme_append_failed",
+            extra={
+                "slug": slug,
+                "file_path": str(readme_path),
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "service_only": True,
+            },
+            exc_info=True,
+        )
         return
     layout_path = repo_root_dir / "semantic" / "layout_proposal.yaml"
     top_levels = _read_layout_top_levels(layout_path)
@@ -172,10 +183,35 @@ def _write_layout_summary(repo_root_dir: Path, book_dir: Path, logger: logging.L
     summary_path = book_dir / "layout_summary.md"
     try:
         ensure_within(repo_root_dir, summary_path)
-    except Exception:
+    except (OSError, ValueError) as exc:
+        logger.warning(
+            "semantic.frontmatter.layout_path_invalid",
+            extra={
+                "slug": slug,
+                "file_path": str(summary_path),
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "service_only": True,
+            },
+            exc_info=True,
+        )
         return
     content = _layout_summary_text(top_levels)
-    safe_write_text(summary_path, content, encoding="utf-8", atomic=True)
+    try:
+        safe_write_text(summary_path, content, encoding="utf-8", atomic=True)
+    except (OSError, UnicodeError, ValueError) as exc:
+        logger.warning(
+            "semantic.frontmatter.layout_write_failed",
+            extra={
+                "slug": slug,
+                "file_path": str(summary_path),
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "service_only": True,
+            },
+            exc_info=True,
+        )
+        return
     logger.info(
         "semantic.layout_summary.written",
         extra={"slug": slug, "file_path": str(summary_path)},

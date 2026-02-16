@@ -326,11 +326,7 @@ def search(
     """Esegue una ricerca vettoriale sui chunk del workspace indicato."""
     throttle_cfg = throttle_mod._normalize_throttle_settings(throttle)
     deadline = throttle_mod._deadline_from_settings(throttle_cfg)
-    try:
-        validation_mod._validate_params_logged(params)
-    except RetrieverError as exc:
-        _apply_error_context(exc, code="retriever_invalid_params", slug=params.slug, scope=params.scope)
-        raise
+    _validate_or_raise(params, code="retriever_invalid_params")
 
     if throttle_mod._deadline_exceeded(deadline):
         _safe_log(
@@ -362,10 +358,7 @@ def search(
     )
 
     with throttle_ctx:
-        if authorizer is not None:
-            authorizer(params)
-        if throttle_check is not None:
-            throttle_check(params)
+        _run_guards(params, authorizer=authorizer, throttle_check=throttle_check)
 
         common_extra = {
             "slug": params.slug,
@@ -387,31 +380,13 @@ def search(
         if _budget_hit(deadline, stage="pre_embedding", slug=params.slug, scope=params.scope):
             return []
 
-        try:
-            query_vector, t_emb_ms = _materialize_query_vector(
-                params,
-                embeddings_client,
-                embedding_model=embedding_model,
-            )
-        except RetrieverError as exc:
-            _apply_error_context(exc, code=ERR_EMBEDDING_FAILED, slug=params.slug, scope=params.scope)
-            _safe_log(
-                "retriever.query.embed_failed",
-                level="warning",
-                extra={
-                    **common_extra,
-                    "code": ERR_EMBEDDING_FAILED,
-                    "error": repr(getattr(exc, "__cause__", None) or exc),
-                },
-            )
-            return []
-
+        query_vector, t_emb_ms = _embed_or_softfail(
+            params,
+            embeddings_client,
+            common_extra=common_extra,
+            embedding_model=embedding_model,
+        )
         if query_vector is None:
-            _safe_log(
-                "retriever.query.embedding_invalid.softfail",
-                level="warning",
-                extra={**common_extra, "code": ERR_EMBEDDING_INVALID},
-            )
             return []
 
         _safe_log(
@@ -455,28 +430,13 @@ def search(
         if _budget_hit(deadline, stage="post_fetch_candidates", slug=params.slug, scope=params.scope):
             return []
 
-        (
-            scored_items,
-            candidates_count,
-            coerce_stats,
-            t_score_sort_ms,
-            evaluated_count,
-            rank_budget_hit,
-        ) = _rank_candidates(
+        scored_items, candidates_count, coerce_stats, t_score_sort_ms, evaluated_count = _rank_or_softfail(
+            params,
             query_vector,
             candidates,
-            params.k,
             deadline=deadline,
-            abort_if_deadline=True,
         )
-
-        budget_hit = rank_budget_hit
-        if budget_hit:
-            _safe_log(
-                "retriever.latency_budget.hit",
-                level="warning",
-                extra={"slug": params.slug, "scope": params.scope, "stage": "ranking"},
-            )
+        if not scored_items and candidates_count > 0 and throttle_mod._deadline_exceeded(deadline):
             return []
 
         total_ms = (time.time() - t_total_start) * 1000.0
@@ -491,15 +451,7 @@ def search(
             coerce_stats=coerce_stats,
         )
 
-        evidence_ids = manifest_mod._build_evidence_ids(scored_items)
-        manifest_mod._log_evidence_selected(
-            params=params,
-            scored_items=scored_items,
-            evidence_ids=evidence_ids,
-            response_id=response_id,
-            budget_hit=budget_hit,
-        )
-        manifest_mod._write_manifest_if_configured(
+        _emit_manifest_and_metrics(
             params=params,
             scored_items=scored_items,
             response_id=response_id,
@@ -513,8 +465,6 @@ def search(
             t_fetch_ms=t_fetch_ms,
             t_score_sort_ms=t_score_sort_ms,
             total_ms=total_ms,
-            budget_hit=budget_hit,
-            evidence_ids=evidence_ids,
         )
 
         if throttle_cfg:
@@ -528,13 +478,142 @@ def search(
                         "latency_budget_ms": int(throttle_cfg.latency_budget_ms),
                         "parallelism": int(throttle_cfg.parallelism),
                         "sleep_ms_between_calls": int(throttle_cfg.sleep_ms_between_calls),
-                        "budget_hit": bool(budget_hit),
+                        "budget_hit": bool(fetch_budget_hit and not scored_items),
                         "evaluated": int(evaluated_count),
                     },
                 },
             )
 
         return scored_items
+
+
+def _validate_or_raise(params: QueryParams, *, code: str) -> None:
+    try:
+        validation_mod._validate_params_logged(params)
+    except RetrieverError as exc:
+        _apply_error_context(exc, code=code, slug=params.slug, scope=params.scope)
+        raise
+
+
+def _run_guards(
+    params: QueryParams,
+    *,
+    authorizer: Callable[[QueryParams], None] | None,
+    throttle_check: Callable[[QueryParams], None] | None,
+) -> None:
+    if authorizer is not None:
+        authorizer(params)
+    if throttle_check is not None:
+        throttle_check(params)
+
+
+def _embed_or_softfail(
+    params: QueryParams,
+    embeddings_client: EmbeddingsClient,
+    *,
+    common_extra: Mapping[str, Any],
+    embedding_model: str | None,
+) -> tuple[list[float] | None, float]:
+    try:
+        query_vector, t_emb_ms = _materialize_query_vector(
+            params,
+            embeddings_client,
+            embedding_model=embedding_model,
+        )
+    except RetrieverError as exc:
+        _apply_error_context(exc, code=ERR_EMBEDDING_FAILED, slug=params.slug, scope=params.scope)
+        _safe_log(
+            "retriever.query.embed_failed",
+            level="warning",
+            extra={
+                **dict(common_extra),
+                "code": ERR_EMBEDDING_FAILED,
+                "error": repr(getattr(exc, "__cause__", None) or exc),
+            },
+        )
+        return None, 0.0
+    if query_vector is None:
+        _safe_log(
+            "retriever.query.embedding_invalid.softfail",
+            level="warning",
+            extra={**dict(common_extra), "code": ERR_EMBEDDING_INVALID},
+        )
+        return None, t_emb_ms
+    return query_vector, t_emb_ms
+
+
+def _rank_or_softfail(
+    params: QueryParams,
+    query_vector: list[float],
+    candidates: list[dict[str, Any]],
+    *,
+    deadline: float | None,
+) -> tuple[list[SearchResult], int, dict[str, int], float, int]:
+    (
+        scored_items,
+        candidates_count,
+        coerce_stats,
+        t_score_sort_ms,
+        evaluated_count,
+        rank_budget_hit,
+    ) = _rank_candidates(
+        query_vector,
+        candidates,
+        params.k,
+        deadline=deadline,
+        abort_if_deadline=True,
+    )
+    if rank_budget_hit:
+        _safe_log(
+            "retriever.latency_budget.hit",
+            level="warning",
+            extra={"slug": params.slug, "scope": params.scope, "stage": "ranking"},
+        )
+        return [], candidates_count, coerce_stats, t_score_sort_ms, evaluated_count
+    return scored_items, candidates_count, coerce_stats, t_score_sort_ms, evaluated_count
+
+
+def _emit_manifest_and_metrics(
+    *,
+    params: QueryParams,
+    scored_items: list[SearchResult],
+    response_id: str | None,
+    embeddings_client: EmbeddingsClient,
+    embedding_model: str | None,
+    explain_base_dir: Path | None,
+    throttle_cfg: Optional[ThrottleSettings],
+    candidates_count: int,
+    evaluated_count: int,
+    t_emb_ms: float,
+    t_fetch_ms: float,
+    t_score_sort_ms: float,
+    total_ms: float,
+) -> None:
+    evidence_ids = manifest_mod._build_evidence_ids(scored_items)
+    manifest_mod._log_evidence_selected(
+        params=params,
+        scored_items=scored_items,
+        evidence_ids=evidence_ids,
+        response_id=response_id,
+        budget_hit=False,
+    )
+    manifest_mod._write_manifest_if_configured(
+        params=params,
+        scored_items=scored_items,
+        response_id=response_id,
+        embeddings_client=embeddings_client,
+        embedding_model=embedding_model,
+        explain_base_dir=explain_base_dir,
+        throttle_cfg=throttle_cfg,
+        candidates_count=candidates_count,
+        evaluated_count=evaluated_count,
+        t_emb_ms=t_emb_ms,
+        t_fetch_ms=t_fetch_ms,
+        t_score_sort_ms=t_score_sort_ms,
+        total_ms=total_ms,
+        budget_hit=False,
+        evidence_ids=evidence_ids,
+    )
 
 
 def with_config_candidate_limit(
