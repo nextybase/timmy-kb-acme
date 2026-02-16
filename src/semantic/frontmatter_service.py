@@ -17,7 +17,7 @@ from pipeline.exceptions import ConfigError, ConversionError, PipelineError
 from pipeline.file_utils import safe_write_text
 from pipeline.frontmatter_utils import dump_frontmatter as _shared_dump_frontmatter
 from pipeline.frontmatter_utils import parse_frontmatter as _shared_parse_frontmatter
-from pipeline.logging_utils import phase_scope
+from pipeline.logging_utils import get_structured_logger, phase_scope
 from pipeline.path_utils import ensure_within, ensure_within_and_resolve, read_text_safe
 from pipeline.qa_gate import require_qa_gate_pass
 from pipeline.vision_paths import vision_yaml_workspace_path
@@ -56,7 +56,11 @@ def _load_vision_text(repo_root_dir: Path) -> str:
         safe = ensure_within_and_resolve(repo_root_dir, path)
         text = read_text_safe(safe.parent, safe, encoding="utf-8")
         return str(text)
-    except Exception:
+    except Exception as exc:
+        get_structured_logger("semantic.frontmatter").warning(
+            "semantic.vision_text.read_failed",
+            extra={"error": str(exc), "repo_root_dir": str(repo_root_dir)},
+        )
         return ""
 
 

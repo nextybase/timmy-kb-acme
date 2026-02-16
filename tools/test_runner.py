@@ -12,6 +12,7 @@ BINARIES = {
     "arch": "arch or contract",
     "negative": "negative and not drive and not e2e and not slow",
     "full": None,
+    "quality": None,
 }
 LINUX_BINARY = "linux"
 
@@ -61,6 +62,8 @@ def _build_pytest_command(binary: str, extra_args: list[str]) -> list[str]:
     cmd = [_pytest_executable(), "-m", "pytest", "-q"]
     if marker_expr:
         cmd.extend(["-m", marker_expr])
+    if binary == "quality":
+        cmd.extend(["--cov=src", "--cov-report=term-missing", "--cov-fail-under=70"])
     cmd.extend(extra_args)
     return cmd
 
@@ -153,7 +156,7 @@ def main() -> int:
     subprocess_env.setdefault("PYTEST_TMPDIR", str(PYTEST_TEMP_DIR.resolve()))
 
     cmd = _build_pytest_command(args.binary, extra_args)
-    if args.binary in {"fast", "full"}:
+    if args.binary in {"fast", "full", "quality"}:
         subprocess_env["TIMMY_ALLOW_BOOTSTRAP"] = "1"
         subprocess_env["TIMMY_BETA_STRICT"] = "0"
     print("Running:", " ".join(cmd))

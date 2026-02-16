@@ -43,6 +43,7 @@ import importlib
 import logging
 import os
 import uuid
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, cast
@@ -91,6 +92,15 @@ class _TagMode(str, Enum):
     DUMMY = "dummy"
     STRICT = "strict"
     FORBIDDEN = "forbidden"
+
+
+@dataclass(frozen=True)
+class NlpRunOptions:
+    rebuild: bool = False
+    only_missing: bool = False
+    enable_entities: bool = True
+    max_workers: int | None = None
+    worker_batch_size: int = 4
 
 
 def _prompt(msg: str) -> str:
@@ -413,11 +423,12 @@ def run_nlp_to_db(
     topk_folder: int = 30,
     cluster_thr: float = 0.78,
     model: str = "paraphrase-multilingual-MiniLM-L12-v2",
-    rebuild: bool = False,
-    only_missing: bool = False,
+    options: NlpRunOptions | None = None,
+    rebuild: bool | None = None,
+    only_missing: bool | None = None,
     max_workers: int | None = None,
-    worker_batch_size: int = 4,
-    enable_entities: bool = True,
+    worker_batch_size: int | None = None,
+    enable_entities: bool | None = None,
 ) -> dict[str, Any]:
     """Esegue estrazione keyword, clustering e aggregazione per cartella."""
 
@@ -438,9 +449,21 @@ def run_nlp_to_db(
 
     ensure_schema_v2(str(db_path_path))
 
-    worker_batch_size = max(1, int(worker_batch_size))
+    resolved = options or NlpRunOptions()
+    if rebuild is not None:
+        resolved = replace(resolved, rebuild=bool(rebuild))
+    if only_missing is not None:
+        resolved = replace(resolved, only_missing=bool(only_missing))
+    if max_workers is not None:
+        resolved = replace(resolved, max_workers=max_workers)
+    if worker_batch_size is not None:
+        resolved = replace(resolved, worker_batch_size=int(worker_batch_size))
+    if enable_entities is not None:
+        resolved = replace(resolved, enable_entities=bool(enable_entities))
 
-    if max_workers is None:
+    worker_batch_size = max(1, int(resolved.worker_batch_size))
+
+    if resolved.max_workers is None:
 
         cpu_count = os.cpu_count() or 1
 
@@ -448,7 +471,7 @@ def run_nlp_to_db(
 
     else:
 
-        worker_count = max(1, int(max_workers))
+        worker_count = max(1, int(resolved.max_workers))
 
     if worker_count > 1:
 
@@ -467,8 +490,8 @@ def run_nlp_to_db(
             topk_folder=topk_folder,
             cluster_thr=cluster_thr,
             model=model,
-            only_missing=only_missing,
-            rebuild=rebuild,
+            only_missing=resolved.only_missing,
+            rebuild=resolved.rebuild,
             worker_count=worker_count,
             worker_batch_size=worker_batch_size,
             logger=log,
@@ -480,7 +503,7 @@ def run_nlp_to_db(
     entities_reason: str | None = None
     entities_processed_pdfs: int | None = None
     entities_skipped: bool | None = None
-    if enable_entities:
+    if resolved.enable_entities:
         try:
             entities_module = importlib.import_module("semantic.entities_runner")
             run_doc_entities_pipeline = getattr(entities_module, "run_doc_entities_pipeline")
@@ -1014,10 +1037,13 @@ def main(args: argparse.Namespace) -> int | None:
                 topk_folder=int(args.topk_folder),
                 cluster_thr=float(args.cluster_thr),
                 model=str(args.model),
-                rebuild=bool(args.rebuild),
-                only_missing=bool(args.only_missing),
-                max_workers=worker_override if worker_override is not None else None,
-                worker_batch_size=int(args.nlp_batch_size),
+                options=NlpRunOptions(
+                    rebuild=bool(args.rebuild),
+                    only_missing=bool(args.only_missing),
+                    max_workers=worker_override if worker_override is not None else None,
+                    worker_batch_size=int(args.nlp_batch_size),
+                    enable_entities=True,
+                ),
             )
             log = get_structured_logger("tag_onboarding", run_id=run_id, context=ctx, **_obs_kwargs())
             log.info("cli.tag_onboarding.nlp_completed", extra=stats)

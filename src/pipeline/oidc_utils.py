@@ -40,6 +40,17 @@ def _read_env(name: str, *, required: bool = False) -> Optional[str]:
     return None
 
 
+def _read_int_env(name: str, *, default: int, min_value: int, max_value: int) -> int:
+    raw = _read_env(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except Exception:
+        return default
+    return max(min_value, min(max_value, value))
+
+
 def fetch_github_id_token(
     audience: str,
     *,
@@ -74,7 +85,8 @@ def fetch_github_id_token(
         headers={"Authorization": f"Bearer {req_token}"},
     )
     payload: dict[str, Any] | None = None
-    for attempt in (1, 2):
+    max_attempts = _read_int_env("OIDC_TOKEN_MAX_ATTEMPTS", default=2, min_value=1, max_value=5)
+    for attempt in range(1, max_attempts + 1):
         try:
             with getattr(urllib.request, "urlopen")(
                 request, timeout=10
@@ -86,11 +98,11 @@ def fetch_github_id_token(
                 "oidc.github.token.error",
                 extra={
                     "attempt": attempt,
-                    "retrying": attempt == 1,
+                    "retrying": attempt < max_attempts,
                     "err": str(exc).splitlines()[:1],
                 },
             )
-            if attempt == 2:
+            if attempt == max_attempts:
                 return None
 
     if payload is None:

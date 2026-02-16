@@ -517,7 +517,7 @@ def _execute_search_pipeline(
 ) -> list[SearchResult]:
     t_total_start = time.perf_counter()
 
-    embed_result = _embed_query_or_soft_fail(
+    embed_result = _compute_query_vector(
         params,
         embeddings_client,
         runtime=runtime,
@@ -526,7 +526,7 @@ def _execute_search_pipeline(
         return []
     query_vector, t_emb_ms = embed_result
 
-    fetch_result = _fetch_candidates_or_soft_fail(
+    fetch_result = _load_and_filter_candidates(
         params,
         runtime=runtime,
     )
@@ -534,7 +534,7 @@ def _execute_search_pipeline(
         return []
     candidates, t_fetch_ms = fetch_result
 
-    rank_result = _rank_or_soft_fail(
+    rank_result = _rank_candidates_with_budget(
         query_vector,
         candidates,
         params,
@@ -563,6 +563,33 @@ def _execute_search_pipeline(
         budget_hit=bool(rank_meta["budget_hit"]),
     )
     return scored_items
+
+
+def _compute_query_vector(
+    params: QueryParams,
+    embeddings_client: EmbeddingsClient,
+    *,
+    runtime: _SearchRuntimeState,
+) -> tuple[list[float], float] | None:
+    return _embed_query_or_soft_fail(params, embeddings_client, runtime=runtime)
+
+
+def _load_and_filter_candidates(
+    params: QueryParams,
+    *,
+    runtime: _SearchRuntimeState,
+) -> tuple[list[dict[str, Any]], float] | None:
+    return _fetch_candidates_or_soft_fail(params, runtime=runtime)
+
+
+def _rank_candidates_with_budget(
+    query_vector: list[float],
+    candidates: list[dict[str, Any]],
+    params: QueryParams,
+    *,
+    runtime: _SearchRuntimeState,
+) -> tuple[list[SearchResult], dict[str, Any]] | None:
+    return _rank_or_soft_fail(query_vector, candidates, params, runtime=runtime)
 
 
 def search(
