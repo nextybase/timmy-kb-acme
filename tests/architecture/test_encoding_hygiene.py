@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -35,8 +36,12 @@ _SUSPICIOUS_TOKENS = {
 
 
 def _resolve_base_commit() -> str:
+    env_base = os.environ.get("GITHUB_BASE_SHA", "").strip()
+    if env_base:
+        return env_base
+
     git_path = _git_path()
-    for target in ("origin/main", "main"):
+    for target in ("origin/main", "refs/remotes/origin/main", "main"):
         try:
             return subprocess.check_output(
                 [git_path, "merge-base", "HEAD", target],
@@ -46,7 +51,15 @@ def _resolve_base_commit() -> str:
             ).strip()
         except subprocess.CalledProcessError:
             continue
-    raise RuntimeError("Impossibile determinare il merge-base con main.")
+    try:
+        return subprocess.check_output(
+            [git_path, "rev-parse", "HEAD^"],
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+        ).strip()
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError("Impossibile determinare un commit base per il delta.") from exc
 
 
 def _iter_delta_targets() -> list[Path]:
