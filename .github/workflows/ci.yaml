@@ -228,10 +228,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install --requirement requirements-dev.txt
           pip install playwright pytest-playwright
+      - name: Detect pytest e2e files
+        id: detect-e2e
+        shell: bash
+        run: |
+          if find tests/e2e -type f -name 'test_*.py' | grep -q .; then
+            echo "has_e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_e2e=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Install Playwright browsers
+        if: steps.detect-e2e.outputs.has_e2e == 'true'
         run: python -m playwright install --with-deps chromium
       - name: Pytest e2e
+        if: steps.detect-e2e.outputs.has_e2e == 'true'
         run: pytest -q -m "e2e" --maxfail=1
+      - name: E2E pytest skipped (no test files)
+        if: steps.detect-e2e.outputs.has_e2e != 'true'
+        run: echo "No tests/e2e/test_*.py found; skipping pytest e2e job."
       - name: Upload e2e artifacts
         if: failure()
         uses: actions/upload-artifact@v4 # v4.4.3
