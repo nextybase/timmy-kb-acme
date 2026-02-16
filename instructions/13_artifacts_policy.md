@@ -184,8 +184,8 @@ Legend: CORE = deterministic pipeline artifact; CORE-GATE = normative prerequisi
 ### A.1 Workspace & config
 | Producer (file:function) | Path target | Output type | Consumer | Class | Dependency/capability | Fallback |
 | --- | --- | --- | --- | --- | --- | --- |
-| `src/pipeline/workspace_bootstrap.py:bootstrap_client_workspace`<br>`bootstrap_dummy_workspace`<br>`migrate_or_repair_workspace` | `output/timmy-kb-<slug>/config/config.yaml`<br>`output/timmy-kb-<slug>/book/README.md`<br>`output/timmy-kb-<slug>/book/SUMMARY.md` | YAML + Markdown | `pipeline.context`, `WorkspaceLayout`, UI/CLI | CORE | Template `config/config.yaml` | No (fail-fast if template missing) |
-| `src/pipeline/workspace_bootstrap.py:bootstrap_client_workspace`<br>`bootstrap_dummy_workspace`<br>`migrate_or_repair_workspace` | `output/timmy-kb-<slug>/{raw,normalized,semantic,book,logs,config}/` | Workspace directories | `WorkspaceLayout`, UI/CLI | CORE | FS permissions | No (fail-fast on file system errors) |
+| `src/pipeline/workspace_bootstrap.py:bootstrap_client_workspace`<br>`bootstrap_dummy_workspace` | `output/timmy-kb-<slug>/config/config.yaml`<br>`output/timmy-kb-<slug>/book/README.md`<br>`output/timmy-kb-<slug>/book/SUMMARY.md` | YAML + Markdown | `pipeline.context`, `WorkspaceLayout`, UI/CLI | CORE | Template `config/config.yaml` | No (fail-fast if template missing) |
+| `src/pipeline/workspace_bootstrap.py:bootstrap_client_workspace`<br>`bootstrap_dummy_workspace` | `output/timmy-kb-<slug>/{raw,normalized,semantic,book,logs,config}/` | Workspace directories | `WorkspaceLayout`, UI/CLI | CORE | FS permissions | No (fail-fast on file system errors) |
 | `src/pipeline/context.py:_ensure_config` | `output/timmy-kb-<slug>/config/config.yaml` | YAML | `Settings.load`, UI/CLI | CORE | Template `config/config.yaml` | No (fail-fast if template missing) |
 | `src/pipeline/config_utils.py:write_client_config_file`<br>`merge_client_config_from_template`<br>`update_config_with_drive_ids` | `output/timmy-kb-<slug>/config/config.yaml` | YAML | Pipeline/CLI/UI | CORE | PyYAML, path safety | No (fail-fast on errors) |
 | `src/pipeline/config_utils.py:write_client_config_file`<br>`merge_client_config_from_template` | `output/timmy-kb-<slug>/config/config.yaml.bak` | Backup YAML | Operator (rollback) | SERVICE | FS copy | No (error if backup fails) |
@@ -194,6 +194,8 @@ Legend: CORE = deterministic pipeline artifact; CORE-GATE = normative prerequisi
 | `src/timmy_kb/cli/pre_onboarding.py:ensure_local_workspace_for_ui` | `output/timmy-kb-<slug>/config/assistant_vision_system_prompt.txt` | TXT prompt | Vision provisioning | CORE (conditional) | Source `config/assistant_vision_system_prompt.txt` | Condition:<br>- required **only** when Vision capability is active (Vision assistant in strict/structured output);<br>Behavior:<br>- if Vision is active and the prompt is missing or empty → FAIL-FAST (ConfigError / PipelineError).<br>- if Vision is inactive → the artifact is not required and is not synthesized implicitly.<br>Notes:<br>- the workspace version (if present) is a SERVICE artifact and must not influence runtime when Vision is inactive. |
 | `src/ui/pages/new_client.py`<br>`src/timmy_kb/cli/pre_onboarding.py:ensure_local_workspace_for_ui` | `output/timmy-kb-<slug>/config/VisionStatement.pdf` | PDF | `visionstatement.yaml` + mapping | CORE (conditional) | User upload | No (missing file blocks Vision) |
 | `src/ui/fine_tuning/vision_modal.py:_ensure_workspace_pdf` | `output/timmy-kb-<slug>/config/VisionStatement.pdf` | PDF | UI Vision modal | CORE (conditional) | None | No (missing file blocks Vision) |
+
+Note (A.1): bootstrap is idempotent, no migration/repair in runtime core.
 
 ### A.2 Vision & mapping
 Note: `visionstatement.yaml` exists only in the workspace (`output/timmy-kb-<slug>/config/visionstatement.yaml`); the repo root keeps `config/vision_template.yaml` as the contract.
