@@ -21,6 +21,7 @@ Design:
 
 from __future__ import annotations
 
+import os
 import time
 from collections.abc import Sequence
 from contextlib import nullcontext
@@ -183,11 +184,18 @@ def _materialize_query_vector(
     kwargs: dict[str, str | None] = {}
     if embedding_model is not None:
         kwargs["model"] = embedding_model
+    allow_model_fallback = os.getenv("TIMMY_ALLOW_EMBEDDING_MODEL_FALLBACK", "0") == "1"
 
     try:
         payload = embeddings_client.embed_texts(*args, **kwargs)  # type: ignore[call-arg]
     except TypeError as exc:
-        if kwargs and "model" in str(exc):
+        # Beta strict: fallback implicito disabilitato di default.
+        if kwargs and allow_model_fallback and "unexpected keyword argument" in str(exc) and "model" in str(exc):
+            _safe_log(
+                "retriever.query.embed_model_fallback.enabled",
+                level="warning",
+                extra={"slug": params.slug, "scope": params.scope, "model": embedding_model},
+            )
             try:
                 payload = embeddings_client.embed_texts(*args)
             except Exception as inner_exc:

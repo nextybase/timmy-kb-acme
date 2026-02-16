@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -43,12 +44,19 @@ def _safe_log(logger: logging.Logger, level: str, event: str, *, extra: Mapping[
     """Log su canale strutturato; in strict fallisce esplicitamente se il logging non e' disponibile."""
     payload = dict(extra or {})
     strict_mode = is_beta_strict()
+    strict_logging = os.getenv("TIMMY_STRICT_LOGGING", "0") == "1"
     try:
         log_fn = getattr(logger, level, None)
         if callable(log_fn):
             log_fn(event, extra=payload)
             return
     except Exception as exc:
+        if strict_mode and strict_logging:
+            raise PipelineError(
+                "Logging strutturato non disponibile in strict runtime.",
+                code="logging.channel.failed",
+                component="pipeline.content_utils",
+            ) from exc
         try:
             _FALLBACK_LOG.warning(
                 "structured_logger_failed",

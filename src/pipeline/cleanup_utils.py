@@ -13,6 +13,7 @@ Ruolo:
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from pathlib import Path
 from typing import Any, Dict
@@ -64,6 +65,10 @@ def clean_legacy_artifacts(
     Restituisce:
         Report con esito per ciascun target pulito.
     """
+    if os.getenv("TIMMY_ENABLE_LEGACY_CLEANUP", "0") != "1":
+        # Beta strict: cleanup legacy disabilitato by-default, abilitarlo solo per migrazioni controllate.
+        return {"ok": True, "reason": "disabled", "targets": []}
+
     _logger = get_structured_logger(logger_name, context=context)
 
     layout = WorkspaceLayout.from_context(context)  # type: ignore[arg-type]
