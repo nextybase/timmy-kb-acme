@@ -345,7 +345,7 @@ def run_vision_with_gating(
 
     try:
         metrics = _mapping_metrics(Path(repo_root_dir), _artifacts_paths(repo_root_dir)["mapping"])
-    except Exception as exc:
+    except (ConfigError, OSError, ValueError, UnicodeError) as exc:
         raise ConfigError(
             f"semantic_mapping.yaml non leggibile: {exc}",
             slug=slug,

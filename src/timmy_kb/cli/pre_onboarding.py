@@ -4,7 +4,7 @@
 """
 Orchestratore della fase di pre-onboarding per Timmy-KB.
 
-Responsabilità:
+Responsabilita:
 - Preparare il contesto locale del cliente (`output/timmy-kb-<slug>/...`).
 - Validare/minimizzare la configurazione e generare/aggiornare `config.yaml`.
 - Creare struttura locale e la struttura remota su Google Drive.
@@ -73,53 +73,10 @@ from storage import decision_ledger
 
 bootstrap_client_workspace = _pipeline_bootstrap_client_workspace
 
-create_drive_folder = None
-create_drive_minimal_structure = None
-get_drive_service = None
-upload_config_to_drive_folder = None
-_drive_import_error: Optional[str] = None
-try:
-    import pipeline.drive_utils as _du
-
-    create_drive_folder = _du.create_drive_folder
-    create_drive_minimal_structure = getattr(_du, "create_drive_minimal_structure", None)
-    get_drive_service = _du.get_drive_service
-    upload_config_to_drive_folder = _du.upload_config_to_drive_folder
-except ImportError as exc:
-    # Import opzionale: in modalità --dry-run non è richiesto googleapiclient
-    _drive_import_error = str(exc).splitlines()[0]
-
 
 def _prompt(msg: str) -> str:
     """Raccoglie input da CLI (abilitato solo negli orchestratori)."""
     return input(msg).strip()
-
-
-def _require_drive_utils() -> None:
-    """Verifica che le utilità Google Drive siano disponibili e callabili.
-
-    Solleva ConfigError con istruzioni d'installazione se mancanti.
-    """
-    missing: list[str] = []
-    if not callable(get_drive_service):
-        missing.append("get_drive_service")
-    if not callable(create_drive_folder):
-        missing.append("create_drive_folder")
-    if not callable(create_drive_minimal_structure):
-        missing.append("create_drive_minimal_structure")
-    if not callable(upload_config_to_drive_folder):
-        missing.append("upload_config_to_drive_folder")
-    if missing:
-        msg = (
-            "Supporto Google Drive non disponibile: funzioni non presenti/callabili: "
-            f"{', '.join(missing)}.\n"
-            "Installa gli extra Drive e rileggi i docs:\n"
-            "  pip install .[drive]\n"
-            "Oppure disattiva il ramo Drive (usa --dry-run o source=local)."
-        )
-        if _drive_import_error:
-            msg = f"{msg}\nDettagli import Drive: {_drive_import_error}"
-        raise ConfigError(msg)
 
 
 def _sync_env(context: ClientContext, *, require_env: bool) -> None:
@@ -263,14 +220,12 @@ def _is_local_only_mode(context: ClientContext, *, dry_run: bool) -> bool:
     try:
         cfg = get_client_config(context) or {}
     except Exception as exc:
-        if is_beta_strict():
-            raise ConfigError(
-                "Impossibile determinare la modalità local-only: configurazione non leggibile.",
-                slug=context.slug,
-                error=str(exc),
-                code="local_only.check_failed",
-            ) from exc
-        return False
+        raise ConfigError(
+            "Impossibile determinare la modalita local-only: configurazione non leggibile.",
+            slug=context.slug,
+            error=str(exc),
+            code="local_only.check_failed",
+        ) from exc
     ui_section = cfg.get("ui")
     if not isinstance(ui_section, dict):
         return False
@@ -395,7 +350,7 @@ def ensure_local_workspace_for_ui(
     Comportamento:
       - Prepara contesto offline (interactive=False, require_drive_env=False) e logger.
       - Riusa la creazione struttura locale e config tramite `_create_local_structure`.
-      - Se `vision_statement_pdf` è fornito, lo salva in `config/VisionStatement.pdf`
+      - Se `vision_statement_pdf` e fornito, lo salva in `config/VisionStatement.pdf`
         (scrittura atomica) e aggiorna `config.yaml` con:
           * `ai.vision.vision_statement_pdf: 'config/VisionStatement.pdf'`
           * `client_name: <client_name>` (se fornito)
@@ -441,7 +396,7 @@ def ensure_local_workspace_for_ui(
             updates["meta"] = {"client_name": resolved_name}
         update_config_with_drive_ids(context, updates, logger=logger)
 
-    # --- NOVITÀ: merge dal template di repository ---
+    # --- NOVITA: merge dal template di repository ---
     try:
         # Permette override nei test/ambienti: TEMPLATE_CONFIG_ROOT=/path/alla/repo
         template_root = get_env_var("TEMPLATE_CONFIG_ROOT", required=False)
@@ -530,10 +485,14 @@ def _drive_phase(
             "DRIVE_ID": mask_partial(context.env.get("DRIVE_ID")),
         },
     )
-    from typing import Any, Callable, cast
+    from pipeline.drive_utils import (
+        create_drive_folder,
+        create_drive_minimal_structure,
+        get_drive_service,
+        upload_config_to_drive_folder,
+    )
 
-    gds = cast(Callable[..., Any], get_drive_service)
-    service = gds(context)
+    service = get_drive_service(context)
 
     drive_parent_id = context.env.get("DRIVE_ID")
     if not drive_parent_id:
@@ -546,8 +505,7 @@ def _drive_phase(
     )
 
     with phase_scope(logger, stage="drive_create_client_folder", customer=context.slug) as m:
-        cdf = cast(Callable[..., str], create_drive_folder)
-        client_folder_id = cdf(service, context.slug, parent_id=drive_parent_id, redact_logs=redact)
+        client_folder_id = create_drive_folder(service, context.slug, parent_id=drive_parent_id, redact_logs=redact)
         m.set_artifacts(1)
     logger.info(
         "cli.pre_onboarding.drive.folder_created",
@@ -555,8 +513,7 @@ def _drive_phase(
     )
 
     with phase_scope(logger, stage="drive_create_structure_minimal", customer=context.slug) as m:
-        cdm = cast(Callable[..., Dict[str, str]], create_drive_minimal_structure)
-        created_map = cdm(service, client_folder_id, redact_logs=redact)
+        created_map = create_drive_minimal_structure(service, client_folder_id, redact_logs=redact)
         try:
             m.set_artifacts(len(created_map or {}))
         except Exception:
@@ -585,8 +542,9 @@ def _drive_phase(
         )
 
     with phase_scope(logger, stage="drive_upload_config", customer=context.slug) as m:
-        ucf = cast(Callable[..., str], upload_config_to_drive_folder)
-        uploaded_cfg_id = ucf(service, context, parent_id=client_folder_id, redact_logs=redact)
+        uploaded_cfg_id = upload_config_to_drive_folder(
+            service, context, parent_id=client_folder_id, redact_logs=redact
+        )
         m.set_artifacts(1)
     logger.info(
         "cli.pre_onboarding.drive_config_uploaded",
@@ -669,7 +627,7 @@ def pre_onboarding_main(
                     extra={"slug": context.slug, "mode": reason},
                 )
                 raise ConfigError(
-                    "Modalità local-only/dry-run non supportata in strict pre_onboarding.",
+                    "Modalita local-only/dry-run non supportata in strict pre_onboarding.",
                     slug=context.slug,
                     code="local_only.strict_disallowed",
                 )
@@ -708,8 +666,6 @@ def pre_onboarding_main(
             return
 
         current_stage = "drive_phase"
-        # Verifica disponibilita funzioni Drive prima della fase remota
-        _require_drive_utils()
         _drive_phase(
             context,
             logger,

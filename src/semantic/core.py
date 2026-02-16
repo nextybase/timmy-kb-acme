@@ -106,7 +106,7 @@ def _sanitize_kw(value: str) -> str:
 
 def _sanitize_and_dedup_mapping(mapping: Dict[str, List[str]]) -> Dict[str, List[str]]:
     out: Dict[str, List[str]] = {}
-    for concept, values in (mapping or {}).items():
+    for concept, values in mapping.items():
         seen: set[str] = set()
         items: List[str] = []
         for raw in values or []:
@@ -147,8 +147,11 @@ def extract_semantic_concepts(
     logger = get_structured_logger("semantic.extract", context=context)
     mapping = load_semantic_mapping(context)
     if not mapping:
-        logger.warning("semantic.extract.mapping_empty", extra={"slug": context.slug})
-        return {}
+        raise PipelineError(
+            "Mapping semantico vuoto: estrazione non attestabile.",
+            slug=getattr(context, "slug", None),
+            code="semantic.mapping.empty",
+        )
     layout = WorkspaceLayout.from_context(context)
     files = _list_markdown_files(context, logger, layout=layout)
 

@@ -162,20 +162,20 @@ def test_extract_semantic_concepts_respects_max_scan_bytes(tmp_path: Path) -> No
     assert out["concept"] == [{"file": "small.md", "keyword": "alpha"}]
 
 
-def test_extract_semantic_concepts_short_circuits_on_empty_mapping(monkeypatch, tmp_path: Path) -> None:
+def test_extract_semantic_concepts_fails_on_empty_mapping(monkeypatch, tmp_path: Path) -> None:
     base = tmp_path / "kb"
     md = base / "book"
     cfg = base / "config"
     _prepare_layout(base, md, strict=True)
     (md / "x.md").write_text("irrelevant", encoding="utf-8")
 
-    # Force load_semantic_mapping to return empty mapping to test short-circuit
+    # Force load_semantic_mapping to return empty mapping: strict mode must hard-fail.
 
     monkeypatch.setattr(se, "load_semantic_mapping", lambda context, logger=None: {})
 
     ctx = DummyCtx(slug="s3", base_dir=base, book_dir=md, config_dir=cfg, repo_root_dir=base)
-    out = extract_semantic_concepts(cast(Any, ctx))
-    assert out == {}
+    with pytest.raises(PipelineError, match="Mapping semantico vuoto"):
+        extract_semantic_concepts(cast(Any, ctx))
 
 
 def test_load_semantic_mapping_requires_tags_db(tmp_path: Path) -> None:
