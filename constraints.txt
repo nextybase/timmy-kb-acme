@@ -16,7 +16,6 @@ anyio==4.11.0
     #   openai
 attrs==25.4.0
     # via
-    #   hypothesis
     #   jsonschema
     #   referencing
 blinker==1.9.0
@@ -127,7 +126,7 @@ huggingface-hub==0.36.0
     #   sentence-transformers
     #   tokenizers
     #   transformers
-hypothesis==6.112.2
+hypothesis==6.151.6
     # via -r requirements.in
 idna==3.11
     # via
