@@ -270,7 +270,7 @@ nvidia-nvtx-cu12==12.8.90
     # via torch
 oauthlib==3.3.1
     # via requests-oauthlib
-openai==2.3.0
+openai==2.21.0
     # via -r requirements.in
 packageurl-python==0.17.5
     # via cyclonedx-python-lib
