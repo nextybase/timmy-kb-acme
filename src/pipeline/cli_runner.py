@@ -6,7 +6,7 @@ import argparse
 import sys
 from typing import Callable, NoReturn
 
-from pipeline.exceptions import ConfigError, PipelineError, exit_code_for
+from pipeline.exceptions import ConfigError, PipelineError, UnexpectedError, exit_code_for
 
 CliMainFn = Callable[[argparse.Namespace], int | None]
 ParseArgsFn = Callable[[], argparse.Namespace]
@@ -32,7 +32,7 @@ def run_cli_orchestrator(entry_name: str, parse_args: ParseArgsFn, main_fn: CliM
     except (ConfigError, PipelineError) as exc:
         sys.exit(exit_code_for(exc))
     except Exception as exc:  # noqa: BLE001 - ultima linea di difesa
-        sys.exit(exit_code_for(exc))
+        sys.exit(exit_code_for(UnexpectedError(f"{type(exc).__name__}: {exc}")))
 
     if isinstance(result, int):
         sys.exit(result)

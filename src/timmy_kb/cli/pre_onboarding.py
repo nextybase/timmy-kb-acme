@@ -881,7 +881,7 @@ def main(args: argparse.Namespace) -> None:
                 "cli.pre_onboarding.exit.unhandled",
                 extra=_error_extra(str(exc).splitlines()[:1], slug),
             )
-            raise PipelineError(str(exc)) from exc
+            raise
 
 
 if __name__ == "__main__":

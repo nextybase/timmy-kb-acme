@@ -82,7 +82,7 @@ def test_run_cli_orchestrator_maps_generic_exception(monkeypatch: pytest.MonkeyP
     with pytest.raises(SystemExit):
         run_cli_orchestrator("dummy", _parse, _main)
 
-    assert codes == [exit_code_for(CustomError("boom"))]
+    assert codes == [99]
 
 
 def test_run_cli_orchestrator_keyboard_interrupt(monkeypatch: pytest.MonkeyPatch) -> None:

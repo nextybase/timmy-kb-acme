@@ -141,7 +141,7 @@ def main(args: argparse.Namespace) -> None:
         raise
     except Exception as exc:  # noqa: BLE001
         early_logger.error("cli.kg_build.failed", extra={"error": str(exc)})
-        raise PipelineError(str(exc)) from exc
+        raise
 
 
 if __name__ == "__main__":

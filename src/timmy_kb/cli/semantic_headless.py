@@ -182,7 +182,7 @@ def run_semantic_headless(
                 "converted_count": 0,
                 "enriched_count": 0,
                 "summary_readme": False,
-                "exit_code": 1,
+                "exit_code": 99,
             }
 
         try:
@@ -211,7 +211,7 @@ def run_semantic_headless(
                 "converted_count": 0,
                 "enriched_count": 0,
                 "summary_readme": False,
-                "exit_code": 1,
+                "exit_code": 99,
             }
 
     log.info("semantic.headless.completed", extra={"converted_count": conv, "enriched_count": enr})
@@ -235,14 +235,21 @@ def run_semantic_headless(
 
 
 def main() -> int:
-    ensure_strict_runtime(context="cli.semantic_headless", require_workspace_root=True)
-    args = _parse_args()
-    result = run_semantic_headless(
-        slug=args.slug,
-        non_interactive=bool(args.non_interactive),
-        log_level=str(args.log_level),
-    )
-    return int(result.get("exit_code", 1))
+    try:
+        ensure_strict_runtime(context="cli.semantic_headless", require_workspace_root=True)
+        args = _parse_args()
+        result = run_semantic_headless(
+            slug=args.slug,
+            non_interactive=bool(args.non_interactive),
+            log_level=str(args.log_level),
+        )
+        return int(result.get("exit_code", 99))
+    except KeyboardInterrupt:
+        return 130
+    except ConfigError:
+        return 2
+    except Exception:
+        return 99
 
 
 if __name__ == "__main__":

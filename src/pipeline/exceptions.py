@@ -97,6 +97,10 @@ class PipelineError(Exception):
         return f"{base_msg}{context_info}"
 
 
+class UnexpectedError(PipelineError):
+    """Errore inatteso (fuori contratto) mappato a exit code 99."""
+
+
 # ---------------------------------------------------------------------------
 # Errori applicativi extra-pipeline
 # ---------------------------------------------------------------------------
@@ -276,6 +280,7 @@ class InvalidSlug(PipelineError):
 EXIT_CODES = {
     "PipelineError": 1,
     "ConfigError": 2,
+    "UnexpectedError": 99,
     "WorkspaceNotFound": 2,
     "WorkspaceLayoutInvalid": 2,
     "WorkspaceLayoutInconsistent": 2,
@@ -291,14 +296,15 @@ EXIT_CODES = {
 
 
 def exit_code_for(exc: BaseException) -> int:
-    """Restituisce il codice di uscita per un'eccezione (default: PipelineError=1)."""
-    return EXIT_CODES.get(type(exc).__name__, EXIT_CODES["PipelineError"])
+    """Restituisce il codice di uscita per un'eccezione (default: UnexpectedError=99)."""
+    return EXIT_CODES.get(type(exc).__name__, EXIT_CODES["UnexpectedError"])
 
 
 __all__ = [
     # basi
     "TimmyError",
     "PipelineError",
+    "UnexpectedError",
     # extra-pipeline
     "RetrieverError",
     "CapabilityUnavailableError",

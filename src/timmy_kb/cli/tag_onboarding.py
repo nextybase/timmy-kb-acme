@@ -52,7 +52,7 @@ from pipeline.artifact_policy import enforce_core_artifacts
 from pipeline.beta_flags import is_beta_strict
 from pipeline.cli_runner import run_cli_orchestrator
 from pipeline.context import ClientContext
-from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, exit_code_for
+from pipeline.exceptions import ArtifactPolicyViolation, ConfigError, PipelineError, UnexpectedError, exit_code_for
 from pipeline.logging_utils import get_structured_logger
 from pipeline.metrics import start_metrics_server_once
 from pipeline.normalized_index import validate_index as validate_normalized_index
@@ -1060,9 +1060,9 @@ def main(args: argparse.Namespace) -> int | None:
             logger = get_structured_logger("tag_onboarding", run_id=run_id, **_obs_kwargs())
             logger.error(
                 "cli.tag_onboarding.failed",
-                extra={"slug": slug, "error": str(exc), "exit_code": exit_code_for(PipelineError(str(exc)))},
+                extra={"slug": slug, "error": str(exc), "exit_code": exit_code_for(UnexpectedError(str(exc)))},
             )
-            raise PipelineError(str(exc)) from exc
+            raise
 
 
 if __name__ == "__main__":
