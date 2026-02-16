@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sqlite3
 from pathlib import Path
 from typing import Any, Iterable, cast
 
@@ -91,20 +92,20 @@ def run_doc_entities_pipeline(
             file_path=(workspace_root / "config" / "config.yaml"),
         ) from exc
 
-    try:
-        mapping = cfg.mapping or {}
-        lexicon_entries = build_lexicon(mapping)
-        lexicon = build_lexicon_map(lexicon_entries)
-        if not lexicon:
-            raise ConfigError(
-                f"entities.lexicon.empty for slug={slug}",
-                slug=slug,
-                file_path=(semantic_dir / "semantic_mapping.yaml"),
-            )
+    mapping = cfg.mapping or {}
+    lexicon_entries = build_lexicon(mapping)
+    lexicon = build_lexicon_map(lexicon_entries)
+    if not lexicon:
+        raise ConfigError(
+            f"entities.lexicon.empty for slug={slug}",
+            slug=slug,
+            file_path=(semantic_dir / "semantic_mapping.yaml"),
+        )
 
+    try:
         nlp = _load_spacy(cfg.spacy_model)
         matcher = make_phrase_matcher(nlp, lexicon)
-    except Exception as exc:
+    except (OSError, IOError, ValueError) as exc:
         raise PipelineError(
             f"entities.spacy.load failed for slug={slug}",
             slug=slug,
@@ -118,7 +119,7 @@ def run_doc_entities_pipeline(
         rel_uid = pdf_path.relative_to(repo_root_dir).as_posix()
         try:
             text = _read_document_text(pdf_path)
-        except Exception as exc:
+        except (OSError, IOError, ValueError) as exc:
             raise PipelineError(
                 f"entities.pdf.read failed for slug={slug}",
                 slug=slug,
@@ -156,7 +157,7 @@ def run_doc_entities_pipeline(
         ]
         save_doc_entities(db_path, records)
         hits_count = len(records)
-    except Exception as exc:
+    except (OSError, IOError, ValueError, sqlite3.Error) as exc:
         raise PipelineError(
             f"entities.persist failed for slug={slug}",
             slug=slug,

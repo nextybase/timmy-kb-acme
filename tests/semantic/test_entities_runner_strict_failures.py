@@ -53,9 +53,24 @@ def _patch_success_primitives(monkeypatch: pytest.MonkeyPatch, *, persist_raises
 def test_run_doc_entities_pipeline_hard_fails_on_spacy_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo_root_dir, raw_dir, semantic_dir, db_path = _paths(tmp_path)
     _patch_success_primitives(monkeypatch)
-    monkeypatch.setattr("semantic.entities_runner._load_spacy", lambda _model: (_ for _ in ()).throw(RuntimeError("x")))
+    monkeypatch.setattr("semantic.entities_runner._load_spacy", lambda _model: (_ for _ in ()).throw(OSError("x")))
 
     with pytest.raises(PipelineError, match="entities.spacy.load failed for slug=dummy"):
+        run_doc_entities_pipeline(
+            repo_root_dir=repo_root_dir,
+            raw_dir=raw_dir,
+            semantic_dir=semantic_dir,
+            db_path=db_path,
+            slug="dummy",
+        )
+
+
+def test_run_doc_entities_pipeline_spacy_unexpected_bubbles(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo_root_dir, raw_dir, semantic_dir, db_path = _paths(tmp_path)
+    _patch_success_primitives(monkeypatch)
+    monkeypatch.setattr("semantic.entities_runner._load_spacy", lambda _model: (_ for _ in ()).throw(RuntimeError("x")))
+
+    with pytest.raises(RuntimeError, match="x"):
         run_doc_entities_pipeline(
             repo_root_dir=repo_root_dir,
             raw_dir=raw_dir,

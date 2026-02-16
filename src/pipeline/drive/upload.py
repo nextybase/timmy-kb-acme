@@ -236,7 +236,39 @@ def create_drive_folder(
 ) -> str:
     if not name:
         raise DriveUploadError("Nome cartella mancante.")
-    existing = _list_existing_folder_by_name(service, parent_id, name)
+    try:
+        existing = _list_existing_folder_by_name(service, parent_id, name)
+    except Exception as e:  # noqa: BLE001
+        # Boundary rule: errori operativi Drive (API/retry/network/quota) => DriveUploadError (exit 22).
+        # Bug "puri" devono emergere come unexpected (exit 99): applichiamo una heuristica conservativa.
+        drive_like = False
+        try:
+            from googleapiclient.errors import HttpError  # type: ignore
+
+            if isinstance(e, HttpError):
+                drive_like = True
+        except Exception:
+            # Se googleapiclient non è disponibile qui, siamo già fuori dal percorso operativo Drive.
+            drive_like = False
+
+        if getattr(e, "resp", None) is not None:
+            drive_like = True
+        if type(e).__name__ == "_RetryBudgetExceeded":
+            drive_like = True
+
+        if not drive_like:
+            raise
+
+        logger.error(
+            "drive.upload.folder.list_error",
+            extra={
+                **_drive_log_extra(parent_id=parent_id or "root", redact_logs=redact_logs),
+                "folder_name": name,
+                "exc_type": type(e).__name__,
+                "error_message": str(e)[:300],
+            },
+        )
+        raise DriveUploadError(f"Listing cartella Drive fallito: {name}") from e
     if existing:
         logger.info(
             "drive.upload.folder.reuse",

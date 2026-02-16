@@ -496,7 +496,7 @@ def run_nlp_to_db(
         try:
             entities_module = importlib.import_module("semantic.entities_runner")
             run_doc_entities_pipeline = getattr(entities_module, "run_doc_entities_pipeline")
-        except Exception as exc:
+        except (ImportError, ModuleNotFoundError) as exc:
             log.error(
                 "tag_onboarding.entities.failed",
                 extra={
@@ -550,7 +550,9 @@ def run_nlp_to_db(
                 "entities_reason": entities_reason or "processed",
                 "entities_backend": entities_backend,
             }
-        except Exception as exc:  # pragma: no cover
+        except (PipelineError, ConfigError):
+            raise
+        except (OSError, IOError, ValueError) as exc:  # pragma: no cover
             log.error(
                 "tag_onboarding.entities.failed",
                 extra={

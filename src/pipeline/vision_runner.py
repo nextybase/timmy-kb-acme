@@ -24,7 +24,7 @@ from pipeline.beta_flags import is_beta_strict
 from pipeline.config_utils import get_client_config, get_drive_id
 from pipeline.drive.upload import create_drive_structure_from_names
 from pipeline.env_utils import get_env_var
-from pipeline.exceptions import ConfigError, WorkspaceLayoutInvalid
+from pipeline.exceptions import ConfigError, DriveUploadError, WorkspaceLayoutInvalid
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
@@ -162,18 +162,20 @@ def _materialize_raw_structure(ctx: Any, logger: logging.Logger, *, repo_root_di
             parent_folder_id=drive_parent,
             log=logger,
         )
-    except Exception as exc:
+    except DriveUploadError as exc:
+        # Drive operational boundary: deve uscire come DriveUploadError (exit 22), non mascherato come ConfigError.
         logger.error(
             "raw_structure_drive_failed",
-            extra={"slug": slug, "reason": "drive_error", "error": str(exc)},
+            extra={"slug": slug, "reason": "drive_upload_error", "error": str(exc)},
         )
-        raise ConfigError(
-            "Drive non disponibile: impossibile materializzare raw su Drive.",
-            slug=slug,
-            file_path=str(mapping_path),
-            code="vision.drive.unavailable",
-            component="vision_runner",
-        ) from exc
+        raise
+    except ConfigError as exc:
+        # Config boundary (creds/env/config): resta ConfigError (exit 2).
+        logger.error(
+            "raw_structure_drive_failed",
+            extra={"slug": slug, "reason": "config_error", "error": str(exc)},
+        )
+        raise
 
     logger.info(
         "raw_structure_drive_created",
