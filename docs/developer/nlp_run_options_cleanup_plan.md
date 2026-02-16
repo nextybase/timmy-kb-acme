@@ -1,6 +1,6 @@
 # NLP Run Options Cleanup Plan (run_nlp_to_db)
 
-Stato: pianificato (fase transitoria attiva con compatibilita legacy)
+Stato: completato (switch typed-only applicato)
 Scope: `timmy_kb.cli.tag_onboarding.run_nlp_to_db`
 
 ## Obiettivo
@@ -42,12 +42,12 @@ e mantenere solo:
 - mantenere test di regressione su API typed
 
 ## Checklist tecnica (T2)
-- [ ] Modificare signature di `run_nlp_to_db` eliminando parametri legacy.
-- [ ] Eliminare blocco `legacy_overrides` e relativo warning di deprecazione.
-- [ ] Aggiornare punti di chiamata CLI in `main(...)` (gia su `NlpRunOptions`, verificare invarianti).
-- [ ] Aggiornare eventuali punti di chiamata in test e tooling.
-- [ ] Eseguire `pre-commit run --all-files`.
-- [ ] Eseguire `python -m pytest -q`.
+- [x] Modificare signature di `run_nlp_to_db` eliminando parametri legacy.
+- [x] Eliminare blocco `legacy_overrides` e relativo warning di deprecazione.
+- [x] Aggiornare punti di chiamata CLI in `main(...)` (gia su `NlpRunOptions`, verificare invarianti).
+- [x] Aggiornare eventuali punti di chiamata in test e tooling.
+- [x] Eseguire `pre-commit run --all-files`.
+- [x] Eseguire `python -m pytest -q`.
 
 ## Test di rimozione (da applicare in T2)
 1. API typed only:

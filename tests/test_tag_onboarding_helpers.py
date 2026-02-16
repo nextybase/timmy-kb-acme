@@ -146,56 +146,28 @@ def test_repo_root_none_always_raises_config_error(monkeypatch, tmp_path: Path):
             raw_dir=normalized,
             db_path=db_path,
             repo_root_dir=None,
-            enable_entities=False,
+            options=NlpRunOptions(enable_entities=False),
         )
 
 
-def test_run_nlp_to_db_legacy_kwargs_override_options_and_emit_deprecation(monkeypatch, tmp_path: Path) -> None:
+def test_run_nlp_to_db_rejects_legacy_kwargs(monkeypatch, tmp_path: Path) -> None:
     normalized, semantic = _ensure_dirs(tmp_path)
     raw_dir = tmp_path / "workspace" / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
     db_path = semantic / "tags.db"
-
-    captured: dict[str, object] = {}
-
-    def _fake_pipeline(_conn, **kwargs):  # noqa: ANN001
-        captured.update(kwargs)
-        return {"doc_terms": 0, "terms": 0, "folders": 0}
-
-    log = _CaptureLogger()
-    monkeypatch.setattr(tag_onboarding, "get_structured_logger", lambda *_a, **_k: log, raising=True)
-    monkeypatch.setattr(tag_onboarding.nlp_runner, "run_doc_terms_pipeline", _fake_pipeline, raising=True)
-
-    options = NlpRunOptions(
-        rebuild=False,
-        only_missing=False,
-        enable_entities=False,
-        max_workers=4,
-        worker_batch_size=9,
-    )
-    run_nlp_to_db(
-        slug="s",
-        normalized_dir=normalized,
-        raw_dir=raw_dir,
-        db_path=db_path,
-        repo_root_dir=tmp_path / "workspace",
-        options=options,
-        rebuild=True,
-        only_missing=True,
-        max_workers=1,
-        worker_batch_size=3,
-        enable_entities=False,
-    )
-
-    assert captured["rebuild"] is True
-    assert captured["only_missing"] is True
-    assert captured["worker_count"] == 1
-    assert captured["worker_batch_size"] == 3
-    deprecations = [evt for evt, _extra in log.events if evt == "cli.tag_onboarding.nlp_legacy_kwargs_deprecated"]
-    assert deprecations
+    with pytest.raises(TypeError):
+        run_nlp_to_db(
+            slug="s",
+            normalized_dir=normalized,
+            raw_dir=raw_dir,
+            db_path=db_path,
+            repo_root_dir=tmp_path / "workspace",
+            options=NlpRunOptions(enable_entities=False),
+            rebuild=True,
+        )
 
 
-def test_run_nlp_to_db_options_only_no_legacy_deprecation(monkeypatch, tmp_path: Path) -> None:
+def test_run_nlp_to_db_options_only_applies_values(monkeypatch, tmp_path: Path) -> None:
     normalized, semantic = _ensure_dirs(tmp_path)
     raw_dir = tmp_path / "workspace" / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -230,5 +202,3 @@ def test_run_nlp_to_db_options_only_no_legacy_deprecation(monkeypatch, tmp_path:
     assert captured["only_missing"] is True
     assert captured["worker_count"] == 2
     assert captured["worker_batch_size"] == 5
-    deprecations = [evt for evt, _extra in log.events if evt == "cli.tag_onboarding.nlp_legacy_kwargs_deprecated"]
-    assert not deprecations

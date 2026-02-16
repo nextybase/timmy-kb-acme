@@ -43,7 +43,7 @@ import importlib
 import logging
 import os
 import uuid
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, cast
@@ -424,23 +424,11 @@ def run_nlp_to_db(
     cluster_thr: float = 0.78,
     model: str = "paraphrase-multilingual-MiniLM-L12-v2",
     options: NlpRunOptions | None = None,
-    rebuild: bool | None = None,
-    only_missing: bool | None = None,
-    max_workers: int | None = None,
-    worker_batch_size: int | None = None,
-    enable_entities: bool | None = None,
 ) -> dict[str, Any]:
     """Esegue estrazione keyword, clustering e aggregazione per cartella.
 
     Precedenza parametri:
-    - `options` definisce il contratto typed canonico.
-    - I kwargs legacy (`rebuild`, `only_missing`, `max_workers`,
-      `worker_batch_size`, `enable_entities`) restano supportati in compatibilità
-      e, quando valorizzati (non ``None``), sovrascrivono i campi di `options`.
-
-    Migrazione:
-    - l'uso di kwargs legacy emette l'evento
-      `cli.tag_onboarding.nlp_legacy_kwargs_deprecated`.
+    - `options` definisce il contratto typed canonico e unico supportato.
     """
 
     strict_mode = is_beta_strict()
@@ -460,42 +448,11 @@ def run_nlp_to_db(
 
     ensure_schema_v2(str(db_path_path))
 
-    legacy_overrides: dict[str, Any] = {}
-    if rebuild is not None:
-        legacy_overrides["rebuild"] = rebuild
-    if only_missing is not None:
-        legacy_overrides["only_missing"] = only_missing
-    if max_workers is not None:
-        legacy_overrides["max_workers"] = max_workers
-    if worker_batch_size is not None:
-        legacy_overrides["worker_batch_size"] = worker_batch_size
-    if enable_entities is not None:
-        legacy_overrides["enable_entities"] = enable_entities
-    if legacy_overrides:
-        log.warning(
-            "cli.tag_onboarding.nlp_legacy_kwargs_deprecated",
-            extra={
-                "slug": slug,
-                "legacy_fields": sorted(legacy_overrides.keys()),
-                "precedence": "legacy_overrides_options",
-            },
-        )
+    resolved_options = options or NlpRunOptions()
 
-    resolved = options or NlpRunOptions()
-    if rebuild is not None:
-        resolved = replace(resolved, rebuild=bool(rebuild))
-    if only_missing is not None:
-        resolved = replace(resolved, only_missing=bool(only_missing))
-    if max_workers is not None:
-        resolved = replace(resolved, max_workers=max_workers)
-    if worker_batch_size is not None:
-        resolved = replace(resolved, worker_batch_size=int(worker_batch_size))
-    if enable_entities is not None:
-        resolved = replace(resolved, enable_entities=bool(enable_entities))
+    worker_batch_size = max(1, int(resolved_options.worker_batch_size))
 
-    worker_batch_size = max(1, int(resolved.worker_batch_size))
-
-    if resolved.max_workers is None:
+    if resolved_options.max_workers is None:
 
         cpu_count = os.cpu_count() or 1
 
@@ -503,7 +460,7 @@ def run_nlp_to_db(
 
     else:
 
-        worker_count = max(1, int(resolved.max_workers))
+        worker_count = max(1, int(resolved_options.max_workers))
 
     if worker_count > 1:
 
@@ -522,8 +479,8 @@ def run_nlp_to_db(
             topk_folder=topk_folder,
             cluster_thr=cluster_thr,
             model=model,
-            only_missing=resolved.only_missing,
-            rebuild=resolved.rebuild,
+            only_missing=resolved_options.only_missing,
+            rebuild=resolved_options.rebuild,
             worker_count=worker_count,
             worker_batch_size=worker_batch_size,
             logger=log,
@@ -535,7 +492,7 @@ def run_nlp_to_db(
     entities_reason: str | None = None
     entities_processed_pdfs: int | None = None
     entities_skipped: bool | None = None
-    if resolved.enable_entities:
+    if resolved_options.enable_entities:
         try:
             entities_module = importlib.import_module("semantic.entities_runner")
             run_doc_entities_pipeline = getattr(entities_module, "run_doc_entities_pipeline")

@@ -13,7 +13,7 @@ from storage.tags_store import ensure_schema_v2, get_conn
 from storage.tags_store import save_doc_terms as real_save_doc_terms
 from storage.tags_store import upsert_document, upsert_folder
 from tests.support.contexts import TestClientCtx
-from timmy_kb.cli.tag_onboarding import _resolve_cli_paths, run_nlp_to_db, scan_normalized_to_db
+from timmy_kb.cli.tag_onboarding import NlpRunOptions, _resolve_cli_paths, run_nlp_to_db, scan_normalized_to_db
 
 
 def test_run_nlp_to_db_processes_nested_markdown(tmp_path, monkeypatch):
@@ -58,7 +58,14 @@ def test_run_nlp_to_db_processes_nested_markdown(tmp_path, monkeypatch):
     monkeypatch.setattr("storage.tags_store.save_doc_terms", fake_save_doc_terms)
 
     # unit test isolation: skip entities pipeline to keep the NLP-only behavior deterministic.
-    stats = run_nlp_to_db("dummy", normalized_dir, str(db_path), enable_entities=False)
+    stats = run_nlp_to_db(
+        "dummy",
+        normalized_dir,
+        normalized_dir,
+        str(db_path),
+        repo_root_dir=tmp_path,
+        options=NlpRunOptions(enable_entities=False),
+    )
 
     assert captured_text["value"] == "dummy text"
     assert captured_doc_ids == [doc_id]
@@ -74,7 +81,7 @@ def test_run_nlp_to_db_requires_repo_root_dir_in_strict(tmp_path, monkeypatch):
     db_path = tmp_path / "semantic" / "tags.db"
 
     with pytest.raises(ConfigError):
-        run_nlp_to_db("dummy", normalized_dir, str(db_path))
+        run_nlp_to_db("dummy", normalized_dir, normalized_dir, str(db_path))
 
 
 def _prepare_nlp_paths(tmp_path):
@@ -105,7 +112,7 @@ def test_run_nlp_to_db_entities_import_missing(strict, tmp_path, monkeypatch) ->
     monkeypatch.setattr(importlib, "import_module", _import_module)
 
     with pytest.raises(PipelineError):
-        run_nlp_to_db("dummy", normalized_dir, str(db_path), repo_root_dir=tmp_path)
+        run_nlp_to_db("dummy", normalized_dir, normalized_dir, str(db_path), repo_root_dir=tmp_path)
 
 
 @pytest.mark.parametrize("strict", (False, True))
@@ -127,7 +134,7 @@ def test_run_nlp_to_db_entities_failure(strict, tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "semantic.entities_runner", fake_entities)
 
     with pytest.raises(PipelineError):
-        run_nlp_to_db("dummy", normalized_dir, str(db_path), repo_root_dir=tmp_path)
+        run_nlp_to_db("dummy", normalized_dir, normalized_dir, str(db_path), repo_root_dir=tmp_path)
 
 
 def test_run_nlp_to_db_persists_terms_and_folder_terms(tmp_path, monkeypatch):
@@ -172,7 +179,14 @@ def test_run_nlp_to_db_persists_terms_and_folder_terms(tmp_path, monkeypatch):
     monkeypatch.setattr("nlp.nlp_keywords.cluster_synonyms", fake_cluster_synonyms)
 
     # unit test isolation: bypass the entities pipeline for deterministic storage checks.
-    stats = run_nlp_to_db("dummy", normalized_dir, str(db_path), enable_entities=False)
+    stats = run_nlp_to_db(
+        "dummy",
+        normalized_dir,
+        normalized_dir,
+        str(db_path),
+        repo_root_dir=tmp_path,
+        options=NlpRunOptions(enable_entities=False),
+    )
 
     with get_conn(str(db_path)) as conn:
         term_rows = conn.execute("SELECT canonical FROM terms").fetchall()
@@ -192,7 +206,7 @@ def test_run_nlp_to_db_rejects_paths_outside_base(tmp_path):
     db_outside = tmp_path.parent / "outside" / "tags.db"
 
     with pytest.raises(PathTraversalError):
-        run_nlp_to_db("dummy", normalized_dir, db_outside, repo_root_dir=base_dir)
+        run_nlp_to_db("dummy", normalized_dir, normalized_dir, db_outside, repo_root_dir=base_dir)
 
 
 def test_scan_normalized_requires_repo_root_dir_in_strict(tmp_path, monkeypatch):
