@@ -10,7 +10,7 @@ from pipeline.ingest import provider as ingest_provider
 from timmy_kb.cli import tag_onboarding
 from timmy_kb.cli import tag_onboarding_raw as raw_ingest
 from timmy_kb.cli.tag_onboarding import _should_proceed  # type: ignore
-from timmy_kb.cli.tag_onboarding import run_nlp_to_db, scan_normalized_to_db
+from timmy_kb.cli.tag_onboarding import NlpRunOptions, run_nlp_to_db, scan_normalized_to_db
 from timmy_kb.cli.tag_onboarding_raw import copy_from_local, download_from_drive
 
 
@@ -20,6 +20,23 @@ class _NoopLogger:
 
     def warning(self, *args, **kwargs):
         pass
+
+    def error(self, *args, **kwargs):
+        pass
+
+
+class _CaptureLogger:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict]] = []
+
+    def info(self, event: str, extra=None, **_kwargs):  # noqa: ANN001
+        self.events.append((event, dict(extra or {})))
+
+    def warning(self, event: str, extra=None, **_kwargs):  # noqa: ANN001
+        self.events.append((event, dict(extra or {})))
+
+    def error(self, event: str, extra=None, **_kwargs):  # noqa: ANN001
+        self.events.append((event, dict(extra or {})))
 
 
 @pytest.mark.parametrize(
@@ -131,3 +148,87 @@ def test_repo_root_none_always_raises_config_error(monkeypatch, tmp_path: Path):
             repo_root_dir=None,
             enable_entities=False,
         )
+
+
+def test_run_nlp_to_db_legacy_kwargs_override_options_and_emit_deprecation(monkeypatch, tmp_path: Path) -> None:
+    normalized, semantic = _ensure_dirs(tmp_path)
+    raw_dir = tmp_path / "workspace" / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    db_path = semantic / "tags.db"
+
+    captured: dict[str, object] = {}
+
+    def _fake_pipeline(_conn, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return {"doc_terms": 0, "terms": 0, "folders": 0}
+
+    log = _CaptureLogger()
+    monkeypatch.setattr(tag_onboarding, "get_structured_logger", lambda *_a, **_k: log, raising=True)
+    monkeypatch.setattr(tag_onboarding.nlp_runner, "run_doc_terms_pipeline", _fake_pipeline, raising=True)
+
+    options = NlpRunOptions(
+        rebuild=False,
+        only_missing=False,
+        enable_entities=False,
+        max_workers=4,
+        worker_batch_size=9,
+    )
+    run_nlp_to_db(
+        slug="s",
+        normalized_dir=normalized,
+        raw_dir=raw_dir,
+        db_path=db_path,
+        repo_root_dir=tmp_path / "workspace",
+        options=options,
+        rebuild=True,
+        only_missing=True,
+        max_workers=1,
+        worker_batch_size=3,
+        enable_entities=False,
+    )
+
+    assert captured["rebuild"] is True
+    assert captured["only_missing"] is True
+    assert captured["worker_count"] == 1
+    assert captured["worker_batch_size"] == 3
+    deprecations = [evt for evt, _extra in log.events if evt == "cli.tag_onboarding.nlp_legacy_kwargs_deprecated"]
+    assert deprecations
+
+
+def test_run_nlp_to_db_options_only_no_legacy_deprecation(monkeypatch, tmp_path: Path) -> None:
+    normalized, semantic = _ensure_dirs(tmp_path)
+    raw_dir = tmp_path / "workspace" / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    db_path = semantic / "tags.db"
+
+    captured: dict[str, object] = {}
+
+    def _fake_pipeline(_conn, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return {"doc_terms": 0, "terms": 0, "folders": 0}
+
+    log = _CaptureLogger()
+    monkeypatch.setattr(tag_onboarding, "get_structured_logger", lambda *_a, **_k: log, raising=True)
+    monkeypatch.setattr(tag_onboarding.nlp_runner, "run_doc_terms_pipeline", _fake_pipeline, raising=True)
+
+    run_nlp_to_db(
+        slug="s",
+        normalized_dir=normalized,
+        raw_dir=raw_dir,
+        db_path=db_path,
+        repo_root_dir=tmp_path / "workspace",
+        options=NlpRunOptions(
+            rebuild=True,
+            only_missing=True,
+            enable_entities=False,
+            max_workers=2,
+            worker_batch_size=5,
+        ),
+    )
+
+    assert captured["rebuild"] is True
+    assert captured["only_missing"] is True
+    assert captured["worker_count"] == 2
+    assert captured["worker_batch_size"] == 5
+    deprecations = [evt for evt, _extra in log.events if evt == "cli.tag_onboarding.nlp_legacy_kwargs_deprecated"]
+    assert not deprecations

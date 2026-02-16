@@ -430,7 +430,18 @@ def run_nlp_to_db(
     worker_batch_size: int | None = None,
     enable_entities: bool | None = None,
 ) -> dict[str, Any]:
-    """Esegue estrazione keyword, clustering e aggregazione per cartella."""
+    """Esegue estrazione keyword, clustering e aggregazione per cartella.
+
+    Precedenza parametri:
+    - `options` definisce il contratto typed canonico.
+    - I kwargs legacy (`rebuild`, `only_missing`, `max_workers`,
+      `worker_batch_size`, `enable_entities`) restano supportati in compatibilità
+      e, quando valorizzati (non ``None``), sovrascrivono i campi di `options`.
+
+    Migrazione:
+    - l'uso di kwargs legacy emette l'evento
+      `cli.tag_onboarding.nlp_legacy_kwargs_deprecated`.
+    """
 
     strict_mode = is_beta_strict()
     log = get_structured_logger("tag_onboarding", **_obs_kwargs())
@@ -448,6 +459,27 @@ def run_nlp_to_db(
     db_path_path = ensure_within_and_resolve(perimeter_root, db_path)
 
     ensure_schema_v2(str(db_path_path))
+
+    legacy_overrides: dict[str, Any] = {}
+    if rebuild is not None:
+        legacy_overrides["rebuild"] = rebuild
+    if only_missing is not None:
+        legacy_overrides["only_missing"] = only_missing
+    if max_workers is not None:
+        legacy_overrides["max_workers"] = max_workers
+    if worker_batch_size is not None:
+        legacy_overrides["worker_batch_size"] = worker_batch_size
+    if enable_entities is not None:
+        legacy_overrides["enable_entities"] = enable_entities
+    if legacy_overrides:
+        log.warning(
+            "cli.tag_onboarding.nlp_legacy_kwargs_deprecated",
+            extra={
+                "slug": slug,
+                "legacy_fields": sorted(legacy_overrides.keys()),
+                "precedence": "legacy_overrides_options",
+            },
+        )
 
     resolved = options or NlpRunOptions()
     if rebuild is not None:
