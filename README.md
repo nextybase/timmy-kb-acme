@@ -46,6 +46,13 @@ python -m timmy_kb.cli.semantic_onboarding --slug acme --non-interactive
 ```
 Ogni step puo' essere eseguito singolarmente; l'orchestrazione dettagliata e' descritta nella [User Guide](docs/user/user_guide.md). Il flusso termina con la preview locale via Docker/HonKit (pipeline `honkit_preview`).
 
+### CLI Exit Contract (Beta)
+
+All CLI core enforce a deterministic exit contract.
+
+Unexpected (out-of-contract) failures terminate with exit code **99**
+(see **ADR-007**: `docs/adr/ADR-007-cli-unexpected-exit-99.md`).
+
 ## ⚠️ Beta constraint: Strict vs Dummy mode
 
 In Beta, il flusso di onboarding è **strict-by-default**: l'assenza o il valore vuoto di
