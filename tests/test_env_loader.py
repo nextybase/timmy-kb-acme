@@ -1,32 +1,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-import importlib as _il
-import os
 from pathlib import Path
 
 import pytest
 
-import pipeline.env_utils as envu
 from pipeline.context import ClientContext
+from tests.support.dotenv_helpers import prepare_dotenv_env
 
 pytestmark = pytest.mark.unit
 
 
 def test_get_env_var_loads_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Arrange: create a temporary .env with a variable not present in process env
-    env_text = "ZZZ_DRIVE_ID=drive-from-dotenv\nZZZ_SERVICE_ACCOUNT_FILE=C:/sa.json\n"
-    (tmp_path / ".env").write_text(env_text, encoding="utf-8")
-    # Ensure process env is clean for these keys
-    monkeypatch.delenv("ZZZ_DRIVE_ID", raising=False)
-    monkeypatch.delenv("ZZZ_SERVICE_ACCOUNT_FILE", raising=False)
-    # Sanity: ensure process env is clean (and use `os` import)
-    assert "ZZZ_DRIVE_ID" not in os.environ
-    assert "ZZZ_SERVICE_ACCOUNT_FILE" not in os.environ
-    # Change CWD to the tmp directory so loader finds .env
-    monkeypatch.chdir(tmp_path)
-
-    # Act: reload module to reset loader, load .env from CWD, then call getter
-    _il.reload(envu)
-    envu.ensure_dotenv_loaded()
+    envu = prepare_dotenv_env(
+        monkeypatch=monkeypatch,
+        tmp_path=tmp_path,
+        env_text="ZZZ_DRIVE_ID=drive-from-dotenv\nZZZ_SERVICE_ACCOUNT_FILE=C:/sa.json\n",
+        clear_keys=("ZZZ_DRIVE_ID", "ZZZ_SERVICE_ACCOUNT_FILE"),
+    )
     drive_id = envu.get_env_var("ZZZ_DRIVE_ID", required=True)
     sa_file = envu.get_env_var("ZZZ_SERVICE_ACCOUNT_FILE", required=True)
 
@@ -36,17 +25,14 @@ def test_get_env_var_loads_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 
 def test_client_context_load_reads_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Arrange: repo root with only a .env file
-    (tmp_path / ".env").write_text("ZZZ_DRIVE_ID=abc123\n", encoding="utf-8")
-    monkeypatch.delenv("ZZZ_DRIVE_ID", raising=False)
-    assert "ZZZ_DRIVE_ID" not in os.environ
-    monkeypatch.chdir(tmp_path)
+    envu = prepare_dotenv_env(
+        monkeypatch=monkeypatch,
+        tmp_path=tmp_path,
+        env_text="ZZZ_DRIVE_ID=abc123\n",
+        clear_keys=("ZZZ_DRIVE_ID",),
+    )
     monkeypatch.setenv("TIMMY_ALLOW_WORKSPACE_OVERRIDE", "1")
     monkeypatch.setenv("TIMMY_ALLOW_BOOTSTRAP", "1")
-
-    # Act: reload env_utils to reset lazy loader, explicitly load .env, then create context (no required env)
-    _il.reload(envu)
-    envu.ensure_dotenv_loaded()
     ClientContext.load(
         slug="dummy",
         require_drive_env=False,
