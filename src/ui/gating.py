@@ -71,10 +71,7 @@ def reset_gating_cache(slug: str | None = None) -> None:
         _LAST_NORMALIZED_READY.clear()
         _LAST_PREVIEW_READY.clear()
         _CAPABILITY_CACHE.clear()
-        try:
-            _module_available.cache_clear()
-        except AttributeError:
-            pass
+        _module_available.cache_clear()
         return
     slug_key = slug or "<none>"
     _LAST_NORMALIZED_READY.pop(slug_key, None)

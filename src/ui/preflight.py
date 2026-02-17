@@ -103,8 +103,15 @@ def _pipeline_origin_ok() -> tuple[bool, str]:
             "ui.preflight.pipeline_mismatch",
             extra={"ui_root": str(ui_root), "pkg_root": str(pkg_root)},
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+
+        logging.getLogger("ui.preflight").warning(
+            "ui.preflight.pipeline_mismatch_fallback " "ui_root=%s pkg_root=%s error=%r",
+            str(ui_root),
+            str(pkg_root),
+            exc,
+        )
     return False, hint
 
 

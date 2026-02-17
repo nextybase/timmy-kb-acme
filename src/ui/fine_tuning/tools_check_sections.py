@@ -6,19 +6,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+import yaml
+
 from pipeline import ontology
 from pipeline.path_utils import read_text_safe
 from ui.utils.control_plane import display_control_plane_result, run_control_plane_tool
+from ui.utils.streamlit_baseline import require_streamlit_feature
 from ui.utils.stubs import get_streamlit
 
 from .system_prompt_modal import open_system_prompt_modal
 from .vision_modal import open_vision_modal
-
-try:
-    import yaml
-except Exception:  # pragma: no cover
-    yaml = None  # type: ignore[assignment]
-
 
 SS_VISION_OPEN = "ft_open_vision_modal"
 SS_SYS_OPEN = "ft_open_system_prompt"
@@ -83,11 +80,8 @@ def render_controls(slug: str, *, st_module: Any | None = None) -> None:
                 paths = payload.get("paths") or {}
                 yaml_path = paths.get("vision_yaml")
                 if yaml_path:
-                    try:
-                        preview = read_text_safe(Path(yaml_path).parent, Path(yaml_path))
-                        st.code(preview, language="yaml")
-                    except Exception:
-                        st.warning("Impossibile mostrare l'anteprima YAML.")
+                    preview = read_text_safe(Path(yaml_path).parent, Path(yaml_path))
+                    st.code(preview, language="yaml")
 
     with col_sys:
         if st.button("Apri System Prompt", key="btn_open_system_prompt"):
@@ -98,10 +92,7 @@ def render_controls(slug: str, *, st_module: Any | None = None) -> None:
     last_result = st.session_state.get(STATE_LAST_VISION_RESULT)
     mapping_data = _load_mapping_data(last_result)
     if mapping_data:
-        try:
-            render_readme_preview(mapping_data, ontology.get_all_entities(), st_module=st)
-        except Exception:
-            pass
+        render_readme_preview(mapping_data, ontology.get_all_entities(), st_module=st)
 
     if _consume_flag(st, SS_VISION_OPEN):
         open_vision_modal(slug=slug)
@@ -130,13 +121,10 @@ def _load_mapping_data(last_result: Any) -> Optional[Dict[str, Any]]:
     mapping_data: Optional[Dict[str, Any]] = None
     if isinstance(last_result, dict):
         mapping_path = last_result.get("mapping")
-        if isinstance(mapping_path, str) and yaml is not None:
-            try:
-                mapping_file = Path(mapping_path)
-                text = read_text_safe(mapping_file.parent, mapping_file)
-                mapping_data = yaml.safe_load(text) or {}
-            except Exception:
-                mapping_data = None
+        if isinstance(mapping_path, str):
+            mapping_file = Path(mapping_path)
+            text = read_text_safe(mapping_file.parent, mapping_file)
+            mapping_data = yaml.safe_load(text) or {}
     return mapping_data
 
 
@@ -208,26 +196,20 @@ def _render_mapping_areas(mapping_data: Dict[str, Any], st: Any) -> None:
 
 
 def _emit_json(st_module: Any, payload: Any) -> None:
-    json_renderer = getattr(st_module, "json", None)
-    if callable(json_renderer):
-        json_renderer(payload)
-    else:  # pragma: no cover - degradazione per test/headless
-        st_module.markdown(f"```json\n{payload}\n```")
+    json_renderer = require_streamlit_feature(st_module, "json")
+    json_renderer(payload)
 
 
 def _global_vocab() -> Dict[str, Dict[str, Any]]:
     """Indicizza le entità globali per id/label (lowercase)."""
     vocab: Dict[str, Dict[str, Any]] = {}
-    try:
-        for ent in ontology.get_all_entities():
-            ent_id = str(ent.get("id") or "").strip()
-            label = str(ent.get("label") or "").strip()
-            if ent_id:
-                vocab.setdefault(ent_id.lower(), ent)
-            if label:
-                vocab.setdefault(label.lower(), ent)
-    except Exception:
-        return {}
+    for ent in ontology.get_all_entities():
+        ent_id = str(ent.get("id") or "").strip()
+        label = str(ent.get("label") or "").strip()
+        if ent_id:
+            vocab.setdefault(ent_id.lower(), ent)
+        if label:
+            vocab.setdefault(label.lower(), ent)
     return vocab
 
 
@@ -324,11 +306,7 @@ def render_global_entities(*, st_module: Any | None = None) -> None:
     """Visualizza le entità globali caricate da ontology.yaml, organizzate per categoria."""
     st = st_module or get_streamlit()
     with st.expander("Entità globali di NeXT", expanded=False):
-        try:
-            data = ontology.load_entities()
-        except Exception as exc:  # pragma: no cover - degradazione UI
-            st.warning(f"Impossibile caricare le entità globali: {exc}")
-            return
+        data = ontology.load_entities()
 
         categories = data.get("categories") if isinstance(data, dict) else {}
         if not isinstance(categories, dict) or not categories:
