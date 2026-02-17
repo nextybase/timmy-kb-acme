@@ -469,6 +469,12 @@ def allow_workspace_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TIMMY_ALLOW_WORKSPACE_OVERRIDE", "1")
 
 
+@pytest.fixture
+def non_strict_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Opt-in esplicito per test che devono eseguire in non-strict."""
+    monkeypatch.setenv("TIMMY_BETA_STRICT", "0")
+
+
 def build_vocab_db(base: Path, tags: Iterable[dict[str, Any]]) -> Path:
     """
     Crea semantic/tags.db nel workspace popolando tag/tag_synonyms (old schema).

@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from ai.responses import (
     ConfigError,
     _diagnose_json_schema_format,

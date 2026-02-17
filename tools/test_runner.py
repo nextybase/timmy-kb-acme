@@ -158,7 +158,6 @@ def main() -> int:
     cmd = _build_pytest_command(args.binary, extra_args)
     if args.binary in {"fast", "full", "quality"}:
         subprocess_env["TIMMY_ALLOW_BOOTSTRAP"] = "1"
-        subprocess_env["TIMMY_BETA_STRICT"] = "0"
     print("Running:", " ".join(cmd))
     return subprocess.call(cmd, env=subprocess_env)
 
