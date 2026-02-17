@@ -69,6 +69,7 @@ __all__ = [
     "index_markdown_to_db",
     "copy_local_pdfs_to_raw",
     "list_content_markdown",
+    "build_tag_kg",
 ]
 
 
@@ -130,6 +131,13 @@ def _extract_candidates(raw_dir: Path, cfg: object) -> Dict[str, Dict[str, objec
 def build_tags_csv(context: ClientContextType, logger: logging.Logger, *, slug: str) -> Path:
     """Costruisce `tags_raw.csv` dal workspace corrente applicando arricchimento NLP (DB + Spacy)."""
     return tagging_service.build_tags_csv(context, logger, slug=slug)
+
+
+def build_tag_kg(context: ClientContextType, *, namespace: str | None = None) -> Any:
+    """Public runtime boundary for Tag KG build."""
+    from timmy_kb.cli.kg_builder import build_kg_for_workspace
+
+    return build_kg_for_workspace(cast(Any, context), namespace=namespace)
 
 
 def copy_local_pdfs_to_raw(src_dir: Path, raw_dir: Path, logger: logging.Logger) -> int:

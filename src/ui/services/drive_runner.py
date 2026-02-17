@@ -381,30 +381,9 @@ def ensure_drive_minimal_and_upload_config(slug: str, client_name: Optional[str]
     Ritorna il path del config locale aggiornato.
     Richiede .env valido (SERVICE_ACCOUNT_FILE, DRIVE_ID, ecc.).
     """
-    from timmy_kb.cli.pre_onboarding import (
-        _create_local_structure,
-        _drive_phase,
-        _prepare_context_and_logger,
-    )
+    from pipeline.drive_bootstrap_api import ensure_drive_minimal_and_upload_config as _bootstrap_drive
 
-    ctx, logger, resolved_name = _prepare_context_and_logger(
-        slug,
-        interactive=False,
-        require_drive_env=False,
-        run_id=None,
-        client_name=client_name,
-    )
-    cfg_path = cast(Path, _create_local_structure(ctx, logger, client_name=(resolved_name or slug)))
-
-    # Esegue la fase Drive (creazione cartelle, upload config, aggiornamento ID locali)
-    _drive_phase(
-        ctx,
-        logger,
-        config_path=cfg_path,
-        client_name=(resolved_name or slug),
-        require_env=True,
-    )
-    return cfg_path
+    return _bootstrap_drive(slug, client_name=client_name)
 
 
 # =====================================================================

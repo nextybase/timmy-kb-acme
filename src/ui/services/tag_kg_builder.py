@@ -10,7 +10,7 @@ from pipeline.exceptions import ConfigError, PipelineError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve
 from pipeline.workspace_layout import WorkspaceLayout
-from timmy_kb.cli.kg_builder import build_kg_for_workspace
+from semantic.api import build_tag_kg
 from ui.utils.context_cache import get_client_context
 
 try:
@@ -48,7 +48,7 @@ def run_tag_kg_builder(
         if not tags_raw.exists():
             raise ConfigError("tags_raw.json mancante: genera prima i tag raw.")
 
-        kg: Any = build_kg_for_workspace(ctx, namespace=namespace)
+        kg: Any = build_tag_kg(ctx, namespace=namespace)
         result: dict[str, int | str] = {
             "namespace": str(getattr(kg, "namespace", namespace or "")),
             "tags": len(getattr(kg, "tags", [])),

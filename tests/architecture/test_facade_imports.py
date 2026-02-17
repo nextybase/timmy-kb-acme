@@ -24,6 +24,7 @@ BLACKLIST = (
 )
 
 UI_FORBIDDEN_PREFIXES = (
+    "timmy_kb.cli",
     "pipeline.drive.",
     "pipeline.drive.client",
     "pipeline.drive.download",
@@ -35,6 +36,10 @@ UI_FORBIDDEN_PREFIXES = (
     "semantic.vision_utils",
     "semantic.validation",
 )
+
+UI_CLI_IMPORT_EXCEPTIONS = {
+    Path("src/ui/services/control_plane.py").as_posix(),
+}
 
 
 def _normalize(module: str | None) -> str:
@@ -72,6 +77,7 @@ def test_ui_imports_use_only_public_surfaces():
     errors: list[str] = []
     ui_root = Path("src/ui")
     for path in ui_root.rglob("*.py"):
+        path_key = path.as_posix()
         try:
             source = path.read_text(encoding="utf-8")
         except Exception:
@@ -81,6 +87,8 @@ def test_ui_imports_use_only_public_surfaces():
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     mod = _normalize(alias.name)
+                    if mod.startswith("timmy_kb.cli") and path_key in UI_CLI_IMPORT_EXCEPTIONS:
+                        continue
                     if any(mod.startswith(prefix) for prefix in UI_FORBIDDEN_PREFIXES):
                         errors.append(
                             f"{path}:{mod} imports '{mod}' "
@@ -88,9 +96,18 @@ def test_ui_imports_use_only_public_surfaces():
                         )
             elif isinstance(node, ast.ImportFrom):
                 module = _normalize(node.module)
+                if module.startswith("timmy_kb.cli") and path_key in UI_CLI_IMPORT_EXCEPTIONS:
+                    continue
                 if any(module.startswith(prefix) for prefix in UI_FORBIDDEN_PREFIXES):
                     errors.append(
                         f"{path}:{module} imports '{module}' "
                         "(UI must stay within facades; see .codex/USER_DEV_SEPARATION.md)"
                     )
+                if node.level == 0 and module and not module.startswith("ui"):
+                    for alias in node.names:
+                        if alias.name.startswith("_"):
+                            errors.append(
+                                f"{path}:{module} imports private symbol '{alias.name}' "
+                                "(UI must not import cross-package _private symbols)"
+                            )
     assert not errors, "\n".join(errors)

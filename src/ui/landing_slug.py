@@ -12,8 +12,8 @@ from pipeline.env_utils import get_bool
 from pipeline.exceptions import ConfigError, InvalidSlug
 from pipeline.logging_utils import get_structured_logger
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe, validate_slug
+from pipeline.workspace_bootstrap_api import bootstrap_workspace_for_ui
 from pipeline.workspace_layout import WorkspaceLayout
-from timmy_kb.cli.pre_onboarding import ensure_local_workspace_for_ui
 from ui.config_store import get_vision_model
 from ui.utils.context_cache import get_client_context
 from ui.utils.repo_root import get_repo_root
@@ -91,9 +91,7 @@ def _state_pop(name: str) -> Any:
     return value
 
 
-CLIENT_CONTEXT_ERROR_MSG = (
-    "ClientContext non disponibile. Esegui pre_onboarding.ensure_local_workspace_for_ui o imposta REPO_ROOT_DIR."
-)
+CLIENT_CONTEXT_ERROR_MSG = "ClientContext non disponibile. Esegui bootstrap_workspace_for_ui o imposta REPO_ROOT_DIR."
 
 
 def _reset_to_landing() -> None:
@@ -387,7 +385,7 @@ def render_workspace_summary(
             _st_notify("error", "Carica il Vision Statement prima di procedere.")
         else:
             try:
-                ensure_local_workspace_for_ui(slug, client_name or slug, vision_statement_pdf=pdf_bytes)
+                bootstrap_workspace_for_ui(slug, client_name or slug, vision_statement_pdf=pdf_bytes)
                 ctx = get_client_context(slug, require_drive_env=False)
                 if ctx.repo_root_dir is None:
                     raise ConfigError("Workspace creato ma repo_root_dir non disponibile.")

@@ -4,6 +4,7 @@
 
 La separazione dei canali User (Streamlit + `ui.services`) e Dev (`timmy_kb.cli.*`, `tools/*`, `src/api/*`) è codificata nello SSoT [.codex/USER_DEV_SEPARATION.md](../../.codex/USER_DEV_SEPARATION.md); rispettare quel contratto prima di toccare nuovi entrypoint o import multipli.
 Ogni cambio deve inoltre passare i guardrail `tests/architecture/test_facade_imports.py` e `tests/architecture/test_dev_does_not_import_ui.py` per assicurare che User e Dev non condividano import proibiti.
+In particolare: lato `src/ui/**` valgono il divieto di import diretto da `timmy_kb.cli.*` (salvo eccezione esplicita documentata) e il divieto di import cross-package di simboli `_private`; i nuovi boundary runtime sono fissati in `pipeline/workspace_bootstrap_api.py`, `pipeline/drive_bootstrap_api.py` e `semantic/api.py` (entry `build_tag_kg`).
 
 La modalità principale e consigliata per usare Codex nel progetto NeXT/Timmy-KB è tramite la **Prompt Chain** orchestrata da l'**OCP (OrchestratoreChainPrompt)**.
 
