@@ -5,12 +5,11 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from pipeline.config_utils import merge_client_config_from_template, update_config_with_drive_ids
+from pipeline.drive_bootstrap_service import create_local_structure, prepare_context_and_logger
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_bytes, safe_write_text
 from pipeline.path_utils import ensure_within, read_text_safe
 from pipeline.workspace_layout import WorkspaceLayout
-
-from pipeline.drive_bootstrap_service import create_local_structure, prepare_context_and_logger
 
 
 def ensure_local_workspace_for_ui(

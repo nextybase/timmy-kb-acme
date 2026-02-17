@@ -8,6 +8,7 @@ import pytest
 
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
+from semantic import vocab_loader as vl
 from semantic.vocab_loader import load_reviewed_vocab
 from storage.tags_store import save_tags_db
 
@@ -50,3 +51,13 @@ def test_load_vocab_valid_db_logs(tmp_path: Path, caplog: pytest.LogCaptureFixtu
     vocab = load_reviewed_vocab(base, logger, slug="dummy")
     assert vocab["analytics"]["aliases"] == ["alias"]
     assert any(rec.getMessage() == "semantic.vocab.loaded" for rec in caplog.records)
+
+
+def test_storage_vocab_merge_chain_too_deep_raises() -> None:
+    chain = 300
+    tags = [{"name": f"n{i}", "action": f"merge_into:n{i + 1}", "synonyms": []} for i in range(chain)]
+    tags.append({"name": f"n{chain}", "synonyms": ["final"]})
+    raw = {"tags": tags}
+
+    with pytest.raises(ConfigError, match="Canonical vocab merge chain too deep"):
+        vl._to_vocab(raw)

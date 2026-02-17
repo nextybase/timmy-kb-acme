@@ -252,20 +252,7 @@ def _parse_storage_tags_rows(rows: Sequence[Any]) -> Dict[str, Dict[str, list[st
     return {display_names.get(canon, canon): {"aliases": aliases} for canon, aliases in final_aliases.items()}
 
 
-def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
-    """
-    Normalizza data in: { canonical: { "aliases": [str,...] } } mantenendo l'ordine di inserimento.
-
-    Formati accettati:
-    - gia normalizzato: Dict[str, Dict[str, Iterable[str]]]
-    - mapping semplice: Dict[str, Iterable[str]]  (canonical -> aliases)
-    - formato storage: {"tags": [{"name": str, "action": str, "synonyms": [str,...]}, ...]}
-    - lista di dict:   [{"canonical": str, "alias": str}, ...]
-    - lista di tuple:  [(canonical:str, alias:str), ...]
-    - lista di liste:  [[canonical, alias], ...]
-    - altro/non riconosciuto -> ConfigError
-    """
-
+def _to_vocab_from_mapping(data: Mapping[str, Any]) -> Dict[str, Dict[str, list[str]]]:
     def _raise_invalid() -> None:
         raise ConfigError("Canonical vocab shape invalid")
 
@@ -281,40 +268,79 @@ def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
             extra={"shape": shape},
         )
 
-    if isinstance(data, Mapping):
-        normalized = _parse_normalized_vocab_mapping(cast(Mapping[str, Any], data))
-        if normalized:
-            LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "normalized_mapping"})
-            return normalized
+    normalized = _parse_normalized_vocab_mapping(cast(Mapping[str, Any], data))
+    if normalized:
+        LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "normalized_mapping"})
+        return normalized
 
-        has_storage_key = hasattr(data, "keys") and "tags" in cast(Mapping[str, Any], data).keys()
-        items = cast(Any, data).get("tags") if hasattr(data, "get") else None
-        if has_storage_key:
-            if not isinstance(items, Sequence) or isinstance(items, (str, bytes)):
-                _raise_invalid()
-            parsed_storage = _parse_storage_tags_rows(items)
-            if parsed_storage:
-                LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "storage_tags"})
-                return parsed_storage
-            # Se il payload dichiara shape storage (`tags`) ma non contiene righe utili,
-            # la shape e' invalida: non tentare fallback su mapping "semplice".
+    has_storage_key = hasattr(data, "keys") and "tags" in cast(Mapping[str, Any], data).keys()
+    items = cast(Any, data).get("tags") if hasattr(data, "get") else None
+    if has_storage_key:
+        if not isinstance(items, Sequence) or isinstance(items, (str, bytes)):
             _raise_invalid()
-
-        simple = _parse_simple_vocab_mapping(cast(Mapping[str, Iterable[Any]], data))
-        if simple:
-            LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "simple_mapping"})
-            _tooling_shape_guard("simple_mapping")
-            return simple
+        parsed_storage = _parse_storage_tags_rows(items)
+        if parsed_storage:
+            LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "storage_tags"})
+            return parsed_storage
+        # Se il payload dichiara shape storage (`tags`) ma non contiene righe utili,
+        # la shape e' invalida: non tentare fallback su mapping "semplice".
         _raise_invalid()
 
-    if isinstance(data, Sequence) and not isinstance(data, (str, bytes)):
-        parsed_sequence = _parse_sequence_rows(data)
-        if parsed_sequence:
-            LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "sequence_rows"})
-            _tooling_shape_guard("sequence_rows")
-            return parsed_sequence
-
+    simple = _parse_simple_vocab_mapping(cast(Mapping[str, Iterable[Any]], data))
+    if simple:
+        LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "simple_mapping"})
+        _tooling_shape_guard("simple_mapping")
+        return simple
     _raise_invalid()
+    return {}
+
+
+def _to_vocab_from_sequence(data: Sequence[Any]) -> Dict[str, Dict[str, list[str]]]:
+    def _raise_invalid() -> None:
+        raise ConfigError("Canonical vocab shape invalid")
+
+    def _tooling_shape_guard(shape: str) -> None:
+        """
+        Tooling shapes (simple_mapping, sequence_rows) sono ammessi solo
+        fuori dalla modalita strict (Envelope runtime).
+        """
+        if is_beta_strict():
+            raise ConfigError(f"Canonical vocab tooling shape not allowed in strict mode: {shape}")
+        _safe_structured_warning(
+            "semantic.vocab.tooling_shape_accepted",
+            extra={"shape": shape},
+        )
+
+    parsed_sequence = _parse_sequence_rows(data)
+    if parsed_sequence:
+        LOGGER.info("semantic.vocab.shape_detected", extra={"shape": "sequence_rows"})
+        _tooling_shape_guard("sequence_rows")
+        return parsed_sequence
+    _raise_invalid()
+    return {}
+
+
+def _to_vocab(data: Any) -> Dict[str, Dict[str, list[str]]]:
+    """
+    Normalizza data in: { canonical: { "aliases": [str,...] } } mantenendo l'ordine di inserimento.
+
+    Formati accettati:
+    - gia normalizzato: Dict[str, Dict[str, Iterable[str]]]
+    - mapping semplice: Dict[str, Iterable[str]]  (canonical -> aliases)
+    - formato storage: {"tags": [{"name": str, "action": str, "synonyms": [str,...]}, ...]}
+    - lista di dict:   [{"canonical": str, "alias": str}, ...]
+    - lista di tuple:  [(canonical:str, alias:str), ...]
+    - lista di liste:  [[canonical, alias], ...]
+    - altro/non riconosciuto -> ConfigError
+    """
+
+    if isinstance(data, Mapping):
+        return _to_vocab_from_mapping(data)
+
+    if isinstance(data, Sequence) and not isinstance(data, (str, bytes)):
+        return _to_vocab_from_sequence(data)
+
+    raise ConfigError("Canonical vocab shape invalid")
     return {}
 
 

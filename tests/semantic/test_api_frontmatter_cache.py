@@ -127,3 +127,29 @@ def test_frontmatter_cache_import_failure_is_fatal(
             enrich_fn=_stub_enrich,
             summary_fn=_stub_summary,
         )
+
+
+def test_frontmatter_cache_clear_oserror_is_fatal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    slug = "dummy-slug"
+    workspace = _prepare_workspace(tmp_path, slug)
+    context = SimpleNamespace(repo_root_dir=workspace, slug=slug, run_id="run-1234")
+    logger = get_structured_logger("tests.semantic.api.cache")
+
+    monkeypatch.setattr(
+        "pipeline.content_utils.clear_frontmatter_cache", lambda: (_ for _ in ()).throw(OSError("boom"))
+    )
+    monkeypatch.setattr("pipeline.content_utils.log_frontmatter_cache_stats", lambda *args, **kwargs: None)
+
+    with pytest.raises(PipelineError, match="Frontmatter cache cleanup failed."):
+        api._run_build_workflow(
+            context,
+            logger,
+            slug=slug,
+            convert_fn=lambda *_args, **_kwargs: [workspace / "raw" / "doc.md"],
+            vocab_fn=lambda *_args, **_kwargs: {},
+            enrich_fn=lambda *_args, **_kwargs: [workspace / "semantic" / "enriched.md"],
+            summary_fn=lambda *_args, **_kwargs: None,
+        )

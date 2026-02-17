@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,13 @@ from timmy_kb.cli.kg_builder import build_kg_for_workspace
 def get_paths(slug: str) -> dict[str, Path]:
     layout = WorkspaceLayout.from_slug(slug=slug, require_drive_env=False)
     return {"base": layout.repo_root_dir, "book": layout.book_dir}
+
+
+@dataclass(frozen=True)
+class SemanticFlowOutcome:
+    exit_code: int
+    touched: tuple[Path, ...]
+    layout: WorkspaceLayout
 
 
 def _parse_args() -> argparse.Namespace:
@@ -634,7 +642,7 @@ def _run_semantic_flow(
     ledger_conn: Any,
     requested: dict[str, object],
     effective: dict[str, object],
-) -> tuple[int, list[Path], WorkspaceLayout]:
+) -> SemanticFlowOutcome:
     """Orchestrazione pura del flusso semantic_onboarding con ledger e policy gates."""
     touched: list[Path] = []
     try:
@@ -648,7 +656,7 @@ def _run_semantic_flow(
             logger=logger,
         )
         if qa_gate_exit_code is not None:
-            return qa_gate_exit_code, touched, layout
+            return SemanticFlowOutcome(exit_code=qa_gate_exit_code, touched=tuple(touched), layout=layout)
 
         touched, layout = _run_pipeline_and_optional_drive_sync(
             ctx=ctx,
@@ -679,7 +687,7 @@ def _run_semantic_flow(
             effective=effective,
             tag_kg_effective=tag_kg_effective,
         )
-        return 0, touched, layout
+        return SemanticFlowOutcome(exit_code=0, touched=tuple(touched), layout=layout)
 
     except (ConfigError, PipelineError) as exc:
         original_error = _summarize_error(exc)
@@ -700,7 +708,7 @@ def _run_semantic_flow(
             "cli.semantic_onboarding.failed",
             extra={"slug": slug, "error": original_error},
         )
-        return code, touched, layout
+        return SemanticFlowOutcome(exit_code=code, touched=tuple(touched), layout=layout)
 
     except Exception as exc:
         code = 99
@@ -720,7 +728,7 @@ def _run_semantic_flow(
             "cli.semantic_onboarding.unexpected_error",
             extra={"slug": slug, "error_type": type(exc).__name__},
         )
-        return code, touched, layout
+        return SemanticFlowOutcome(exit_code=code, touched=tuple(touched), layout=layout)
 
 
 def main() -> int:
@@ -782,7 +790,7 @@ def main() -> int:
             trace_kind="onboarding",
         ):
 
-            exit_code, touched, layout = _run_semantic_flow(
+            outcome = _run_semantic_flow(
                 ctx=ctx,
                 layout=layout,
                 logger=logger,
@@ -792,6 +800,9 @@ def main() -> int:
                 requested=requested,
                 effective=effective,
             )
+            exit_code = outcome.exit_code
+            touched = list(outcome.touched)
+            layout = outcome.layout
             if exit_code != 0:
                 return exit_code
 

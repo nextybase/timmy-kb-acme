@@ -2,6 +2,10 @@
 # tests/test_content_utils_no_traversal_when_safe_pdfs.py
 from dataclasses import dataclass, field
 from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from hypothesis import given
+from hypothesis import strategies as st
 
 import pipeline.content_utils as cu
 from pipeline.workspace_layout import WorkspaceLayout
@@ -110,3 +114,16 @@ def test_convert_md_uses_safe_pdfs_without_traversal(monkeypatch, tmp_path):
     cu.convert_files_to_structured_markdown(ctx, book_dir=book, safe_pdfs=safe_pdfs)
     produced2 = set(book.rglob("*.md")) - {book / "README.md", book / "SUMMARY.md"}
     assert produced2 == produced
+
+
+@given(st.text(alphabet=st.characters(whitelist_categories=("Ll", "Lu", "Nd")), min_size=1, max_size=64))
+def test_filter_safe_pdfs_rejects_traversal(candidate: str) -> None:
+    with TemporaryDirectory() as tmp:
+        perimeter = Path(tmp) / "kb"
+        raw_root = perimeter / "raw"
+        raw_root.mkdir(parents=True, exist_ok=True)
+
+        maybe_unsafe = raw_root / f"{candidate}.pdf"
+        out = cu._filter_safe_pdfs(perimeter, raw_root, [maybe_unsafe], slug="dummy")
+
+        assert all(path.is_absolute() and path.is_relative_to(raw_root.resolve()) for path in out)
