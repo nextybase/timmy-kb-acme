@@ -8,10 +8,10 @@ from pathlib import Path
 
 
 BINARIES = {
-    "fast": 'unit and not slow',
+    "fast": "not slow and not e2e and not drive",
     "arch": "arch or contract",
     "negative": "negative and not drive and not e2e and not slow",
-    "full": None,
+    "full": "not e2e and not drive",
     "quality": None,
 }
 LINUX_BINARY = "linux"

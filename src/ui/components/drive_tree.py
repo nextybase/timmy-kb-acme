@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import io
 from typing import Any, Dict, Iterable, List, Optional, cast
 
 from pipeline.drive_utils import delete_drive_file as _delete_drive_file
@@ -102,6 +103,153 @@ def _clear_tree_cache_best_effort() -> None:
         _clear_drive_tree_cache()
     except Exception:  # pragma: no cover
         return
+
+
+def _find_files_by_name(service: Any, parent_id: str, file_name: str) -> List[Dict[str, Any]]:
+    query_name = file_name.replace("'", "\\'")
+    query = f"'{parent_id}' in parents and name = '{query_name}' and trashed = false"
+    if not callable(list_drive_files):  # pragma: no cover
+        raise CapabilityUnavailableError(
+            "Google Drive capability not available. Install extra dependencies with: pip install .[drive]"
+        )
+    return [
+        cast(Dict[str, Any], item)
+        for item in list_drive_files(service, parent_id, query=query, fields="files(id,name)")
+    ]
+
+
+def _upload_or_update_drive_file(
+    *,
+    service: Any,
+    parent_id: str,
+    file_name: str,
+    payload: bytes,
+    mime_type: str,
+) -> str:
+    from googleapiclient.http import MediaIoBaseUpload
+
+    if not file_name.strip():
+        raise RuntimeError("Nome file non valido.")
+
+    media = MediaIoBaseUpload(io.BytesIO(payload), mimetype=mime_type or "application/octet-stream", resumable=False)
+    matches = _find_files_by_name(service, parent_id, file_name)
+    if len(matches) > 1:
+        raise RuntimeError(f"Più file con nome '{file_name}' nella cartella selezionata.")
+
+    if matches:
+        file_id = str(matches[0].get("id") or "")
+        if not file_id:
+            raise RuntimeError(f"File id non valido per '{file_name}'.")
+        updated = (
+            service.files()
+            .update(
+                fileId=file_id,
+                media_body=media,
+                supportsAllDrives=True,
+                fields="id",
+            )
+            .execute()
+        )
+        return str(updated.get("id") or file_id)
+
+    created = (
+        service.files()
+        .create(
+            body={"name": file_name, "parents": [parent_id], "mimeType": mime_type or "application/octet-stream"},
+            media_body=media,
+            supportsAllDrives=True,
+            fields="id",
+        )
+        .execute()
+    )
+    return str(created.get("id") or "")
+
+
+def _open_drive_upload_modal(
+    *,
+    service: Any,
+    slug: str,
+    folder_name: str,
+    folder_id: str,
+) -> None:
+    if st is None:  # pragma: no cover
+        return
+    dialog_factory = getattr(st, "dialog", None)
+    if not callable(dialog_factory):
+        st.error("Upload non disponibile: Streamlit dialog non supportato in questo runtime.")
+        return
+
+    def _modal() -> None:
+        st.caption(f"Carica file in `raw/{folder_name}` (Drive).")
+        files = st.file_uploader(
+            "Trascina qui i file oppure clicca per selezionarli",
+            accept_multiple_files=True,
+            key=f"drive_upload_files_{slug}_{folder_name}",
+        )
+        if files:
+            st.caption(f"File pronti: {len(files)}")
+        c_cancel, c_upload = st.columns(2)
+        if c_cancel.button("Annulla", key=f"drive_upload_cancel_{slug}_{folder_name}"):
+            return
+        if c_upload.button("Carica", type="primary", key=f"drive_upload_submit_{slug}_{folder_name}"):
+            if not files:
+                st.warning("Seleziona almeno un file da caricare.")
+                return
+            valid_files: List[tuple[str, bytes, str]] = []
+            total_bytes = 0
+            for up in files:
+                file_name = str(getattr(up, "name", "") or "").strip()
+                payload = up.getvalue()
+                if not file_name or payload is None:
+                    continue
+                mime_type = str(getattr(up, "type", "") or "application/octet-stream")
+                valid_files.append((file_name, payload, mime_type))
+                total_bytes += len(payload)
+            if not valid_files:
+                st.warning("Nessun file valido da caricare.")
+                return
+
+            progress = st.progress(0, text="Preparazione upload...")
+            status_box = st.empty()
+            uploaded_count = 0
+            uploaded_bytes = 0
+            for file_name, payload, mime_type in valid_files:
+                status_box.caption(f"Carico `{file_name}` ({_human_size(len(payload))})...")
+                _upload_or_update_drive_file(
+                    service=service,
+                    parent_id=folder_id,
+                    file_name=file_name,
+                    payload=payload,
+                    mime_type=mime_type,
+                )
+                uploaded_count += 1
+                uploaded_bytes += len(payload)
+                progress_value = int((uploaded_bytes / max(total_bytes, 1)) * 100)
+                progress.progress(
+                    min(progress_value, 100),
+                    text=(
+                        f"Upload {uploaded_count}/{len(valid_files)} file - "
+                        f"{_human_size(uploaded_bytes)} / {_human_size(total_bytes)}"
+                    ),
+                )
+            progress.progress(100, text=f"Upload completato: {_human_size(uploaded_bytes)}")
+            status_box.caption("Operazione completata.")
+            _LOGGER.info(
+                "drive_tree.upload_completed",
+                extra={"slug": slug, "folder": folder_name, "uploaded_count": uploaded_count},
+            )
+            st.toast(f"Upload completato in raw/{folder_name}: {uploaded_count} file.")
+            _clear_tree_cache_best_effort()
+            rerun_fn = getattr(st, "rerun", None)
+            if callable(rerun_fn):
+                rerun_fn()
+
+    open_modal = dialog_factory(f"Upload su Drive - raw/{folder_name}", width="large")
+    runner = open_modal(_modal)
+    if callable(runner):
+        runner()
+    else:
+        _modal()
 
 
 def _render_drive_file_row(
@@ -244,6 +392,27 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
                     sub_files.append(item)
 
             with st.expander(f"{sub_name}/ ({len(sub_files)} file)", expanded=False):
+                c_actions, _ = st.columns([0.3, 0.7])
+                with c_actions:
+                    if st.button(
+                        "⬆ Upload",
+                        key=f"drive_upload_open_{slug}_{sub_name}",
+                        help=f"Carica file in raw/{sub_name} su Drive.",
+                        type="secondary",
+                    ):
+                        try:
+                            _open_drive_upload_modal(
+                                service=service,
+                                slug=slug,
+                                folder_name=sub_name,
+                                folder_id=str(sub.get("id") or ""),
+                            )
+                        except Exception as exc:
+                            _LOGGER.warning(
+                                "drive_tree.upload_failed",
+                                extra={"slug": slug, "folder": sub_name, "error": str(exc)},
+                            )
+                            st.error(f"Upload non riuscito in raw/{sub_name}: {exc}")
                 if not sub_items:
                     st.caption("Cartella vuota.")
                 for item in sub_files:

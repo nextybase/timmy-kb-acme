@@ -20,7 +20,7 @@ from pipeline.paths import get_repo_root
 
 LOGGER = get_structured_logger("pipeline.env_attestation")
 
-ATTESTATION_RELATIVE_PATH = Path(".timmy") / "env_attestation.json"
+ATTESTATION_RELATIVE_PATH = Path(".timmy_kb") / "env_attestation.json"
 REQUIRED_OPENAI_VERSION = "2.3.0"
 _REQUIREMENTS_FILES: tuple[str, ...] = ("requirements.txt", "requirements-dev.txt")
 _ATTESTATION_OK_CACHE: dict[tuple[str, str], bool] = {}

@@ -52,8 +52,8 @@ Questa sezione descrive gli skip **attesi** (non "incidenti"):
 
 **Scopo**: feedback rapido durante lo sviluppo.
 
-- Include **solo** test marcati `unit`.
-- Esclude sempre `slow`.
+- Include tutti i test **non** marcati `slow`, `e2e`, `drive`.
+
 
 Comando:
 
@@ -61,7 +61,7 @@ Comando:
 python tools/test_runner.py fast
 ```
 
-**Regola**: se un test deve girare nell'inner loop, deve essere marcato `unit`. Se manca il marker, **non è garantito** in FAST.
+**Regola**: un test veloce non deve dipendere dal marker `unit` per entrare in FAST; `unit` resta un marker semantico utile ma non è più il gate di selezione.
 
 **Nota pratica**: il fatto che un test sia "veloce" non basta; deve anche essere **stabile** e non dipendere da integrazioni opzionali.
 
@@ -102,6 +102,8 @@ python tools/test_runner.py full
 ```
 
 **Regola**: FULL deve essere affidabile, ripetibile e "non sorprendente". Se un test è flaky, va reso deterministico oppure spostato/isolato (o rimosso se non porta valore reale).
+
+Selezione corrente: FULL include anche gli slow, ma continua a escludere `e2e` e `drive` nel runner locale.
 
 ---
 
@@ -238,7 +240,7 @@ pre-commit run --hook-stage pre-push --all-files
 
 | Hook                                                   | Stage                 | Descrizione                                                         |
 | ------------------------------------------------------ | --------------------- | ------------------------------------------------------------------- |
-| `pytest-fast`                                          | pre-commit            | invoca `python tools/test_runner.py fast` (solo `unit`, non `slow`) |
+| `pytest-fast`                                          | pre-commit            | invoca `python tools/test_runner.py fast` (`not slow and not e2e and not drive`) |
 | `pytest-full`                                          | pre-push              | invoca `python tools/test_runner.py full`                           |
 | `black`, `ruff`, `isort`, `mypy`, `cspell`, `qa-safe`… | pre-commit / pre-push | formattazione, linting, disciplina (vedi `.pre-commit-config.yaml`) |
 
