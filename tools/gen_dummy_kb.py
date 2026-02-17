@@ -104,7 +104,15 @@ from pipeline.vision_template import load_vision_template_sections  # noqa: E402
 try:
     _dummy_helpers = dummy_kb_capabilities.load_dummy_helpers()
 except ImportError as exc:
-    raise SystemExit(f"Dummy KB helpers mancanti: {exc}") from exc
+    details = str(exc)
+    if "pydantic_core._pydantic_core" in details:
+        raise SystemExit(
+            "Dummy KB helpers non caricabili: estensione binaria 'pydantic_core' assente/incompatibile "
+            f"con l'interprete corrente ({sys.executable}). "
+            "Usa un interpreter supportato dal progetto (es. 'py -3.11 ...' o 'python ...') "
+            "oppure reinstalla le dipendenze su questo interpreter."
+        ) from exc
+    raise SystemExit(f"Dummy KB helpers mancanti: {details}") from exc
 
 HardCheckError = getattr(dummy_kb_capabilities, "HardCheckError", None)
 

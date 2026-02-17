@@ -385,7 +385,6 @@ def ensure_drive_minimal_and_upload_config(slug: str, client_name: Optional[str]
         _create_local_structure,
         _drive_phase,
         _prepare_context_and_logger,
-        _require_drive_utils,
     )
 
     ctx, logger, resolved_name = _prepare_context_and_logger(
@@ -396,9 +395,6 @@ def ensure_drive_minimal_and_upload_config(slug: str, client_name: Optional[str]
         client_name=client_name,
     )
     cfg_path = cast(Path, _create_local_structure(ctx, logger, client_name=(resolved_name or slug)))
-
-    # Verifica che le primitive Drive siano disponibili e configurate
-    _require_drive_utils()
 
     # Esegue la fase Drive (creazione cartelle, upload config, aggiornamento ID locali)
     _drive_phase(
