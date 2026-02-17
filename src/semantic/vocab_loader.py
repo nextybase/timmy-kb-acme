@@ -19,20 +19,36 @@ _FALLBACK_LOG = get_structured_logger("semantic.vocab_loader.fallback")
 
 
 def _safe_structured_warning(event: str, *, extra: Mapping[str, Any]) -> None:
-    """Emette un warning strutturato senza degradazione silenziosa.
+    """Emette un warning strutturato senza alterare la semantica runtime.
 
-    Se il logger strutturato fallisce (handler/extra non serializzabile), degrada su stdlib logger.
+    Beta 1.0 note:
+    - eccezione normativa SERVICE_ONLY: fallback usato solo per osservabilita';
+    - nessun impatto su stati, gate, ledger, artefatti core o decisioni di flusso;
+    - eventuali failure del canale log restano visibili con evento esplicito.
     """
     try:
         LOGGER.warning(event, extra=dict(extra))
     except Exception as exc:
-        # Fallback non silenzioso: stdlib logger con contesto minimizzato.
+        # SERVICE_ONLY observability fallback (no semantic/runtime side-effects).
         _FALLBACK_LOG.warning(
             "structured_logger_failed",
-            extra={"event": event, "error": repr(exc), "payload_keys": list(extra.keys())},
+            extra={
+                "event": event,
+                "error": repr(exc),
+                "payload_keys": list(extra.keys()),
+                "service_only": True,
+                "service": "semantic.vocab_loader.observability",
+            },
             exc_info=True,
         )
-        _FALLBACK_LOG.warning(event, extra={"payload": dict(extra)})
+        _FALLBACK_LOG.warning(
+            event,
+            extra={
+                "payload": dict(extra),
+                "service_only": True,
+                "service": "semantic.vocab_loader.observability",
+            },
+        )
 
 
 def _load_tags_db_or_raise() -> Any:

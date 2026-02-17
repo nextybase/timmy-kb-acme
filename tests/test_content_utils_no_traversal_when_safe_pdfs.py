@@ -121,9 +121,16 @@ def test_filter_safe_pdfs_rejects_traversal(candidate: str) -> None:
     with TemporaryDirectory() as tmp:
         perimeter = Path(tmp) / "kb"
         raw_root = perimeter / "raw"
+        outside = Path(tmp) / "outside"
         raw_root.mkdir(parents=True, exist_ok=True)
+        outside.mkdir(parents=True, exist_ok=True)
 
-        maybe_unsafe = raw_root / f"{candidate}.pdf"
-        out = cu._filter_safe_pdfs(perimeter, raw_root, [maybe_unsafe], slug="dummy")
+        traversal_candidates = [
+            raw_root / ".." / f"{candidate}.pdf",
+            raw_root / ".." / "outside" / f"{candidate}.pdf",
+            outside / f"{candidate}.pdf",
+        ]
 
-        assert all(path.is_absolute() and path.is_relative_to(raw_root.resolve()) for path in out)
+        for maybe_unsafe in traversal_candidates:
+            out = cu._filter_safe_pdfs(perimeter, raw_root, [maybe_unsafe], slug="dummy")
+            assert out == []
