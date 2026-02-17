@@ -36,67 +36,35 @@ from pipeline.observability_config import (
     update_observability_settings,
 )
 from pipeline.tracing import start_phase_span, start_root_trace
-
-try:  # Prefer local tool under repo root
-    from tools import observability_stack
-except Exception:  # pragma: no cover
-    observability_stack = None
-
-if observability_stack is None:  # pragma: no cover
-    try:
-        import importlib.util
-
-        repo_root = Path(__file__).resolve().parents[2]
-        obs_path = repo_root / "tools" / "observability_stack.py"
-        spec = importlib.util.spec_from_file_location("observability_stack", obs_path)
-        if spec is not None and spec.loader is not None:
-            observability_stack = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(observability_stack)
-    except Exception:
-        observability_stack = None
-
-StackAction = Callable[[], tuple[bool, str]]
-start_observability_stack: StackAction | None = getattr(observability_stack, "start_observability_stack", None)
-stop_observability_stack: StackAction | None = getattr(observability_stack, "stop_observability_stack", None)
 from ui.chrome import render_chrome_then_require
 from ui.utils.slug import get_active_slug
+from ui.utils.streamlit_baseline import require_streamlit_feature
 from ui.utils.stubs import get_streamlit
 
 st = get_streamlit()
+StackAction = Callable[[], tuple[bool, str]]
 
 
-def _warn_once(key: str, event: str, *, page: str, slug: str | None, message: str, decision: str) -> None:
-    if st.session_state.get(key):
-        return
-    st.session_state[key] = True
-    logger = get_structured_logger("ui.logs_panel")
-    logger.warning(
-        event,
-        extra={
-            "page": page,
-            "slug": slug or "",
-            "reason": message,
-            "decision": decision,
-        },
-    )
-    st.warning(message)
+def _require_observability_stack_module() -> Any:
+    """In Beta non sono ammessi import dinamici/fallback: tooling mancante = misconfig esplicita."""
+    try:
+        from tools import observability_stack as obs_stack
+    except Exception as exc:
+        logger = get_structured_logger("ui.logs_panel")
+        logger.exception(
+            "ui.observability.stack_module_missing",
+            extra={"error_type": type(exc).__name__, "error": str(exc)},
+        )
+        st.error("Observability stack tooling non disponibile (tools/observability_stack.py). Misconfig Beta.")
+        st.stop()
+        raise RuntimeError("Observability stack tooling non disponibile.")
+    return obs_stack
 
 
 def _safe_link_button(label: str, url: str, **kwargs: Any) -> bool:
-    """Resa compatta quando l'API `link_button` non è disponibile."""
-    link_btn = getattr(st, "link_button", None)
-    if callable(link_btn):
-        try:
-            return bool(link_btn(label, url, **kwargs))
-        except Exception:
-            pass
-    button = getattr(st, "button", None)
-    if callable(button):
-        try:
-            return bool(button(label, **kwargs))
-        except Exception:
-            pass
-    return False
+    """In Beta richiede Streamlit.link_button (nessun fallback a button/write)."""
+    link_btn = require_streamlit_feature(st, "link_button")
+    return bool(link_btn(label, url, **kwargs))
 
 
 def _safe_success(message: str, **kwargs: Any) -> bool:
@@ -209,9 +177,8 @@ def _render_stack_controls(
     stack_enabled: bool,
     grafana_reachable: bool,
     action_button: Callable[..., bool],
-    start_stack: StackAction | None,
-    stop_stack: StackAction | None,
-    slug: str | None,
+    start_stack: StackAction,
+    stop_stack: StackAction,
 ) -> None:
     """
     Rende i controlli Start/Stop stack e i messaggi informativi
@@ -223,40 +190,22 @@ def _render_stack_controls(
             f" Esempio: `{docker_cmd} up -d` nella root del progetto."
         )
         return
-    if start_stack is None and stop_stack is None:
-        _warn_once(
-            "logs_panel_stack_controls_unavailable",
-            "ui.logs_panel.stack_controls_unavailable",
-            page="logs_panel",
-            slug=slug,
-            message="Controlli stack non disponibili: modulo observability_stack non importato.",
-            decision="HIDE",
-        )
-        st.caption("Controlli stack non disponibili.")
-        return
-
     stack_ready = stack_enabled and grafana_reachable
     if stack_ready:
         if action_button("Stop Stack"):
-            if stop_stack is None:
-                st.warning("Stop Stack non disponibile: modulo observability_stack non importato.")
+            ok, msg = stop_stack()
+            if ok:
+                _safe_success(f"Stack fermato: {msg}")
             else:
-                ok, msg = stop_stack()
-                if ok:
-                    _safe_success(f"Stack fermato: {msg}")
-                else:
-                    st.warning(f"Errore Stop Stack: {msg}")
+                st.warning(f"Errore Stop Stack: {msg}")
         st.caption("Stack attivo - usa Stop Stack per spegnere temporaneamente il monitoring.")
     else:
         if action_button("Start Stack"):
-            if start_stack is None:
-                st.warning("Start Stack non disponibile: modulo observability_stack non importato.")
+            ok, msg = start_stack()
+            if ok:
+                _safe_success(f"Stack avviato: {msg}")
             else:
-                ok, msg = start_stack()
-                if ok:
-                    _safe_success(f"Stack avviato: {msg}")
-                else:
-                    st.warning(f"Errore Start Stack: {msg}")
+                st.warning(f"Errore Start Stack: {msg}")
         st.caption("Stack inattivo - avvialo con Start Stack o verifica lo stato del daemon.")
 
 
@@ -339,6 +288,20 @@ def _render_observability_controls() -> None:
 
     settings = get_observability_settings()
     logger = get_structured_logger("ui.logs_panel")
+    obs_stack = _require_observability_stack_module()
+    start_stack = getattr(obs_stack, "start_observability_stack", None)
+    stop_stack = getattr(obs_stack, "stop_observability_stack", None)
+    if not callable(start_stack) or not callable(stop_stack):
+        logger.error(
+            "ui.observability.stack_module_invalid",
+            extra={
+                "start_callable": callable(start_stack),
+                "stop_callable": callable(stop_stack),
+            },
+        )
+        st.error("Observability stack tooling invalido: funzioni start/stop mancanti.")
+        st.stop()
+        raise RuntimeError("Observability stack tooling invalido: start/stop non callabili.")
 
     col1, col2 = st.columns([1, 1])
 
@@ -378,9 +341,8 @@ def _render_observability_controls() -> None:
         stack_enabled=stack_enabled,
         grafana_reachable=reachable,
         action_button=action_button,
-        start_stack=start_observability_stack,
-        stop_stack=stop_observability_stack,
-        slug=slug,
+        start_stack=start_stack,
+        stop_stack=stop_stack,
     )
 
     with col2:
