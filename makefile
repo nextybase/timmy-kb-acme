@@ -110,9 +110,6 @@ qa-safe:
 sbom: env-check
 \t@./tools/sbom.sh --output sbom.json
 
-sbom: env-check
-\t@./tools/sbom.sh --output sbom.json
-
 ci-safe: qa-safe
 	@if command -v pytest >/dev/null 2>&1; then \
 	  echo "[ci-safe] pytest"; pytest -ra; \
