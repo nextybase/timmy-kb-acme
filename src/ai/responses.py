@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import hashlib
-import inspect
 import json
 import os
-import sys
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
+from pipeline.env_attestation import ensure_env_attestation
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -38,27 +37,8 @@ def _debug_runtime_enabled() -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _inspect_signature(create_fn: Any) -> tuple[Optional[str], Optional[bool], Optional[list[str]]]:
-    try:
-        signature_obj = inspect.signature(create_fn)
-    except Exception:
-        return None, None, None
-    params = list(signature_obj.parameters.values())
-    param_names = [param.name for param in params]
-    supports_text = "text" in param_names or any(param.kind is inspect.Parameter.VAR_KEYWORD for param in params)
-    return str(signature_obj), supports_text, param_names
-
-
-def _runtime_info() -> tuple[str, str, str]:
-    try:
-        import openai  # type: ignore
-
-        openai_version = getattr(openai, "__version__", "unknown")
-        openai_file = getattr(openai, "__file__", "unknown")
-    except Exception as exc:
-        openai_version = f"unavailable:{type(exc).__name__}"
-        openai_file = "unavailable"
-    return sys.executable, openai_version, openai_file
+def _require_attested_runtime() -> None:
+    ensure_env_attestation()
 
 
 def _dump_json_schema_payload(
@@ -208,6 +188,7 @@ def run_text_model(
     """
     Esegue una chiamata Responses testuale (senza response_format).
     """
+    _require_attested_runtime()
     client = client or make_openai_client()
     msg_list: List[Mapping[str, Any]] = list(messages)
     input_payload = _to_input_blocks(msg_list)
@@ -235,7 +216,11 @@ def run_text_model(
         )
     except AttributeError as exc:  # pragma: no cover - client privo di responses
         LOGGER.error("ai.responses.unsupported", extra={"error": str(exc)})
-        raise ConfigError("Client OpenAI non supporta l'API Responses.") from exc
+        raise ConfigError(
+            "Environment invalid - reinstall required.",
+            code="responses.environment.invalid",
+            component="responses",
+        ) from exc
     except Exception as exc:
         LOGGER.error("ai.responses.error", extra={"error": str(exc)})
         raise ConfigError("Chiamata Responses fallita.") from exc
@@ -369,6 +354,7 @@ def run_json_model(
     Esegue una chiamata Responses con output JSON e valida il parsing.
     `messages` segue il formato chat role/content e viene convertito in input_text.
     """
+    _require_attested_runtime()
     client = client or make_openai_client()
     # Guard paranoico: fallisce immediatamente se l'API Responses non è disponibile o invocabile.
     resp_api = getattr(client, "responses", None)
@@ -379,8 +365,8 @@ def run_json_model(
             extra={"error": "responses.create missing_or_not_callable"},
         )
         raise ConfigError(
-            "Client OpenAI non supporta l'API Responses.",
-            code="responses.unsupported",
+            "Environment invalid - reinstall required.",
+            code="responses.environment.invalid",
             component="responses",
         )
     input_payload = _to_input_blocks(messages)
@@ -443,38 +429,6 @@ def run_json_model(
         ),
     )
 
-    signature_text, supports_text, signature_params = _inspect_signature(create_fn)
-    if _debug_runtime_enabled():
-        sys_executable, openai_version, openai_file = _runtime_info()
-        LOGGER.info(
-            "ai.responses.signature",
-            extra={
-                "openai_version": openai_version,
-                "openai_file": openai_file,
-                "sys_executable": sys_executable,
-                "signature": signature_text,
-                "supports_text": supports_text,
-            },
-        )
-    if not supports_text:
-        params_value = ", ".join(signature_params or []) or "unavailable"
-        message = (
-            "SDK Responses.create non supporta text.format; parametri disponibili="
-            f"{params_value}; upgrade richiesto."
-        )
-        if _debug_runtime_enabled():
-            sys_executable, openai_version, openai_file = _runtime_info()
-            signature_value = signature_text or "unavailable"
-            message = (
-                f"{message} Runtime: exe={sys_executable} openai={openai_version} "
-                f"file={openai_file} signature={signature_value}"
-            )
-        raise ConfigError(
-            message,
-            code="responses.request.invalid",
-            component="responses",
-        )
-
     try:
         request_kwargs: Dict[str, Any] = {
             "model": model,
@@ -494,11 +448,10 @@ def run_json_model(
             component="responses",
         ) from exc
     except AttributeError as exc:  # pragma: no cover
-        # Extra-paranoico: se l'SDK solleva AttributeError durante l'esecuzione, classificare come non supportato.
         LOGGER.error("ai.responses.unsupported", extra={"error": str(exc)})
         raise ConfigError(
-            "Client OpenAI non supporta l'API Responses.",
-            code="responses.unsupported",
+            "Environment invalid - reinstall required.",
+            code="responses.environment.invalid",
             component="responses",
         ) from exc
     except Exception as exc:

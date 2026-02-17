@@ -13,6 +13,7 @@ except Exception:  # pragma: no cover
     st = None
 
 import pipeline.env_utils as _env_utils
+from pipeline.env_attestation import validate_env_attestation
 from pipeline.env_utils import ensure_dotenv_loaded, get_env_var
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
@@ -212,6 +213,17 @@ def _collect_env_checks() -> list[CheckItem]:
     return [("OPENAI_API_KEY", _has_openai_key(), "Imposta .env o st.secrets e riavvia")]
 
 
+def _collect_attestation_checks() -> list[CheckItem]:
+    status = validate_env_attestation()
+    if status.ok:
+        return [("Environment attestation", True, f"OK ({status.path})")]
+    hint = (
+        "Ambiente non attestato: esegui `python -m timmy_kb.cli env-attest` "
+        f"(path: {status.path}). Dettagli: {'; '.join(status.errors)}"
+    )
+    return [("Environment attestation", False, hint)]
+
+
 def _collect_port_check(docker_ok: bool) -> bool:
     port_val = get_env_var("PORT", default="4000")
     try:
@@ -227,6 +239,7 @@ def run_preflight() -> tuple[List[CheckItem], bool]:
     _maybe_load_dotenv()
     results: List[CheckItem] = []
 
+    results.extend(_collect_attestation_checks())
     results.extend(_collect_schema_checks())
 
     docker_and_pipe_checks, docker_ok = _collect_docker_and_pipeline_checks()

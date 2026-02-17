@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from pipeline.env_attestation import ensure_env_attestation
 from pipeline.exceptions import ConfigError
 from pipeline.logging_utils import get_structured_logger
 from pipeline.paths import get_repo_root, global_logs_dir
@@ -228,6 +229,13 @@ def _run_preflight_flow(
     """
     if st_module.session_state.get("preflight_ok", False):
         return
+
+    try:
+        ensure_env_attestation()
+    except ConfigError as exc:
+        st_module.error(str(exc))
+        st_module.session_state["preflight_ok"] = False
+        st_module.stop()
 
     if config_store.get_skip_preflight(repo_root=repo_root):
         logger.info(

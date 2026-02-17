@@ -9,6 +9,11 @@ import pytest
 import ai.responses as responses
 
 
+@pytest.fixture(autouse=True)
+def _bypass_env_attestation(monkeypatch) -> None:
+    monkeypatch.setattr(responses, "_require_attested_runtime", lambda: None)
+
+
 def _dummy_client(output_text: str = "ok"):
     class DummyResponses:
         def create(self, **_: object) -> SimpleNamespace:

@@ -19,6 +19,11 @@ from ai.responses import (
 from pipeline.path_utils import ensure_within_and_resolve, read_text_safe
 
 
+@pytest.fixture(autouse=True)
+def _bypass_env_attestation(monkeypatch) -> None:
+    monkeypatch.setattr("ai.responses._require_attested_runtime", lambda: None)
+
+
 class _FakeResponse:
     def __init__(self, text: str):
         self.output_text = text
@@ -98,7 +103,7 @@ def test_run_json_model_missing_responses_raises() -> None:
             messages=[{"role": "user", "content": "hi"}],
             client=client,
         )
-    assert "Client OpenAI non supporta l'API Responses." in str(exc.value)
+    assert "Environment invalid - reinstall required." in str(exc.value)
 
 
 def test_run_json_model_responses_without_create_raises() -> None:
@@ -109,7 +114,7 @@ def test_run_json_model_responses_without_create_raises() -> None:
             messages=[{"role": "user", "content": "hi"}],
             client=client,
         )
-    assert "Client OpenAI non supporta l'API Responses." in str(exc.value)
+    assert "Environment invalid - reinstall required." in str(exc.value)
 
 
 def test_run_json_model_type_error_raises() -> None:
