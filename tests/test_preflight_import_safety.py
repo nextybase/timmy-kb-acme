@@ -24,3 +24,16 @@ def test_preflight_no_side_effect_import(monkeypatch) -> None:
 
     mod.run_preflight()
     assert fake_state["called"] is True  # invocato solo durante run_preflight
+
+
+def test_preflight_attestation_check_degrades_on_unexpected_error(monkeypatch) -> None:
+    monkeypatch.delitem(sys.modules, "ui.preflight", raising=False)
+    mod = importlib.import_module("ui.preflight")
+    monkeypatch.setattr(mod, "validate_env_attestation", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    checks = mod._collect_attestation_checks()
+    assert len(checks) == 1
+    name, ok, hint = checks[0]
+    assert name == "Environment attestation"
+    assert ok is False
+    assert "Check attestazione fallito in modo inatteso." in hint

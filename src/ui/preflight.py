@@ -214,7 +214,21 @@ def _collect_env_checks() -> list[CheckItem]:
 
 
 def _collect_attestation_checks() -> list[CheckItem]:
-    status = validate_env_attestation()
+    try:
+        status = validate_env_attestation()
+    except Exception as exc:  # pragma: no cover - hardening difensivo
+        _logger().error(
+            "ui.preflight.attestation_check_failed",
+            extra={"error": str(exc)},
+        )
+        return [
+            (
+                "Environment attestation",
+                False,
+                "Check attestazione fallito in modo inatteso. "
+                "Esegui `python -m timmy_kb.cli env-attest --verify-only` e controlla i log.",
+            )
+        ]
     if status.ok:
         return [("Environment attestation", True, f"OK ({status.path})")]
     hint = (

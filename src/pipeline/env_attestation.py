@@ -23,6 +23,7 @@ LOGGER = get_structured_logger("pipeline.env_attestation")
 ATTESTATION_RELATIVE_PATH = Path(".timmy") / "env_attestation.json"
 REQUIRED_OPENAI_VERSION = "2.3.0"
 _REQUIREMENTS_FILES: tuple[str, ...] = ("requirements.txt", "requirements-dev.txt")
+_ATTESTATION_OK_CACHE: dict[tuple[str, str], bool] = {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,8 +243,14 @@ def validate_env_attestation(*, repo_root: Path | None = None) -> EnvAttestation
 
 
 def ensure_env_attestation(*, repo_root: Path | None = None) -> None:
-    status = validate_env_attestation(repo_root=repo_root)
+    root = repo_root or get_repo_root(allow_env=False)
+    cache_key = (str(root.resolve()), str(Path(sys.executable).resolve()))
+    if _ATTESTATION_OK_CACHE.get(cache_key, False):
+        return
+
+    status = validate_env_attestation(repo_root=root)
     if status.ok:
+        _ATTESTATION_OK_CACHE[cache_key] = True
         return
     detail = "; ".join(status.errors)
     LOGGER.error(

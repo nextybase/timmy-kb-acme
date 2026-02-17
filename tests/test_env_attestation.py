@@ -64,3 +64,33 @@ def test_ensure_attestation_missing_raises(tmp_path: Path) -> None:
     with pytest.raises(ConfigError) as exc:
         ensure_env_attestation(repo_root=tmp_path)
     assert "Environment invalid - reinstall required." in str(exc.value)
+
+
+def test_ensure_attestation_uses_in_process_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _seed_requirements(tmp_path)
+    monkeypatch.setattr(
+        "pipeline.env_attestation._openai_runtime_probe",
+        lambda: {
+            "openai_version": REQUIRED_OPENAI_VERSION,
+            "responses_create_signature": "(**kwargs)",
+            "responses_create_supports_text": True,
+        },
+    )
+    monkeypatch.setattr("pipeline.env_attestation.metadata.version", lambda name: REQUIRED_OPENAI_VERSION)
+    write_env_attestation(repo_root=tmp_path)
+
+    import pipeline.env_attestation as env_attestation
+
+    env_attestation._ATTESTATION_OK_CACHE.clear()
+    calls = {"count": 0}
+    original_validate = env_attestation.validate_env_attestation
+
+    def _counting_validate(*, repo_root: Path | None = None):
+        calls["count"] += 1
+        return original_validate(repo_root=repo_root)
+
+    monkeypatch.setattr(env_attestation, "validate_env_attestation", _counting_validate)
+
+    env_attestation.ensure_env_attestation(repo_root=tmp_path)
+    env_attestation.ensure_env_attestation(repo_root=tmp_path)
+    assert calls["count"] == 1
