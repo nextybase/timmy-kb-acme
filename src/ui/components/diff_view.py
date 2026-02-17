@@ -93,6 +93,15 @@ def _format_mtime(ts: Optional[float]) -> str:
         return "-"
 
 
+def _drive_type_label(path_key: str, meta: Dict[str, Any]) -> str:
+    if str(meta.get("type", "")).lower() == "dir":
+        return "DIR"
+    suffix = Path(path_key).suffix.lower().lstrip(".")
+    if suffix:
+        return suffix.upper()
+    return "FILE"
+
+
 # ------------------- LINK E FILTRI -----------------------------------------------
 
 
@@ -232,7 +241,6 @@ def _rows_from_pairs(
         rows.append(
             {
                 "path": display,
-                "type": meta.get("type", "-"),
                 "size": _human_size(meta.get("size")),
                 "mtime": _format_mtime(meta.get("mtime")),
             }
@@ -351,7 +359,7 @@ def render_file_actions(
             raise AttributeError("expander API non disponibile")
         return expander_fn
 
-    with _expander(col_drive)("Solo su Drive", expanded=False):
+    with _expander(col_drive)("Contenuto cartelle Drive", expanded=False):
         if dataset.only_drive:
             grouped_pairs = _group_keys_by_category(dataset.only_drive)
             for category in sorted(grouped_pairs):
@@ -365,15 +373,15 @@ def render_file_actions(
                         md_rows.append(
                             {
                                 "file": display,
+                                "type": _drive_type_label(key, meta),
                                 "size": _human_size(meta.get("size")),
-                                "mtime": _format_mtime(meta.get("mtime")),
                             }
                         )
-                    st_module.markdown(_mk_md_table(md_rows, headers=["file", "size", "mtime"]))
+                    st_module.markdown(_mk_md_table(md_rows, headers=["file", "type", "size"]))
         else:
             st_module.caption("Nessun elemento solo su Drive.")
 
-    with _expander(col_local)("Solo su locale", expanded=False):
+    with _expander(col_local)("Cartelle in locale", expanded=False):
         # Mostra la struttura locale reale sotto raw/, non solo gli elementi diff.
         grouped_pairs = _group_local_structure(dataset.local_entries)
         if grouped_pairs:
@@ -459,11 +467,10 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
     st.caption(
         "Confronto su dimensione e timestamp (s). Differenze di fuso o sincronizzazione possono produrre scostamenti."
     )
-    columns = list(st.columns(3))
+    columns = list(st.columns(2))
     metrics = [
         ("Solo Drive", len(dataset.only_drive)),
         ("Solo locale", len(dataset.only_local)),
-        ("Differenze", len(dataset.differences)),
     ]
     for col, (label, value) in zip(columns, metrics, strict=False):
         metric_fn = getattr(col, "metric", None)
@@ -473,12 +480,11 @@ def render_drive_local_diff(slug: str, drive_index: Optional[Dict[str, Dict[str,
             st.write(f"{label}: {value}")
 
     try:
-        col_drive, col_local, col_diff = columns
+        col_drive, col_local = columns
     except Exception:
-        col_drive = col_local = col_diff = st
+        col_drive = col_local = st
 
     render_file_actions(dataset, st, slug=slug, columns=(col_drive, col_local))
-    render_diff_table(dataset, st, column=col_diff)
 
     divider_fn = getattr(st, "divider", None)
     if callable(divider_fn):

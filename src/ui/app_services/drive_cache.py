@@ -3,13 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Any, Callable, Dict, Optional, cast
-
-try:
-    import streamlit as st
-except Exception:  # pragma: no cover
-    st = None
 
 RenderTreeCallable = Callable[[str], Dict[str, Dict[str, Any]]]
 
@@ -27,14 +21,11 @@ def _drive_tree_uncached(slug: str) -> Dict[str, Dict[str, Any]]:
     return render_drive_tree(slug)
 
 
-# st.cache_data returns a wrapper preserving the callable signature but mypy sees `Any`.
-if st is not None and hasattr(st, "cache_data"):
-    _drive_tree_cached: RenderTreeCallable = cast(
-        RenderTreeCallable,
-        st.cache_data(ttl=timedelta(seconds=90))(_drive_tree_uncached),
-    )
-else:
-    _drive_tree_cached = _drive_tree_uncached
+# NOTE:
+# render_drive_tree() contiene widget Streamlit (es. pulsanti azione file).
+# Caching di funzioni con widget genera CachedWidgetWarning.
+# Manteniamo quindi questo path esplicitamente non-cachato.
+_drive_tree_cached: RenderTreeCallable = _drive_tree_uncached
 
 
 def _clear_drive_tree_cache(*args: Any, **kwargs: Any) -> None:

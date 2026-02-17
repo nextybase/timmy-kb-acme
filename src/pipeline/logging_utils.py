@@ -38,6 +38,7 @@ import logging
 import os
 import re
 import sys
+import threading
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -63,6 +64,8 @@ BRIDGE_FIELDS_ALWAYS = {"run_id", "slug", "phase_id", "state_id", "intent_id", "
 BRIDGE_FIELDS_OTEL = {"trace_id", "span_id"}
 _STREAMLIT_NOISE_SUPPRESSED = False
 _telemetry_error_reported = False
+_rollover_warning_paths: set[str] = set()
+_rollover_warning_lock = threading.Lock()
 LOG = logging.getLogger("pipeline.logging_utils")
 
 
@@ -277,6 +280,41 @@ class _SafeStreamHandler(logging.StreamHandler):
             return
 
 
+class _SafeRotatingFileHandler(RotatingFileHandler):
+    """RotatingFileHandler fail-soft su Windows quando il file e' locked.
+
+    In caso di lock durante il rename di rollover (WinError 32), salta il rollover
+    e prosegue senza stampare traceback runtime.
+    """
+
+    def doRollover(self) -> None:
+        try:
+            super().doRollover()
+        except PermissionError:
+            _warn_rollover_lock_once(str(getattr(self, "baseFilename", "")))
+            return
+        except OSError as exc:
+            # Windows lock error: "[WinError 32] file in uso da un altro processo"
+            # cspell:ignore winerror
+            if getattr(exc, "winerror", None) == 32:
+                _warn_rollover_lock_once(str(getattr(self, "baseFilename", "")))
+                return
+            raise
+
+
+def _warn_rollover_lock_once(path: str) -> None:
+    """Segnala una sola volta per path un lock di rollover, senza usare il logger stesso."""
+    normalized = path or "<unknown>"
+    with _rollover_warning_lock:
+        if normalized in _rollover_warning_paths:
+            return
+        _rollover_warning_paths.add(normalized)
+    try:
+        sys.stderr.write("[timmy-kb] log rollover skipped (file locked): " f"{normalized}\n")
+    except Exception:
+        return
+
+
 def _make_console_handler(level: int, fmt: str) -> logging.Handler:
     ch = _SafeStreamHandler(stream=sys.stdout)
     ch.setLevel(level)
@@ -289,7 +327,7 @@ def _make_file_handler(
 ) -> logging.Handler:
     max_b = max(1024 * 128, int(max_bytes or 0)) if (max_bytes or 0) > 0 else 1024 * 1024
     bk_cnt = int(backup_count or 3)
-    fh = RotatingFileHandler(path, encoding="utf-8", maxBytes=max_b, backupCount=bk_cnt)
+    fh = _SafeRotatingFileHandler(path, encoding="utf-8", maxBytes=max_b, backupCount=bk_cnt)
     fh.setLevel(level)
     fh.setFormatter(_KVFormatter(fmt))
     return fh

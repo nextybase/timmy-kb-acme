@@ -201,73 +201,66 @@ def render_drive_tree(slug: str) -> Dict[str, Dict[str, Any]]:
         st.warning(f"Cartella Drive '{slug}' non trovata sotto DRIVE_ID.")
         return index
 
-    root_meta = _as_meta(slug_folder)
     st.subheader(f"Albero Drive (DRIVE_ID/{slug})")
     st.caption("Focus su raw/ e sottocartelle.")
-    root_container = st.expander(f"Drive :: {slug}", expanded=False)
-    with root_container:
-        children = _list_children(service, slug_folder["id"])
-        index["./"] = root_meta
-        _render_entry_line(f"{slug}/", root_meta, depth=0, suffix=_summarise_entries(children))
-        raw_entry: Optional[Dict[str, Any]] = None
-        for entry in children:
-            name = entry.get("name") or ""
-            rel_path = name
-            meta = _as_meta(entry)
-            index[rel_path] = meta
-            if meta["type"] == "dir" and name == "raw":
-                raw_entry = entry
+    children = _list_children(service, slug_folder["id"])
+    raw_entry: Optional[Dict[str, Any]] = None
+    for entry in children:
+        name = entry.get("name") or ""
+        rel_path = name
+        meta = _as_meta(entry)
+        index[rel_path] = meta
+        if meta["type"] == "dir" and name == "raw":
+            raw_entry = entry
+            break
+
+    if raw_entry is None:
+        st.warning("Cartella `raw/` non presente nel client su Drive.")
+        return index
+
+    raw_meta = _as_meta(raw_entry)
+    index["raw"] = raw_meta
+    raw_children = _list_children(service, raw_entry["id"])
+    with st.expander("raw/", expanded=True):
+        _render_entry_line(f"{slug}/raw", raw_meta, depth=0, suffix=_summarise_entries(raw_children))
+        for sub in raw_children:
+            sub_name = sub.get("name") or ""
+            sub_rel = f"raw/{sub_name}"
+            sub_meta = _as_meta(sub)
+            index[sub_rel] = sub_meta
+            if sub_meta["type"] != "dir":
                 continue
-            if meta["type"] == "dir":
-                _render_entry_line(f"{slug}/{name.rstrip('/')}", meta, depth=0, suffix="")
+            sub_items = _list_children(service, sub["id"])
+            sub_files: List[Dict[str, Any]] = []
+            sub_dirs: List[Dict[str, Any]] = []
+            for item in sub_items:
+                item_name = item.get("name") or ""
+                item_rel = f"raw/{sub_name}/{item_name}"
+                item_meta = _as_meta(item)
+                index[item_rel] = item_meta
+                if item_meta["type"] == "dir":
+                    sub_dirs.append(item)
+                else:
+                    sub_files.append(item)
 
-        if raw_entry is None:
-            _render_entry_line(f"{slug}/raw", {"type": "dir"}, depth=0, suffix="(cartella non presente)")
-            return index
-
-        raw_meta = _as_meta(raw_entry)
-        index["raw"] = raw_meta
-        raw_children = _list_children(service, raw_entry["id"])
-        with st.expander("raw/", expanded=True):
-            _render_entry_line(f"{slug}/raw", raw_meta, depth=0, suffix=_summarise_entries(raw_children))
-            for sub in raw_children:
-                sub_name = sub.get("name") or ""
-                sub_rel = f"raw/{sub_name}"
-                sub_meta = _as_meta(sub)
-                index[sub_rel] = sub_meta
-                if sub_meta["type"] != "dir":
-                    continue
-                sub_items = _list_children(service, sub["id"])
-                sub_files: List[Dict[str, Any]] = []
-                sub_dirs: List[Dict[str, Any]] = []
-                for item in sub_items:
-                    item_name = item.get("name") or ""
-                    item_rel = f"raw/{sub_name}/{item_name}"
-                    item_meta = _as_meta(item)
-                    index[item_rel] = item_meta
-                    if item_meta["type"] == "dir":
-                        sub_dirs.append(item)
-                    else:
-                        sub_files.append(item)
-
-                with st.expander(f"{sub_name}/ ({len(sub_files)} file)", expanded=False):
-                    if not sub_items:
-                        st.caption("Cartella vuota.")
-                    for item in sub_files:
-                        _render_drive_file_row(
-                            service=service,
-                            slug=slug,
-                            sub_name=sub_name,
-                            entry=item,
+            with st.expander(f"{sub_name}/ ({len(sub_files)} file)", expanded=False):
+                if not sub_items:
+                    st.caption("Cartella vuota.")
+                for item in sub_files:
+                    _render_drive_file_row(
+                        service=service,
+                        slug=slug,
+                        sub_name=sub_name,
+                        entry=item,
+                    )
+                if sub_dirs:
+                    st.caption("Sottocartelle presenti:")
+                    for dir_item in sub_dirs:
+                        dir_name = dir_item.get("name") or ""
+                        _render_entry_line(
+                            f"{slug}/raw/{sub_name}/{dir_name}",
+                            _as_meta(dir_item),
+                            depth=0,
+                            suffix="(cartella)",
                         )
-                    if sub_dirs:
-                        st.caption("Sottocartelle presenti:")
-                        for dir_item in sub_dirs:
-                            dir_name = dir_item.get("name") or ""
-                            _render_entry_line(
-                                f"{slug}/raw/{sub_name}/{dir_name}",
-                                _as_meta(dir_item),
-                                depth=0,
-                                suffix="(cartella)",
-                            )
     return index
