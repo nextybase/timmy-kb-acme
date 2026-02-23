@@ -280,7 +280,7 @@ pydantic==2.7.1
     #   weasel
 pydantic-core==2.18.2
     # via pydantic
-pydantic-settings==2.0.0
+pydantic-settings==2.13.1
     # via -r requirements.in
 pydeck==0.9.1
     # via streamlit
@@ -442,6 +442,9 @@ typing-extensions==4.12.2
     #   streamlit
     #   torch
     #   typer
+    #   typing-inspection
+typing-inspection==0.4.2
+    # via pydantic-settings
 tzdata==2025.3
     # via pandas
 uritemplate==4.2.0
