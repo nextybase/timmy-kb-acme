@@ -296,7 +296,7 @@ pynacl==1.6.2
     #   pygithub
 pyparsing==3.2.5
     # via httplib2
-pypdf==6.6.2
+pypdf==6.7.2
     # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via pandas
