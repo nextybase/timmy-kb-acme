@@ -243,7 +243,7 @@ def create_drive_folder(
         # Bug "puri" devono emergere come unexpected (exit 99): applichiamo una heuristica conservativa.
         drive_like = False
         try:
-            from googleapiclient.errors import HttpError  # type: ignore
+            from googleapiclient.errors import HttpError
 
             if isinstance(e, HttpError):
                 drive_like = True

@@ -12,6 +12,7 @@ from inspect import signature as inspect_signature
 from pathlib import Path
 from typing import Any, Mapping
 
+from ai.client_factory import make_openai_client
 from pipeline.exceptions import ConfigError
 from pipeline.file_utils import safe_write_text
 from pipeline.logging_utils import get_structured_logger
@@ -61,15 +62,6 @@ def _requirements_hashes(repo_root: Path) -> dict[str, str]:
 
 def _openai_runtime_probe() -> dict[str, Any]:
     try:
-        import openai  # type: ignore
-    except Exception as exc:  # pragma: no cover - dipende dall'ambiente
-        raise ConfigError(
-            f"Import openai fallito: {type(exc).__name__}: {exc}",
-            code="env.attestation.openai_import_failed",
-            component="pipeline.env_attestation",
-        ) from exc
-
-    try:
         openai_version = metadata.version("openai")
     except Exception as exc:
         raise ConfigError(
@@ -85,8 +77,13 @@ def _openai_runtime_probe() -> dict[str, Any]:
             component="pipeline.env_attestation",
         )
 
+    repo_root = get_repo_root(allow_env=False)
     try:
-        client = openai.OpenAI(api_key="attestation-check")
+        client = make_openai_client(
+            api_key_override="attestation-check",  # pragma: allowlist secret
+            settings_root=repo_root,
+            allow_repo_root_in_strict=True,
+        )
     except Exception as exc:
         raise ConfigError(
             f"Inizializzazione OpenAI client fallita: {exc}",

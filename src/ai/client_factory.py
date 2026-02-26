@@ -25,7 +25,12 @@ def _normalize_base_url(raw: str) -> str:
     return base
 
 
-def make_openai_client():
+def make_openai_client(
+    *,
+    api_key_override: str | None = None,
+    settings_root: Path | None = None,
+    allow_repo_root_in_strict: bool = False,
+):
     """
     Costruisce un client OpenAI (SDK >= 2) applicando le policy del progetto.
 
@@ -33,14 +38,17 @@ def make_openai_client():
     """
     ensure_dotenv_loaded()
 
-    try:
-        api_key = get_env_var("OPENAI_API_KEY", required=True)
-    except KeyError as exc:
-        raise ConfigError(
-            "Manca la API key. Imposta la variabile di ambiente OPENAI_API_KEY.",
-            code="openai.client.config.invalid",
-            component="client_factory",
-        ) from exc
+    if api_key_override and str(api_key_override).strip():
+        api_key = str(api_key_override).strip()
+    else:
+        try:
+            api_key = get_env_var("OPENAI_API_KEY", required=True)
+        except KeyError as exc:
+            raise ConfigError(
+                "Manca la API key. Imposta la variabile di ambiente OPENAI_API_KEY.",
+                code="openai.client.config.invalid",
+                component="client_factory",
+            ) from exc
 
     OpenAI = get_openai_ctor()
 
@@ -52,7 +60,13 @@ def make_openai_client():
 
     base_url_env = get_env_var("OPENAI_BASE_URL", default=None)
     project_env = get_env_var("OPENAI_PROJECT", default=None)
-    settings_obj = _load_settings()
+    if settings_root is None and not allow_repo_root_in_strict:
+        settings_obj = _load_settings()
+    else:
+        settings_obj = _load_settings(
+            settings_root=settings_root,
+            allow_repo_root_in_strict=allow_repo_root_in_strict,
+        )
     openai_cfg = settings_obj.openai_settings
     client_kwargs["timeout"] = float(openai_cfg.timeout)
     client_kwargs["max_retries"] = int(openai_cfg.max_retries)
@@ -87,7 +101,20 @@ def _reject_repo_sentinels(root: Path, *, context: str) -> None:
         )
 
 
-def _resolve_settings_root() -> Path:
+def _resolve_settings_root(*, settings_root: Path | None = None, allow_repo_root_in_strict: bool = False) -> Path:
+    if settings_root is not None:
+        try:
+            resolved = Path(settings_root).expanduser().resolve()
+        except Exception as exc:
+            raise ConfigError(
+                f"settings_root non valido: {settings_root}",
+                code="config.root.invalid",
+                component="client_factory",
+            ) from exc
+        if not allow_repo_root_in_strict:
+            _reject_repo_sentinels(resolved, context="settings_root")
+        return resolved
+
     workspace_root = get_env_var(WORKSPACE_ROOT_ENV, default=None)
     repo_root_env = get_env_var(REPO_ROOT_ENV, default=None)
     if workspace_root:
@@ -119,9 +146,12 @@ def _resolve_settings_root() -> Path:
     return _REPO_ROOT
 
 
-def _load_settings() -> Settings:
+def _load_settings(*, settings_root: Path | None = None, allow_repo_root_in_strict: bool = False) -> Settings:
     try:
-        root = _resolve_settings_root()
+        root = _resolve_settings_root(
+            settings_root=settings_root,
+            allow_repo_root_in_strict=allow_repo_root_in_strict,
+        )
         config_path = root / "config" / "config.yaml"
         LOGGER.info(
             "openai.client.settings_root.resolved",

@@ -23,6 +23,7 @@ from glob import iglob
 from pathlib import Path
 from typing import Any, Callable, Iterable, List, Optional, Sequence, cast
 
+from ai.client_factory import make_openai_client
 from pipeline.context import ClientContext
 from pipeline.env_utils import get_env_var
 from pipeline.exceptions import ConfigError, PathTraversalError
@@ -399,13 +400,11 @@ class OpenAIEmbeddings:
         *,
         api_key: str | None = None,
     ) -> None:
-        try:
-            from openai import OpenAI
-        except Exception as e:  # pragma: no cover - errore di import
-            raise RuntimeError("Pacchetto openai non disponibile. Installa openai>=1.x") from e
-        self._OpenAI = OpenAI
-        # Iniezione opzionale della chiave senza mutare l'ambiente
-        self._client = OpenAI(api_key=api_key) if api_key else OpenAI()
+        # SSoT: tutti i client OpenAI passano dalla factory centralizzata.
+        if api_key and str(api_key).strip():
+            self._client = make_openai_client(api_key_override=str(api_key).strip())
+        else:
+            self._client = make_openai_client()
         self._model = model
 
     def embed_texts(
