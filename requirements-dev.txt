@@ -452,7 +452,7 @@ ruamel-yaml==0.18.16
     # via pre-commit-hooks
 ruamel-yaml-clib==0.2.14
     # via ruamel-yaml
-ruff==0.6.4
+ruff==0.15.2
     # via -r requirements-dev.in
 safetensors==0.6.2
     # via transformers
